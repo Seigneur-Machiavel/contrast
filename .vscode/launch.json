@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Electron App",
+            "runtimeExecutable": "electron",
+            "program": "${workspaceFolder}/main.mjs",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {},
+            "sourceMaps": false,
+            "outFiles": [
+                "${workspaceFolder}/**/*.js"
+            ]
+        }
+    ]
+}
