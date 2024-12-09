@@ -5,7 +5,7 @@
             "request": "launch",
             "name": "Launch Electron App",
             "runtimeExecutable": "electron",
-            "program": "${workspaceFolder}/main.mjs",
+            "program": "${workspaceFolder}/main.js",
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {},

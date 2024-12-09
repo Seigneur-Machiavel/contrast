@@ -2,7 +2,7 @@
   "name": "contrast",
   "version": "1.0.0",
   "description": "All-in-one Contrast app",
-  "main": "main.mjs",
+  "main": "main.js",
   "scripts": {
     "start": "electron ."
   },
