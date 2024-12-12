@@ -127,16 +127,17 @@ body {
     box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);
 }
 .window .title-bar {
+    user-select: none;
     cursor: move;
-    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 44%, var(--color2_2) 52%, var(--color2_2) 100%);
-    background-size: 200% 100%;
+    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 40%, var(--color2_2) 54%, var(--color2_2) 98%, var(--color2) 110%);
+    background-size: 220% 100%;
     color: var(--color1);
     padding: 5px;
     height: calc(32px - 10px);
     display: flex;
     justify-content: space-between;
     background-position: 100% 50%;
-    transition: background-position 0.2s;
+    transition: background-position 0.12s;
 }
 .window.front .title-bar {
     background-position: 0% 50%;
