@@ -1,0 +1,231 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body { 
+    font-family: monospace;
+    overflow: hidden;
+    background: white;
+    color: black;
+    height: 100vh;
+}
+
+.app {
+    display: none; 
+    grid-template-columns: 250px 1fr;
+    height: 100vh;
+}
+
+/* Login screen */
+#login {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 20px;
+}
+
+/* Sidebar */
+#sidebar {
+    border-right: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    background: white;
+}
+
+.logo {
+    padding: 20px;
+    font-size: 24px;
+    border-bottom: 1px solid #eee;
+}
+
+#status {
+    padding: 10px;
+    font-size: 12px;
+    color: #666;
+    word-break: break-all;
+    border-bottom: 1px solid #eee;
+}
+
+.section {
+    padding: 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.section h3 {
+    margin-bottom: 10px;
+}
+
+#channels, #peers {
+    overflow-y: auto;
+    max-height: 200px;
+}
+
+.channel {
+    padding: 8px;
+    cursor: pointer;
+    margin: 4px 0;
+    border-radius: 4px;
+}
+
+.channel:hover { background: #f8f8f8; }
+.channel.active { background: #eee; }
+
+.peer {
+    font-size: 12px;
+    padding: 4px;
+    word-break: break-all;
+}
+
+/* Main chat area */
+#main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+#messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+.message {
+    margin-bottom: 15px;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: fadeIn 0.2s forwards;
+}
+
+.message-header {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 5px;
+    font-size: 14px;
+}
+
+.message-time {
+    color: #666;
+    font-size: 12px;
+}
+
+.message-latency {
+    color: #999;
+    font-size: 11px;
+}
+
+.controls {
+    padding: 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    gap: 10px;
+}
+
+/* Common elements */
+input[type="text"] {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    font-family: inherit;
+}
+
+button {
+    padding: 10px 20px;
+    background: black;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+button:hover { opacity: 0.9; }
+
+.notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 15px 20px;
+    background: black;
+    color: white;
+    border-radius: 4px;
+    opacity: 0;
+    transform: translateY(20px);
+    animation: notifyIn 0.3s forwards;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes notifyIn {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+.file-message .message-content {
+    background: #f8f8f8;
+    padding: 10px;
+    border-radius: 4px;
+    margin-top: 5px;
+}
+
+.file-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.download-button {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.progress-bar {
+    width: 100px;
+    height: 4px;
+    background: #eee;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progress {
+    width: 0%;
+    height: 100%;
+    background: #000;
+    transition: width 0.3s ease;
+}
+
+.peer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    font-size: 12px;
+    border-bottom: 1px solid #eee;
+}
+
+.peer-id {
+    word-break: break-all;
+    margin-right: 8px;
+}
+
+.peer-status {
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.peer-status.connecting {
+    color: #f0ad4e;
+}
+
+.peer-status.connected {
+    color: #5cb85c;
+}
