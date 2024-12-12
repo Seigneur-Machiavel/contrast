@@ -2,7 +2,7 @@ const state = {
     currentChannel: 'system',
     channels: new Set(['system']),
     peers: new Set(),
-    connectingPeers: new Set(), // Add this line
+    connectingPeers: new Set(),
     messageHistory: new Map(),
     lastMessageTime: new Map(),
     debug: true
@@ -31,14 +31,6 @@ const log = {
     }
 };
 
-const isElectron = typeof process !== 'undefined' && process.versions?.electron;
-const ipcRenderer = isElectron ? window.require('electron').ipcRenderer : {
-    invoke: async (channel, ...args) => {
-        log.event('DEV', `IPC ${channel}`, args);
-        return { success: true };
-    }
-};
-
 function addMessageToHistory(msg) {
     if (!state.messageHistory.has(msg.channel)) {
         state.messageHistory.set(msg.channel, []);
@@ -61,7 +53,6 @@ function addMessageToHistory(msg) {
     
     return true;
 }
-
 
 function displayMessage(msg) {
     const div = document.createElement('div');
@@ -88,8 +79,7 @@ async function start() {
     }
 
     try {
-        const result = await ipcRenderer.invoke('start-chat', nickname);
-        console.log(result);
+        const result = await window.api.startChat(nickname);
         if (!result.success) {
             notify('Failed to start: ' + result.error);
             return;
@@ -98,7 +88,6 @@ async function start() {
         document.getElementById('status').textContent = 
             `Connected as: ${nickname}\nAddress: ${result.addr}`;
 
-        // Switch UI and setup handlers
         document.getElementById('login').style.display = 'none';
         document.getElementById('app').style.display = 'grid';
         document.getElementById('message').addEventListener('keypress', e => {
@@ -118,7 +107,7 @@ async function sendMessage() {
     if (!content) return;
 
     try {
-        const result = await ipcRenderer.invoke('send-message', {
+        const result = await window.api.sendMessage({
             channel: state.currentChannel,
             content
         });
@@ -141,7 +130,7 @@ async function joinChannel() {
     if (!channel) return;
 
     try {
-        const result = await ipcRenderer.invoke('join-channel', channel);
+        const result = await window.api.joinChannel(channel);
         if (result.success) {
             state.channels.add(channel);
             input.value = '';
@@ -164,7 +153,7 @@ async function connectPeer() {
     if (!addr) return;
 
     try {
-        const success = await ipcRenderer.invoke('connect-peer', addr);
+        const success = await window.api.connectPeer(addr);
         if (success) {
             input.value = '';
             notify('Connected to peer');
@@ -190,7 +179,6 @@ function switchChannel(channel) {
     history.forEach(displayMessage);
 }
 
-// UI updates
 function updateChannelList() {
     const html = Array.from(state.channels)
         .map(channel => `
@@ -214,6 +202,7 @@ function updatePeerList() {
         `).join('');
     document.getElementById('peers').innerHTML = html;
 }
+
 function notify(message) {
     const notification = document.createElement('div');
     notification.className = 'notification';
@@ -225,95 +214,91 @@ function notify(message) {
 
 const transfers = new Map();
 
-if (isElectron) {
-    ipcRenderer.on('file:progress', (event, data) => {
+// Set up event listeners
+window.api.onFileProgress((data) => {
+    const progressElement = document.querySelector(`[data-file-progress="${data.filename}"]`);
+    if (progressElement) {
+        progressElement.style.width = `${data.progress}%`;
+        log.event('Progress', `${data.filename}: ${data.progress}%`);
+    }
+});
+
+window.api.onChatMessage((msg) => {
+    if (msg.content.startsWith('/file ')) {
+        const [_, filename, cid, size, type] = msg.content.split(' ');
         
-        const progressElement = document.querySelector(`[data-file-progress="${data.filename}"]`);
-        if (progressElement) {
-            progressElement.style.width = `${data.progress}%`;
-            log.event('Progress', `${data.filename}: ${data.progress}%`);
-        }
-    });
-    
-    ipcRenderer.on('chat-message', (event, msg) => {
-        if (msg.content.startsWith('/file ')) {
-            const [_, filename, cid, size, type] = msg.content.split(' ');
-            
-            
-            transfers.set(cid, {
-                filename,
-                size: parseInt(size),
-                type,
-                announced: Date.now()
-            });
-            
-            const div = document.createElement('div');
-            div.className = 'message file-message';
-            div.innerHTML = `
-                <div class="message-header">
-                    <span class="message-sender">${msg.from}</span>
-                    <span class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <div class="message-content">
-                    <div class="file-info">
-                        <span>${getFileIcon(type)} ${filename} (${formatSize(size)})</span>
-                        <div class="progress-bar">
-                            <div class="progress" data-file-progress="${filename}" style="width: 0%"></div>
-                        </div>
-                        <button onclick="downloadFile('${cid}')" class="download-button">
-                            Download
-                        </button>
+        transfers.set(cid, {
+            filename,
+            size: parseInt(size),
+            type,
+            announced: Date.now()
+        });
+        
+        const div = document.createElement('div');
+        div.className = 'message file-message';
+        div.innerHTML = `
+            <div class="message-header">
+                <span class="message-sender">${msg.from}</span>
+                <span class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+            </div>
+            <div class="message-content">
+                <div class="file-info">
+                    <span>${getFileIcon(type)} ${filename} (${formatSize(size)})</span>
+                    <div class="progress-bar">
+                        <div class="progress" data-file-progress="${filename}" style="width: 0%"></div>
                     </div>
+                    <button onclick="downloadFile('${cid}')" class="download-button">
+                        Download
+                    </button>
                 </div>
-            `;
-            document.getElementById('messages').appendChild(div);
-            scrollToBottom();
-            
-            log.event('File', 'Announced', { 
-                filename, 
-                size: formatSize(size),
-                type,
-                cid
-            });
-        } else {
-            try {
-                if (addMessageToHistory(msg) && msg.channel === state.currentChannel) {
-                    displayMessage(msg);
-                }
-                log.event('Message', 'Received', { 
-                    channel: msg.channel, 
-                    from: msg.from, 
-                    content: msg.content 
-                });
-            } catch (err) {
-                log.error('Message', 'Display failed', err);
+            </div>
+        `;
+        document.getElementById('messages').appendChild(div);
+        scrollToBottom();
+        
+        log.event('File', 'Announced', { 
+            filename, 
+            size: formatSize(size),
+            type,
+            cid
+        });
+    } else {
+        try {
+            if (addMessageToHistory(msg) && msg.channel === state.currentChannel) {
+                displayMessage(msg);
             }
+            log.event('Message', 'Received', { 
+                channel: msg.channel, 
+                from: msg.from, 
+                content: msg.content 
+            });
+        } catch (err) {
+            log.error('Message', 'Display failed', err);
         }
-    });
+    }
+});
 
+window.api.onPeerConnecting((peer) => {
+    state.connectingPeers.add(peer);
+    updatePeerList();
+    log.event('Peer', 'Connecting', peer);
+});
 
-    ipcRenderer.on('peer-connecting', (event, peer) => {
-        state.connectingPeers.add(peer);
-        updatePeerList();
-        log.event('Peer', 'Connecting', peer);
-    });
+window.api.onPeerJoined((peer) => {
+    state.peers.add(peer);
+    state.connectingPeers.delete(peer);
+    updatePeerList();
+    notify('Peer joined: ' + peer.slice(0, 10) + '...');
+    log.event('Peer', 'Joined', peer);
+});
 
-    ipcRenderer.on('peer-joined', (event, peer) => {
-        state.peers.add(peer);
-        state.connectingPeers.delete(peer); 
-        updatePeerList();
-        notify('Peer joined: ' + peer.slice(0, 10) + '...');
-        log.event('Peer', 'Joined', peer);
-    });
-
-    ipcRenderer.on('peer-left', (event, peer) => {
-        state.peers.delete(peer);
-        state.connectingPeers.delete(peer); 
-        updatePeerList();
-        notify('Peer left: ' + peer.slice(0, 10) + '...');
-        log.event('Peer', 'Left', peer);
-    });
-}
+window.api.onPeerLeft((peer) => {
+    state.peers.delete(peer);
+    state.connectingPeers.delete(peer);
+    updatePeerList();
+    notify('Peer left: ' + peer.slice(0, 10) + '...');
+    log.event('Peer', 'Left', peer);
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     const controls = document.querySelector('.controls');
@@ -330,7 +315,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = e.target.files[0];
         if (!file) return;
 
-        
         const div = document.createElement('div');
         div.className = 'message file-message';
         div.innerHTML = `
@@ -353,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const buffer = await file.arrayBuffer();
-            const result = await ipcRenderer.invoke('share-file', {
+            const result = await window.api.shareFile({
                 channel: state.currentChannel,
                 file: {
                     name: file.name,
@@ -375,7 +359,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('❌ File share failed:', err);
             notify('Failed to share file: ' + err.message);
-            // Remove progress bar on error
             div.remove();
         }
 
@@ -384,7 +367,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function scrollToBottom() {
-
     requestAnimationFrame(() => {
         const messages = document.getElementById('messages');
         messages.scrollTop = messages.scrollHeight;
@@ -414,11 +396,10 @@ function formatSize(bytes) {
 }
 
 async function downloadFile(cid) {
-
     console.log('📥 Attempting to download file:', cid);
     
     try {
-        const result = await ipcRenderer.invoke('download-file', { cid });
+        const result = await window.api.downloadFile({ cid });
         if (result.success) {
             notify(`Downloaded: ${result.metadata.filename}`);
             log.event('File', 'Downloaded', { 
@@ -434,4 +415,15 @@ async function downloadFile(cid) {
     }
 }
 
+// Clean up event listeners when the window unloads
+window.addEventListener('unload', () => {
+    window.api.removeAllListeners('chat-message');
+    window.api.removeAllListeners('peer-joined');
+    window.api.removeAllListeners('peer-left');
+    window.api.removeAllListeners('peer-connecting');
+    window.api.removeAllListeners('file:progress');
+    window.api.removeAllListeners('file:complete');
+});
+
+// Initialize channel list
 updateChannelList();

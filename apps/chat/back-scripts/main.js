@@ -1,16 +1,14 @@
+const { ipcMain, dialog, app } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
-const { ipcMain, dialog } = require('electron');
-//const { P2P } = require('./apps/chat/back-scripts/p2p.mjs');
-// dynamic import
+// Dynamic import for P2P
 let P2P;
 (async () => {
     const { P2P: P2PModule } = await import('./p2p.mjs');
     P2P = P2PModule;
 })();
-const fs = require('fs');
-const path = require('path');
 
-//let mainWindow = null;
 let p2p = null;
 
 function setupP2PEvents(p2pInstance) {
@@ -26,40 +24,62 @@ function setupP2PEvents(p2pInstance) {
     Object.entries(events).forEach(([p2pEvent, ipcEvent]) => {
         p2pInstance.on(p2pEvent, data => {
             console.log(`🔄 [${p2pEvent}]`, data);
-            mainWindow?.webContents.send(ipcEvent, data);
+            if (global.mainWindow) {
+                global.mainWindow.webContents.send(ipcEvent, data);
+            }
         });
     });
 
-    
     p2pInstance.on('peer:connecting', peerId => {
-        mainWindow?.webContents.send('peer-connecting', peerId);
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('peer-connecting', peerId);
+        }
     });
-
 }
 
 const handlers = {
-    'start-chat': async (nickname) => {
-        p2p = new P2P(nickname);
-        setupP2PEvents(p2p);
-        const addr = await p2p.start();
-        return { success: true, addr };
+    'start-chat': async (event, nickname) => {
+        try {
+            if (!P2P) {
+                throw new Error('P2P module not initialized');
+            }
+            p2p = new P2P(nickname);
+            setupP2PEvents(p2p);
+            const addr = await p2p.start();
+            return { success: true, addr };
+        } catch (err) {
+            console.error('Failed to start chat:', err);
+            return { success: false, error: err.message };
+        }
     },
 
-    'send-message': async ({ channel, content }) => {
-        await p2p.sendMessage(channel, content);
-        return { success: true };
+    'send-message': async (event, { channel, content }) => {
+        try {
+            await p2p.sendMessage(channel, content);
+            return { success: true };
+        } catch (err) {
+            return { success: false, error: err.message };
+        }
     },
 
-    'join-channel': async (channel) => {
-        await p2p.joinChannel(channel);
-        return { success: true };
+    'join-channel': async (event, channel) => {
+        try {
+            await p2p.joinChannel(channel);
+            return { success: true };
+        } catch (err) {
+            return { success: false, error: err.message };
+        }
     },
 
-    'connect-peer': async (addr) => {
-        return await p2p.connectToPeer(addr);
+    'connect-peer': async (event, addr) => {
+        try {
+            return await p2p.connectToPeer(addr);
+        } catch (err) {
+            return { success: false, error: err.message };
+        }
     },
 
-    'share-file': async ({ channel, file }) => {
+    'share-file': async (event, { channel, file }) => {
         console.log(`📁 [share-file] Processing:`, {
             name: file.name,
             size: file.size,
@@ -89,7 +109,7 @@ const handlers = {
         }
     },
 
-    'download-file': async ({ cid }) => {
+    'download-file': async (event, { cid }) => {
         console.log(`📥 [download-file] Starting:`, cid);
         
         try {
@@ -99,7 +119,7 @@ const handlers = {
                 size: metadata.size
             });
             
-            const { filePath } = await dialog.showSaveDialog(mainWindow, {
+            const { filePath } = await dialog.showSaveDialog(global.mainWindow, {
                 defaultPath: path.join(app.getPath('downloads'), metadata.filename),
                 filters: [
                     { name: 'All Files', extensions: ['*'] }
@@ -125,14 +145,13 @@ const handlers = {
     }
 };
 
-
 function setupHandlers() {
     console.log('🔗 Setting up IPC handlers...');
     Object.entries(handlers).forEach(([name, handler]) => {
         ipcMain.handle(name, async (event, ...args) => {
             try {
                 console.log(`📥 [${name}] Called with:`, ...args);
-                const result = await handler(...args);
+                const result = await handler(event, ...args);
                 console.log(`📤 [${name}] Result:`, result);
                 return result;
             } catch (err) {
@@ -143,16 +162,19 @@ function setupHandlers() {
     });
 }
 
-/*app.on('before-quit', async (event) => {
+// Cleanup function for P2P instance
+async function cleanup() {
     if (p2p) {
-        event.preventDefault();
-        await p2p.stop();
-        console.log('🛑 P2P network stopped cleanly');
-        app.quit();
+        try {
+            await p2p.stop();
+            console.log('🛑 P2P network stopped cleanly');
+        } catch (err) {
+            console.error('Error stopping P2P network:', err);
+        }
     }
-});*/
+}
 
-// export setupHandlers
 module.exports = {
-    setupHandlers
+    setupHandlers,
+    cleanup
 };
