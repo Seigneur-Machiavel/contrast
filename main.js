@@ -1,6 +1,6 @@
-const { app, BrowserWindow, Menu, globalShortcut, contextBridge, ipcRenderer } = require('electron');
+const { app, BrowserWindow, Menu, globalShortcut, contextBridge, ipcRenderer, ipcMain, dialog } = require('electron');
 const setShortcuts = require('./preferences/shortcuts.js');
-const { chat } = require('./apps/chat/back-scripts/main.js');
+const { setupHandlers } = require('./apps/chat/back-scripts/main.js');
 
 const isDev = true;
 
@@ -18,9 +18,9 @@ function createWindow() {
 
 	mainWindow.loadFile('index.html');
 	mainWindow.webContents.on('did-finish-load', () => { setShortcuts(BrowserWindow, globalShortcut, isDev); });
-	chat.mainWindow = mainWindow;
-	chat.setupHandlers();
-	console.log("chat setupHandlers done" + chat.mainWindow);
+	//chat.mainWindow = mainWindow;
+	setupHandlers(ipcMain);
+	//console.log("chat setupHandlers done" + chat.mainWindow);
 	Menu.setApplicationMenu(null);
 }
 

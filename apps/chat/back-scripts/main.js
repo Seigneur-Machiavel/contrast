@@ -1,7 +1,14 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
-import { P2P } from './apps/chat/back-scripts/p2p.mjs';
-import fs from 'fs';
-import path from 'path';
+
+const { ipcMain, dialog } = require('electron');
+//const { P2P } = require('./apps/chat/back-scripts/p2p.mjs');
+// dynamic import
+let P2P;
+(async () => {
+    const { P2P: P2PModule } = await import('./p2p.mjs');
+    P2P = P2PModule;
+})();
+const fs = require('fs');
+const path = require('path');
 
 let mainWindow = null;
 let p2p = null;
@@ -136,11 +143,16 @@ function setupHandlers() {
     });
 }
 
-app.on('before-quit', async (event) => {
+/*app.on('before-quit', async (event) => {
     if (p2p) {
         event.preventDefault();
         await p2p.stop();
         console.log('🛑 P2P network stopped cleanly');
         app.quit();
     }
-});
+});*/
+
+// export setupHandlers
+module.exports = {
+    setupHandlers
+};
