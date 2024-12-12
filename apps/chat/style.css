@@ -129,7 +129,7 @@ input[type="text"] {
     font-family: inherit;
 }
 
-button {
+chat-button {
     padding: 10px 20px;
     background: black;
     color: white;
@@ -139,7 +139,7 @@ button {
     font-family: inherit;
 }
 
-button:hover { opacity: 0.9; }
+chat-button:hover { opacity: 0.9; }
 
 .notification {
     position: fixed;

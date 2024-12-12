@@ -8,7 +8,7 @@
     <div id="login">
         <h2>C° Chat</h2>
         <input type="text" id="nickname" placeholder="Enter nickname">
-        <button onclick="start()">Start</button>
+        <chat-button onclick="start()">Start</chat-button>
     </div>
 
     <div id="app" class="app">
@@ -21,7 +21,7 @@
                 <div id="channels"></div>
                 <div style="margin-top: 10px;">
                     <input type="text" id="newChannel" placeholder="Channel name">
-                    <button onclick="joinChannel()">Join</button>
+                    <chat-button onclick="joinChannel()">Join</chat-button>
                 </div>
             </div>
 
@@ -30,7 +30,7 @@
                 <div id="peers"></div>
                 <div style="margin-top: 10px;">
                     <input type="text" id="peerAddr" placeholder="Peer address">
-                    <button onclick="connectPeer()">Connect</button>
+                    <chat-button onclick="connectPeer()">Connect</chat-button>
                 </div>
             </div>
         </div>
@@ -39,7 +39,7 @@
             <div id="messages"></div>
             <div class="controls">
                 <input type="text" id="message" placeholder="Type a message...">
-                <button onclick="sendMessage()">Send</button>
+                <chat-button onclick="sendMessage()">Send</chat-button>
             </div>
         </div>
     </div>
