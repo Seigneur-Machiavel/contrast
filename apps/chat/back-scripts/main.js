@@ -10,7 +10,7 @@ let P2P;
 const fs = require('fs');
 const path = require('path');
 
-let mainWindow = null;
+//let mainWindow = null;
 let p2p = null;
 
 function setupP2PEvents(p2pInstance) {

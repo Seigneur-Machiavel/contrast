@@ -3,15 +3,15 @@ const setShortcuts = require('./preferences/shortcuts.js');
 const { setupHandlers } = require('./apps/chat/back-scripts/main.js');
 
 const isDev = true;
-
+let mainWindow;
 function createWindow() {
-	const mainWindow = new BrowserWindow({
+	mainWindow = new BrowserWindow({
 		width: 1200,
 		height: 800,
 		icon: 'img/icon_128.png',
 		webPreferences: {
 			//nodeIntegration: false, // disabled by default when contextIsolation is enabled
-			contextIsolation: true,
+			contextIsolation: false,
 			webviewTag: true
 		}
 	});
