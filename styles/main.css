@@ -77,6 +77,17 @@
 
     --modal-background-color: rgba(0, 0, 0, 0.7);
 }
+.index-dark-mode {
+    --color1: black;
+    --color1_1: #161616;
+    --color1_2: #323232;
+
+    --color2: white;
+    --color2_1: #f0f0f0;
+    --color2_2: #e0e0e0;
+    
+    --modal-background-color: rgba(0, 0, 0, 0.7);
+}
 body {
     background-color: var(--color1);
     color: var(--color2);
