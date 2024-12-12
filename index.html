@@ -4,14 +4,19 @@
     <meta charset="UTF-8">
     <title>Contrast</title>
     <link rel="stylesheet" href="./styles/main.css">
-    <script src="./scripts/main.mjs" defer></script>
+    <script src="./libs/anime.min.js"></script>
+    <script src="./index-scripts/index.mjs" type="module"></script>
 </head>
 <body>
-    <label class="switch">
-        <input type="checkbox" id="dark-mode-toggle" checked>
-        <span class="slider"></span>
+    <label class="index-switch">
+        <input type="checkbox" id="index-dark-mode-toggle" checked>
+        <span class="index-slider"></span>
     </label>
 
     <h1 style="text-align: center; width: 100%; margin-top: 40vh;">Hello world!</h1>
+
+    <div id="index-windows-wrap"></div>
+
+    <div id="index-bottom-buttons-bar"></div>
 </body>
 </html>

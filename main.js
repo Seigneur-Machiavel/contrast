@@ -10,12 +10,14 @@ function createWindow() {
 		icon: 'img/icon_128.png',
 		webPreferences: {
 			//nodeIntegration: false, // disabled by default when contextIsolation is enabled
-			contextIsolation: true
+			contextIsolation: true,
+			webviewTag: true
 		}
 	});
 
 	mainWindow.loadFile('index.html');
 	mainWindow.webContents.on('did-finish-load', () => { setShortcuts(BrowserWindow, globalShortcut, isDev); });
+
 	Menu.setApplicationMenu(null);
 }
 
