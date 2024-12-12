@@ -128,8 +128,7 @@ body {
 }
 .window .title-bar {
     cursor: move;
-    /*background-color: var(--color2_2);*/
-    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 40%, var(--color2_2) 60%, var(--color2_2) 100%);
+    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 44%, var(--color2_2) 52%, var(--color2_2) 100%);
     background-size: 200% 100%;
     color: var(--color1);
     padding: 5px;
