@@ -1,4 +1,48 @@
-<div>
-    hello world! I am the chat content.
-    <div id="chat-messages"></div>
-</div>
+<!DOCTYPE html>
+<html>
+<head>
+    <title>C° Chat</title>
+    <link rel="stylesheet" href="./apps/chat/style.css">
+</head>
+<body>
+    <div id="login">
+        <h2>C° Chat</h2>
+        <input type="text" id="nickname" placeholder="Enter nickname">
+        <button onclick="start()">Start</button>
+    </div>
+
+    <div id="app" class="app">
+        <div id="sidebar">
+            <div class="logo">C°</div>
+            <div id="status"></div>
+            
+            <div class="section">
+                <h3>Channels</h3>
+                <div id="channels"></div>
+                <div style="margin-top: 10px;">
+                    <input type="text" id="newChannel" placeholder="Channel name">
+                    <button onclick="joinChannel()">Join</button>
+                </div>
+            </div>
+
+            <div class="section">
+                <h3>Peers</h3>
+                <div id="peers"></div>
+                <div style="margin-top: 10px;">
+                    <input type="text" id="peerAddr" placeholder="Peer address">
+                    <button onclick="connectPeer()">Connect</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="main">
+            <div id="messages"></div>
+            <div class="controls">
+                <input type="text" id="message" placeholder="Type a message...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
