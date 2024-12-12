@@ -65,8 +65,8 @@ class SubWindow {
 	render(parentElement = document.body, fromX= 0, fromY= 0) {
 		this.element = newElement('div', ['window'], '', parentElement);
 		this.element.dataset.key = this.key;
-		newElement('div', ['title-bar'], this.title, this.element);
-		newElement('div', ['content'], this.content, this.element);
+		newElement('div', ['index-title-bar'], this.title, this.element);
+		newElement('div', ['index-content'], this.content, this.element);
 		
 		if (fromX && fromY) {
 			this.element.style.transform = 'scale(0)';
@@ -150,6 +150,7 @@ class AppsManager {
 	setFrontWindow(appName) {
 		if (!this.windows[appName]) return;
 		if (!this.windows[appName].element) return;
+		if (this.windows[appName].element.style.zIndex === '1') return;
 
 		for (const app in this.windows) {
 			this.windows[app].element.style.zIndex = 0;
@@ -182,17 +183,21 @@ class AppsManager {
 	}
 	clickWindowHandler(e) {
 		// if click in a window (anywhere), bring it to front
-		const subWindow = Object.values(this.windows).find(w => w.element.contains(e.target));
+		// trough parents of the clicked element until find the window
+		let target = e.target;
+		while(target && target !== document.body) {
+			if (target.classList.contains('window')) { break; }
+			target = target.parentElement;
+		}
+
+		const subWindow = Object.values(this.windows).find(w => w.element.contains(target));
 		if (!subWindow) return;
 
 		const key = subWindow.element.dataset.key;
 		this.setFrontWindow(key);
-
-
-		
 	}
 	grabWindowHandler(e) {
-		const titleBar = e.target.closest('.title-bar');
+		const titleBar = e.target.closest('.index-title-bar');
 		if (!titleBar) return;
 
 		const subWindow = Object.values(this.windows).find(w => w.element.contains(titleBar));
@@ -236,6 +241,7 @@ appsManager.initApps();
 // better implementation with less event listeners
 document.addEventListener('click', (e) => {
 	appsManager.grabClickHandler(e);
+	appsManager.clickWindowHandler(e);
 });
 document.addEventListener('mousedown', (e) => {
 	appsManager.grabWindowHandler(e);
