@@ -65,8 +65,8 @@ class SubWindow {
 	render(parentElement = document.body, fromX= 0, fromY= 0) {
 		this.element = newElement('div', ['window'], '', parentElement);
 		this.element.dataset.key = this.key;
-		newElement('div', ['index-title-bar'], this.title, this.element);
-		newElement('div', ['index-content'], this.content, this.element);
+		newElement('div', ['title-bar'], this.title, this.element);
+		newElement('div', ['content'], this.content, this.element);
 		
 		if (fromX && fromY) {
 			this.element.style.transform = 'scale(0)';
@@ -197,13 +197,12 @@ class AppsManager {
 		this.setFrontWindow(key);
 	}
 	grabWindowHandler(e) {
-		const titleBar = e.target.closest('.index-title-bar');
+		const titleBar = e.target.closest('.title-bar');
 		if (!titleBar) return;
 
 		const subWindow = Object.values(this.windows).find(w => w.element.contains(titleBar));
 		if (!subWindow) return;
 
-		console.log('grabbed');
 		subWindow.isDragging = true;
 		subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
 		subWindow.dragStart.y = e.clientY - subWindow.element.offsetTop;
