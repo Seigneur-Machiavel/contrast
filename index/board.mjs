@@ -134,6 +134,13 @@ class AppsManager {
 		const origin = this.buttonsBar.getButtonOrigin(appName);
 		this.windows[appName] = new SubWindow(appName, this.appsConfig[appName].title, this.appsConfig[appName].content);
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
+
+		if (this.appsConfig[appName].minWidth) {
+			this.windows[appName].element.style.minWidth = this.appsConfig[appName].minWidth + 'px';
+		}
+		if (this.appsConfig[appName].minHeight) {
+			this.windows[appName].element.style.minHeight = this.appsConfig[appName].minHeight + 'px';
+		}
 	}
 	toggleAppWindow(appName) {
 		if (!this.appsConfig[appName]) return;
