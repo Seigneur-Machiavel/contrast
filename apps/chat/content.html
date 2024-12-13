@@ -1,49 +1,41 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>C° Chat</title>
-    <link rel="stylesheet" href="./apps/chat/style.css">
-</head>
-<body>
-    <div id="login">
-        <h2>C° Chat</h2>
-        <input type="text" id="nickname" placeholder="Enter nickname">
-        <chat-button>Start</chat-button>
-    </div>
+<title>C° Chat</title>
+<link rel="stylesheet" href="./apps/chat/style.css">
 
-    <div id="app" class="app">
-        <div id="sidebar">
-            <div class="logo">C°</div>
-            <div id="status"></div>
+<div id="login">
+    <h2>C° Chat</h2>
+    <input type="text" id="nickname" placeholder="Enter nickname">
+    <chat-button onclick="start()">Start</chat-button>
+</div>
 
-            <div class="section">
-                <h3>Channels</h3>
-                <div id="channels"></div>
-                <div style="margin-top: 10px;">
-                    <input type="text" id="newChannel" placeholder="Channel name">
-                    <chat-button>Join</chat-button>
-                </div>
-            </div>
+<div id="app" class="app">
+    <div id="sidebar">
+        <div class="logo">C°</div>
+        <div id="status"></div>
 
-            <div class="section">
-                <h3>Peers</h3>
-                <div id="peers"></div>
-                <div style="margin-top: 10px;">
-                    <input type="text" id="peerAddr" placeholder="Peer address">
-                    <chat-button>Connect</chat-button>
-                </div>
+        <div class="section">
+            <h3>Channels</h3>
+            <div id="channels"></div>
+            <div style="margin-top: 10px;">
+                <input type="text" id="newChannel" placeholder="Channel name">
+                <chat-button onclick="joinChannel()">Join</chat-button>
             </div>
         </div>
 
-        <div id="main">
-            <div id="messages"></div>
-            <div class="controls">
-                <input type="file" id="fileInput" style="display: none">
-                <button id="shareButton">Share File</button>
-                <input type="text" id="message" placeholder="Type a message...">
-                <chat-button>Send</chat-button>
+        <div class="section">
+            <h3>Peers</h3>
+            <div id="peers"></div>
+            <div style="margin-top: 10px;">
+                <input type="text" id="peerAddr" placeholder="Peer address">
+                <chat-button onclick="connectPeer()">Connect</chat-button>
             </div>
         </div>
     </div>
-</body>
-</html>
+
+    <div id="main">
+        <div id="messages"></div>
+        <div class="controls">
+            <input type="text" id="message" placeholder="Type a message...">
+            <chat-button onclick="sendMessage()">Send</chat-button>
+        </div>
+    </div>
+</div>
