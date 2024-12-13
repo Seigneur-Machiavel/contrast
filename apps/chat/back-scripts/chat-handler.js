@@ -3,7 +3,7 @@ if (false) {
 }
 
 /**
- * @typedef {{name: string, size: number, type: string, content: Uint8Array}} FileData 
+ * @typedef {{name: string, size: number, type: string, content: Uint8Array}} FileData
  */
 
 const { ipcMain, dialog, app } = require('electron');
@@ -42,14 +42,11 @@ class P2PChatHandler {
         );
 
         // Initialize module right away but don't block constructor
-        this.moduleReady = this.initP2PModule();
+        this.moduleReady = this.#initP2PModule();
         
     }
 
-    /**
-     * @private
-     */
-    async initP2PModule() {
+    async #initP2PModule() {
         const { P2P } = await import('./p2p.mjs');
         return P2P;
     }
@@ -57,7 +54,6 @@ class P2PChatHandler {
     /**
      * @param {'info'|'error'|'success'|'file'|'network'|'peer'} type
      * @param {string} action
-     * @param {*} data
      */
     log(type, action, data) {
         const emojis = {
@@ -67,9 +63,6 @@ class P2PChatHandler {
         console.log(`${emojis[type]} [${action}]`, data);
     }
 
-    /**
-     * @param {*} p2pInstance
-     */
     setupP2PEvents(p2pInstance) {
         this.log('network', 'setup', 'Initializing P2P events');
         // Wizard: Track event listeners for cleanup
@@ -82,10 +75,7 @@ class P2PChatHandler {
         });
     }
 
-    /**
-     * @param {*} event
-     * @param {string} nickname
-     */
+    /** @param {string} nickname */
     async startChat(event, nickname) {
         try {
             const P2P = await this.moduleReady;
@@ -100,10 +90,7 @@ class P2PChatHandler {
         }
     }
 
-    /**
-     * @param {*} event
-     * @param {{channel: string, file: FileData}} param1
-     */
+    /** @param {{channel: string, file: FileData}} param1 */
     async shareFile(event, { channel, file }) {
         if (!file?.content) throw new Error('Invalid file data received');
         
@@ -121,10 +108,7 @@ class P2PChatHandler {
         }
     }
 
-    /**
-     * @param {*} event
-     * @param {{cid: string}} param1
-     */
+    /** @param {{cid: string}} param1 */
     async downloadFile(event, { cid }) {
         this.log('file', 'download-start', { cid });
         try {
@@ -145,34 +129,22 @@ class P2PChatHandler {
         }
     }
 
-    /**
-     * @param {*} event
-     * @param {{channel: string, content: string}} param1
-     */
+    /** @param {{channel: string, content: string}} param1 */
     async sendMessage(event, { channel, content }) {
         return this.wrapP2PCall('send-message', () => this.p2p.sendMessage(channel, content));
     }
 
-    /**
-     * @param {*} event
-     * @param {string} channel
-     */
+    /** @param {string} channel */
     async joinChannel(event, channel) {
         return this.wrapP2PCall('join-channel', () => this.p2p.joinChannel(channel));
     }
 
-    /**
-     * @param {*} event
-     * @param {string} addr
-     */
+    /** @param {string} addr */
     async connectPeer(event, addr) {
         return this.wrapP2PCall('connect-peer', () => this.p2p.connectToPeer(addr));
     }
 
-    /**
-     * @param {string} action
-     * @param {Function} fn
-     */
+    /** @param {string} action @param {Function} fn */
     async wrapP2PCall(action, fn) {
         try {
             await fn();

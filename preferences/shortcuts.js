@@ -18,6 +18,7 @@ function setShortcuts(bw, handlersToRemove = [], dev = true) {
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {
         if (!bw.getFocusedWindow()) return;
 
+        // Should be better if the handlers are removed by the initiator app
         for (let appHandlers of handlersToRemove) {
             const keys = Object.keys(appHandlers);
             for (const key of keys) ipcMain.removeHandler(key);
