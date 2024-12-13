@@ -1,10 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
-//const ChatApi = require('./apps/chat/chat-back-api.js');
 
-// Expose protected methods that allow the renderer process to use
-// specific IPC channels safely in isolation
-contextBridge.exposeInMainWorld('chat', {
-    // Chat methods
+const chatApi = {
+    // Methods
     startChat: (nickname) => ipcRenderer.invoke('start-chat', nickname),
     sendMessage: (data) => ipcRenderer.invoke('send-message', data),
     joinChannel: (channel) => ipcRenderer.invoke('join-channel', channel),
@@ -12,7 +9,7 @@ contextBridge.exposeInMainWorld('chat', {
     shareFile: (data) => ipcRenderer.invoke('share-file', data),
     downloadFile: (data) => ipcRenderer.invoke('download-file', data),
 
-    // Event listeners
+    // Listeners
     onChatMessage: (callback) => ipcRenderer.on('message', (event, data) => callback(data)),
     onPeerJoined: (callback) => ipcRenderer.on('peer-joined', (event, data) => callback(data)),
     onPeerLeft: (callback) => ipcRenderer.on('peer-left', (event, data) => callback(data)),
@@ -22,4 +19,8 @@ contextBridge.exposeInMainWorld('chat', {
 
     // Remove event listeners
     removeAllListeners: (channel) => { ipcRenderer.removeAllListeners(channel); }
-});
+};
+
+// Expose protected methods that allow the renderer process to use
+// specific IPC channels safely in isolation
+contextBridge.exposeInMainWorld('chat', chatApi);

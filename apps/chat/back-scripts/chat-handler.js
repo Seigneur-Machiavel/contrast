@@ -19,7 +19,7 @@ class P2PChatHandler {
         
         this.events = ['message', 'peer-joined', 'peer-left', 'file-progress', 'file-complete', 'peer-connecting'];
 
-        this.boundHandlers = {
+        this.handlers = {
             'start-chat': this.startChat.bind(this),
             'send-message': this.sendMessage.bind(this),
             'join-channel': this.joinChannel.bind(this),
@@ -28,19 +28,14 @@ class P2PChatHandler {
             'download-file': this.downloadFile.bind(this)
         };
 
-        this.handlers = Object.fromEntries(
-            ['start-chat', 'send-message', 'join-channel', 'connect-peer', 'share-file', 'download-file']
-            .map(name => [name, this[name.replace(/-./g, x => x[1].toUpperCase())]])
-        );
-
         // Initialize module right away but don't block constructor
-        this.moduleReady = this.#initP2PModule();
-        
+        this.P2P;
+        this.#initP2PModule();
     }
 
     async #initP2PModule() {
         const { P2P } = await import('./p2p.mjs');
-        return P2P;
+        this.P2P = P2P;
     }
 
     /**
@@ -68,9 +63,12 @@ class P2PChatHandler {
 
     /** @param {string} nickname */
     async startChat(event, nickname) {
+        while (!this.P2P) {
+            console.warn('P2P module not initialized yet');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
         try {
-            const P2P = await this.moduleReady;
-            this.p2p = new P2P(nickname);
+            this.p2p = new this.P2P(nickname);
             this.setupP2PEvents(this.p2p);
             const addr = await this.p2p.start();
             this.log('success', 'chat-started', { nickname, addr });
@@ -149,7 +147,7 @@ class P2PChatHandler {
 
     setupHandlers() {
         this.log('info', 'setup', 'Registering IPC handlers');
-        Object.entries(this.boundHandlers).forEach(([name, handler]) => {
+        Object.entries(this.handlers).forEach(([name, handler]) => {
             ipcMain.handle(name, async (event, ...args) => {
                 try {
                     this.log('info', `${name}-called`, args);

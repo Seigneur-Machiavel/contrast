@@ -5,7 +5,7 @@ const setShortcuts = require('./preferences/shortcuts.js');
 
 const isDev = true;
 
-function createWindow() {
+async function createWindow() {
     const mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,

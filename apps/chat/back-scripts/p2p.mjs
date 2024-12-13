@@ -22,6 +22,7 @@ const BOOTSTRAP_LIST = [
 
 const MAX_HISTORY = 100;
 
+
 export class P2P extends EventEmitter {
     constructor(nickname, options = {}) {
         super();
