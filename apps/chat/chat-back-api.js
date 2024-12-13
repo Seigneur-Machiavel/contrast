@@ -10,7 +10,7 @@ const ChatApi = {
     downloadFile: (data) => ipcRenderer.invoke('download-file', data),
 
     // Event listeners
-    onChatMessage: (callback) => ipcRenderer.on('chat-message', (event, data) => callback(data)),
+    onChatMessage: (callback) => ipcRenderer.on('message', (event, data) => callback(data)),
     onPeerJoined: (callback) => ipcRenderer.on('peer-joined', (event, data) => callback(data)),
     onPeerLeft: (callback) => ipcRenderer.on('peer-left', (event, data) => callback(data)),
     onPeerConnecting: (callback) => ipcRenderer.on('peer-connecting', (event, data) => callback(data)),

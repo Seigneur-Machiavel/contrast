@@ -17,14 +17,7 @@ class P2PChatHandler {
         this.mainWindow = mainWindow;
         this.p2p = null;
         
-        this.events = {
-            'message': 'chat-message',
-            'peer:join': 'peer-joined',
-            'peer:left': 'peer-left',
-            'file:progress': 'file:progress',
-            'file:complete': 'file:complete',
-            'peer:connecting': 'peer-connecting'
-        };
+        this.events = ['message', 'peer-joined', 'peer-left', 'file-progress', 'file-complete', 'peer-connecting'];
 
         this.boundHandlers = {
             'start-chat': this.startChat.bind(this),
@@ -62,16 +55,16 @@ class P2PChatHandler {
         };
         console.log(`${emojis[type]} [${action}]`, data);
     }
-
+    
     setupP2PEvents(p2pInstance) {
         this.log('network', 'setup', 'Initializing P2P events');
-        // Wizard: Track event listeners for cleanup
-        Object.entries(this.events).forEach(([p2pEvent, ipcEvent]) => {
+        // Wizard: Simple loop through event array since event names are identical
+        this.events.forEach(event => {
             const handler = data => {
-                this.log('info', p2pEvent, data);
-                this.mainWindow.webContents.send(ipcEvent, data);
+                this.log('info', event, data);
+                this.mainWindow.webContents.send(event, data);
             };
-            p2pInstance.on(p2pEvent, handler);
+            p2pInstance.on(event, handler);
         });
     }
 

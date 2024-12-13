@@ -181,7 +181,7 @@ export class P2P extends EventEmitter {
                 this.peers.add(peerId);
                 console.log(`🤝 [${this.nickname}] Connected (CM): ${peerId}`);
                 this.dhtStats.connected.push(peerId);
-                this.emit('peer:join', peerId);
+                this.emit('peer-joined', peerId);
 
                 try {
                     const peerInfo = await this.node.peerStore.get(evt.detail);
@@ -204,7 +204,7 @@ export class P2P extends EventEmitter {
             const peerId = evt.detail.toString();
             this.peers.delete(peerId);
             console.log(`👋 [${this.nickname}] Disconnected: ${peerId}`);
-            this.emit('peer:left', peerId);
+            this.emit('peer-left', peerId);
         });
     
         
@@ -386,7 +386,7 @@ export class P2P extends EventEmitter {
             for await (const chunk of file.stream()) {
                 chunks.push(chunk);
                 totalRead += chunk.length;
-                this.emit('file:progress', {
+                this.emit('file-progress', {
                     channel, filename: file.name,
                     progress: Math.floor((totalRead / file.size) * 100)
                 });
