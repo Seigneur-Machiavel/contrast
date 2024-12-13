@@ -14,8 +14,8 @@ const ChatApi = {
     onPeerJoined: (callback) => ipcRenderer.on('peer-joined', (event, data) => callback(data)),
     onPeerLeft: (callback) => ipcRenderer.on('peer-left', (event, data) => callback(data)),
     onPeerConnecting: (callback) => ipcRenderer.on('peer-connecting', (event, data) => callback(data)),
-    onFileProgress: (callback) => ipcRenderer.on('file:progress', (event, data) => callback(data)),
-    onFileComplete: (callback) => ipcRenderer.on('file:complete', (event, data) => callback(data)),
+    onFileProgress: (callback) => ipcRenderer.on('file-progress', (event, data) => callback(data)),
+    onFileComplete: (callback) => ipcRenderer.on('file-complete', (event, data) => callback(data)),
 
     // Remove event listeners
     removeAllListeners: (channel) => {
