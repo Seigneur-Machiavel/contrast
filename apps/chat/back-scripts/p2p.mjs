@@ -14,7 +14,7 @@ import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string';
 import EventEmitter from 'events';
 import { pipe } from 'it-pipe';
 import { concat as uint8ArrayConcat } from 'uint8arrays/concat';
-import { create } from 'ipfs-core';
+//import { create } from 'ipfs-core';
 
 const BOOTSTRAP_LIST = [
     ''
@@ -93,7 +93,7 @@ export class P2P extends EventEmitter {
             }
         });
     
-        this.ipfs = await create({
+/*         this.ipfs = await create({
             repo: `ipfs/ipfs-${this.nickname}}`,
             init: { algorithm: 'Ed25519' },
             config: {
@@ -102,7 +102,7 @@ export class P2P extends EventEmitter {
                 }
             }
         });
-    
+     */
         this.node.services.pubsub.addEventListener('message', msg => {
             try {
                 const { topic, data } = msg.detail;
