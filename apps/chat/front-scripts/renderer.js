@@ -79,7 +79,7 @@ async function start() {
     }
 
     try {
-        const result = await window.api.startChat(nickname);
+        const result = await window.chat.startChat(nickname);
         if (!result.success) {
             notify('Failed to start: ' + result.error);
             return;
@@ -107,7 +107,7 @@ async function sendMessage() {
     if (!content) return;
 
     try {
-        const result = await window.api.sendMessage({
+        const result = await window.chat.sendMessage({
             channel: state.currentChannel,
             content
         });
@@ -130,7 +130,7 @@ async function joinChannel() {
     if (!channel) return;
 
     try {
-        const result = await window.api.joinChannel(channel);
+        const result = await window.chat.joinChannel(channel);
         if (result.success) {
             state.channels.add(channel);
             input.value = '';
@@ -153,7 +153,7 @@ async function connectPeer() {
     if (!addr) return;
 
     try {
-        const success = await window.api.connectPeer(addr);
+        const success = await window.chat.connectPeer(addr);
         if (success) {
             input.value = '';
             notify('Connected to peer');
@@ -215,7 +215,7 @@ function notify(message) {
 const transfers = new Map();
 
 // Set up event listeners
-window.api.onFileProgress((data) => {
+window.chat.onFileProgress((data) => {
     const progressElement = document.querySelector(`[data-file-progress="${data.filename}"]`);
     if (progressElement) {
         progressElement.style.width = `${data.progress}%`;
@@ -223,7 +223,7 @@ window.api.onFileProgress((data) => {
     }
 });
 
-window.api.onChatMessage((msg) => {
+window.chat.onChatMessage((msg) => {
     if (msg.content.startsWith('/file ')) {
         const [_, filename, cid, size, type] = msg.content.split(' ');
         
@@ -278,13 +278,13 @@ window.api.onChatMessage((msg) => {
     }
 });
 
-window.api.onPeerConnecting((peer) => {
+window.chat.onPeerConnecting((peer) => {
     state.connectingPeers.add(peer);
     updatePeerList();
     log.event('Peer', 'Connecting', peer);
 });
 
-window.api.onPeerJoined((peer) => {
+window.chat.onPeerJoined((peer) => {
     state.peers.add(peer);
     state.connectingPeers.delete(peer);
     updatePeerList();
@@ -292,7 +292,7 @@ window.api.onPeerJoined((peer) => {
     log.event('Peer', 'Joined', peer);
 });
 
-window.api.onPeerLeft((peer) => {
+window.chat.onPeerLeft((peer) => {
     state.peers.delete(peer);
     state.connectingPeers.delete(peer);
     updatePeerList();
@@ -337,7 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const buffer = await file.arrayBuffer();
-            const result = await window.api.shareFile({
+            const result = await window.chat.shareFile({
                 channel: state.currentChannel,
                 file: {
                     name: file.name,
@@ -399,7 +399,7 @@ async function downloadFile(cid) {
     console.log('📥 Attempting to download file:', cid);
     
     try {
-        const result = await window.api.downloadFile({ cid });
+        const result = await window.chat.downloadFile({ cid });
         if (result.success) {
             notify(`Downloaded: ${result.metadata.filename}`);
             log.event('File', 'Downloaded', { 
@@ -417,12 +417,12 @@ async function downloadFile(cid) {
 
 // Clean up event listeners when the window unloads
 window.addEventListener('unload', () => {
-    window.api.removeAllListeners('chat-message');
-    window.api.removeAllListeners('peer-joined');
-    window.api.removeAllListeners('peer-left');
-    window.api.removeAllListeners('peer-connecting');
-    window.api.removeAllListeners('file:progress');
-    window.api.removeAllListeners('file:complete');
+    window.chat.removeAllListeners('chat-message');
+    window.chat.removeAllListeners('peer-joined');
+    window.chat.removeAllListeners('peer-left');
+    window.chat.removeAllListeners('peer-connecting');
+    window.chat.removeAllListeners('file:progress');
+    window.chat.removeAllListeners('file:complete');
 });
 
 // Initialize channel list
