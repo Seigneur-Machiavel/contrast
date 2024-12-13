@@ -1,6 +1,3 @@
-if (false) {
-    const { BrowserWindow } = require('electron');
-}
 /**
  * @typedef {{name: string, size: number, type: string, content: Uint8Array}} FileData 
  */
@@ -10,10 +7,7 @@ const fs = require('fs');
 const path = require('path');
 
 class P2PChatHandler {
-    /** @param {BrowserWindow} mainWindow */
-    constructor(mainWindow) {
-        /** @type {BrowserWindow} */
-        this.mainWindow = mainWindow;
+    constructor() {
         this.p2p = null;
         
         this.events = {
@@ -25,21 +19,32 @@ class P2PChatHandler {
             'peer:connecting': 'peer-connecting'
         };
 
-        Object.getOwnPropertyNames(P2PChatHandler.prototype)
-            .filter(method => method !== 'constructor')
-            .forEach(method => this[method] = this[method].bind(this));
+        this.boundHandlers = {
+            'start-chat': this.startChat.bind(this),
+            'send-message': this.sendMessage.bind(this),
+            'join-channel': this.joinChannel.bind(this),
+            'connect-peer': this.connectPeer.bind(this),
+            'share-file': this.shareFile.bind(this),
+            'download-file': this.downloadFile.bind(this)
+        };
 
+        // Wizard: Auto-map kebab-case names to camelCase methods
         this.handlers = Object.fromEntries(
             ['start-chat', 'send-message', 'join-channel', 'connect-peer', 'share-file', 'download-file']
             .map(name => [name, this[name.replace(/-./g, x => x[1].toUpperCase())]])
         );
-
+        this.activeListeners = new Set();
+        // Initialize module right away but don't block constructor
         this.moduleReady = this.initP2PModule();
+        
     }
 
+    /**
+     * @private
+     */
     async initP2PModule() {
         const { P2P } = await import('./p2p.mjs');
-        return P2P; // Store promise result for later use
+        return P2P;
     }
 
     /**
@@ -60,11 +65,14 @@ class P2PChatHandler {
      */
     setupP2PEvents(p2pInstance) {
         this.log('network', 'setup', 'Initializing P2P events');
+        // Wizard: Track event listeners for cleanup
         Object.entries(this.events).forEach(([p2pEvent, ipcEvent]) => {
-            p2pInstance.on(p2pEvent, data => {
+            const handler = data => {
                 this.log('info', p2pEvent, data);
-                this.mainWindow?.webContents.send(ipcEvent, data);
-            });
+                global.mainWindow?.webContents.send(ipcEvent, data);
+            };
+            p2pInstance.on(p2pEvent, handler);
+            this.activeListeners.add({ event: p2pEvent, handler, instance: p2pInstance });
         });
     }
 
@@ -88,7 +96,7 @@ class P2PChatHandler {
 
     /**
      * @param {*} event
-     * @param {{channel: string, file: FileData}} params
+     * @param {{channel: string, file: FileData}} param1
      */
     async shareFile(event, { channel, file }) {
         if (!file?.content) throw new Error('Invalid file data received');
@@ -109,13 +117,13 @@ class P2PChatHandler {
 
     /**
      * @param {*} event
-     * @param {{cid: string}} params
+     * @param {{cid: string}} param1
      */
     async downloadFile(event, { cid }) {
         this.log('file', 'download-start', { cid });
         try {
             const { content, metadata } = await this.p2p.downloadFile(cid);
-            const { filePath } = await dialog.showSaveDialog(this.mainWindow, {
+            const { filePath } = await dialog.showSaveDialog(global.mainWindow, {
                 defaultPath: path.join(app.getPath('downloads'), metadata.filename),
                 filters: [{ name: 'All Files', extensions: ['*'] }]
             });
@@ -133,7 +141,7 @@ class P2PChatHandler {
 
     /**
      * @param {*} event
-     * @param {{channel: string, content: string}} params
+     * @param {{channel: string, content: string}} param1
      */
     async sendMessage(event, { channel, content }) {
         return this.wrapP2PCall('send-message', () => this.p2p.sendMessage(channel, content));
@@ -172,7 +180,7 @@ class P2PChatHandler {
 
     setupHandlers() {
         this.log('info', 'setup', 'Registering IPC handlers');
-        Object.entries(this.handlers).forEach(([name, handler]) => {
+        Object.entries(this.boundHandlers).forEach(([name, handler]) => {
             ipcMain.handle(name, async (event, ...args) => {
                 try {
                     this.log('info', `${name}-called`, args);
@@ -186,17 +194,32 @@ class P2PChatHandler {
     }
 
     async cleanup() {
+        this.log('info', 'cleanup', 'Starting cleanup');
+        
+        // Wizard: Remove all IPC handlers first
+        Object.keys(this.boundHandlers).forEach(channel => {
+            ipcMain.removeHandler(channel);
+            this.log('info', 'cleanup', `Removed handler: ${channel}`);
+        });
+
+        // Wizard: Clean up all tracked event listeners
+        this.activeListeners.forEach(({ event, handler, instance }) => {
+            instance.off(event, handler);
+            this.log('info', 'cleanup', `Removed listener: ${event}`);
+        });
+        this.activeListeners.clear();
+
+        // Stop P2P network
         if (this.p2p) {
             try {
                 await this.p2p.stop();
-                this.log('info', 'cleanup', 'P2P network stopped cleanly');
+                this.p2p = null;
+                this.log('success', 'cleanup', 'P2P network stopped cleanly');
             } catch (err) {
-                this.log('error', 'cleanup', err);
+                this.log('error', 'cleanup', `Failed to stop P2P: ${err.message}`);
+                throw err; // Propagate error for proper error handling
             }
         }
-
-        // cleanup ipcMain
-        //Object.keys(this.handlers).forEach(name => ipcMain.removeHandler(name));
     }
 }
 
