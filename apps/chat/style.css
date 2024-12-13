@@ -1,21 +1,24 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+    --color1: white;
+    --color1_1: #f0f0f0;
+    --color1_2: #e0e0e0;
 
-body { 
-    font-family: monospace;
-    overflow: hidden;
-    background: white;
-    color: black;
-    height: 100vh;
+    --color2: black;
+    --color2_1: #161616;
+    --color2_2: #323232;
+
+    --modal-background-color: rgba(0, 0, 0, 0.7);
 }
 
-.app {
+
+.chat-app {
     display: none; 
     grid-template-columns: 250px 1fr;
-    height: 100vh;
+    height: 100%;
 }
 
 /* Login screen */
-#login {
+#chat-login {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -25,37 +28,37 @@ body {
 }
 
 /* Sidebar */
-#sidebar {
-    border-right: 1px solid #eee;
+#chat-sidebar {
+    border-right: 1px solid var(--color1_2);
     display: flex;
     flex-direction: column;
-    background: white;
+    background: var(--color1);
 }
 
 .logo {
     padding: 20px;
     font-size: 24px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color1_2);
 }
 
-#status {
+#chat-status {
     padding: 10px;
     font-size: 12px;
-    color: #666;
+    color: var(--color2_1);
     word-break: break-all;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color1_2);
 }
 
 .section {
     padding: 20px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color1_2);
 }
 
 .section h3 {
     margin-bottom: 10px;
 }
 
-#channels, #peers {
+#chat-channels, #chat-peers {
     overflow-y: auto;
     max-height: 200px;
 }
@@ -67,8 +70,8 @@ body {
     border-radius: 4px;
 }
 
-.channel:hover { background: #f8f8f8; }
-.channel.active { background: #eee; }
+.channel:hover { background: var(--color1_1); }
+.channel.active { background: var(--color1_2); }
 
 .peer {
     font-size: 12px;
@@ -77,13 +80,13 @@ body {
 }
 
 /* Main chat area */
-#main {
+#chat-main {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 100%;
 }
 
-#messages {
+#chat-messages {
     flex: 1;
     overflow-y: auto;
     padding: 20px;
@@ -104,18 +107,18 @@ body {
 }
 
 .message-time {
-    color: #666;
+    color: var(--color2_1);
     font-size: 12px;
 }
 
 .message-latency {
-    color: #999;
+    color: var(--color2_2);
     font-size: 11px;
 }
 
 .controls {
     padding: 20px;
-    border-top: 1px solid #eee;
+    border-top: 1px solid var(--color1_2);
     display: flex;
     gap: 10px;
 }
@@ -124,22 +127,22 @@ body {
 input[type="text"] {
     flex: 1;
     padding: 10px;
-    border: 1px solid #eee;
+    border: 1px solid var(--color1_2);
     border-radius: 4px;
     font-family: inherit;
 }
 
-chat-button {
+.chat-button {
     padding: 10px 20px;
     background: black;
-    color: white;
+    color: var(--color1);
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-family: inherit;
 }
 
-chat-button:hover { opacity: 0.9; }
+.chat-button:hover { opacity: 0.9; }
 
 .notification {
     position: fixed;
@@ -147,7 +150,7 @@ chat-button:hover { opacity: 0.9; }
     right: 20px;
     padding: 15px 20px;
     background: black;
-    color: white;
+    color: var(--color1);
     border-radius: 4px;
     opacity: 0;
     transform: translateY(20px);
@@ -171,7 +174,7 @@ chat-button:hover { opacity: 0.9; }
 
 
 .file-message .message-content {
-    background: #f8f8f8;
+    background: var(--color1_1);
     padding: 10px;
     border-radius: 4px;
     margin-top: 5px;
@@ -183,15 +186,10 @@ chat-button:hover { opacity: 0.9; }
     gap: 10px;
 }
 
-.download-button {
-    padding: 4px 8px;
-    font-size: 12px;
-}
-
 .progress-bar {
     width: 100px;
     height: 4px;
-    background: #eee;
+    background: var(--color1_2);
     border-radius: 2px;
     overflow: hidden;
 }
@@ -199,7 +197,7 @@ chat-button:hover { opacity: 0.9; }
 .progress {
     width: 0%;
     height: 100%;
-    background: #000;
+    background: var(--color2);
     transition: width 0.3s ease;
 }
 
@@ -209,7 +207,7 @@ chat-button:hover { opacity: 0.9; }
     align-items: center;
     padding: 8px;
     font-size: 12px;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--color1_2);
 }
 
 .peer-id {

@@ -147,7 +147,7 @@ class P2PChatHandler {
 
     setupHandlers() {
         this.log('info', 'setup', 'Registering IPC handlers');
-        Object.entries(this.handlers).forEach(([name, handler]) => {
+        for (const [name, handler] of Object.entries(this.handlers)) {
             ipcMain.handle(name, async (event, ...args) => {
                 try {
                     this.log('info', `${name}-called`, args);
@@ -157,7 +157,7 @@ class P2PChatHandler {
                     return { success: false, error: err.message };
                 }
             });
-        });
+        }
 
         return this.handlers;
     }

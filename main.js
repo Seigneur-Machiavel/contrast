@@ -21,8 +21,13 @@ async function createWindow() {
 	const chatHandler = new P2PChatHandler(mainWindow);
     mainWindow.loadFile('index.html');
     mainWindow.webContents.on('did-finish-load', () => {
+		console.log('Main window loaded. -> Setting up chatHandlers && shortcuts');
 		const chatHandlers = chatHandler.setupHandlers();
 		setShortcuts(BrowserWindow, [ chatHandlers ], isDev);
+	});
+
+	mainWindow.webContents.on('will-navigate', (event) => { // EXPERIMENTAL
+		globalShortcut.unregisterAll();
 	});
 
     Menu.setApplicationMenu(null);

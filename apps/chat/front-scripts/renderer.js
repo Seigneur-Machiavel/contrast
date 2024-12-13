@@ -4,6 +4,20 @@
 class ChatUI {
     /** @param {HTMLElement} parentDiv */
     constructor(parentDiv) {
+        /** @type {HTMLElement} */
+        this.document = parentDiv;
+        this.eHTML = {
+            login: document.getElementById('chat-login'),
+            nickname: document.getElementById('chat-login').getElementsByTagName('input')[0],
+            app: document.getElementById('chat-app'),
+            status: document.getElementById('chat-status'),
+            messages: document.getElementById('chat-messages'),
+            message: document.getElementById('chat-message'),
+            channels: document.getElementById('chat-channels'),
+            newChannel: document.getElementById('chat-newChannel'),
+            peerAddr: document.getElementById('chat-peerAddr'),
+            peers: document.getElementById('chat-peers')
+        }
         this.state = {
             currentChannel: 'system',
             channels: new Set(['system']),
@@ -14,16 +28,15 @@ class ChatUI {
             transfers: new Map(),
             debug: true
         };
-        /** @type {HTMLElement} */
-        this.document = parentDiv;
         // Bind methods
         Object.getOwnPropertyNames(ChatUI.prototype)
             .filter(method => method !== 'constructor')
             .forEach(method => this[method] = this[method].bind(this));
 
-        this.initializeUI(); // Initialize on Content (parentDiv) ready
+        this.updateChannelList();
         window.addEventListener('unload', this.cleanup);
         this.initializeEventListeners();
+        this.initializeFrontListeners();
     }
 
     log(type, action, data) {
@@ -45,87 +58,36 @@ class ChatUI {
         window.chat.onPeerJoined(this.handlePeerJoined);
         window.chat.onPeerLeft(this.handlePeerLeft);
     }
-    initializeFrontListerners() {
-        /*// Initialize after DOM is ready
-        window.addEventListener('DOMContentLoaded', () => {
-            window.chatUI = new ChatUI();
-            // Connect all buttons after initialization
-            connectButtons();
+    initializeFrontListeners() {
+        this.document.addEventListener('click', e => {
+            switch (e.target.dataset.action) {
+                case 'start': if (e.target.tagName === 'BUTTON') this.start(); break;
+                case 'joinChannel': this.joinChannel(); break;
+                case 'switchChannel': this.switchChannel(e.target.dataset.value); break;
+                case 'connectPeer': this.connectPeer(); break;
+                case 'sendMessage': if (e.target.tagName === 'BUTTON') this.sendMessage(); break;
+            }
         });
 
-        function connectButtons() {
-            // Connect start button
-            document.querySelector('#login chat-button')
-                .addEventListener('click', () => window.chatUI.start());
-
-            // Connect channel button
-            document.querySelector('#newChannel')
-                .nextElementSibling
-                .addEventListener('click', () => window.chatUI.joinChannel());
-
-            // Connect peer button
-            document.querySelector('#peerAddr')
-                .nextElementSibling
-                .addEventListener('click', () => window.chatUI.connectPeer());
-
-            // Connect send button
-            document.querySelector('#message')
-                .nextElementSibling
-                .addEventListener('click', () => window.chatUI.sendMessage());
-        }*/
-
-                /*
-                        document.getElementById('shareButton').addEventListener('click', () => {
-            document.getElementById('fileInput').click();
+        this.document.addEventListener('keypress', e => {
+            switch (e.target.dataset.action) {
+                case 'start': if (e.key === 'Enter') this.start(); break;
+                case 'sendMessage': if (e.key === 'Enter') this.sendMessage(); break;
+            }
         });
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            window.chatUI.handleFileUpload(e);
-        });*/
-    }
-
-    initializeUI() {
-        const controls = this.document.querySelector('.controls');
-        if (!controls) return;
-        controls.innerHTML = `
-            <input type="file" id="fileInput" style="display: none">
-            <button onclick="chatUI.handleFileButtonClick()">Share File</button>
-            <input type="text" id="message" placeholder="Type a message...">
-            <button onclick="chatUI.sendMessage()">Send</button>
-        `;
-
-        this.document.getElementById('fileInput').addEventListener('change', this.handleFileUpload);
-        this.document.getElementById('message').addEventListener('keypress', e => {
-            if (e.key === 'Enter') this.sendMessage();
-        });
-
-        this.updateChannelList();
-    }
-
-    handleFileButtonClick() {
-        this.document.getElementById('fileInput').click();
     }
 
     async start() {
-        const nickname = this.document.getElementById('nickname').value.trim();
-        if (!nickname) {
-            this.notify('Please enter a nickname');
-            return;
-        }
+        const nickname = this.eHTML.nickname.value.trim();
+        if (!nickname) { this.notify('Please enter a nickname'); return; }
 
         try {
             const result = await window.chat.startChat(nickname);
-            if (!result.success) {
-                throw new Error(result.error);
-            }
+            if (!result.success) { throw new Error(result.error); }
 
-            this.document.getElementById('status').textContent = 
-                `Connected as: ${nickname}\nAddress: ${result.addr}`;
-
-            this.document.getElementById('login').style.display = 'none';
-            this.document.getElementById('app').style.display = 'grid';
-            this.document.getElementById('message').addEventListener('keypress', e => {
-                if (e.key === 'Enter') this.sendMessage();
-            });
+            this.eHTML.status.textContent = `Connected as: ${nickname}\nAddress: ${result.addr}`;
+            this.eHTML.login.style.display = 'none';
+            this.eHTML.app.style.display = 'grid';
 
             this.log('Chat', 'Started', { nickname, addr: result.addr });
         } catch (err) {
@@ -135,10 +97,10 @@ class ChatUI {
     }
 
     async sendMessage() {
-        const input = this.document.getElementById('message');
-        const content = input.value.trim();
+        const content = this.eHTML.message.value.trim();
         if (!content) return;
 
+        console.log('sendMessage', content);
         try {
             const result = await window.chat.sendMessage({
                 channel: this.state.currentChannel,
@@ -146,7 +108,7 @@ class ChatUI {
             });
 
             if (result.success) {
-                input.value = '';
+                this.eHTML.message.value = '';
                 this.log('Message', 'Sent', { channel: this.state.currentChannel, content });
             } else {
                 this.notify('Failed to send: ' + result.error);
@@ -158,15 +120,14 @@ class ChatUI {
     }
 
     async joinChannel() {
-        const input = this.document.getElementById('newChannel');
-        const channel = input.value.trim();
+        const channel = this.eHTML.newChannel.value.trim();
         if (!channel) return;
 
         try {
             const result = await window.chat.joinChannel(channel);
             if (result.success) {
                 this.state.channels.add(channel);
-                input.value = '';
+                this.eHTML.newChannel.value = '';
                 this.updateChannelList();
                 this.switchChannel(channel);
                 this.notify(`Joined ${channel}`);
@@ -181,14 +142,13 @@ class ChatUI {
     }
 
     async connectPeer() {
-        const input = this.document.getElementById('peerAddr');
-        const addr = input.value.trim();
+        const addr = this.eHTML.peerAddr.value.trim();
         if (!addr) return;
 
         try {
             const success = await window.chat.connectPeer(addr);
             if (success) {
-                input.value = '';
+                this.eHTML.peerAddr.value = '';
                 this.notify('Connected to peer');
                 this.log('Peer', 'Connected', addr);
             } else {
@@ -205,7 +165,7 @@ class ChatUI {
         if (!file) return;
 
         const div = this.createFileMessage(file, 'You');
-        this.document.getElementById('messages').appendChild(div);
+        this.eHTML.messages.appendChild(div);
         this.scrollToBottom();
 
         try {
@@ -264,19 +224,7 @@ class ChatUI {
 
     handleChatMessage(msg) {
         if (msg.content.startsWith('/file ')) {
-            const [_, filename, cid, size, type] = msg.content.split(' ');
-            this.state.transfers.set(cid, {
-                filename,
-                size: parseInt(size),
-                type,
-                announced: Date.now()
-            });
-            
-            const div = this.createFileMessage({ name: filename, size, type }, msg.from, cid);
-            this.document.getElementById('messages').appendChild(div);
-            this.scrollToBottom();
-            
-            this.log('File', 'Announced', { filename, size: this.formatSize(size), type, cid });
+
         } else if (this.addMessageToHistory(msg) && msg.channel === this.state.currentChannel) {
             this.displayMessage(msg);
             this.log('Message', 'Received', { 
@@ -285,28 +233,6 @@ class ChatUI {
                 content: msg.content 
             });
         }
-    }
-
-    createFileMessage(file, from, cid = null) {
-        const div = this.document.createElement('div');
-        div.className = 'message file-message';
-        div.innerHTML = `
-            <div class="message-header">
-                <span class="message-sender">${from}</span>
-                <span class="message-time">${new Date().toLocaleTimeString()}</span>
-            </div>
-            <div class="message-content">
-                <div class="file-info">
-                    <span>${this.getFileIcon(file.type)} ${file.name} (${this.formatSize(file.size)})</span>
-                    <div class="progress-bar">
-                        <div class="progress" data-file-progress="${file.name}" style="width: 0%"></div>
-                    </div>
-                    ${cid ? `<button onclick="chatUI.downloadFile('${cid}')" class="download-button">Download</button>`
-                         : '<span>Uploading...</span>'}
-                </div>
-            </div>
-        `;
-        return div;
     }
 
     addMessageToHistory(msg) {
@@ -331,17 +257,29 @@ class ChatUI {
     }
 
     displayMessage(msg) {
-        const div = this.document.createElement('div');
+        const div = document.createElement('div');
         div.className = 'message';
-        div.innerHTML = `
-            <div class="message-header">
-                <span class="message-sender">${msg.from}</span>
-                <span class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
-                ${msg.latency ? `<span class="message-latency">(${msg.latency}ms)</span>` : ''}
-            </div>
-            <div class="message-content">${msg.content}</div>
-        `;
-        this.document.getElementById('messages').appendChild(div);
+
+        const header = document.createElement('div');
+        header.className = 'message-header';
+        div.appendChild(header);
+
+        const sender = document.createElement('span');
+        sender.className = 'message-sender';
+        sender.textContent = msg.from;
+        header.appendChild(sender);
+        
+        const content = document.createElement('div');
+        content.className = 'message-content';
+        content.textContent = msg.content;
+        div.appendChild(content);
+
+        const time = document.createElement('span');
+        time.className = 'message-time';
+        time.textContent = new Date(msg.timestamp).toLocaleTimeString();
+        header.appendChild(time);
+
+        this.eHTML.messages.appendChild(div);
         this.scrollToBottom();
     }
 
@@ -350,35 +288,53 @@ class ChatUI {
         this.state.currentChannel = channel;
         this.updateChannelList();
         
-        const messages = document.getElementById('messages');
-        messages.innerHTML = '';
+        this.eHTML.messages.innerHTML = '';
         
         const history = this.state.messageHistory.get(channel) || [];
         history.forEach(msg => this.displayMessage(msg));
     }
 
     updateChannelList() {
+        this.eHTML.channels.innerHTML = '';
         const html = Array.from(this.state.channels)
-            .map(channel => `
-                <div class="channel ${channel === this.state.currentChannel ? 'active' : ''}"
-                     onclick="chatUI.switchChannel('${channel}')">
-                    #${channel}
-                </div>
-            `).join('');
-        this.document.getElementById('channels').innerHTML = html;
+        for (const channel of html) {
+            const div = document.createElement('div');
+            div.classList.add('channel');
+            if (channel === this.state.currentChannel) div.classList.add('active');
+
+            div.dataset.action = 'switchChannel';
+            div.dataset.value = channel;
+            
+            div.textContent = '#' + channel;
+            this.eHTML.channels.appendChild(div);
+        }
     }
 
     updatePeerList() {
-        const html = Array.from(this.state.peers)
-            .map(peer => `
-                <div class="peer">
-                    <span class="peer-id">${peer}</span>
-                    <span class="peer-status ${this.state.connectingPeers.has(peer) ? 'connecting' : 'connected'}">
-                        ${this.state.connectingPeers.has(peer) ? '🔄' : '🟢'}
-                    </span>
-                </div>
-            `).join('');
-        this.document.getElementById('peers').innerHTML = html;
+        this.eHTML.peers.innerHTML = '';
+        
+        const peers = Array.from(this.state.peers);
+        for (const peer of peers) {
+            const div = this.createPeerDiv(peer);
+            this.eHTML.peers.appendChild(div);
+        }
+    }
+    createPeerDiv(peer) {
+        const div = document.createElement('div');
+        div.className = 'peer';
+
+        const idSpan = document.createElement('span');
+        idSpan.className = 'peer-id';
+        idSpan.textContent = peer;
+        div.appendChild(idSpan);
+
+        const statusSpan = document.createElement('span');
+        statusSpan.className = 'peer-status';
+        statusSpan.classList.add(this.state.connectingPeers.has(peer) ? 'connecting' : 'connected');
+        statusSpan.textContent = this.state.connectingPeers.has(peer) ? '🔄' : '🟢';
+        div.appendChild(statusSpan);
+
+        return div;
     }
 
     handlePeerConnecting(peer) {
@@ -404,18 +360,17 @@ class ChatUI {
     }
 
     notify(message, duration = 3000) {
-        const notification = this.document.createElement('div');
+        const notification = document.createElement('div');
         notification.className = 'notification';
         notification.textContent = message;
-        this.document.body.appendChild(notification);
+        document.body.appendChild(notification);
         setTimeout(() => notification.remove(), duration);
         this.log('Notify', message);
     }
 
     scrollToBottom() {
         requestAnimationFrame(() => {
-            const messages = this.document.getElementById('messages');
-            messages.scrollTop = messages.scrollHeight;
+            this.eHTML.messages.scrollTop = this.eHTML.messages.scrollHeight;
         });
     }
 

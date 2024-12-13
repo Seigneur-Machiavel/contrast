@@ -150,8 +150,10 @@ class AppsManager {
 		const appMainClassName = this.appsConfig[appName].mainClass;
 		const appMainClass = mainClasses[appMainClassName];
 		if (appMainClass) {
-			const contentDiv = this.windows[appName].element.querySelector('.content');
-			this.windows[appName].mainInstance = new appMainClass(contentDiv);
+			setTimeout(() => { // wait for the element to be rendered
+				const contentDiv = this.windows[appName].element.querySelector('.content');
+				this.windows[appName].mainInstance = new appMainClass(contentDiv);
+			}, 40);
 		}
 
 		if (this.appsConfig[appName].setGlobal && this.windows[appName].mainInstance) {
