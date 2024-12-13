@@ -28,7 +28,6 @@ class P2PChatHandler {
             'download-file': this.downloadFile.bind(this)
         };
 
-        // Wizard: Auto-map kebab-case names to camelCase methods
         this.handlers = Object.fromEntries(
             ['start-chat', 'send-message', 'join-channel', 'connect-peer', 'share-file', 'download-file']
             .map(name => [name, this[name.replace(/-./g, x => x[1].toUpperCase())]])
@@ -55,10 +54,9 @@ class P2PChatHandler {
         };
         console.log(`${emojis[type]} [${action}]`, data);
     }
-    
+
     setupP2PEvents(p2pInstance) {
         this.log('network', 'setup', 'Initializing P2P events');
-        // Wizard: Simple loop through event array since event names are identical
         this.events.forEach(event => {
             const handler = data => {
                 this.log('info', event, data);
