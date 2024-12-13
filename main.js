@@ -26,12 +26,6 @@ function createWindow() {
 	});
 
     Menu.setApplicationMenu(null);
-
-    // Handle window closure
-    mainWindow.on('closed', () => {
-        chatHandler.cleanup();
-    }); 
-
 }
 
 app.whenReady().then(createWindow);

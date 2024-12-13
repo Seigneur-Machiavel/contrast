@@ -40,7 +40,7 @@ class P2PChatHandler {
             ['start-chat', 'send-message', 'join-channel', 'connect-peer', 'share-file', 'download-file']
             .map(name => [name, this[name.replace(/-./g, x => x[1].toUpperCase())]])
         );
-        this.activeListeners = new Set();
+
         // Initialize module right away but don't block constructor
         this.moduleReady = this.initP2PModule();
         
@@ -79,7 +79,6 @@ class P2PChatHandler {
                 this.mainWindow.webContents.send(ipcEvent, data);
             };
             p2pInstance.on(p2pEvent, handler);
-            this.activeListeners.add({ event: p2pEvent, handler, instance: p2pInstance });
         });
     }
 
@@ -203,21 +202,6 @@ class P2PChatHandler {
     }
 
     async cleanup() {
-        this.log('info', 'cleanup', 'Starting cleanup');
-        
-        // Wizard: Remove all IPC handlers first
-        Object.keys(this.boundHandlers).forEach(channel => {
-            ipcMain.removeHandler(channel);
-            this.log('info', 'cleanup', `Removed handler: ${channel}`);
-        });
-
-        // Wizard: Clean up all tracked event listeners
-        this.activeListeners.forEach(({ event, handler, instance }) => {
-            instance.off(event, handler);
-            this.log('info', 'cleanup', `Removed listener: ${event}`);
-        });
-        this.activeListeners.clear();
-
         // Stop P2P network
         if (this.p2p) {
             try {
