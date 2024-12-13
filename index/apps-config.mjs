@@ -6,6 +6,8 @@
  * @property {string} icon
  * @property {string} title
  * @property {string} content // HTML content (not full html document)
+ * @property {string} mainClass
+ * @property {boolean} setGlobal // Set the app as global (window)
  */
 
 export const AppConfig = () => {
@@ -15,17 +17,21 @@ export const AppConfig = () => {
 		minHeight: 300,
 		icon: '',
 		title: '',
-		content: ''
+		content: '',
+		mainClass: '',
+		setGlobal: false
 	}
 }
 export const appsConfig = {
 	chat: {
-		preload: true,
+		preload: false,
 		minWidth: 300,
 		minHeight: 300,
 		icon: 'img/chat_128.png',
 		title: 'Chat',
-		content: './apps/chat/content.html'
+		content: './apps/chat/content.html',
+		mainClass: 'ChatUI',
+		setGlobal: true
 	},
 	wallet: {
 		preload: false,

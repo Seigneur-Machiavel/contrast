@@ -1,8 +1,12 @@
 if (false) { // Just for better completion
 	const anime = require('animejs');
+	const ChatUI = require('../apps/chat/front-scripts/renderer.js');
 }
-import { AppConfig, appsConfig } from './apps-config.mjs';
+const mainClasses = {
+	'ChatUI': ChatUI
+}
 
+import { AppConfig, appsConfig } from './apps-config.mjs';
 console.log('index-scripts/index.mjs loaded');
 
 
@@ -50,6 +54,7 @@ class ButtonsBar {
 }
 class SubWindow {
 	constructor(key, title, content) {
+		this.mainInstance = null;
 		this.key = key;
 		/** @type {HTMLElement} */
 		this.element;
@@ -141,6 +146,17 @@ class AppsManager {
 		if (this.appsConfig[appName].minHeight) {
 			this.windows[appName].element.style.minHeight = this.appsConfig[appName].minHeight + 'px';
 		}
+
+		const appMainClassName = this.appsConfig[appName].mainClass;
+		const appMainClass = mainClasses[appMainClassName];
+		if (appMainClass) {
+			const contentDiv = this.windows[appName].element.querySelector('.content');
+			this.windows[appName].mainInstance = new appMainClass(contentDiv);
+		}
+
+		if (this.appsConfig[appName].setGlobal && this.windows[appName].mainInstance) {
+			window[appMainClassName] = this.windows[appName].mainInstance;
+		}
 	}
 	toggleAppWindow(appName) {
 		if (!this.appsConfig[appName]) return;
@@ -183,11 +199,9 @@ class AppsManager {
 
 		const appName = button.dataset.key;
 		const appInitialized = this.windows[appName];
-		const origin = this.buttonsBar.getButtonOrigin(appName);
 		if (!appInitialized && !this.windows[appName]) {
 			if (!this.appsConfig[appName]) { console.error('App not found:', appName); return; }
-			this.windows[appName] = new SubWindow(appName, this.appsConfig[appName].title, this.appsConfig[appName].content);
-			this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
+			this.loadApp(appName);
 		}
 
 		this.toggleAppWindow(appName);
@@ -247,6 +261,7 @@ const eHTML = {
 }
 const appsManager = new AppsManager(eHTML.windowsWrap, eHTML.bottomButtonsBar, appsConfig);
 appsManager.initApps();
+window.appsManager = appsManager;
 
 // better implementation with less event listeners
 document.addEventListener('click', (e) => {
@@ -262,7 +277,6 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', (e) => {
 	appsManager.releaseWindowHandler(e);
 });
-
 
 // DARK MODE
 document.addEventListener('change', (event) => {

@@ -3,37 +3,6 @@
 <head>
     <title>C° Chat</title>
     <link rel="stylesheet" href="./apps/chat/style.css">
-    <!-- Load chat UI -->
-    <script type="module">
-        import { ChatUI } from './apps/chat/front-scripts/renderer.js';
-        // Initialize after DOM is ready
-        window.addEventListener('DOMContentLoaded', () => {
-            window.chatUI = new ChatUI();
-            // Connect all buttons after initialization
-            connectButtons();
-        });
-
-        function connectButtons() {
-            // Connect start button
-            document.querySelector('#login chat-button')
-                .addEventListener('click', () => window.chatUI.start());
-
-            // Connect channel button
-            document.querySelector('#newChannel')
-                .nextElementSibling
-                .addEventListener('click', () => window.chatUI.joinChannel());
-
-            // Connect peer button
-            document.querySelector('#peerAddr')
-                .nextElementSibling
-                .addEventListener('click', () => window.chatUI.connectPeer());
-
-            // Connect send button
-            document.querySelector('#message')
-                .nextElementSibling
-                .addEventListener('click', () => window.chatUI.sendMessage());
-        }
-    </script>
 </head>
 <body>
     <div id="login">
@@ -76,15 +45,5 @@
             </div>
         </div>
     </div>
-
-    <script>
-        // File handling setup
-        document.getElementById('shareButton').addEventListener('click', () => {
-            document.getElementById('fileInput').click();
-        });
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            window.chatUI.handleFileUpload(e);
-        });
-    </script>
 </body>
 </html>

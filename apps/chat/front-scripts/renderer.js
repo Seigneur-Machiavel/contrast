@@ -2,7 +2,8 @@
  * @typedef {{from: string, content: string, timestamp: number, channel: string, latency?: number}} Message
  */
 class ChatUI {
-    constructor(document) {
+    /** @param {HTMLElement} parentDiv */
+    constructor(parentDiv) {
         this.state = {
             currentChannel: 'system',
             channels: new Set(['system']),
@@ -13,14 +14,14 @@ class ChatUI {
             transfers: new Map(),
             debug: true
         };
-        this.document = document;
+        /** @type {HTMLElement} */
+        this.document = parentDiv;
         // Bind methods
         Object.getOwnPropertyNames(ChatUI.prototype)
             .filter(method => method !== 'constructor')
             .forEach(method => this[method] = this[method].bind(this));
 
-        // Initialize on DOM ready
-        this.document.addEventListener('DOMContentLoaded', this.initializeUI);
+        this.initializeUI(); // Initialize on Content (parentDiv) ready
         window.addEventListener('unload', this.cleanup);
         this.initializeEventListeners();
     }
@@ -44,9 +45,47 @@ class ChatUI {
         window.chat.onPeerJoined(this.handlePeerJoined);
         window.chat.onPeerLeft(this.handlePeerLeft);
     }
+    initializeFrontListerners() {
+        /*// Initialize after DOM is ready
+        window.addEventListener('DOMContentLoaded', () => {
+            window.chatUI = new ChatUI();
+            // Connect all buttons after initialization
+            connectButtons();
+        });
+
+        function connectButtons() {
+            // Connect start button
+            document.querySelector('#login chat-button')
+                .addEventListener('click', () => window.chatUI.start());
+
+            // Connect channel button
+            document.querySelector('#newChannel')
+                .nextElementSibling
+                .addEventListener('click', () => window.chatUI.joinChannel());
+
+            // Connect peer button
+            document.querySelector('#peerAddr')
+                .nextElementSibling
+                .addEventListener('click', () => window.chatUI.connectPeer());
+
+            // Connect send button
+            document.querySelector('#message')
+                .nextElementSibling
+                .addEventListener('click', () => window.chatUI.sendMessage());
+        }*/
+
+                /*
+                        document.getElementById('shareButton').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            window.chatUI.handleFileUpload(e);
+        });*/
+    }
 
     initializeUI() {
         const controls = this.document.querySelector('.controls');
+        if (!controls) return;
         controls.innerHTML = `
             <input type="file" id="fileInput" style="display: none">
             <button onclick="chatUI.handleFileButtonClick()">Share File</button>
@@ -411,5 +450,9 @@ class ChatUI {
     }
 }
 
-export { ChatUI };  // Named export
-export default ChatUI; // Default export
+//window.ChatUI = ChatUI;
+/*export { ChatUI };
+export default ChatUI;*/
+
+// Just used for completion
+if (typeof exports !== 'undefined') { module.exports = ChatUI; }

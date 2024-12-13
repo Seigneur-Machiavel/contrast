@@ -6,12 +6,7 @@
     <link rel="stylesheet" href="./index/style.css">
     <!-- Load core dependencies -->
     <script src="./libs/anime.min.js"></script>
-    <!-- Load chat as module with defer -->
-    <script type="module">
-        import { ChatUI } from './apps/chat/front-scripts/renderer.js';
-        window.ChatUI = ChatUI;  // Make class available globally
-        window.chatUI = new ChatUI(); // Create instance
-    </script>
+    <script src="./apps/chat/front-scripts/renderer.js"></script>
     <script src="./index/board.mjs" type="module"></script>
 </head>
 <body>
