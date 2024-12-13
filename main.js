@@ -13,26 +13,24 @@ function createWindow() {
             //nodeIntegration: false, // default disabled if contextIsolation is set to true
             contextIsolation: true,
             //webviewTag: true, // unused actually
-            //preload: path.join(__dirname, 'preload.js')
+            preload: path.join(__dirname, 'preload.js')
         }
     });
 
-    //global.mainWindow = mainWindow;
+    global.mainWindow = mainWindow;
 
     mainWindow.loadFile('index.html');
     mainWindow.webContents.on('did-finish-load', () => { setShortcuts(BrowserWindow, globalShortcut, isDev); });
 
-    // Import and setup chat handlers
-    //const { setupHandlers } = require('./apps/chat/back-scripts/main.js');
-    //setupHandlers();
+	const chatHandler = require('./apps/chat/back-scripts/chat-handler.js');
+    chatHandler.setupHandlers();
 
     Menu.setApplicationMenu(null);
 
     // Handle window closure
-    /*mainWindow.on('closed', () => {
-        mainWindow = null;
+    mainWindow.on('closed', () => {
         global.mainWindow = null;
-    });*/
+    }); 
 }
 
 app.whenReady().then(createWindow);
