@@ -265,6 +265,10 @@ document.addEventListener('mouseup', (e) => {
 
 
 // DARK MODE
-document.getElementById("index-dark-mode-toggle").addEventListener('change', (event) => {
-    document.body.classList.toggle('index-dark-mode');
+document.addEventListener('change', (event) => {
+	switch(event.target.id) {
+		case 'index-dark-mode-toggle':
+    		document.body.classList.toggle('index-dark-mode');
+			break;
+	}
 });
