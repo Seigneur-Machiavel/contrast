@@ -25,7 +25,7 @@ export const appsConfig = {
 		minHeight: 300,
 		icon: 'img/chat_128.png',
 		title: 'Chat',
-		content: 'toto' //'./apps/chat/content.html'
+		content: './apps/chat/content.html'
 	},
 	wallet: {
 		preload: false,
