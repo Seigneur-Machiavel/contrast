@@ -4,9 +4,15 @@
     <meta charset="UTF-8">
     <title>Contrast</title>
     <link rel="stylesheet" href="./index/style.css">
+    <!-- Load core dependencies -->
     <script src="./libs/anime.min.js"></script>
+    <!-- Load chat as module with defer -->
+    <script type="module">
+        import { ChatUI } from './apps/chat/front-scripts/renderer.js';
+        window.ChatUI = ChatUI;  // Make class available globally
+        window.chatUI = new ChatUI(); // Create instance
+    </script>
     <script src="./index/board.mjs" type="module"></script>
-    <!--<script src="./apps/chat/front-scripts/renderer.js"></script>-->
 </head>
 <body>
     <label class="index-switch">
@@ -17,7 +23,6 @@
     <h1 style="text-align: center; width: 100%; margin-top: 40vh;">Hello world!</h1>
 
     <div id="index-windows-wrap"></div>
-
     <div id="index-bottom-buttons-bar"></div>
 </body>
 </html>
