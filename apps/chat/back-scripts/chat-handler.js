@@ -183,6 +183,8 @@ class P2PChatHandler {
                 }
             });
         });
+
+        return this.handlers;
     }
 
     async cleanup() {

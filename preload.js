@@ -21,7 +21,5 @@ contextBridge.exposeInMainWorld('chat', {
     onFileComplete: (callback) => ipcRenderer.on('file:complete', (event, data) => callback(data)),
 
     // Remove event listeners
-    removeAllListeners: (channel) => {
-        ipcRenderer.removeAllListeners(channel);
-    }
+    removeAllListeners: (channel) => { ipcRenderer.removeAllListeners(channel); }
 });

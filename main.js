@@ -20,9 +20,9 @@ function createWindow() {
 
 	const chatHandler = new P2PChatHandler(mainWindow);
     mainWindow.loadFile('index.html');
-    mainWindow.webContents.on('did-finish-load', () => { 
-		setShortcuts(BrowserWindow, globalShortcut, isDev);
-		chatHandler.setupHandlers();
+    mainWindow.webContents.on('did-finish-load', () => {
+		const chatHandlers = chatHandler.setupHandlers();
+		setShortcuts(BrowserWindow, [ chatHandlers ], isDev);
 	});
 
     Menu.setApplicationMenu(null);
@@ -47,6 +47,4 @@ app.whenReady().then(createWindow);
     }
 });*/
 
-app.on('will-quit', () => { 
-    globalShortcut.unregisterAll(); 
-});
+app.on('will-quit', () => { globalShortcut.unregisterAll(); });
