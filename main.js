@@ -25,8 +25,6 @@ function createWindow() {
 		setShortcuts(BrowserWindow, [ chatHandlers ], isDev);
 	});
 
-	global.mainWindow = mainWindow;
-
     Menu.setApplicationMenu(null);
 
     // Handle window closure
