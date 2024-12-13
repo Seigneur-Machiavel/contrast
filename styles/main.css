@@ -124,17 +124,21 @@ body {
 }
 
 .window {
+    pointer-events: none;
     position: absolute;
     border-radius: 5px;
     background-color: var(--color1);
-    resize: both;
     overflow: hidden;
     transform-origin: bottom center;
-    
+    box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2);
+}
+.window.onBoard {
+    pointer-events: auto;
+    resize: both;
     box-shadow: inset 0 0 2px 0px var(--color1_2), 0px 2px 0px 0.6px var(--color1_2);
     transition: box-shadow 0.2s;
 }
-.window.front {
+.window.onBoard.front {
     box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);
 }
 .window .title-bar {
@@ -148,9 +152,12 @@ body {
     display: flex;
     justify-content: space-between;
     background-position: 100% 50%;
-    transition: background-position 0.12s;
+    transition: background-position .12s .4s;
 }
-.window.front .title-bar {
+.window.onBoard .title-bar {
+    transition: background-position .12s;
+}
+.window.onBoard.front .title-bar {
     background-position: 0% 50%;
 }
 .window .close-window {

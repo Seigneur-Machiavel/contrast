@@ -4,7 +4,7 @@ import { tcp } from '@libp2p/tcp';
 import { noise } from '@chainsafe/libp2p-noise';
 import { identify } from '@libp2p/identify';
 import { bootstrap } from '@libp2p/bootstrap';
-import { mdns } from '@libp2p/mdns'
+import { mdns } from '@libp2p/mdns';
 import { kadDHT } from '@libp2p/kad-dht';
 import { multiaddr } from '@multiformats/multiaddr';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';

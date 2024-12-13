@@ -7,9 +7,11 @@ function setShortcuts(BrowserWindow, globalShortcut, dev = true) {
     if (!dev) { for (let key in shortcutsKeys) shortcutsKeys[key].enabled = !shortcutsKeys[key].devOnly; }
 
     if (shortcutsKeys.devTools.enabled) globalShortcut.register(shortcutsKeys.devTools.key, () => {
+        if (!BrowserWindow.getFocusedWindow()) return;
         BrowserWindow.getFocusedWindow().webContents.toggleDevTools();
     });
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {
+        if (!BrowserWindow.getFocusedWindow()) return;
         BrowserWindow.getFocusedWindow().reload();
     });
 };

@@ -3,6 +3,8 @@ if (false) { // Just for better completion
 }
 import { AppConfig, appsConfig } from './apps-config.mjs';
 
+console.log('index-scripts/index.mjs loaded');
+
 
 /** @param {string} tag @param {string[]} classes @param {string} content @param {HTMLElement} [parent] */
 function newElement(tag, classes, content, parent) {
@@ -69,7 +71,7 @@ class SubWindow {
 		newElement('div', ['content'], this.content, this.element);
 		
 		if (fromX && fromY) {
-			this.element.style.transform = 'scale(0)';
+			this.element.style.transform = 'scale(.1)';
 			this.element.style.left = (fromX - this.element.offsetWidth / 2) + 'px';
 			this.element.style.top = (fromY - this.element.offsetHeight) + 'px';
 			this.element.style.opacity = 0;
@@ -78,27 +80,29 @@ class SubWindow {
 
 	toggleFold(originX, originY, duration = 400) {
 		this.folded = !this.folded;
-		if (this.folded) { this.element.style.pointerEvents = 'none'; }
+		if (this.folded) { this.element.classList.remove('onBoard'); }
 
-		// OPACITY ANIMATION
+		// COMBINED ANIMATION
+		if (this.animation) { this.animation.pause(); }
 		this.animation = anime({
 			targets: this.element,
-			opacity: this.folded ? 0 : 1,
-			easing: 'easeOutQuad',
-			duration: duration * .1,
-			delay: this.folded ? duration * .8 : 0
-		});
-
-		// POSITION/SCALE ANIMATION
-		this.animation = anime({
-			targets: this.element,
-			scale: this.folded ? .1 : 1,
-			left: !this.folded ? this.position.left : (originX - this.element.offsetWidth / 2),
-			top: !this.folded ? this.position.top : (originY - this.element.offsetHeight),
-			easing: 'easeOutQuad',
-			duration: duration,
+			opacity: {
+				value: this.folded ? 0 : 1,
+				duration: duration * .1,
+				delay: this.folded ? duration * .8 : 0,
+				easing: 'easeOutQuad'
+			},
+			scale: { value: this.folded ? .1 : 1, duration: duration, easing: 'easeOutQuad' },
+			left: {
+				value: !this.folded ? this.position.left : (originX - this.element.offsetWidth / 2),
+				duration: duration, easing: 'easeOutQuad',
+			},
+			top: {
+				value: !this.folded ? this.position.top : (originY - this.element.offsetHeight),
+				duration: duration, easing: 'easeOutQuad'
+			},
 			complete: () => {
-				if (!this.folded) { this.element.style.pointerEvents = 'auto'; }
+				if (!this.folded) { this.element.classList.add('onBoard'); }
 			}
 		});
 
@@ -133,25 +137,31 @@ class AppsManager {
 	}
 	toggleAppWindow(appName) {
 		if (!this.appsConfig[appName]) return;
-
 		if (!this.windows[appName]) { this.loadApp(appName); }
 		
 		const isFront = this.windows[appName].element.style.zIndex === '1';
 		const unfoldButNotFront = isFront === false && this.windows[appName].folded === false;
-		this.setFrontWindow(appName);
+		let appToFocus = appName;
 		
-		if (unfoldButNotFront) { return; } // -> don't toggle after setting front
-		
-		const origin = this.buttonsBar.getButtonOrigin(appName);
-		const folded = this.windows[appName].toggleFold(origin.x, origin.y);
-		const firstUnfolded = Object.values(this.windows).find(w => w.folded === false);
-		if (folded && firstUnfolded) { this.setFrontWindow(firstUnfolded.key); }
+		if (!unfoldButNotFront) {  // -> don't toggle after setting front
+			const origin = this.buttonsBar.getButtonOrigin(appName);
+			const folded = this.windows[appName].toggleFold(origin.x, origin.y, 400);
+			const firstUnfolded = Object.values(this.windows).find(w => w.folded === false);
+			if (folded && firstUnfolded) {
+				//await new Promise(resolve => setTimeout(resolve, 400));
+				console.log('firstUnfolded', firstUnfolded);
+				appToFocus = firstUnfolded.key;
+			}
+		}
+		console.log('appToFocus', appToFocus);
+		this.setFrontWindow(appToFocus);
 	}
 	setFrontWindow(appName) {
 		if (!this.windows[appName]) return;
 		if (!this.windows[appName].element) return;
 		if (this.windows[appName].element.style.zIndex === '1') return;
 
+		console.log('setFrontWindow', appName);
 		for (const app in this.windows) {
 			this.windows[app].element.style.zIndex = 0;
 			this.windows[app].element.classList.remove('front');
@@ -165,21 +175,15 @@ class AppsManager {
 		if (!button) return;
 
 		const appName = button.dataset.key;
-		this.toggleAppWindow(appName);
-
-		if (!this.appsConfig[appName]) return;
-
+		const appInitialized = this.windows[appName];
 		const origin = this.buttonsBar.getButtonOrigin(appName);
-		if (!this.windows[appName]) {
+		if (!appInitialized && !this.windows[appName]) {
+			if (!this.appsConfig[appName]) { console.error('App not found:', appName); return; }
 			this.windows[appName] = new SubWindow(appName, this.appsConfig[appName].title, this.appsConfig[appName].content);
 			this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
 		}
 
-		const isFront = this.windows[appName].element.style.zIndex === '1';
-		const unfoldButNotFront = isFront === false && this.windows[appName].folded === false;
-		this.setFrontWindow(appName);
-
-		if (unfoldButNotFront) { return; } // -> don't toggle after setting front
+		this.toggleAppWindow(appName);
 	}
 	clickWindowHandler(e) {
 		// if click in a window (anywhere), bring it to front
