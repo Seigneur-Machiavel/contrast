@@ -85,7 +85,7 @@
     --color2: white;
     --color2_1: #f0f0f0;
     --color2_2: #e0e0e0;
-    
+
     --modal-background-color: rgba(0, 0, 0, 0.7);
 }
 body {
@@ -181,7 +181,7 @@ body {
 }
 .index-slider {
     position: absolute;
-    /*cursor: pointer;*/
+    cursor: pointer;
     top: 0;
     left: 0;
     right: 0;

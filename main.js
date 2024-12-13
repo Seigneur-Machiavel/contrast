@@ -13,7 +13,7 @@ function createWindow() {
         height: 800,
         icon: 'img/icon_128.png',
         webPreferences: {
-            nodeIntegration: false,
+            //nodeIntegration: false, // is default value after Electron v5 if contextIsolation is not set to true
             contextIsolation: true,
             webviewTag: true,
             preload: path.join(__dirname, 'preload.js')
