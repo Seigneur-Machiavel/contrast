@@ -1,5 +1,6 @@
 const path = require('path');
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
+const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./preferences/shortcuts.js');
 
 const isDev = true;
@@ -17,19 +18,18 @@ function createWindow() {
         }
     });
 
-    global.mainWindow = mainWindow;
-
+	const chatHandler = new P2PChatHandler(mainWindow);
     mainWindow.loadFile('index.html');
-    mainWindow.webContents.on('did-finish-load', () => { setShortcuts(BrowserWindow, globalShortcut, isDev); });
-
-	const chatHandler = require('./apps/chat/back-scripts/chat-handler.js');
-    chatHandler.setupHandlers();
+    mainWindow.webContents.on('did-finish-load', () => { 
+		setShortcuts(BrowserWindow, globalShortcut, isDev);
+		chatHandler.setupHandlers();
+	});
 
     Menu.setApplicationMenu(null);
 
     // Handle window closure
     mainWindow.on('closed', () => {
-        global.mainWindow = null;
+        chatHandler.cleanup();
     }); 
 }
 

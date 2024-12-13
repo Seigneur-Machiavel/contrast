@@ -1,3 +1,6 @@
+if (false) {
+    const { BrowserWindow } = require('electron');
+}
 /**
  * @typedef {{name: string, size: number, type: string, content: Uint8Array}} FileData 
  */
@@ -7,7 +10,10 @@ const fs = require('fs');
 const path = require('path');
 
 class P2PChatHandler {
-    constructor() {
+    /** @param {BrowserWindow} mainWindow */
+    constructor(mainWindow) {
+        /** @type {BrowserWindow} */
+        this.mainWindow = mainWindow;
         this.p2p = null;
         
         this.events = {
@@ -57,7 +63,7 @@ class P2PChatHandler {
         Object.entries(this.events).forEach(([p2pEvent, ipcEvent]) => {
             p2pInstance.on(p2pEvent, data => {
                 this.log('info', p2pEvent, data);
-                global.mainWindow?.webContents.send(ipcEvent, data);
+                this.mainWindow?.webContents.send(ipcEvent, data);
             });
         });
     }
@@ -109,7 +115,7 @@ class P2PChatHandler {
         this.log('file', 'download-start', { cid });
         try {
             const { content, metadata } = await this.p2p.downloadFile(cid);
-            const { filePath } = await dialog.showSaveDialog(global.mainWindow, {
+            const { filePath } = await dialog.showSaveDialog(this.mainWindow, {
                 defaultPath: path.join(app.getPath('downloads'), metadata.filename),
                 filters: [{ name: 'All Files', extensions: ['*'] }]
             });
@@ -188,7 +194,10 @@ class P2PChatHandler {
                 this.log('error', 'cleanup', err);
             }
         }
+
+        // cleanup ipcMain
+        //Object.keys(this.handlers).forEach(name => ipcMain.removeHandler(name));
     }
 }
 
-module.exports = new P2PChatHandler();
+module.exports = { P2PChatHandler };
