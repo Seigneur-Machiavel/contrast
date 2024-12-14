@@ -67,6 +67,7 @@
     font-style: italic;
 }
 :root {
+    --dark-mode: 0;
     --color1: white;
     --color1_1: #f0f0f0;
     --color1_2: #e0e0e0;
@@ -76,8 +77,12 @@
     --color2_2: #323232;
 
     --modal-background-color: rgba(0, 0, 0, 0.7);
+
+    --buttons-bar-height: 70px;
+    --windows-animation-duration: 400ms;
 }
-.index-dark-mode {
+.dark-mode {
+    --dark-mode: 1;
     --color1: black;
     --color1_1: #161616;
     --color1_2: #323232;
@@ -102,11 +107,12 @@ body {
     justify-content: center;
     align-items: center;
     width: 100%;
+    height: var(--buttons-bar-height);
     bottom: 0;
 }
 #index-bottom-buttons-bar button {
     margin: 10px;
-    width: 50px;
+    height: calc(100% - 20px);
     aspect-ratio: 1 / 1;
     border-radius: 50%;
     border: none;
@@ -120,7 +126,7 @@ body {
 }
 #index-bottom-buttons-bar button img {
     width: 70%;
-    filter: invert(1);
+    filter: invert(calc(1 - var(--dark-mode)));
 }
 
 .window {
@@ -128,15 +134,25 @@ body {
     position: absolute;
     border-radius: 5px;
     background-color: var(--color1);
+    /*background-color: blue;*/ /* FOR EASY DEBUG */
     overflow: hidden;
     transform-origin: bottom center;
     box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2);
+    transition: border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
+}
+.window.fullscreen {
+    box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2) !important;
+    border-radius: 0 !important;
+    resize: none !important;
 }
 .window.onBoard {
     pointer-events: auto;
     resize: both;
     box-shadow: inset 0 0 2px 0px var(--color1_2), 0px 2px 0px 0.6px var(--color1_2);
-    transition: box-shadow 0.2s;
+    /*transition: box-shadow 0.2s;*/
+    transition:
+        box-shadow calc(var(--windows-animation-duration) * .5),
+        border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
 }
 .window.onBoard.front {
     box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);
@@ -144,21 +160,69 @@ body {
 .window .title-bar {
     user-select: none;
     cursor: move;
-    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 40%, var(--color2_2) 54%, var(--color2_2) 98%, var(--color2) 110%);
-    background-size: 220% 100%;
     color: var(--color1);
-    padding: 5px;
+    padding: 5px 10px;
     height: calc(32px - 10px);
     display: flex;
     justify-content: space-between;
+    filter: invert(0);
+    transition: filter var(--windows-animation-duration);
+}
+.window.fullscreen .title-bar {
+    pointer-events: none;
+    filter: invert(1);
+}
+.window .title-bar .background {
+    z-index: -1;
+    pointer-events: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 1;
+    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 40%, var(--color2_2) 54%, var(--color2_2) 98%, var(--color2) 110%);
     background-position: 100% 50%;
-    transition: background-position .12s .4s;
+    background-size: 220% 100%;
+    transition:
+        /*background-position .12s var(--windows-animation-duration),*/
+        background-position calc(var(--windows-animation-duration) * .3) var(--windows-animation-duration),
+        filter var(--windows-animation-duration),
+        opacity var(--windows-animation-duration);
 }
-.window.onBoard .title-bar {
-    transition: background-position .12s;
+.window.onBoard .title-bar .background {
+    transition:
+        /*background-position .12s,*/
+        background-position calc(var(--windows-animation-duration) * .3),
+        filter var(--windows-animation-duration),
+        opacity var(--windows-animation-duration);
 }
-.window.onBoard.front .title-bar {
+.window.onBoard.front .title-bar .background {
     background-position: 0% 50%;
+}
+.window.fullscreen .title-bar .background {
+    opacity: 0;
+}
+.window .title-bar span {
+    pointer-events: none;
+    font-family: 'Contrast', sans-serif;
+    display: flex;
+    align-items: flex-end;
+}
+.window .title-bar .buttons-wrap {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    filter: invert(1);
+}
+.window .title-bar .buttons-wrap img {
+    pointer-events: auto;
+    filter: invert(var(--dark-mode));
+    margin: 0 0 0 12px;
+    height: 70%;
+}
+.window .title-bar .buttons-wrap img:hover {
+    cursor: pointer;
 }
 .window .close-window {
     border: none;
@@ -175,8 +239,8 @@ body {
 .index-switch {
     z-index: 4;
     position: fixed;
-    right: 20px;
-    top: 20px;
+    right: 10px;
+    bottom: 10px;
     display: inline-block;
     width: 60px;
     height: 34px;
@@ -194,7 +258,7 @@ body {
     right: 0;
     bottom: 0;
     background-color: var(--color2);
-    transition: .4s;
+    transition: .3s;
     border-radius: 34px;
 }
 .index-slider:before {
@@ -205,7 +269,7 @@ body {
     left: 4px;
     bottom: 4px;
     background-color: var(--color1);
-    transition: .4s;
+    transition: .3s;
     border-radius: 50%;
 }
 input:checked+.index-slider {

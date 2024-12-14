@@ -1,4 +1,5 @@
 :root {
+    /* Sample applied by the main board, dark-mode applied on these vars */
     --color1: white;
     --color1_1: #f0f0f0;
     --color1_2: #e0e0e0;
@@ -35,7 +36,7 @@
     background: var(--color1);
 }
 
-.logo {
+.chat-logo {
     padding: 20px;
     font-size: 24px;
     border-bottom: 1px solid var(--color1_2);
@@ -49,12 +50,12 @@
     border-bottom: 1px solid var(--color1_2);
 }
 
-.section {
+.chat-section {
     padding: 20px;
     border-bottom: 1px solid var(--color1_2);
 }
 
-.section h3 {
+.chat-section h3 {
     margin-bottom: 10px;
 }
 
@@ -134,7 +135,7 @@ input[type="text"] {
 
 .chat-button {
     padding: 10px 20px;
-    background: black;
+    background: var(--color2);
     color: var(--color1);
     border: none;
     border-radius: 4px;
@@ -149,7 +150,7 @@ input[type="text"] {
     bottom: 20px;
     right: 20px;
     padding: 15px 20px;
-    background: black;
+    background: var(--color2);
     color: var(--color1);
     border-radius: 4px;
     opacity: 0;

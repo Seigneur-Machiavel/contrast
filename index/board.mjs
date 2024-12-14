@@ -10,18 +10,17 @@ import { AppConfig, appsConfig } from './apps-config.mjs';
 console.log('index-scripts/index.mjs loaded');
 
 
-/** @param {string} tag @param {string[]} classes @param {string} content @param {HTMLElement} [parent] */
-function newElement(tag, classes, content, parent) {
+/** @param {string} tag @param {string[]} classes @param {string} innerHTML @param {HTMLElement} [parent] */
+function newElement(tag, classes, innerHTML, parent) {
 	const element = document.createElement(tag);
 	element.classList.add(...classes);
 
-	const contentIsHtmlPath = content.includes('.html');
-	if (contentIsHtmlPath) {
-		fetch(content).then(res => res.text()).then(html => {
+	if (innerHTML.includes('.html')) {
+		fetch(innerHTML).then(res => res.text()).then(html => {
 			element.innerHTML = html;
 		});
 	} else {
-		element.innerHTML = content;
+		element.innerHTML = innerHTML;
 	}
 	if (parent) parent.appendChild(element);
 	return element;
@@ -32,18 +31,20 @@ class ButtonsBar {
 		/** @type {HTMLElement} */
 		this.element = element;
 		this.buttons = [];
+		this.buttonsByAppNames = {};
 	}
 
-	addButton(key, app) {
+	addButton(appName, app) {
 		const button = newElement('button', ['app-button'], '', this.element);
-		button.dataset.key = key;
+		button.dataset.appName = appName;
 		newElement('img', [], '', button).src = app.icon;
 		this.buttons.push(button);
+		this.buttonsByAppNames[appName] = button;
 	}
 	getButtonOrigin(buttonKey) {
 		const result = { x: 0, y: 0 };
 		/** @type {HTMLElement} */
-		const button = this.buttons.find(b => b.dataset.key === buttonKey);
+		const button = this.buttonsByAppNames[buttonKey];
 		if (!button) return result;
 		
 		const rect = button.getBoundingClientRect();
@@ -53,59 +54,80 @@ class ButtonsBar {
 	}
 }
 class SubWindow {
-	constructor(key, title, content) {
+	constructor(appName, title, content) {
+		this.appName = appName;
 		this.mainInstance = null;
-		this.key = key;
+
 		/** @type {HTMLElement} */
 		this.element;
 		this.title = title;
 		this.content = content;
 
-		this.isDragging = false;
-
 		this.dragStart = { x: 0, y: 0 };
 		this.position = { left: 0, top: 0 };
+		this.minSize = { width: 0, height: 0 };
+		this.windowSize = { width: 0, height: 0 };
 		this.folded = true;
 		this.animation = null;
+		this.animationsComplexity = 1; // 0: none, 1: simple, 2: complex
 	}
 
 	render(parentElement = document.body, fromX= 0, fromY= 0) {
 		this.element = newElement('div', ['window'], '', parentElement);
-		this.element.dataset.key = this.key;
-		newElement('div', ['title-bar'], this.title, this.element);
+		this.element.dataset.appName = this.appName;
+		this.element.appendChild(this.#newTitleBar(this.title));
 		newElement('div', ['content'], this.content, this.element);
+		this.element.style.minWidth = this.minSize.width + 'px';
+		this.element.style.minHeight = this.minSize.height + 'px';
 		
 		if (fromX && fromY) {
+			this.element.style.opacity = 0;
 			this.element.style.transform = 'scale(.1)';
 			this.element.style.left = (fromX - this.element.offsetWidth / 2) + 'px';
 			this.element.style.top = (fromY - this.element.offsetHeight) + 'px';
-			this.element.style.opacity = 0;
 		}
 	}
+	#newTitleBar(title) {
+		const titleBar = newElement('div', ['title-bar'], '');
+		newElement('div', ['background'], '', titleBar);
+		newElement('span', [], title, titleBar);
 
+		const buttonsWrap = newElement('div', ['buttons-wrap'], '', titleBar);
+		
+		const foldButton = newElement('img', ['fold-button'], '', buttonsWrap);
+		foldButton.dataset.appName = this.appName;
+		foldButton.dataset.action = 'fold';
+		foldButton.src = 'img/fold_64.png';
+
+		const expandButton = newElement('img', ['expand-button'], '', buttonsWrap);
+		expandButton.dataset.appName = this.appName;
+		expandButton.dataset.action = 'expand';
+		expandButton.src = 'img/expand_64.png';
+
+		return titleBar;
+	}
 	toggleFold(originX, originY, duration = 400) {
 		this.folded = !this.folded;
 		if (this.folded) { this.element.classList.remove('onBoard'); }
 
 		// COMBINED ANIMATION
 		if (this.animation) { this.animation.pause(); }
+
+		const toPosition = { left: originX - this.element.offsetWidth / 2, top: originY - this.element.offsetHeight };
+		if (!this.folded) { toPosition.left = this.position.left; toPosition.top = this.position.top };
+		if (!this.folded && this.element.classList.contains('fullscreen')) { toPosition.left = 0; toPosition.top = 0; }
+
 		this.animation = anime({
 			targets: this.element,
-			opacity: {
+			opacity: this.animationsComplexity < 1 ? null : {
 				value: this.folded ? 0 : 1,
-				duration: duration * .1,
-				delay: this.folded ? duration * .8 : 0,
+				duration: duration * .3,
+				delay: this.folded ? duration * .5 : 0,
 				easing: 'easeOutQuad'
 			},
 			scale: { value: this.folded ? .1 : 1, duration: duration, easing: 'easeOutQuad' },
-			left: {
-				value: !this.folded ? this.position.left : (originX - this.element.offsetWidth / 2),
-				duration: duration, easing: 'easeOutQuad',
-			},
-			top: {
-				value: !this.folded ? this.position.top : (originY - this.element.offsetHeight),
-				duration: duration, easing: 'easeOutQuad'
-			},
+			left: { value: toPosition.left, duration: duration, easing: 'easeOutQuad' },
+			top: { value: toPosition.top, duration: duration, easing: 'easeOutQuad' },
 			complete: () => {
 				if (!this.folded) { this.element.classList.add('onBoard'); }
 			}
@@ -113,17 +135,70 @@ class SubWindow {
 
 		return this.folded;
 	}
+	setFullScreen(boardSize = { width: 0, height: 0 }, duration = 400) {
+		if (this.element.classList.contains('fullscreen')) { return; }
+		this.element.classList.add('fullscreen');
+
+		const expandButton = this.element.querySelector('.expand-button');
+		if (!expandButton) return;
+
+		expandButton.dataset.action = 'detach';
+		expandButton.src = 'img/detach_window_64.png';
+		
+		this.windowSize.width = this.element.offsetWidth;
+		this.windowSize.height = this.element.offsetHeight;
+		this.animation = anime({
+			targets: this.element,
+			width: boardSize.width + 'px',
+			height: boardSize.height + 'px',
+			top: '0px',
+			left: '0px',
+			duration,
+			easing: 'easeOutQuad',
+			complete: () => {
+				this.element.style.width = '100%';
+				this.element.style.height = 'calc(100% - var(--buttons-bar-height))';
+			}
+		});
+	}
+	unsetFullScreen(duration = 400) {
+		if (!this.element.classList.contains('fullscreen')) { return; }
+		this.element.classList.remove('fullscreen');
+
+		const expandButton = this.element.querySelector('.expand-button');
+		if (!expandButton) return;
+		expandButton.dataset.action = 'expand';
+		expandButton.src = 'img/expand_64.png';
+		
+		this.element.style.width = this.element.offsetWidth + 'px';
+		this.element.style.height = this.element.offsetHeight + 'px';
+
+		this.animation = anime({
+			targets: this.element,
+			width: this.windowSize.width + 'px',
+			height: this.windowSize.height + 'px',
+			top: this.position.top + 'px',
+			left: this.position.left + 'px',
+			duration,
+			easing: 'easeOutQuad'
+		});
+	}
 }
 class AppsManager {
 	constructor(windowsWrap, buttonsBarElement, appsConf) {
+		this.transitionsDuration = 400;
 		this.windowsWrap = windowsWrap;
 		this.buttonsBar = new ButtonsBar(buttonsBarElement);
 		/** @type {Object<string, AppConfig>} */
 		this.appsConfig = appsConf;
 		/** @type {Object<string, SubWindow>} */
 		this.windows = {};
+		this.draggingWindow = null;
 	}
 
+	updateCssAnimationsDuration() {
+		document.documentElement.style.setProperty('--windows-animation-duration', this.transitionsDuration + 'ms');
+	}
 	initApps() {
 		this.buttonsBar.element.innerHTML = '';
 		for (const app in this.appsConfig) { this.buttonsBar.addButton(app, this.appsConfig[app]); }
@@ -138,14 +213,9 @@ class AppsManager {
 
 		const origin = this.buttonsBar.getButtonOrigin(appName);
 		this.windows[appName] = new SubWindow(appName, this.appsConfig[appName].title, this.appsConfig[appName].content);
+		this.windows[appName].minSize.width = this.appsConfig[appName].minWidth;
+		this.windows[appName].minSize.height = this.appsConfig[appName].minHeight;
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
-
-		if (this.appsConfig[appName].minWidth) {
-			this.windows[appName].element.style.minWidth = this.appsConfig[appName].minWidth + 'px';
-		}
-		if (this.appsConfig[appName].minHeight) {
-			this.windows[appName].element.style.minHeight = this.appsConfig[appName].minHeight + 'px';
-		}
 
 		const appMainClassName = this.appsConfig[appName].mainClass;
 		const appMainClass = mainClasses[appMainClassName];
@@ -153,11 +223,10 @@ class AppsManager {
 			setTimeout(() => { // wait for the element to be rendered
 				const contentDiv = this.windows[appName].element.querySelector('.content');
 				this.windows[appName].mainInstance = new appMainClass(contentDiv);
+				if (!this.appsConfig[appName].setGlobal) { return; }
+				// set the app as global (window)
+				window[appMainClassName] = this.windows[appName].mainInstance;
 			}, 40);
-		}
-
-		if (this.appsConfig[appName].setGlobal && this.windows[appName].mainInstance) {
-			window[appMainClassName] = this.windows[appName].mainInstance;
 		}
 	}
 	toggleAppWindow(appName) {
@@ -170,23 +239,29 @@ class AppsManager {
 		
 		if (!unfoldButNotFront) {  // -> don't toggle after setting front
 			const origin = this.buttonsBar.getButtonOrigin(appName);
-			const folded = this.windows[appName].toggleFold(origin.x, origin.y, 400);
+			const folded = this.windows[appName].toggleFold(origin.x, origin.y, this.transitionsDuration);
 			const firstUnfolded = Object.values(this.windows).find(w => w.folded === false);
 			if (folded && firstUnfolded) {
-				//await new Promise(resolve => setTimeout(resolve, 400));
 				console.log('firstUnfolded', firstUnfolded);
-				appToFocus = firstUnfolded.key;
+				appToFocus = firstUnfolded.appName;
 			}
 		}
+
 		console.log('appToFocus', appToFocus);
-		this.setFrontWindow(appToFocus);
+		const delay = appToFocus === appName ? 0 : this.transitionsDuration;
+		setTimeout(() => { this.setFrontWindow(appToFocus); }, delay);
+	}
+	calculateBoardSize() {
+		return {
+			width: window.innerWidth,
+			height: window.innerHeight - this.buttonsBar.element.offsetHeight
+		};
 	}
 	setFrontWindow(appName) {
 		if (!this.windows[appName]) return;
 		if (!this.windows[appName].element) return;
 		if (this.windows[appName].element.style.zIndex === '1') return;
 
-		console.log('setFrontWindow', appName);
 		for (const app in this.windows) {
 			this.windows[app].element.style.zIndex = 0;
 			this.windows[app].element.classList.remove('front');
@@ -195,11 +270,11 @@ class AppsManager {
 		this.windows[appName].element.classList.add('front');
 	}
 
-	grabClickHandler(e) {
+	clickAppButtonsHandler(e) {
 		const button = e.target.closest('.app-button');
 		if (!button) return;
 
-		const appName = button.dataset.key;
+		const appName = button.dataset.appName;
 		const appInitialized = this.windows[appName];
 		if (!appInitialized && !this.windows[appName]) {
 			if (!this.appsConfig[appName]) { console.error('App not found:', appName); return; }
@@ -209,6 +284,16 @@ class AppsManager {
 		this.toggleAppWindow(appName);
 	}
 	clickWindowHandler(e) {
+		switch(e.target.dataset.action) {
+			case 'fold': this.toggleAppWindow(e.target.dataset.appName); return;
+			case 'expand':
+				this.windows[e.target.dataset.appName].setFullScreen(this.calculateBoardSize(), this.transitionsDuration);
+				return;
+			case 'detach':
+				this.windows[e.target.dataset.appName].unsetFullScreen(this.transitionsDuration);
+				return;
+		}
+
 		// if click in a window (anywhere), bring it to front
 		// trough parents of the clicked element until find the window
 		let target = e.target;
@@ -220,39 +305,45 @@ class AppsManager {
 		const subWindow = Object.values(this.windows).find(w => w.element.contains(target));
 		if (!subWindow) return;
 
-		const key = subWindow.element.dataset.key;
-		this.setFrontWindow(key);
+		const appName = subWindow.element.dataset.appName;
+		this.setFrontWindow(appName);
 	}
 	grabWindowHandler(e) {
-		const titleBar = e.target.closest('.title-bar');
+		if (!e.target.classList.contains('title-bar')) return;
+
+		const titleBar = e.target;
 		if (!titleBar) return;
 
 		const subWindow = Object.values(this.windows).find(w => w.element.contains(titleBar));
 		if (!subWindow) return;
 
-		subWindow.isDragging = true;
+		this.draggingWindow = subWindow;
 		subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
 		subWindow.dragStart.y = e.clientY - subWindow.element.offsetTop;
 		subWindow.element.classList.add('dragging');
 
 		// bring to front
-		const key = subWindow.element.dataset.key;
-		this.setFrontWindow(key);
+		const appName = subWindow.element.dataset.appName;
+		this.setFrontWindow(appName);
 	}
 	moveWindowHandler(e) {
-		const subWindow = Object.values(this.windows).find(w => w.isDragging);
+		const subWindow = this.draggingWindow;
 		if (!subWindow) return;
+
+		if (subWindow.element.classList.contains('fullscreen')) {
+			subWindow.unsetFullScreen(this.transitionsDuration, true);
+		}
 
 		subWindow.element.style.left = e.clientX - subWindow.dragStart.x + 'px';
 		subWindow.element.style.top = e.clientY - subWindow.dragStart.y + 'px';
 	}
 	releaseWindowHandler(e) {
-		const subWindow = Object.values(this.windows).find(w => w.isDragging);
+		const subWindow = this.draggingWindow;
 		if (!subWindow) return;
 
 		subWindow.position.left = e.clientX - subWindow.dragStart.x;
 		subWindow.position.top = e.clientY - subWindow.dragStart.y;
-		subWindow.isDragging = false;
+		this.draggingWindow = null;
 		subWindow.element.classList.remove('dragging');
 	}
 }
@@ -267,7 +358,7 @@ window.appsManager = appsManager;
 
 // better implementation with less event listeners
 document.addEventListener('click', (e) => {
-	appsManager.grabClickHandler(e);
+	appsManager.clickAppButtonsHandler(e);
 	appsManager.clickWindowHandler(e);
 });
 document.addEventListener('mousedown', (e) => {
@@ -283,8 +374,8 @@ document.addEventListener('mouseup', (e) => {
 // DARK MODE
 document.addEventListener('change', (event) => {
 	switch(event.target.id) {
-		case 'index-dark-mode-toggle':
-    		document.body.classList.toggle('index-dark-mode');
+		case 'dark-mode-toggle':
+    		document.body.classList.toggle('dark-mode');
 			break;
 	}
 });

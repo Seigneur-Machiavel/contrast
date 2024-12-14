@@ -13,8 +13,8 @@
 export const AppConfig = () => {
 	return {
 		preload: true,
-		minWidth: 300,
-		minHeight: 300,
+		minWidth: undefined,
+		minHeight: undefined,
 		icon: '',
 		title: '',
 		content: '',
@@ -28,7 +28,7 @@ export const appsConfig = {
 		minWidth: 300,
 		minHeight: 300,
 		icon: 'img/chat_128.png',
-		title: 'Chat',
+		title: 'CHAT',
 		content: './apps/chat/content.html',
 		mainClass: 'ChatUI',
 		setGlobal: true
@@ -38,15 +38,13 @@ export const appsConfig = {
 		minWidth: 300,
 		minHeight: 300,
 		icon: 'img/wallet_128.png',
-		title: 'Wallet',
+		title: 'WALLET',
 		content: 'This is a notes app.'
 	},
 	node: {
 		preload: false,
-		minWidth: 300,
-		minHeight: 300,
 		icon: 'img/network_128.png',
-		title: 'Node',
+		title: 'NODE',
 		content: 'This is a node app.'
 	}
 };

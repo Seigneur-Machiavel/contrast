@@ -26,9 +26,10 @@ async function createWindow() {
 		setShortcuts(BrowserWindow, [ chatHandlers ], isDev);
 	});
 
-	mainWindow.webContents.on('will-navigate', (event) => { // EXPERIMENTAL
+	/*mainWindow.webContents.on('will-navigate', async (event) => { // EXPERIMENTAL and useless
+		await chatHandler.cleanup();
 		globalShortcut.unregisterAll();
-	});
+	});*/
 
     Menu.setApplicationMenu(null);
 }
