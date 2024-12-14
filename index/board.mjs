@@ -308,14 +308,25 @@ class AppsManager {
 		const appName = subWindow.element.dataset.appName;
 		this.setFrontWindow(appName);
 	}
+	dlbClickTitleBarHandler(e) {
+		if (!e.target.classList.contains('title-bar')) return;
+
+		const subWindow = Object.values(this.windows).find(w => w.element.contains(e.target));
+		if (!subWindow) return;
+
+		if (!subWindow.element.classList.contains('fullscreen')) {
+			subWindow.setFullScreen(this.calculateBoardSize(), this.transitionsDuration);
+		} else {
+			subWindow.unsetFullScreen(this.transitionsDuration);
+		}
+	}
+
 	grabWindowHandler(e) {
 		if (!e.target.classList.contains('title-bar')) return;
 
-		const titleBar = e.target;
-		if (!titleBar) return;
-
-		const subWindow = Object.values(this.windows).find(w => w.element.contains(titleBar));
+		const subWindow = Object.values(this.windows).find(w => w.element.contains(e.target));
 		if (!subWindow) return;
+		if (subWindow.element.classList.contains('fullscreen')) { return; }
 
 		this.draggingWindow = subWindow;
 		subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
@@ -329,10 +340,6 @@ class AppsManager {
 	moveWindowHandler(e) {
 		const subWindow = this.draggingWindow;
 		if (!subWindow) return;
-
-		if (subWindow.element.classList.contains('fullscreen')) {
-			subWindow.unsetFullScreen(this.transitionsDuration, true);
-		}
 
 		subWindow.element.style.left = e.clientX - subWindow.dragStart.x + 'px';
 		subWindow.element.style.top = e.clientY - subWindow.dragStart.y + 'px';
@@ -360,6 +367,10 @@ window.appsManager = appsManager;
 document.addEventListener('click', (e) => {
 	appsManager.clickAppButtonsHandler(e);
 	appsManager.clickWindowHandler(e);
+});
+// double click
+document.addEventListener('dblclick', (e) => {
+	if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e);
 });
 document.addEventListener('mousedown', (e) => {
 	appsManager.grabWindowHandler(e);

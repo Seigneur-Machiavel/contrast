@@ -166,11 +166,13 @@ body {
     display: flex;
     justify-content: space-between;
     filter: invert(0);
-    transition: filter var(--windows-animation-duration);
+    transition: filter var(--windows-animation-duration), box-shadow var(--windows-animation-duration);
+    box-shadow: 0px 0px 0px 0px var(--color1);
 }
 .window.fullscreen .title-bar {
-    pointer-events: none;
+    cursor: default;
     filter: invert(1);
+    box-shadow: 0px 2px 0px 0px var(--color1);
 }
 .window .title-bar .background {
     z-index: -1;
@@ -216,7 +218,6 @@ body {
     filter: invert(1);
 }
 .window .title-bar .buttons-wrap img {
-    pointer-events: auto;
     filter: invert(var(--dark-mode));
     margin: 0 0 0 12px;
     height: 70%;
