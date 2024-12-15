@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<!--
+    Flags Icons made by Freepik from www.flaticon.com
+    https://www.flaticon.com/packs/flags-collection-6
+-->
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkVault</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAOwAAADsAEnxA+tAAACeklEQVR42mNgoAz4A3E3EM8C4mwgZmKgMVAH4odA/B8N/0Hj/wPiUGpaDPLZM6jhP6A+x+VbAyA+AlX7F4hdKLXcDslXPCToYwbiG1C9l8m1PARqwA4sciDHdADxXSBeDcTKOMywhJrxmlTLtaAae7HIVSLF9z1o6ODzqShU/gApDgBpuI5F3AYqV4YmLg0VP4jDPCWovCMxlu+GKkYHAtBE+AiHPgu03GCGJr8Oh7kogAOqyBpJzBfNYFaouD0Qnwbi9WgJFGTGRqhaOywhW4PPAfVornSF8rcBMR+SnCdS7oA5jBnNrDPQrIgM9kPLDbxxvxKNfwaLOl4gjkJTV4UjXTChlSn/CTnAGSkv/4caRAi8hRbHoOhZjOYAISx2hONzACeaa2WwqAsEYhYs4opI0XEBKXrQ7ViEzwHIABTHt5H4akiGxiPpASU6LiD+BtUDK5bloPLL0OzYSqwDYFnrKBBLQQ0/jabGFi2XSKDJgyqw52h2bMFmuRyOBGKMZgEu4IxD/g+0uEZ2wBRsBlwB4i9ElJC7CMj/R0of73GkAQdcmqcTcEAolvbAVqQygB2IXyHJfUPLBbhCmcGHmGISqSbMAeIGIG6D6vtKpN5r0OIcA3wE4l9kVtvsUEfwElDHClWniy4hBpXgYSAfYDUYDTzAUjSj1O8MNHSAClSNHDZJEaREA4pLbTIc8BtaWeGTv0vIECmkdhy1AcjMZGIUamKpwajlAG1SUrQgDRygSs0Uja/pRrED/iLV6fjAS2j5QXUHnEKqUnEBI6ihArRwQBpUA6gxyo+GQeX6Hqj8SVqlARBYhaXS+Y/U58ulZSJkoFE5oIguCAAu5tauhE0TJAAAAABJRU5ErkJggg==" type="image/x-icon">
+    <link rel="stylesheet" href="../styles/main-styles.css">
+    <script src="../scripts/argon2-bundled.min.js"></script>
+    <script src="../scripts/secureModule.js"></script>
+    <script src="../scripts/cryptoLight.js"></script>
+    <script src="../scripts/anime.min.js"></script>
+    <script src="../scripts/classes.js"></script>
+    <script src="../scripts/htmlAnimations.js"></script>
+    <script src="../scripts/mnemoLinkerLoader.js" type="module"></script>
+    <script src="../games/gamesinfo.js"></script>
+    <script src="../scripts/main.js" defer></script>
+    <script src="../scripts/bip39-3.1.0.js" defer></script>
+</head>
+
+<body> <!-- class="dark-mode"> -->
+
+    <div id="bodyBackground"></div>
+
+    <label class="switch">
+        <!-- <input type="checkbox" id="dark-mode-toggle" checked> -->
+        <input type="checkbox" id="dark-mode-toggle">
+        <span class="slider"></span>
+    </label>
+
+    <div id="appTitleWrap" class="visible">
+        <div id="appTitleShadow"></div>
+        <div id="appTitle" class="appTitle hidden">
+            <h1 class="ml3">Link Vault</h1>
+            <span class="titleSufix">Beta</span>
+        </div>
+    </div>
+
+    <div id="dashboard">
+        <div id="dashboardFrameWrap" class="wrap">
+            <div class="dashboardFrame">
+                <div id="dashboardTopBar">
+                    <div id="vaultBtn" class="dashboardTopBarBtn active">Vault</div>
+                    <div id="gamesBtn" class="dashboardTopBarBtn">Games</div>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <line x1="0" y1="82" x2="0" y2="24" stroke="black" stroke-width="1vh"></line>
+                    <line x1="0" y1="24" x2="24" y2="0" stroke="black" stroke-width=".66vh"></line>
+                    <line x1="24" y1="0" x2="100" y2="0" stroke="black" stroke-width="1vh"></line>
+                </svg>
+            </div>
+            <div class="dashboardFrame right bottom">
+                <div id="dashboardMnemolinksList">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <line x1="0" y1="0" x2="0" y2="24" stroke="black" stroke-width=".2vh"></line>
+                        <line x1="0" y1="0" x2="48" y2="0" stroke="black" stroke-width=".2vh"></line>
+                    </svg>
+                    <div id="mnemolinksList">
+                        <!-- Filled in script_1.js, just an example of how it could look like
+                        <div class="mnemolink">
+                            <div class="leftDecoration"></div>
+                            <div class="showBtn"></div>
+                            <div class="editBtn"></div>
+                            <input class="mnemolinkInput">key1</input>
+                        </div>-->
+                        <div id="linkNewMnemonicBtn"><div>+</div></div>
+                    </div>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <line x1="0" y1="100" x2="76" y2="100" stroke="black" stroke-width="1vh"></line>
+                    <line x1="76" y1="100" x2="100" y2="76" stroke="black" stroke-width=".66vh"></line>
+                    <line x1="100" y1="76" x2="100" y2="18" stroke="black" stroke-width="1vh"></line>
+                </svg>
+            </div>
+            <div class="dashboardFrame bottom">
+                <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <line x1="0" y1="18" x2="0" y2="76" stroke="black" stroke-width=".54vh"></line>
+                    <line x1="0" y1="76" x2="24" y2="100" stroke="black" stroke-width=".332vh"></line>
+                    <line x1="24" y1="100" x2="60" y2="100" stroke="black" stroke-width=".4vh"></line>
+                    <line x1="60" y1="100" x2="72" y2="88" stroke="black" stroke-width=".332vh"></line>
+                    <line x1="72" y1="88" x2="100" y2="88" stroke="black" stroke-width=".2vh"></line>
+                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style="transform: translateX(100%);">
+                    <line x1="0" y1="88" x2="48" y2="88" stroke="black" stroke-width=".2vh"></line>
+                </svg>
+            </div>
+            <div class="dashboardFrame right">
+                <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <line x1="0" y1="12" x2="28" y2="12" stroke="black" stroke-width=".2vh"></line>
+                    <line x1="28" y1="12" x2="40" y2="0" stroke="black" stroke-width=".332vh"></line>
+                    <line x1="40" y1="0" x2="76" y2="0" stroke="black" stroke-width=".4vh"></line>
+                    <line x1="76" y1="0" x2="100" y2="24" stroke="black" stroke-width=".332vh"></line>
+                    <line x1="100" y1="24" x2="100" y2="82" stroke="black" stroke-width=".54vh"></line>
+                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style="transform: translateX(-100%);">
+                    <line x1="52" y1="12" x2="100" y2="12" stroke="black" stroke-width=".2vh"></line>
+                </svg>
+            </div>
+        </div>
+    </div>
+    
+    <div id="inVaultWrap">
+        <div id="vault">
+            <div id="mnemolinksBubblesContainer">
+                <div class="wrap linksWrap">
+                    <!-- Filled in script_1.js, just an example of how it could look like
+                    <svg class="mnemolinkLink"></svg>
+                    <svg class="mnemolinkLink"></svg>-->
+                </div>
+                <div class="wrap">
+                    <!-- Filled in script_1.js, just an example of how it could look like
+                    <div class="mnemolinkBubble"></div>
+                    <div class="mnemolinkBubble"></div>-->
+                </div>
+            </div>
+            <div id="centerScreenBtnWrap">
+                <div class="wrap">
+                    <div id="centerScreenBtn">
+                        <div class="lockCircle">
+                            <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                                <path d="M 30 5 Q 50 0 70 5"/>
+                            </svg>-->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="games" class="tidy">
+            <div class="categorySheet active">
+                <div class="categoryBtn"><div class="wrap">Scribe Quest</div></div>
+                <div class="sheetBackground"><div></div></div>
+                <div class="gamesList">
+                    <!--<div class="gameSheet">
+                        <img class="gameMiniature" src="../games/scribeQuest/give_me_ya_seed/miniature.png"></img>
+                        <div class="gameTitleDescriptionWrap">
+                            <div class="gameTitle">Give me ya seed!</div>
+                            <div class="gameDescription">A game of words and wits.</div>
+                        </div>
+                    </div>-->
+                </div>
+            </div>
+            <div class="categorySheet">
+                <div class="categoryBtn"><div class="wrap">Cipher Circuit</div></div>
+                <div class="sheetBackground"><div></div></div>
+                <div class="gamesList"></div>
+            </div>
+            <div class="categorySheet">
+                <div class="categoryBtn"><div class="wrap">Byte Bard</div></div>
+                <div class="sheetBackground"><div></div></div>
+                <div class="gamesList"></div>
+            </div>
+            <div id="gamesCategoryToolTip">
+                <h2></h2>
+                <p></p>
+            </div>
+        </div>
+        <div id="game" class="tidy">
+
+        </div>
+    </div>
+
+    <div class="modalsWrap hidden fold">
+        <div class="modalWrap hidden" id="waitingForConnectionModalWrap">
+            <div class="modal">
+                <form id="waitingForConnectionForm">
+                    <h2>Waiting for connection...</h2>
+                    <div class="loadingSvgDiv"></div>
+                </form>
+            </div>
+        </div>
+        <div class="modalWrap hidden" id="authentificationModalWrap">
+            <div class="modal">
+                <form id="loginForm">
+                    <input type="password" placeholder="Password">
+                    <button type="submit">Unlock</button>
+                </form>
+                <p class="bottomInfo"></p>
+            </div>
+        </div>
+        <div class="modalWrap hidden" id="confirmChoiceModalWrap">
+            <div class="modal">
+                <h2 class="modalText"></h2>
+                <div class="wrap">
+                    <button class="modalButton">Yes</button>
+                    <button class="modalButton">No</button>
+                </div>
+                <p class="bottomInfo"></p>
+            </div>
+        </div>
+        <div class="modalWrap hidden" id="masterMnemonicModalWrap">
+            <div class="modal">
+                <h2 class="modalTopText">Safe's Key creation</h2> <!-- Create Master Mnemonic-->
+                <div style="display: flex; justify-content: space-between; margin: 20px;">
+                    <div style="display: flex; flex-direction: column; justify-content: space-evenly; width: 136px;">
+                        <select class="optionsList" style="display: none;">
+                            <option>BIP-0039</option>
+                        </select>
+                        <select class="optionsList" style="display: none;"></select>
+                        <div style="display: flex; align-items: center;">
+                            <div class="wrap seedWordsRangeWrap">
+                                <label for="seedWords">Seed words: <span class="seedWordsValueStr">12</span></label>
+                                <input type="range" name="seedWords" min="10" max="24" value="12" step="1">
+                            </div>
+                        </div>
+                    </div>
+                    <div style="text-align: center; transform: translateY(60%); color: var(--placeholder-color);">
+                        <!--<p class="modalTopSubText">it's about finding a balance between ease of memorization and security.</p>-->
+                        <p class="modalTopSubText">To be saved until memorized!<br>(you will be accompanied in this process)</p>
+                    </div>
+                    <div class="bipLanguageBtnWrap">
+                        <button class="arrowButton">&#11164;</button>
+                        <button class="languageSelectionBtn english"></button>
+                        <button class="arrowButton">&#11166;</button>
+                    </div>
+                </div>
+                <!--<div class="hSeparator"></div>-->
+                <div class="mnemonicWrap">
+                    <div class="mnemonicGrid">
+                        <div class="mnemonicSeparator"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">1.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">2.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">3.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">4.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">5.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">6.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">7.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">8.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">9.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">10.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">11.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">12.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">13.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">14.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">15.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">16.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">17.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">18.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">19.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">20.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">21.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">22.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">23.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">24.</label><input type="text" class="wordInput" autocomplete="off"><button class="rdnBtn">&#x1F500;</button></div>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: center; height: 30px; margin: 16px 0 0 0;">
+                    <div class="scoreBarWrap">
+                        <div class="scoreBarBackground"></div>
+                        <div class="scoreBarValue">
+                            <div class="scoreBarFill"></div>
+                        </div>
+                        <label class="scoreLabel">Security score: <span class="scoreLabelSpan">100.00%</span></label>
+                    </div>
+                </div>
+                <div class="horizontalButtonsList">
+                    <button class="modalButton crushed">Copy
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAH9JREFUSIntlFEKgCAQBYfoVGH/2bGrk9RB7KcgrMSn1pcDgqD7hmVR+JER2AAnrFkRqOEOmBTBWdQpRSmCojSBs5SZbIB9C/Q7SJmJA9ZYgToT85ARJVC41YRmUIQqqIJ82st+4YO/KER9aNECE5nVq/Li37WPPS6r4YPaSRY7NTlrd5oI7GYAAAAASUVORK5CYII=" />
+                    </button>
+                    <button class="modalButton crushed">Download
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAASlJREFUSInt0z1OQlEQBeAP8WcHFCxAGuzcg6WRhETXYtQYlqGlf52hsXQFlhZqb9DOEg0GCwbfC/HBfagdJ5m8e++bOWdmMkM6angIq5WIS0YLw7BWatBSCYFqwfnPBObCQmAh8H8CVWxJ29ha+CbvBnSMNvYZjXhryza5HW+N8Bni+CeiWS2q4zYnkkcj/tVLJP6NVVzLMn7BUe6+L8t8iBuszSPSzZF8Fpy74TsXJiuZtKTMT/GG7cRKUjLfCc4TGETA5YxK8iKz2nIVfoNl2SRNC/gwGs2DuHfirQgr8V2C11B7RGVKUCoqwTVEDy5kpR/+UqQSHGO+swo2cCdr0RPujUaxDKpoYj3u79gc/9xDX/E4lrU+diczaOLcqG/zEveCozkm/QLDg3YsFTo2qgAAAABJRU5ErkJggg==" />
+                    </button>
+                    <button class="modalButton disabled">Save
+                    </button>
+                </div>
+                <p class="bottomInfo"></p>
+            </div>
+        </div>
+        <div class="modalWrap hidden" id="mnemonicModalWrap">
+            <div class="modal">
+                <h2 class="modalTopText">New link</h2>
+                <div style="display: flex; justify-content: space-between; margin: 20px;">
+                    <div style="display: flex; flex-direction: column; justify-content: space-evenly; width: 136px;">
+                        <select class="optionsList" style="display: none;"> <option>BIP-0039</option> </select>
+                        <select class="optionsList" style="display: none;"></select>
+                        <div style="display: flex; align-items: center;">
+                            <div class="wrap seedWordsRangeWrap">
+                                <label for="seedWords">Seed words: <span class="seedWordsValueStr">12</span></label>
+                                <input type="range" name="seedWords" min="1" max="5" value="1" step="1">
+                            </div>
+                        </div>
+                    </div>
+                    <div style="text-align: center; transform: translateY(60%); color: var(--placeholder-color);">
+                        <p class="modalTopSubText">Enter an existing mnemonic<br>or<br>click the flag to generate a new one.</p>
+                    </div>
+                    <div class="bipLanguageBtnWrap">
+                        <button class="arrowButton">&#11164;</button>
+                        <button class="languageSelectionBtn english"></button>
+                        <button class="arrowButton">&#11166;</button>
+                    </div>
+                </div>
+                <!--<div class="hSeparator"></div>-->
+                <div class="mnemonicWrap">
+                    <div class="mnemonicGrid">
+                        <div class="mnemonicSeparator"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">1.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">2.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">3.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">4.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">5.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">6.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">7.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">8.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">9.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">10.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">11.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap"><label class="wordIndexLabel">12.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">13.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">14.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">15.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">16.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">17.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">18.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">19.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">20.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">21.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">22.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">23.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                        <div class="wordInputWrap hidden"><label class="wordIndexLabel">24.</label><input type="text" class="wordInput" autocomplete="off"></div>
+                    </div>
+                </div>
+                <div class="horizontalButtonsList">
+                    <button class="modalButton crushed">Copy
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAH9JREFUSIntlFEKgCAQBYfoVGH/2bGrk9RB7KcgrMSn1pcDgqD7hmVR+JER2AAnrFkRqOEOmBTBWdQpRSmCojSBs5SZbIB9C/Q7SJmJA9ZYgToT85ARJVC41YRmUIQqqIJ82st+4YO/KER9aNECE5nVq/Li37WPPS6r4YPaSRY7NTlrd5oI7GYAAAAASUVORK5CYII=" />
+                    </button>
+                    <button class="modalButton crushed">Download
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAACxAAAAsQHGLUmNAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAASlJREFUSInt0z1OQlEQBeAP8WcHFCxAGuzcg6WRhETXYtQYlqGlf52hsXQFlhZqb9DOEg0GCwbfC/HBfagdJ5m8e++bOWdmMkM6angIq5WIS0YLw7BWatBSCYFqwfnPBObCQmAh8H8CVWxJ29ha+CbvBnSMNvYZjXhryza5HW+N8Bni+CeiWS2q4zYnkkcj/tVLJP6NVVzLMn7BUe6+L8t8iBuszSPSzZF8Fpy74TsXJiuZtKTMT/GG7cRKUjLfCc4TGETA5YxK8iKz2nIVfoNl2SRNC/gwGs2DuHfirQgr8V2C11B7RGVKUCoqwTVEDy5kpR/+UqQSHGO+swo2cCdr0RPujUaxDKpoYj3u79gc/9xDX/E4lrU+diczaOLcqG/zEveCozkm/QLDg3YsFTo2qgAAAABJRU5ErkJggg==" />
+                    </button>
+                    <button class="modalButton disabled">Save
+                        <!--
+                        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAAAA3NCSVQICAjb4U/gAAAACXBIWXMAABdsAAAXbAHnC+qbAAAAGXRFWHRTb2Z0d2FyZQB3d3cuaW5rc2NhcGUub3Jnm+48GgAAAK5QTFRF////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAIAAAIAAAHAAAHAAAHBgAGBQAFBAAEBAAEBAAEBAAEBAAEAwADAwADAwADAwADAgAFAgAEAgAEAgAEAgAEAgAEBAIEBAIEAwEEAwEEAwEEAwEEAwEEAgEEAgEEAgEEBAEEBAEEBAEEAwEDAwEFAwEEAwEDAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEEAwEE4+8CqgAAADl0Uk5TAAEDBgcMDRATICEiIyUmLDI+P0BCRUxOVl9rd3h5f4CBiqutsrS7z9LU1dbZ2+Dn6+zw8fT1/P3+NMDcPgAAALBJREFUOE+l08cOwjAQRdGEAKGFGnrvvbfc//8xFoBMMhKzyOyefCTb47FlxS+v6pjg+PnoegeW2W9wVzz7EXAEzvVPaANM0yEAwKP7Dj0AtkUBYJIygGtTAtaeAQQjWwAuDQNg7gpAMLANYF8SAGbDn3BrScAplMYJASK1yCiAQ1kB3H0FsNPARtuiEu+Q8ppao5RWa4+pPbc2MMrI/RtadezVj2Pl/KQJTq0QXY9dLytSffZNDb5YAAAAAElFTkSuQmCC" />
+                        -->
+                    </button>
+                </div>
+                <p class="bottomInfo"></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="footerContent">
+            <div class="footerLeft">
+                <a href="https://github.com/Seigneur-Machiavel/MnemoLink" target="_blank" class="footerLink">
+                    <img src="../images/github.png">
+                </a>
+                <p class="footerText footerVersion">LinkVault: <span id="footerVersion">v0.0</span></p>
+            </div>
+            <div class="footerRight">
+                <a href="https://discord.com/invite/s5Ayh9Nk7A" target="_blank" class="footerLink">
+                    <img src="../images/discord.png">
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

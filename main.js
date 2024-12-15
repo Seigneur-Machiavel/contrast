@@ -17,9 +17,10 @@ async function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         }
     });
+    
+    mainWindow.loadFile('index.html');
 
 	const chatHandler = new P2PChatHandler(mainWindow);
-    mainWindow.loadFile('index.html');
     mainWindow.webContents.on('did-finish-load', () => {
 		console.log('Main window loaded. -> Setting up chatHandlers && shortcuts');
 		const chatHandlers = chatHandler.setupHandlers();

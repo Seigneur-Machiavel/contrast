@@ -1,14 +1,12 @@
 if (false) { // Just for better completion
 	const anime = require('animejs');
 	const ChatUI = require('../apps/chat/front-scripts/renderer.js');
-}
-const mainClasses = {
-	'ChatUI': ChatUI
-}
+} // For better completion ---------------
 
 import { AppConfig, appsConfig } from './apps-config.mjs';
-console.log('index-scripts/index.mjs loaded');
-
+const appsMainClasses = {
+	'ChatUI': ChatUI
+}
 
 /** @param {string} tag @param {string[]} classes @param {string} innerHTML @param {HTMLElement} [parent] */
 function newElement(tag, classes, innerHTML, parent) {
@@ -37,7 +35,11 @@ class ButtonsBar {
 	addButton(appName, app) {
 		const button = newElement('button', ['app-button'], '', this.element);
 		button.dataset.appName = appName;
-		newElement('img', [], '', button).src = app.icon;
+
+		const img = newElement('img', [], '', button);
+		img.src = app.icon;
+		img.style.width = app.iconWidth;
+
 		this.buttons.push(button);
 		this.buttonsByAppNames[appName] = button;
 	}
@@ -190,12 +192,20 @@ class AppsManager {
 		this.windowsWrap = windowsWrap;
 		this.buttonsBar = new ButtonsBar(buttonsBarElement);
 		/** @type {Object<string, AppConfig>} */
-		this.appsConfig = appsConf;
+		this.appsConfig = this.#buildAppsConfig(appsConf);
 		/** @type {Object<string, SubWindow>} */
 		this.windows = {};
 		this.draggingWindow = null;
 	}
 
+	#buildAppsConfig(appsConf) {
+		const result = {};
+		for (const appName in appsConf) {
+			const conf = appsConf[appName];
+			result[appName] = AppConfig(appName, conf);
+		}
+		return result;
+	}
 	updateCssAnimationsDuration() {
 		document.documentElement.style.setProperty('--windows-animation-duration', this.transitionsDuration + 'ms');
 	}
@@ -218,7 +228,7 @@ class AppsManager {
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
 
 		const appMainClassName = this.appsConfig[appName].mainClass;
-		const appMainClass = mainClasses[appMainClassName];
+		const appMainClass = appsMainClasses[appMainClassName];
 		if (appMainClass) {
 			setTimeout(() => { // wait for the element to be rendered
 				const contentDiv = this.windows[appName].element.querySelector('.content');
@@ -355,13 +365,13 @@ class AppsManager {
 	}
 }
 
-const eHTML = {
-	windowsWrap: document.getElementById('index-windows-wrap'),
-	bottomButtonsBar: document.getElementById('index-bottom-buttons-bar')
-}
-const appsManager = new AppsManager(eHTML.windowsWrap, eHTML.bottomButtonsBar, appsConfig);
+const appsManager = new AppsManager(
+	document.getElementById('index-windows-wrap'),
+	document.getElementById('index-bottom-buttons-bar'),
+	appsConfig
+);
 appsManager.initApps();
-window.appsManager = appsManager;
+window.appsManager = appsManager; // 
 
 // better implementation with less event listeners
 document.addEventListener('click', (e) => {

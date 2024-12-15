@@ -76,8 +76,6 @@
     --color2_1: #161616;
     --color2_2: #323232;
 
-    --modal-background-color: rgba(0, 0, 0, 0.7);
-
     --buttons-bar-height: 70px;
     --windows-animation-duration: 400ms;
 }
@@ -90,8 +88,6 @@
     --color2: white;
     --color2_1: #f0f0f0;
     --color2_2: #e0e0e0;
-
-    --modal-background-color: rgba(0, 0, 0, 0.7);
 }
 body {
     background-color: var(--color1);
@@ -111,11 +107,15 @@ body {
     bottom: 0;
 }
 #index-bottom-buttons-bar button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin: 10px;
     height: calc(100% - 20px);
     aspect-ratio: 1 / 1;
     border-radius: 50%;
     border: none;
+    padding: 0;
     background-color: var(--color2);
     color: var(--color1);
     transition: transform 0.2s;
@@ -149,7 +149,6 @@ body {
     pointer-events: auto;
     resize: both;
     box-shadow: inset 0 0 2px 0px var(--color1_2), 0px 2px 0px 0.6px var(--color1_2);
-    /*transition: box-shadow 0.2s;*/
     transition:
         box-shadow calc(var(--windows-animation-duration) * .5),
         border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);

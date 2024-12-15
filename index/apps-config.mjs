@@ -10,16 +10,17 @@
  * @property {boolean} setGlobal // Set the app as global (window)
  */
 
-export const AppConfig = () => {
+export const AppConfig = (appName, appConfig) => {
 	return {
-		preload: true,
-		minWidth: undefined,
-		minHeight: undefined,
-		icon: '',
-		title: '',
-		content: '',
-		mainClass: '',
-		setGlobal: false
+		preload: appConfig.preload || false,
+		minWidth: appConfig.minWidth || undefined,
+		minHeight: appConfig.minHeight || undefined,
+		icon: appConfig.icon || `apps/${appName}/img/icon_128.png`,
+		iconWidth: appConfig.iconWidth || '50%',
+		title: appConfig.title || 'App_Title',
+		content: appConfig.content || 'This is a default app.',
+		mainClass: appConfig.mainClass || undefined,
+		setGlobal: appConfig.setGlobal || false
 	}
 }
 export const appsConfig = {
@@ -27,23 +28,25 @@ export const appsConfig = {
 		preload: false,
 		minWidth: 300,
 		minHeight: 300,
-		icon: 'img/chat_128.png',
 		title: 'CHAT',
-		content: './apps/chat/content.html',
+		content: 'apps/chat/content.html',
 		mainClass: 'ChatUI',
 		setGlobal: true
 	},
 	wallet: {
 		preload: false,
-		minWidth: 300,
-		minHeight: 300,
-		icon: 'img/wallet_128.png',
 		title: 'WALLET',
 		content: 'This is a notes app.'
 	},
+	vault: {
+		preload: false,
+		iconWidth: '68%',
+		title: 'VAULT',
+		content: 'This is a vault app.'
+	},
 	node: {
 		preload: false,
-		icon: 'img/network_128.png',
+		iconWidth: '56%',
 		title: 'NODE',
 		content: 'This is a node app.'
 	}
