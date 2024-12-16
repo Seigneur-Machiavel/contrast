@@ -4,6 +4,14 @@ const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./preferences/shortcuts.js');
 
 const isDev = true;
+function checkArrayOfArraysDuplicate(handlersKeys = []) {
+    const handlers = handlersKeys.flat();
+    const duplicates = handlers.filter((v, i) => handlers.indexOf(v) !== i);
+    if (duplicates.length > 0) {
+        return duplicates;
+    }
+    return false;
+}
 
 async function createWindow() {
     const mainWindow = new BrowserWindow({
@@ -23,8 +31,13 @@ async function createWindow() {
 	const chatHandler = new P2PChatHandler(mainWindow);
     mainWindow.webContents.on('did-finish-load', () => {
 		console.log('Main window loaded. -> Setting up chatHandlers && shortcuts');
-		const chatHandlers = chatHandler.setupHandlers();
-		setShortcuts(BrowserWindow, [ chatHandlers ], isDev);
+        const handlersKeys = [];
+        handlersKeys.push(Object.keys(chatHandler.setupHandlers()));
+
+        const duplicates = checkArrayOfArraysDuplicate(handlersKeys);
+        if (duplicates) { console.error('Duplicate IPC handlers detected:', duplicates); return; }
+
+		setShortcuts(BrowserWindow, handlersKeys, isDev);
 	});
 
 	/*mainWindow.webContents.on('will-navigate', async (event) => { // EXPERIMENTAL and useless

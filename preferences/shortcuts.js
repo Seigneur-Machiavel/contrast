@@ -19,9 +19,8 @@ function setShortcuts(bw, handlersToRemove = [], dev = true) {
         if (!bw.getFocusedWindow()) return;
 
         // Should be better if the handlers are removed by the initiator app
-        for (let appHandlers of handlersToRemove) {
-            const keys = Object.keys(appHandlers);
-            for (const key of keys) ipcMain.removeHandler(key);
+        for (let handlerKeys of handlersToRemove) {
+            for (const key of handlerKeys) ipcMain.removeHandler(key);
         }
         bw.getFocusedWindow().reload();
     });
