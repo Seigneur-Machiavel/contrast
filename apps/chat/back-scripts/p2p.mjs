@@ -73,7 +73,14 @@ export class P2P extends EventEmitter {
                 dht
             },
             peerDiscovery: [
-
+                mdns({
+                    interval: 1000, // Faster discovery interval
+                    enabled: false,
+                    serviceTag: 'dchat', // Unique service tag
+                    broadcast: true, // Ensure broadcasting is enabled
+                    timeout: 1000,
+                    ttl: 120
+                }),
                 bootstrap({
                     list: this.bootstrapNodes,
                     timeout: 3000,
@@ -131,7 +138,6 @@ export class P2P extends EventEmitter {
                             latency
                         };
     
-                       
                         if (parsed.content?.startsWith('/file ')) {
                             const [_, filename, cid, size, type] = parsed.content.split(' ');
                             if (!this.files.has(cid)) {
@@ -290,11 +296,27 @@ export class P2P extends EventEmitter {
             this.channels.add(channel);
             console.log(`📻 [${this.nickname}] Joined: ${channel}`);
             
-            await this._requestHistory(channel);
-            
-            await this.sendMessage(channel, '/join').catch(err => {
-                console.error(`📛 [${this.nickname}] Join message failed:`, err.message);
-            });
+            // Add a small delay to let subscriptions propagate
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            try {
+                // Only try to send join message if we have peers
+                const peers = Array.from(await this.node.services.pubsub.getSubscribers(topicName));
+                if (peers.length > 0) {
+                    await this.sendMessage(channel, '/join');
+                    console.log(`👋 [${this.nickname}] Announced join to ${peers.length} peers in ${channel}`);
+                } else {
+                    console.log(`🔕 [${this.nickname}] No peers in ${channel} yet, skipping join announcement`);
+                }
+                
+                // Request history only if there are peers
+                if (peers.length > 0) {
+                    await this._requestHistory(channel);
+                }
+            } catch (err) {
+                // Don't throw on announcement failure, just log it
+                console.warn(`⚠️ [${this.nickname}] Join announcement failed in ${channel}:`, err.message);
+            }
         }
     }
 
