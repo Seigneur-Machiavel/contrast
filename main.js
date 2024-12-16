@@ -38,7 +38,7 @@ function createLoggerSettingWindow() {
     loggerWindow.loadFile('./miniLogger/miniLoggerSetting.html');
     return loggerWindow;
 }
-async function createMainWindow(awaitForLoading = true) {
+async function createMainWindow() {
     /** @type {BrowserWindow} */
     const mainWindow = new BrowserWindow({
         width: 1200,
