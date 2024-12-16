@@ -174,6 +174,10 @@ class P2PChatHandler {
                 throw err; // Propagate error for proper error handling
             }
         }
+
+        // Remove IPC handlers
+        const appHandlers = Object.keys(this.handlers);
+        for (const key of appHandlers) ipcMain.removeHandler(key);
     }
 }
 

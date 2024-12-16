@@ -17,7 +17,7 @@ async function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         }
     });
-    
+
     mainWindow.loadFile('index.html');
 
 	const chatHandler = new P2PChatHandler(mainWindow);
@@ -36,17 +36,5 @@ async function createWindow() {
 }
 
 app.whenReady().then(createWindow);
-
-/*app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
-});*/
-
-/*app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createWindow();
-    }
-});*/
 
 app.on('will-quit', () => { globalShortcut.unregisterAll(); });
