@@ -104,6 +104,12 @@ class MiniLogger {
 
         console.error(`${message}`);
     }
+    warn(label = 'global', message) {
+        this.#saveLog(label, message);
+        if (this.activeLabels[label] !== true && this.allActive !== true) return;
+
+        console.warn(`${message}`);
+    }
 }
 
 module.exports = { MiniLogger, loadDefaultConfig, loadMergedConfig };
