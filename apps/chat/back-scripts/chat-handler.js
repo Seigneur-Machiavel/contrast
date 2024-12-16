@@ -64,13 +64,14 @@ class P2PChatHandler {
     }
 
     /** @param {string} nickname */
-    async startChat(event, nickname) {
+    async startChat(event, nickname, listenAddr) {
         while (!this.P2P) {
             this.miniLogger.warn('chat', 'P2P module not initialized yet');
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         try {
-            this.p2p = new this.P2P(nickname);
+            console.log('Starting chat with', nickname, listenAddr);
+            this.p2p = new this.P2P(nickname,listenAddr);
             this.setupP2PEvents(this.p2p);
             const addr = await this.p2p.start();
             this.log('success', 'chat-started', { nickname, addr });
@@ -132,7 +133,17 @@ class P2PChatHandler {
 
     /** @param {string} addr */
     async connectPeer(event, addr) {
-        return this.wrapP2PCall('connect-peer', () => this.p2p.connectToPeer(addr));
+        try {
+            const connected = await this.p2p.connectToPeer(addr);
+            this.log('network', 'connect-peer', `Connection ${connected ? 'succeeded' : 'failed'} to ${addr}`);
+            return { 
+                success: connected, // Actually use the connection result
+                error: connected ? null : 'Failed to establish connection'
+            };
+        } catch (err) {
+            this.log('error', 'connect-peer', `Connection failed to ${addr}: ${err.message}`);
+            return { success: false, error: err.message };
+        }
     }
 
     /** @param {string} action @param {Function} fn */

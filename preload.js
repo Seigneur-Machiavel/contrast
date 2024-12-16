@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const chatApi = {
     // Methods
-    startChat: (nickname) => ipcRenderer.invoke('start-chat', nickname),
+    startChat: (nickname, listenAddr) => ipcRenderer.invoke('start-chat', nickname, listenAddr),
     sendMessage: (data) => ipcRenderer.invoke('send-message', data),
     joinChannel: (channel) => ipcRenderer.invoke('join-channel', channel),
     connectPeer: (addr) => ipcRenderer.invoke('connect-peer', addr),
