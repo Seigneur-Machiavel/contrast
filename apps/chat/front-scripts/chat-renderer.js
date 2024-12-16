@@ -58,11 +58,11 @@ class ChatUI {
     }
 
     initializeEventListeners() {
-        window.chat.onFileProgress(this.handleFileProgress);
-        window.chat.onChatMessage(this.handleChatMessage);
-        window.chat.onPeerConnecting(this.handlePeerConnecting);
-        window.chat.onPeerJoined(this.handlePeerJoined);
-        window.chat.onPeerLeft(this.handlePeerLeft);
+        window.chatAPI.onFileProgress(this.handleFileProgress);
+        window.chatAPI.onChatMessage(this.handleChatMessage);
+        window.chatAPI.onPeerConnecting(this.handlePeerConnecting);
+        window.chatAPI.onPeerJoined(this.handlePeerJoined);
+        window.chatAPI.onPeerLeft(this.handlePeerLeft);
     }
     initializeFrontListeners() {
         this.document.addEventListener('click', e => {
@@ -90,7 +90,7 @@ class ChatUI {
         if (!nickname) { this.notify('Please enter a nickname'); return; }
         if (!listenAddr) { this.notify('Please enter a listen address'); return; }
         try {
-            const result = await window.chat.startChat(nickname, listenAddr);
+            const result = await window.chatAPI.startChat(nickname, listenAddr);
             if (!result.success) { throw new Error(result.error); }
 
             this.eHTML.status.textContent = `Connected as: ${nickname}\nAddress: ${result.addr}`;
@@ -110,7 +110,7 @@ class ChatUI {
 
         console.log('sendMessage', content);
         try {
-            const result = await window.chat.sendMessage({
+            const result = await window.chatAPI.sendMessage({
                 channel: this.state.currentChannel,
                 content
             });
@@ -132,7 +132,7 @@ class ChatUI {
         if (!channel) return;
 
         try {
-            const result = await window.chat.joinChannel(channel);
+            const result = await window.chatAPI.joinChannel(channel);
             if (result.success) {
                 this.state.channels.add(channel);
                 this.eHTML.newChannel.value = '';
@@ -154,7 +154,7 @@ class ChatUI {
         if (!addr) return;
 
         try {
-            const success = await window.chat.connectPeer(addr);
+            const success = await window.chatAPI.connectPeer(addr);
             if (success === true) {
                 console.log(success);
                 this.eHTML.peerAddr.value = '';
@@ -180,7 +180,7 @@ class ChatUI {
 
         try {
             const buffer = await file.arrayBuffer();
-            const result = await window.chat.shareFile({
+            const result = await window.chatAPI.shareFile({
                 channel: this.state.currentChannel,
                 file: {
                     name: file.name,
@@ -208,7 +208,7 @@ class ChatUI {
     async downloadFile(cid) {
         this.log('File', 'Download started', { cid });
         try {
-            const result = await window.chat.downloadFile({ cid });
+            const result = await window.chatAPI.downloadFile({ cid });
             if (result.success) {
                 this.notify(`Downloaded: ${result.metadata.filename}`);
                 this.log('File', 'Downloaded', { 
@@ -406,12 +406,12 @@ class ChatUI {
     }
 
     cleanup() {
-        window.chat.removeAllListeners('chat-message');
-        window.chat.removeAllListeners('peer-joined');
-        window.chat.removeAllListeners('peer-left');
-        window.chat.removeAllListeners('peer-connecting');
-        window.chat.removeAllListeners('file:progress');
-        window.chat.removeAllListeners('file:complete');
+        window.chatAPI.removeAllListeners('chat-message');
+        window.chatAPI.removeAllListeners('peer-joined');
+        window.chatAPI.removeAllListeners('peer-left');
+        window.chatAPI.removeAllListeners('peer-connecting');
+        window.chatAPI.removeAllListeners('file:progress');
+        window.chatAPI.removeAllListeners('file:complete');
     }
 }
 

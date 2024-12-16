@@ -4,10 +4,10 @@ const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./preferences/shortcuts.js');
 const { MiniLogger, loadMergedConfig } = require('./miniLogger/mini-logger.js');
 
+Menu.setApplicationMenu(null);
 const miniLoggerConfig = loadMergedConfig();
 const miniLogger = new MiniLogger(miniLoggerConfig);
 
-Menu.setApplicationMenu(null);
 const isDev = true;
 function checkArrayOfArraysDuplicate(handlersKeys = []) {
     const handlers = handlersKeys.flat();
@@ -31,7 +31,7 @@ function createLoggerSettingWindow() {
         const actualizedMiniLoggerConfig = loadMergedConfig();
         miniLogger.initFromConfig(actualizedMiniLoggerConfig);
 
-        miniLogger.log('global', 'Logger settings saved and window closed');
+        miniLogger.log('global', 'Logger settings swapped');
         loggerWindow.hide();
     });
 

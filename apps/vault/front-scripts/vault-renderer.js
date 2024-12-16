@@ -10,7 +10,8 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-cryptoLight.useArgon2Worker = true; console.log('Argon2 worker enabled!');
+cryptoLight.useArgon2Worker = true;
+console.log('Argon2 worker enabled!');
 //#region - VARIABLES
 /** @type {MnemoLinker} */
 let MnemoLinkerLastest = null; // FOR FAST ACCESS TO THE LATEST VERSION (need to be use as : new MnemoLinkerLastest()

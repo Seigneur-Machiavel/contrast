@@ -23,4 +23,4 @@ const chatApi = {
 
 // Expose protected methods that allow the renderer process to use
 // specific IPC channels safely in isolation
-contextBridge.exposeInMainWorld('chat', chatApi);
+contextBridge.exposeInMainWorld('chatAPI', chatApi);
