@@ -1,38 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
 
-<!--
-    Flags Icons made by Freepik from www.flaticon.com
-    https://www.flaticon.com/packs/flags-collection-6
--->
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LinkVault</title>
-    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAOwAAADsAEnxA+tAAACeklEQVR42mNgoAz4A3E3EM8C4mwgZmKgMVAH4odA/B8N/0Hj/wPiUGpaDPLZM6jhP6A+x+VbAyA+AlX7F4hdKLXcDslXPCToYwbiG1C9l8m1PARqwA4sciDHdADxXSBeDcTKOMywhJrxmlTLtaAae7HIVSLF9z1o6ODzqShU/gApDgBpuI5F3AYqV4YmLg0VP4jDPCWovCMxlu+GKkYHAtBE+AiHPgu03GCGJr8Oh7kogAOqyBpJzBfNYFaouD0Qnwbi9WgJFGTGRqhaOywhW4PPAfVornSF8rcBMR+SnCdS7oA5jBnNrDPQrIgM9kPLDbxxvxKNfwaLOl4gjkJTV4UjXTChlSn/CTnAGSkv/4caRAi8hRbHoOhZjOYAISx2hONzACeaa2WwqAsEYhYs4opI0XEBKXrQ7ViEzwHIABTHt5H4akiGxiPpASU6LiD+BtUDK5bloPLL0OzYSqwDYFnrKBBLQQ0/jabGFi2XSKDJgyqw52h2bMFmuRyOBGKMZgEu4IxD/g+0uEZ2wBRsBlwB4i9ElJC7CMj/R0of73GkAQdcmqcTcEAolvbAVqQygB2IXyHJfUPLBbhCmcGHmGISqSbMAeIGIG6D6vtKpN5r0OIcA3wE4l9kVtvsUEfwElDHClWniy4hBpXgYSAfYDUYDTzAUjSj1O8MNHSAClSNHDZJEaREA4pLbTIc8BtaWeGTv0vIECmkdhy1AcjMZGIUamKpwajlAG1SUrQgDRygSs0Uja/pRrED/iLV6fjAS2j5QXUHnEKqUnEBI6ihArRwQBpUA6gxyo+GQeX6Hqj8SVqlARBYhaXS+Y/U58ulZSJkoFE5oIguCAAu5tauhE0TJAAAAABJRU5ErkJggg==" type="image/x-icon">
-    <link rel="stylesheet" href="../styles/main-styles.css">
-    <script src="../scripts/argon2-bundled.min.js"></script>
-    <script src="../scripts/secureModule.js"></script>
-    <script src="../scripts/cryptoLight.js"></script>
-    <script src="../scripts/anime.min.js"></script>
-    <script src="../scripts/classes.js"></script>
-    <script src="../scripts/htmlAnimations.js"></script>
-    <script src="../scripts/mnemoLinkerLoader.js" type="module"></script>
-    <script src="../games/gamesinfo.js"></script>
-    <script src="../scripts/main.js" defer></script>
-    <script src="../scripts/bip39-3.1.0.js" defer></script>
-</head>
+<link rel="stylesheet" href="./apps/vault/vault-style.css">
+<script src="../scripts/argon2-bundled.min.js"></script>
+<script src="../scripts/secureModule.js"></script>
+<script src="../scripts/cryptoLight.js"></script>
+<script src="../scripts/classes.js"></script>
+<script src="../scripts/htmlAnimations.js"></script>
+<script src="../scripts/mnemoLinkerLoader.js" type="module"></script>
+<script src="../games/gamesinfo.js"></script>
+<script src="../scripts/bip39-3.1.0.js" defer></script>
 
 <body> <!-- class="dark-mode"> -->
 
     <div id="bodyBackground"></div>
-
-    <label class="switch">
-        <!-- <input type="checkbox" id="dark-mode-toggle" checked> -->
-        <input type="checkbox" id="dark-mode-toggle">
-        <span class="slider"></span>
-    </label>
 
     <div id="appTitleWrap" class="visible">
         <div id="appTitleShadow"></div>
@@ -338,22 +317,6 @@
                     </button>
                 </div>
                 <p class="bottomInfo"></p>
-            </div>
-        </div>
-    </div>
-
-    <div class="footer">
-        <div class="footerContent">
-            <div class="footerLeft">
-                <a href="https://github.com/Seigneur-Machiavel/MnemoLink" target="_blank" class="footerLink">
-                    <img src="../images/github.png">
-                </a>
-                <p class="footerText footerVersion">LinkVault: <span id="footerVersion">v0.0</span></p>
-            </div>
-            <div class="footerRight">
-                <a href="https://discord.com/invite/s5Ayh9Nk7A" target="_blank" class="footerLink">
-                    <img src="../images/discord.png">
-                </a>
             </div>
         </div>
     </div>

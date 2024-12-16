@@ -1,6 +1,7 @@
 if (false) { // Just for better completion
 	const anime = require('animejs');
-	const ChatUI = require('../apps/chat/front-scripts/renderer.js');
+	const ChatUI = require('../apps/chat/front-scripts/chat-renderer.js');
+	
 } // For better completion ---------------
 
 import { AppConfig, appsConfig } from './apps-config.mjs';

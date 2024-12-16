@@ -2,7 +2,11 @@ const path = require('path');
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
 const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./preferences/shortcuts.js');
+const MiniLogger = require('./miniLogger/mini-logger.js');
+const miniLoggerConfig = require('./miniLogger/mini-logger-config.js');
+const miniLogger = new MiniLogger(miniLoggerConfig);
 
+Menu.setApplicationMenu(null);
 const isDev = true;
 function checkArrayOfArraysDuplicate(handlersKeys = []) {
     const handlers = handlersKeys.flat();
@@ -12,8 +16,20 @@ function checkArrayOfArraysDuplicate(handlersKeys = []) {
     }
     return false;
 }
+function createLoggerSettingWindow() {
+    const loggerWindow = new BrowserWindow({
+        width: 300,
+        height: 500,
+        icon: 'img/icon_128.png',
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
+    });
 
-async function createWindow() {
+    loggerWindow.on('close', (e) => { e.preventDefault(); loggerWindow.hide(); });
+    loggerWindow.loadFile('./miniLogger/miniLoggerSetting.html');
+    return loggerWindow;
+}
+async function createMainWindow(awaitForLoading = true) {
+    /** @type {BrowserWindow} */
     const mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
@@ -28,26 +44,32 @@ async function createWindow() {
 
     mainWindow.loadFile('index.html');
 
-	const chatHandler = new P2PChatHandler(mainWindow);
-    mainWindow.webContents.on('did-finish-load', () => {
-		console.log('Main window loaded. -> Setting up chatHandlers && shortcuts');
-        const handlersKeys = [];
-        handlersKeys.push(Object.keys(chatHandler.setupHandlers()));
-
-        const duplicates = checkArrayOfArraysDuplicate(handlersKeys);
-        if (duplicates) { console.error('Duplicate IPC handlers detected:', duplicates); return; }
-
-		setShortcuts(BrowserWindow, handlersKeys, isDev);
-	});
+    let loaded;
+    mainWindow.webContents.on('did-finish-load', () => { loaded = true; });
 
 	/*mainWindow.webContents.on('will-navigate', async (event) => { // EXPERIMENTAL and useless
 		await chatHandler.cleanup();
 		globalShortcut.unregisterAll();
 	});*/
 
-    Menu.setApplicationMenu(null);
+    while(!loaded) { await new Promise(resolve => setTimeout(resolve, 100)); }
+    return mainWindow;
 }
 
-app.whenReady().then(createWindow);
+app.on('ready', async () => {
+    const loggerWindow = createLoggerSettingWindow();
+    loggerWindow.hide();
+
+    const mainWindow = await createMainWindow();
+    const handlersKeys = [];
+    const chatHandler = new P2PChatHandler(mainWindow);
+    handlersKeys.push(Object.keys(chatHandler.setupHandlers()));
+
+    const duplicates = checkArrayOfArraysDuplicate(handlersKeys);
+    if (duplicates) { miniLogger.error('Duplicate IPC handlers detected:', duplicates); return; }
+
+    setShortcuts(miniLogger, loggerWindow, handlersKeys, isDev);
+    BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
+});
 
 app.on('will-quit', () => { globalShortcut.unregisterAll(); });

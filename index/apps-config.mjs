@@ -29,7 +29,7 @@ export const appsConfig = {
 		minWidth: 300,
 		minHeight: 300,
 		title: 'CHAT',
-		content: 'apps/chat/content.html',
+		content: 'apps/chat/chat-content.html',
 		mainClass: 'ChatUI',
 		setGlobal: true
 	},
@@ -42,7 +42,7 @@ export const appsConfig = {
 		preload: false,
 		iconWidth: '68%',
 		title: 'VAULT',
-		content: 'This is a vault app.'
+		content: 'apps/vault/vault-content.html',
 	},
 	node: {
 		preload: false,
