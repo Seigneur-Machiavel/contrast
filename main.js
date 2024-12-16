@@ -28,7 +28,7 @@ function createLoggerSettingWindow() {
     loggerWindow.on('close', (e) => {
         e.preventDefault();
 
-        const actualizedMiniLoggerConfig = mergedConfig();
+        const actualizedMiniLoggerConfig = loadMergedConfig();
         miniLogger.initFromConfig(actualizedMiniLoggerConfig);
 
         miniLogger.log('global', 'Logger settings saved and window closed');

@@ -70,7 +70,7 @@ class MiniLogger {
         }
     }
     #saveHistory() {
-        fs.writeFileSync('./history.json', JSON.stringify(this.history));
+        fs.writeFileSync('./miniLogger/history.json', JSON.stringify(this.history));
     }
     #saveLog(label, message) {
         const historicalLog = HistoricalLog(label, message);
