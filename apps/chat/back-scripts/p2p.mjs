@@ -13,9 +13,13 @@ import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string';
 import EventEmitter from 'events';
 import { pipe } from 'it-pipe';
 import { concat as uint8ArrayConcat } from 'uint8arrays/concat';
+import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
+
 
 const BOOTSTRAP_LIST = [
-    ''
+    '',
+/*     '/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN',
+    '/dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa', */
 ];
 
 const MAX_HISTORY = 100;
@@ -40,10 +44,15 @@ export class P2P extends EventEmitter {
         };
         this.files = new Map(); // Map<cid, metadata>
         this.chunkSize = 1024 * 256;
+        this.uniqueHash = options.uniqueHash || this.generateRandomNonce(32);
     }
+
 
     async start() {
         console.log(` Address: ${this.listenAddr} started p2p chat`);
+        const hashUint8Array = this.toUint8Array(this.uniqueHash);
+        const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
+
         const dht = kadDHT({
             protocol: '/ipfs/kad/1.0.0',
             clientMode: false,
@@ -52,10 +61,18 @@ export class P2P extends EventEmitter {
         });
     
         this.node = await createLibp2p({
-            addresses: { listen: [this.listenAddr] },
-            transports: [tcp()],
+            addresses: { 
+                listen: [
+                    this.listenAddr,
+                    '/ip4/0.0.0.0/tcp/0' // Allow dynamic port allocation
+                ]
+            },
+            transports: [
+                tcp(),
+            ],
             streamMuxers: [yamux()],
             connectionEncrypters: [noise()],
+            privateKey: privateKeyObject,
             services: {
                 identify: identify({
                     protocolPrefix: '/dchat',
@@ -70,14 +87,14 @@ export class P2P extends EventEmitter {
                     heartbeatInterval: 1000,
                     directPeers: []
                 }),
-                dht
+                dht: dht
             },
             peerDiscovery: [
                 mdns({
-                    interval: 1000, // Faster discovery interval
-                    enabled: false,
-                    serviceTag: 'dchat', // Unique service tag
-                    broadcast: true, // Ensure broadcasting is enabled
+                    interval: 1000,
+                    enabled: true,
+                    serviceTag: 'dchat', 
+                    broadcast: true, 
                     timeout: 1000,
                     ttl: 120
                 }),
@@ -87,10 +104,14 @@ export class P2P extends EventEmitter {
                 }),  
             ],
             connectionManager: {
-                minConnections: 0,
+                minConnections: 5,
                 maxConnections: 50,
                 pollInterval: 2000,
-            }
+                autoDial: true,
+                maxParallelDials: 5,
+                dialTimeout: 30000,
+            },
+
         });
 
         this.node.services.pubsub.addEventListener('message', msg => {
@@ -233,7 +254,8 @@ export class P2P extends EventEmitter {
         
         await this.joinChannel('system');
     
-        return this.getMultiaddrs()[0];
+        // concat all the addresses in multiaddr format
+        return this.getMultiaddrs().map(ma => ma.toString() + '\n\n').join('');
     }
     getMultiaddrs() {
         return this.node.getMultiaddrs().map(ma => ma.toString());
@@ -518,8 +540,24 @@ export class P2P extends EventEmitter {
             this.node = null;
             console.log(`🛑 [${this.nickname}] Stopped`);
         }
-        if (this.ipfs) {
-            await this.ipfs.stop();
+    }
+
+    generateRandomNonce(length) {
+        // Create a random hex string of specified length
+        return Array.from(crypto.getRandomValues(new Uint8Array(length)))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
+
+    toUint8Array(hex) {
+        if (hex.length % 2 !== 0) {
+            throw new Error("The length of the input is not a multiple of 2.");
         }
+        const length = hex.length / 2;
+        const uint8Array = new Uint8Array(length);
+        for (let i = 0, j = 0; i < length; ++i, j += 2) {
+            uint8Array[i] = parseInt(hex.substring(j, j + 2), 16);
+        }
+        return uint8Array;
     }
 }
