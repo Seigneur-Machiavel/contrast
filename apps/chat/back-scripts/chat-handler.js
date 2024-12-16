@@ -1,5 +1,6 @@
 if (false) {
     const { BrowserWindow } = require('electron');
+    const { MiniLogger } = require('../../../miniLogger/mini-logger.js');
 }
 
 /**
@@ -11,8 +12,9 @@ const fs = require('fs');
 const path = require('path');
 
 class P2PChatHandler {
-    /** @param {BrowserWindow} mainWindow */
-    constructor(mainWindow) {
+    /** @param {BrowserWindow} mainWindow @param {MiniLogger} miniLogger */
+    constructor(mainWindow, miniLogger) {
+        this.miniLogger = miniLogger;
         /** @type {BrowserWindow} */
         this.mainWindow = mainWindow;
         this.p2p = null;
@@ -47,7 +49,7 @@ class P2PChatHandler {
             info: '📝', error: '❌', success: '✅', 
             file: '📁', network: '🔗', peer: '👤'
         };
-        console.log(`${emojis[type]} [${action}]`, data);
+        this.miniLogger.log('chat', `${emojis[type]} [${action}]`, data);
     }
 
     setupP2PEvents(p2pInstance) {
@@ -64,7 +66,7 @@ class P2PChatHandler {
     /** @param {string} nickname */
     async startChat(event, nickname) {
         while (!this.P2P) {
-            console.warn('P2P module not initialized yet');
+            this.miniLogger.warn('chat', 'P2P module not initialized yet');
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         try {

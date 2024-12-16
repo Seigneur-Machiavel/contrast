@@ -1,4 +1,3 @@
-if (false) { const miniLoggerConfig = require('./mini-logger-config.js'); }
 const fs = require('fs');
 
 const HistoricalLog = (label = 'global', message = 'toto') => {
@@ -12,8 +11,42 @@ const HistoricalLog = (label = 'global', message = 'toto') => {
     }
 }
 
+const MiniLoggerConfig = () => {
+    return {
+        maxHistory: 100,
+        allActive: false,
+        activeLabels: { global: true }
+    }
+}
+
+/** @returns {MiniLoggerConfig} */
+function loadDefaultConfig() {
+    const defaultConfig = JSON.parse(fs.readFileSync('./miniLogger/mini-logger-config.json'));
+    return defaultConfig;
+}
+/** @returns {MiniLoggerConfig} */
+function loadMergedConfig() {
+    const defaultConfig = loadDefaultConfig();
+    if (!fs.existsSync('./miniLogger/mini-logger-config-custom.json')) return defaultConfig;
+
+    const customConfig = JSON.parse(fs.readFileSync('./miniLogger/mini-logger-config-custom.json'));
+    const config = {
+        maxHistory: customConfig.maxHistory === undefined ? defaultConfig.maxHistory : customConfig.maxHistory,
+        allActive: customConfig.allActive === undefined ? defaultConfig.allActive : customConfig.allActive,
+        activeLabels: defaultConfig.activeLabels
+    };
+
+    for (const key in defaultConfig.activeLabels) {
+        if (customConfig.activeLabels === undefined) break;
+        if (customConfig.activeLabels[key] === undefined) continue;
+        config.activeLabels[key] = customConfig.activeLabels[key];
+    }
+
+    return config;
+}
+
 class MiniLogger {
-    /** @param {miniLoggerConfig} miniLoggerConfig */
+    /** @param {MiniLoggerConfig} miniLoggerConfig */
     constructor(miniLoggerConfig) {
         this.maxHistory = miniLoggerConfig.maxHistory || 100;
         this.history = this.#loadHistory();
@@ -73,4 +106,4 @@ class MiniLogger {
     }
 }
 
-module.exports = MiniLogger;
+module.exports = { MiniLogger, loadDefaultConfig, loadMergedConfig };

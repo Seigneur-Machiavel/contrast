@@ -2,8 +2,9 @@ const path = require('path');
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
 const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./preferences/shortcuts.js');
-const MiniLogger = require('./miniLogger/mini-logger.js');
-const miniLoggerConfig = require('./miniLogger/mini-logger-config.js');
+const { MiniLogger, loadMergedConfig } = require('./miniLogger/mini-logger.js');
+
+const miniLoggerConfig = loadMergedConfig();
 const miniLogger = new MiniLogger(miniLoggerConfig);
 
 Menu.setApplicationMenu(null);
@@ -24,7 +25,16 @@ function createLoggerSettingWindow() {
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
 
-    loggerWindow.on('close', (e) => { e.preventDefault(); loggerWindow.hide(); });
+    loggerWindow.on('close', (e) => {
+        e.preventDefault();
+
+        const actualizedMiniLoggerConfig = mergedConfig();
+        miniLogger.initFromConfig(actualizedMiniLoggerConfig);
+
+        miniLogger.log('global', 'Logger settings saved and window closed');
+        loggerWindow.hide();
+    });
+
     loggerWindow.loadFile('./miniLogger/miniLoggerSetting.html');
     return loggerWindow;
 }
@@ -62,7 +72,7 @@ app.on('ready', async () => {
 
     const mainWindow = await createMainWindow();
     const handlersKeys = [];
-    const chatHandler = new P2PChatHandler(mainWindow);
+    const chatHandler = new P2PChatHandler(mainWindow, miniLogger);
     handlersKeys.push(Object.keys(chatHandler.setupHandlers()));
 
     const duplicates = checkArrayOfArraysDuplicate(handlersKeys);

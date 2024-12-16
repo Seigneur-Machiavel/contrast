@@ -36,6 +36,9 @@
     </style>
     <script>
         window.onload = () => {
+            const fs = require('fs');
+            const { loadDefaultConfig, loadMergedConfig } = require('./mini-logger.js');
+
             function createLabelElement(key, value) {
                 const listElement = document.createElement('div');
                 listElement.classList.add('label-input-wrap');
@@ -62,44 +65,59 @@
 
                 return listElement;
             }
+            function newLabel() {
+                const key = document.getElementById('new-label-input').value;
+                if (!key) return;
+                document.getElementById('new-label-input').value = '';
+    
+                const listElement = createLabelElement(key, true);
+                activeLabelsList.insertBefore(listElement, newLabelWrap);
+            }
 
-            const miniLoggerConfig = require('./mini-logger-config.js');
-            document.getElementById('max-history').value = miniLoggerConfig.maxHistory || 100;
-            document.getElementById('all-active').checked = miniLoggerConfig.allActive || false;
+            const config = loadMergedConfig();
+            document.getElementById('max-history').value = config.maxHistory || 100;
+            document.getElementById('all-active').checked = config.allActive || false;
     
             const activeLabelsList = document.getElementById('active-labels');
             const newLabelWrap = document.querySelector('.new-label-wrap');
             const newLabelButton = document.getElementById('new-label');
 
-            for (const key in miniLoggerConfig.activeLabels) {
-                const listElement = createLabelElement(key, miniLoggerConfig.activeLabels[key]);
+            for (const key in config.activeLabels) {
+                const listElement = createLabelElement(key, config.activeLabels[key]);
                 activeLabelsList.insertBefore(listElement, newLabelWrap);
             }
 
             document.getElementById('new-label').onclick = () => {
-                const key = document.getElementById('new-label-input').value;
-                if (!key) return;
-                document.getElementById('new-label-input').value = '';
-
-                const listElement = createLabelElement(key, true);
-                activeLabelsList.insertBefore(listElement, newLabelWrap);
+                newLabel();
+            };
+            document.getElementById('new-label-input').onkeypress = (e) => {
+                if (e.key === 'Enter') { newLabel(); }
             };
 
-            const fs = require('fs');
             document.getElementById('save').onclick = () => {
+                const defaultConfig = loadDefaultConfig();
                 const maxHistory = document.getElementById('max-history').value;
                 const allActive = document.getElementById('all-active').checked;
                 const activeLabels = {};
                 for (const listElement of activeLabelsList.children) {
                     if (!listElement.classList.contains('label-input-wrap')) continue;
 
+                    // set custom active labels
                     const key = listElement.children[0].textContent;
                     const value = listElement.children[1].children[0].checked;
                     activeLabels[key] = value;
+
+                    if (defaultConfig.activeLabels[key]) { continue; }
+                    
+                    // add key to default config if it doesn't exist
+                    defaultConfig.activeLabels[key] = true;
                 }
+
                 const newConfig = { maxHistory, allActive, activeLabels };
-                const fileContent = `const miniLoggerConfig = ${JSON.stringify(newConfig)};\n\nmodule.exports = miniLoggerConfig;`;
-                fs.writeFileSync('./miniLogger/mini-logger-config.js', fileContent);
+                fs.writeFileSync('./miniLogger/mini-logger-config-custom.json', JSON.stringify(newConfig, null, 4));
+                fs.writeFileSync('./miniLogger/mini-logger-config.json', JSON.stringify(defaultConfig, null, 4));
+
+                window.close();
             };
         };
     </script>

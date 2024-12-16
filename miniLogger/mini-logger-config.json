@@ -1,0 +1,10 @@
+{
+    "maxHistory": "100",
+    "allActive": false,
+    "activeLabels": {
+        "global": true,
+        "main": true,
+        "shortcuts": true,
+        "chat": true
+    }
+}

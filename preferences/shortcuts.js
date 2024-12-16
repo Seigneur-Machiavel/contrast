@@ -16,12 +16,12 @@ function setShortcuts(miniLogger, loggerWindow, handlersToRemove = [], dev = tru
     if (!dev) { for (let key in shortcutsKeys) shortcutsKeys[key].enabled = !shortcutsKeys[key].devOnly; }
 
     if (shortcutsKeys.devTools.enabled) globalShortcut.register(shortcutsKeys.devTools.key, () => {
-        miniLogger.log('shortcuts.js', `DevTools shortcut pressed (${shortcutsKeys.devTools.key})`);
+        miniLogger.log('shortcuts', `DevTools shortcut pressed (${shortcutsKeys.devTools.key})`);
         if (!BrowserWindow.getFocusedWindow()) return;
         BrowserWindow.getFocusedWindow().webContents.toggleDevTools();
     });
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {
-        miniLogger.log('shortcuts.js', `Reload shortcut pressed (${shortcutsKeys.reload.key})`);
+        miniLogger.log('shortcuts', `Reload shortcut pressed (${shortcutsKeys.reload.key})`);
         if (!BrowserWindow.getFocusedWindow()) return;
 
         // Should be better if the handlers are removed by the initiator app
@@ -31,10 +31,12 @@ function setShortcuts(miniLogger, loggerWindow, handlersToRemove = [], dev = tru
         BrowserWindow.getFocusedWindow().reload();
     });
     if (shortcutsKeys.loggerSettings.enabled) globalShortcut.register(shortcutsKeys.loggerSettings.key, () => {
-        miniLogger.log('shortcuts.js', `Logger settings shortcut pressed (${shortcutsKeys.loggerSettings.key})`);
+        miniLogger.log('shortcuts', `Logger settings shortcut pressed (${shortcutsKeys.loggerSettings.key})`);
         const loggerWindowVisible = loggerWindow.isVisible();
         if (!loggerWindowVisible) { loggerWindow.show(); loggerWindow.reload(); } else { loggerWindow.hide(); }
     });
+
+    miniLogger.log('shortcuts', 'Shortcuts set');
 };
 
 module.exports = setShortcuts;
