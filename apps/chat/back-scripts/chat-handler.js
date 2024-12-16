@@ -64,13 +64,14 @@ class P2PChatHandler {
     }
 
     /** @param {string} nickname */
-    async startChat(event, nickname) {
+    async startChat(event, nickname, listenAddr) {
         while (!this.P2P) {
             this.miniLogger.warn('chat', 'P2P module not initialized yet');
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         try {
-            this.p2p = new this.P2P(nickname);
+            console.log('Starting chat with', nickname, listenAddr);
+            this.p2p = new this.P2P(nickname, listenAddr);
             this.setupP2PEvents(this.p2p);
             const addr = await this.p2p.start();
             this.log('success', 'chat-started', { nickname, addr });
@@ -83,7 +84,10 @@ class P2PChatHandler {
 
     /** @param {{channel: string, file: FileData}} param1 */
     async shareFile(event, { channel, file }) {
-        if (!file?.content) throw new Error('Invalid file data received');
+        if (!file?.content) {
+            this.log('error', 'share-failed', 'Invalid file data received');
+            return { success: false, error: 'Invalid file data received' };
+        }
         
         this.log('file', 'share-start', { name: file.name, size: file.size });
         try {
@@ -109,7 +113,10 @@ class P2PChatHandler {
                 filters: [{ name: 'All Files', extensions: ['*'] }]
             });
             
-            if (!filePath) throw new Error('Save cancelled by user');
+            if (!filePath) {
+                this.log('info', 'download-cancelled', { cid });
+                return { success: false, error: 'Save cancelled by user' };
+            }
             
             fs.writeFileSync(filePath, Buffer.from(content));
             this.log('success', 'download-complete', { path: filePath, metadata });
@@ -122,27 +129,39 @@ class P2PChatHandler {
 
     /** @param {{channel: string, content: string}} param1 */
     async sendMessage(event, { channel, content }) {
-        return this.wrapP2PCall('send-message', () => this.p2p.sendMessage(channel, content));
+        try {
+            await this.p2p.sendMessage(channel, content);
+            this.log('success', 'message-sent', { channel, content: content.slice(0, 50) });
+            return { success: true };
+        } catch (err) {
+            this.log('error', 'message-failed', err);
+            return { success: false, error: err.message };
+        }
     }
 
     /** @param {string} channel */
     async joinChannel(event, channel) {
-        return this.wrapP2PCall('join-channel', () => this.p2p.joinChannel(channel));
+        try {
+            await this.p2p.joinChannel(channel);
+            this.log('success', 'channel-joined', { channel });
+            return { success: true };
+        } catch (err) {
+            this.log('error', 'join-failed', err);
+            return { success: false, error: err.message };
+        }
     }
 
     /** @param {string} addr */
     async connectPeer(event, addr) {
-        return this.wrapP2PCall('connect-peer', () => this.p2p.connectToPeer(addr));
-    }
-
-    /** @param {string} action @param {Function} fn */
-    async wrapP2PCall(action, fn) {
         try {
-            await fn();
-            this.log('success', action, 'completed');
-            return { success: true };
+            const connected = await this.p2p.connectToPeer(addr);
+            this.log('network', 'connect-peer', `Connection ${connected ? 'succeeded' : 'failed'} to ${addr}`);
+            return { 
+                success: connected,
+                error: connected ? null : 'Failed to establish connection'
+            };
         } catch (err) {
-            this.log('error', action, err);
+            this.log('error', 'connect-peer', `Connection failed to ${addr}: ${err.message}`);
             return { success: false, error: err.message };
         }
     }
@@ -160,12 +179,10 @@ class P2PChatHandler {
                 }
             });
         }
-
         return this.handlers;
     }
 
     async cleanup() {
-        // Stop P2P network
         if (this.p2p) {
             try {
                 await this.p2p.stop();
@@ -173,13 +190,12 @@ class P2PChatHandler {
                 this.log('success', 'cleanup', 'P2P network stopped cleanly');
             } catch (err) {
                 this.log('error', 'cleanup', `Failed to stop P2P: ${err.message}`);
-                throw err; // Propagate error for proper error handling
+                throw err;
             }
         }
 
-        // Remove IPC handlers
         const appHandlers = Object.keys(this.handlers);
-        for (const key of appHandlers) ipcMain.removeHandler(key);
+        for (const key of appHandlers) { ipcMain.removeHandler(key); }
     }
 }
 

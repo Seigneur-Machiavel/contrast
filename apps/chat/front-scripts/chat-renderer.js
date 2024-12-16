@@ -9,6 +9,7 @@ class ChatUI {
         this.eHTML = {
             login: document.getElementById('chat-login'),
             nickname: document.getElementById('chat-login').getElementsByTagName('input')[0],
+            listenAddr: document.getElementById('chat-login').getElementsByTagName('input')[1],
             app: document.getElementById('chat-app'),
             status: document.getElementById('chat-status'),
             messages: document.getElementById('chat-messages'),
@@ -28,6 +29,8 @@ class ChatUI {
             transfers: new Map(),
             debug: true
         };
+
+   
         // Bind methods
         Object.getOwnPropertyNames(ChatUI.prototype)
             .filter(method => method !== 'constructor')
@@ -36,6 +39,9 @@ class ChatUI {
         this.updateChannelList();
         window.addEventListener('unload', this.cleanup);
         this.initializeEventListeners();
+        
+        this.eHTML.listenAddr.value = '/ip4/0.0.0.0/tcp/27260';
+        
         this.initializeFrontListeners();
     }
 
@@ -79,10 +85,12 @@ class ChatUI {
 
     async start() {
         const nickname = this.eHTML.nickname.value.trim();
+        const listenAddr = this.eHTML.listenAddr.value.trim();
+        console.log('start', nickname, listenAddr);
         if (!nickname) { this.notify('Please enter a nickname'); return; }
-
+        if (!listenAddr) { this.notify('Please enter a listen address'); return; }
         try {
-            const result = await window.chat.startChat(nickname);
+            const result = await window.chat.startChat(nickname, listenAddr);
             if (!result.success) { throw new Error(result.error); }
 
             this.eHTML.status.textContent = `Connected as: ${nickname}\nAddress: ${result.addr}`;
@@ -147,11 +155,13 @@ class ChatUI {
 
         try {
             const success = await window.chat.connectPeer(addr);
-            if (success) {
+            if (success === true) {
+                console.log(success);
                 this.eHTML.peerAddr.value = '';
                 this.notify('Connected to peer');
                 this.log('Peer', 'Connected', addr);
             } else {
+                console.log(success);
                 this.notify('Failed to connect to peer');
             }
         } catch (err) {

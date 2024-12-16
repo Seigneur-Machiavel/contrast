@@ -1,4 +1,3 @@
-// p2p.mjs
 import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
 import { noise } from '@chainsafe/libp2p-noise';
@@ -14,7 +13,6 @@ import { fromString as uint8ArrayFromString } from 'uint8arrays/from-string';
 import EventEmitter from 'events';
 import { pipe } from 'it-pipe';
 import { concat as uint8ArrayConcat } from 'uint8arrays/concat';
-//import { create } from 'ipfs-core';
 
 const BOOTSTRAP_LIST = [
     ''
@@ -24,7 +22,7 @@ const MAX_HISTORY = 100;
 
 
 export class P2P extends EventEmitter {
-    constructor(nickname, options = {}) {
+    constructor(nickname, listenAddr, options = {}) {
         super();
         this.nickname = nickname;
         this.node = null;
@@ -34,17 +32,18 @@ export class P2P extends EventEmitter {
         this.bootstrapNodes = options.bootstrapNodes || BOOTSTRAP_LIST;
         this.lastBootstrap = Date.now();
         this.messageHistory = new Map();
+        this.listenAddr = listenAddr;
         this.dhtStats = {
             found: [],
             connected: [],
             errors: []
         };
-        this.ipfs = null;
         this.files = new Map(); // Map<cid, metadata>
         this.chunkSize = 1024 * 256;
     }
 
     async start() {
+        console.log(` Address: ${this.listenAddr} started p2p chat`);
         const dht = kadDHT({
             protocol: '/ipfs/kad/1.0.0',
             clientMode: false,
@@ -53,7 +52,7 @@ export class P2P extends EventEmitter {
         });
     
         this.node = await createLibp2p({
-            addresses: { listen: ['/ip4/0.0.0.0/tcp/0'] },
+            addresses: { listen: [this.listenAddr] },
             transports: [tcp()],
             streamMuxers: [yamux()],
             connectionEncrypters: [noise()],
@@ -93,17 +92,7 @@ export class P2P extends EventEmitter {
                 pollInterval: 2000,
             }
         });
-    
-/*         this.ipfs = await create({
-            repo: `ipfs/ipfs-${this.nickname}}`,
-            init: { algorithm: 'Ed25519' },
-            config: {
-                Addresses: {
-                    Swarm: ['/ip4/0.0.0.0/tcp/0']
-                }
-            }
-        });
-     */
+
         this.node.services.pubsub.addEventListener('message', msg => {
             try {
                 const { topic, data } = msg.detail;
@@ -149,7 +138,6 @@ export class P2P extends EventEmitter {
                             latency
                         };
     
-                       
                         if (parsed.content?.startsWith('/file ')) {
                             const [_, filename, cid, size, type] = parsed.content.split(' ');
                             if (!this.files.has(cid)) {
@@ -183,21 +171,6 @@ export class P2P extends EventEmitter {
                 console.log(`🤝 [${this.nickname}] Connected (CM): ${peerId}`);
                 this.dhtStats.connected.push(peerId);
                 this.emit('peer-joined', peerId);
-
-                try {
-                    const peerInfo = await this.node.peerStore.get(evt.detail);
-                    const multiaddrs = peerInfo.addresses[0].multiaddr;
-                    
-                        try {
-                            await this.ipfs.swarm.connect(multiaddrs);
-                            console.log(`🔗 [${this.nickname}] IPFS connected:`, multiaddrs);
-                        } catch (err) {
-                            console.warn(`⚠️ [${this.nickname}] IPFS connection failed:`, multiaddrs, err.message);
-                        }
-              
-                } catch (err) {
-                    console.warn(`⚠️ [${this.nickname}] Failed to establish IPFS connection:`, err.message);
-                }
             }
         });
     
@@ -323,11 +296,27 @@ export class P2P extends EventEmitter {
             this.channels.add(channel);
             console.log(`📻 [${this.nickname}] Joined: ${channel}`);
             
-            await this._requestHistory(channel);
-            
-            await this.sendMessage(channel, '/join').catch(err => {
-                console.error(`📛 [${this.nickname}] Join message failed:`, err.message);
-            });
+            // Add a small delay to let subscriptions propagate
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            try {
+                // Only try to send join message if we have peers
+                const peers = Array.from(await this.node.services.pubsub.getSubscribers(topicName));
+                if (peers.length > 0) {
+                    await this.sendMessage(channel, '/join');
+                    console.log(`👋 [${this.nickname}] Announced join to ${peers.length} peers in ${channel}`);
+                } else {
+                    console.log(`🔕 [${this.nickname}] No peers in ${channel} yet, skipping join announcement`);
+                }
+                
+                // Request history only if there are peers
+                if (peers.length > 0) {
+                    await this._requestHistory(channel);
+                }
+            } catch (err) {
+                // Don't throw on announcement failure, just log it
+                console.warn(`⚠️ [${this.nickname}] Join announcement failed in ${channel}:`, err.message);
+            }
         }
     }
 
