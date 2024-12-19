@@ -1,3 +1,4 @@
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import utils from './utils.mjs';
 import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
@@ -79,6 +80,7 @@ class generatedAccount {
 }
 export class Wallet {
     constructor(masterHex, useDevArgon2 = false) {
+        this.miniLogger = new MiniLogger('wallet');
         /** @type {string} */
         this.masterHex = masterHex; // 30 bytes - 60 chars
         /** @type {Object<string, Account[]>} */
@@ -126,7 +128,8 @@ export class Wallet {
         //const nbOfExistingAccounts = this.accounts[addressPrefix].length;
         const nbOfExistingAccounts = this.accountsGenerated[addressPrefix].length;
         const accountToGenerate = nbOfAccounts - nbOfExistingAccounts < 0 ? 0 : nbOfAccounts - nbOfExistingAccounts;
-        console.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`);
+        this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`, (m) => { console.info(m); });
+        
         const progressLogger = new utils.ProgressLogger(accountToGenerate, '[WALLET] deriving accounts');
         let iterationsPerAccount = 0;
 
@@ -158,13 +161,13 @@ export class Wallet {
 
             if (!derivationResult) {
                 const derivedAccounts = this.accounts[addressPrefix].slice(nbOfExistingAccounts).length;
-                console.error(`Failed to derive account (derived: ${derivedAccounts})`);
+                this.miniLogger.log(`Failed to derive account (derived: ${derivedAccounts})`, (m) => { console.error(m); });
                 return {};
             }
 
             const account = derivationResult.account;
             const iterations = derivationResult.iterations;
-            if (!account) { console.error('deriveAccounts interrupted!'); return {}; }
+            if (!account) { this.miniLogger.log('deriveAccounts interrupted!', (m) => { console.error(m); }); return {}; }
 
             iterationsPerAccount += iterations;
             this.accounts[addressPrefix].push(account);
@@ -172,15 +175,16 @@ export class Wallet {
         }
 
         if (this.accounts[addressPrefix].length !== nbOfAccounts) {
-            console.error(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`);
+            this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m) => { console.error(m); });
             return {};
         }
         
         const endTime = performance.now();
         const derivedAccounts = this.accounts[addressPrefix].slice(nbOfExistingAccounts);
         const avgIterations = derivedAccounts.length > 0 ? Math.round(iterationsPerAccount / derivedAccounts.length) : 0;
-        console.info(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
-avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`);
+        this.miniLogger.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
+avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, (m) => { console.info(m); });
+
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
     }
     async tryDerivationUntilValidAccountUsingWorkers(accountIndex = 0, desiredPrefix = "C") {
@@ -255,7 +259,9 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`);
                 }
             } catch (error) {
                 const errorSkippingLog = ['Address does not meet the security level'];
-                if (!errorSkippingLog.includes(error.message.slice(0, 40))) { console.error(error.stack); }
+                if (!errorSkippingLog.includes(error.message.slice(0, 40))) {
+                    this.miniLogger.log(error.stack, (m) => { console.error(m); });
+                }
             }
         }
 

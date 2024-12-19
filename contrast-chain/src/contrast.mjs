@@ -1,4 +1,4 @@
-const logImports = true;
+const logImports = false;
 
 if (logImports) console.log('Loading Contrast libs...');
 import utils from './utils.mjs';

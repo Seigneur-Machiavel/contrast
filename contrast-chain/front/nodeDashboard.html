@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrast Node Dashboard</title>
+    <script crossorigin src="https://unpkg.com/@msgpack/msgpack"></script>
+    <script src="/libs/anime.min.js"></script>
+    <script src="./front/nodeDashboardScript.mjs" type="module"></script>
+    <link rel="stylesheet" href="./front/nodeDashboard.css">
+</head>
+
+<body>
+    <div id="topBar">
+        <h1>Contrast Node v1.0</h1>
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <a href="/log-config" class="navigation-link">
+                <button>Logs Config</button>
+            </a>
+            <a href="/log-viewer" class="navigation-link">
+                <button>Logs Viewer</button>
+            </a>
+            <div class="adminPanelContainer">
+                <div class="btnWrap hidden">
+                    <h3>roles: <span id="roles"></span></h3>
+                    <div>
+                        <button id="forceRestart">Restart</button>
+                        <button id="Revalidate">Revalidate</button>
+                        <button id="resetInfo">Reset Wallet Data</button>
+                        <button id="hardReset">Hard Reset (Git)</button>
+                        <button id="updateGit">Update (Git)</button>
+                    </div>
+                </div>
+                <button id="toggleAdminPanel" class="toggleAdminPanelButton">Show Admin Panel</button>
+            </div>
+        </div>
+    </div> 
+
+    <!-- Rest of the HTML remains exactly the same -->
+    <div id="dashboard">
+        <div class="dashboard-inner">
+            <!-- Validator Container -->
+            <div class="container validator">
+                <div class="spacedText">
+                    <h1>Validator</h1>
+                    <h3 class="heightText">Height: <span id="validatorHeight">0</span></h3>
+                </div>
+                <div class="spacedText">
+                    <h3>Address:</h3>
+                    <h3 id="validatorAddress"></h3>
+                </div>
+                <div class="spacedText">
+                    <h3>Reward address:</h3>
+                    <div style="display: flex; position: relative; align-items: center;">
+                        <h3 id="validatorRewardAddress"></h3>
+                        <div id="validatorAddressEditBtn" class="editButton">✎</div>
+                    </div>
+                </div>
+                <div class="spacedText">
+                    <h3>Balance:</h3>
+                    <h3 id="validatorBalance">0.000000</h3>
+                </div>
+                <div class="spacedText">
+                    <h3>Staked:</h3>
+                    <h3 id="staked">0.000000</h3>
+                </div>
+                <div class="spacedText">
+                    <h3>Staking:</h3>
+                    <div id="stakeInputWrap">
+                        <input type="text" class="amountInput" value="1.000000" min="0">
+                        <button>Stake</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Miner Container -->
+            <div class="container miner">
+                <div class="spacedText">
+                    <h1>Miner</h1>
+                    <h3 class="heightText">Height: <span id="minerHeight">0</span></h3>
+                </div>
+                <div class="spacedText">
+                    <h3>Address:</h3>
+                    <div style="display: flex; position: relative; align-items: center;">
+                        <h3 id="minerAddress"></h3>
+                        <div id="minerAddressEditBtn" class="editButton">✎</div>
+                    </div>
+                </div>
+                <div class="spacedText">
+                    <h3>Balance:</h3>
+                    <h3 id="minerBalance">0.000000</h3>
+                </div>
+                <div class="spacedText">
+                    <h3>HashRate:</h3>
+                    <h3><span id="hashRate" value="0"></span> H/s</h3>
+                </div>
+                <div class="spacedText">
+                    <h3>Threads:</h3>
+                    <div id="minerThreadsIncrementalInput" class="incrementalInput">
+                        <button>-</button>
+                        <input type="number" value="1" min="1" max="4">
+                        <button>+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Global Information Container -->
+        <div class="container global-info">
+            <div class="spacedText">
+                <h1>Node Information</h1>
+            </div>
+            <div id="ignoreBlocksWrap" class="toggleWrap flex justify-between items-center mb-2">
+                <span class="text-gray-300">Ignore Incoming Blocks:</span>
+                <div class="flex items-center gap-2">
+                    <button id="ignoreBlocksToggle" class="toggleButton relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out bg-gray-600" role="switch" aria-checked="false">
+                        <span aria-hidden="true" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0"></span>
+                    </button>
+                    <span id="ignoreBlocksStatus" class="toggleSpan text-sm">OFF</span>
+                </div>
+            </div>
+            <div id="disabledSyncWrap" class="toggleWrap flex justify-between items-center mb-2">
+                <span class="text-gray-300">Disable Sync:</span>
+                <div class="flex items-center gap-2">
+                    <button id="disabledSyncToggle" class="toggleButton relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out bg-gray-600" role="switch" aria-checked="false">
+                        <span aria-hidden="true" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0"></span>
+                    </button>
+                    <span id="disabledSyncStatus" class="toggleSpan text-sm">OFF</span>
+                </div>
+            </div>
+            <div class="spacedText">
+                <h3>Client Version</h3>
+                <h3 id="clientVersion">v0.1</h3> 
+            </div>
+
+            <div class="spacedText">
+                <h3>Node State</h3>
+                <h3 id="nodeState">Sync/Idle/Digest</h3>
+            </div>
+
+            <div class="spacedText">
+                <h3>Last Block Info:</h3>
+                <h3 id="lastBlockInfo">N/A</h3>
+            </div>
+            
+            <div class="spacedText">
+                <h3>Last Legitimacy:</h3>
+                <h3 id="lastLegitimacy">N/A</h3>
+            </div>
+
+            <div class="spacedText">
+                <h3>Tx in Mempool:</h3>
+                <h3 id="txInMempool">0</h3>
+            </div>
+            
+            <div class="spacedText">
+                <h3>Average Block Time:</h3>
+                <h3 id="averageBlockTime">0 seconds</h3>
+            </div>
+            <!-- New Network Section -->
+            <div class="spacedText">
+                <h1>Network</h1>
+            </div>
+            
+            <div class="spacedText">
+                <h3>Peer ID:</h3>
+                <h3 id="peerId">N/A</h3>
+            </div>
+            <div class="spacedText column">
+                <h3>Listening on:</h3>
+                <h3 id="listenAddress">N/A</h3>
+            </div>
+
+            <div class="spacedText">
+                <h3>Peers Connected:</h3>
+                <h3 id="peersConnected">0</h3>
+            </div>
+            
+            <div class="spacedText">
+                <h3>Connected Peers:</h3>
+                <ul id="peersConnectedList" class="network-list">
+                </ul>
+            </div>
+
+            <div class="spacedText">
+                <h3>Reputation Scores:</h3>
+                <ul id="repScoreList" class="network-list">
+                </ul>
+            </div>
+
+            <div class="spacedText">
+                <h3>Peers Heights:</h3>
+                <ul id="peersHeightList" class="network-list">
+                </ul>
+            </div>
+        </div>
+
+    </div>
+    
+    <div class="modalsWrap hidden fold">
+        <div class="modalsWrapBackground"></div>
+        
+        <!-- Unified Modal -->
+        <div class="modalWrap hidden" id="unifiedModalWrap">
+            <div class="modal">
+                <form id="unifiedModalForm">
+                    <div class="spacedText">
+                        <p id="modalMessage">Are you sure?</p>
+                    </div>
+                    <!-- Dynamic Input Section -->
+                    <div class="spacedText" id="modalInputSection" style="display: none;">
+                        <h3 id="modalInputLabel">Input:</h3>
+                        <div id="modalInputWrap">
+                            <input type="password" id="modalInput" placeholder="">
+                            <button type="button" id="toggleModalInput">Show</button>
+                        </div>
+                    </div>
+                    <div class="spacedText">
+                        <button type="button" id="modalCancelBtn">Cancel</button>
+                        <button type="button" id="modalConfirmBtn">Confirm</button> 
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

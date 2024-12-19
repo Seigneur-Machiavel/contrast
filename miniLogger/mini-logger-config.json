@@ -9,6 +9,10 @@
         "P2PNetwork": true,
         "blockchain": true,
         "node": true,
-        "sync": true
+        "sync": true,
+        "validation": true,
+        "wallet": true,
+        "dashboard": true,
+        "TimeSynchronizer": true
     }
 }

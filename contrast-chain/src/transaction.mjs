@@ -1,6 +1,5 @@
 import utils from './utils.mjs';
 import { HashFunctions } from './conCrypto.mjs';
-import { TxValidation } from './validations-classes.mjs';
 import { BlockUtils } from './block-classes.mjs';
 
 /**
@@ -16,8 +15,6 @@ export class TxIO_Builder {
      */
     static newOutput(amount, rule, address) {
         const txOutput = TxOutput(amount, rule, address);
-        TxValidation.isConformOutput(txOutput);
-
         return txOutput;
     }
     /** @param {string} anchor */

@@ -1,7 +1,10 @@
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import ntpClient from 'ntp-client';
 
 class TimeSynchronizer {
     constructor(options = {}) {
+        /** @type {MiniLogger} */
+        this.miniLogger = new MiniLogger('TimeSynchronizer');
         this.ntpServers = options.ntpServers || [
             '0.pool.ntp.org',
             '1.pool.ntp.org',
@@ -35,13 +38,13 @@ class TimeSynchronizer {
     }
 
     async syncTimeWithRetry(attempts = this.retryAttempts, delay) {
-        console.log(`Attempting NTP sync with ${this.getCurrentNtpServer()}. Attempts left: ${attempts}`);
+        this.miniLogger.log(`Attempting NTP sync with ${this.getCurrentNtpServer()}. Attempts left: ${attempts}`, (m) => { console.log(m); });
 
         for (let i = 0; i < attempts; i++) {
             try {
                 await this.syncTimeWithNTP();
                 const readableTime = new Date(this.getCurrentTime()).toLocaleString();
-                console.log(`Time synchronized after ${i + 1} attempts, current time: ${readableTime}`);
+                this.miniLogger.log(`Time synchronized after ${i + 1} attempts, current time: ${readableTime}`, (m) => { console.log(m); });
                 return true;
             } catch (err) {
                 this.rotateNtpServer();
@@ -49,7 +52,7 @@ class TimeSynchronizer {
             }
         }
 
-        console.warn(`Failed to sync with NTP after ${this.retryAttempts} attempts`);
+        this.miniLogger.log(`Failed to sync with NTP after ${this.retryAttempts} attempts`, (m) => { console.warn(m); });
     }
     async #startSyncLoop() {
         while (true) {
@@ -60,24 +63,24 @@ class TimeSynchronizer {
     }
     
     async syncTimeWithNTP() {
-        console.log(`Syncing time with NTP server: ${this.getCurrentNtpServer()}`);
+        this.miniLogger.log(`Syncing time with NTP server: ${this.getCurrentNtpServer()}`, (m) => { console.log(m); });
         return new Promise((resolve, reject) => {
             ntpClient.getNetworkTime(this.getCurrentNtpServer(), this.ntpPort, (err, date) => {
                 if (err) {
-                    console.error(`Failed to sync time with NTP server: ${err}`);
+                    this.miniLogger.log(`Failed to sync time with NTP server: ${err}`, (m) => { console.error(m); });
                     return reject(err);
                 }
                 
                 const systemTime = Date.now();
                 const offset = date.getTime() - systemTime;
                 if (Math.abs(offset) > 600_000) {
-                    console.warn(`Large time offset detected: ${offset} ms`);
+                    this.miniLogger.log(`Large time offset detected: ${offset} ms`, (m) => { console.warn(m); });
                     return reject('Large time offset');
                 }
 
                 this.offset = offset;
                 this.lastSyncedTime = date;
-                console.log(`Time synchronized. Offset: ${this.offset} ms`);
+                this.miniLogger.log(`Time synchronized. Offset: ${this.offset} ms`, (m) => { console.log(m); });
                 return resolve(this.offset);
             });
         });

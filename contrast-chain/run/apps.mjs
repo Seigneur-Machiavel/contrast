@@ -1,4 +1,4 @@
-
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -7,7 +7,7 @@ import localStorage_v1 from '../storage/local-storage-management.mjs';
 import contrast from '../src/contrast.mjs'; //? Not all libs needed
 import { exec } from 'child_process';
 import { CallBackManager } from '../src/websocketCallback.mjs';
-import utils from '../src/utils.mjs';
+
 /**
 * @typedef {import("../src/wallet.mjs").Account} Account
 * @typedef {import("../src/node-factory.mjs").NodeFactory} NodeFactory
@@ -19,7 +19,8 @@ import utils from '../src/utils.mjs';
 const APPS_VARS = {
     __filename: fileURLToPath(import.meta.url),
     __dirname: path.dirname( fileURLToPath(import.meta.url) ),
-    __parentDirname: path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ),
+    __contrastchainDir: path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ),
+    __contrastDir: path.dirname( path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ) ),
     /*__httpsOptions: {
         cert: fs.readFileSync('/chemin/vers/votre/certificate.crt'),
         key: fs.readFileSync('/chemin/vers/votre/private.key')
@@ -105,6 +106,7 @@ export class DashboardWsApp {
     #nodesSettings = {};
     /** @param {NodeFactory} factory */
     constructor(factory, port = 27271, autoInit = true) {
+        this.miniLogger = new MiniLogger('dashboard');
         /** @type {NodeFactory} */
         this.factory = factory;
         /** @type {CallBackManager} */
@@ -124,16 +126,17 @@ export class DashboardWsApp {
     async init(privateKey) {
         if (this.app === null) {
             this.app = express();
-            this.app.use(express.static(APPS_VARS.__parentDirname));
+            this.app.use(express.static(APPS_VARS.__contrastchainDir));
             this.app.use(express.json({ limit: '1mb' }));
             this.app.use(express.urlencoded({ extended: true }));
-            this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__parentDirname + '/front/nodeDashboard.html'); });
-            this.app.get('/log-config', (req, res) => {
-                res.sendFile(APPS_VARS.__parentDirname + '/front/log-config.html');
-            });
-            this.app.get('/log-viewer', (req, res) => {
-                res.sendFile(APPS_VARS.__parentDirname + '/front/log-viewer.html');
-            });
+            this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
+            this.app.use('/fonts', express.static(path.join(APPS_VARS.__contrastDir, 'fonts')));
+            this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));
+            this.app.use('/miniLogger', express.static(path.join(APPS_VARS.__contrastDir, 'miniLogger')));
+            
+            this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/nodeDashboard.html'); });
+            this.app.get('/log-config', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/log-config.html'); });
+            this.app.get('/log-viewer', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/log-viewer.html'); });
 
             // Add the API endpoints
             this.app.get('/api/log-config', (req, res) => {
@@ -506,9 +509,13 @@ export class ObserverWsApp {
         if (!this.node.roles.includes('validator')) { throw new Error('ObserverWsApp must be used with a validator node'); }
         if (!this.node.roles.includes('observer')) { throw new Error('ObserverWsApp must be used with an observer node'); }
 
-        this.app.use(express.static(APPS_VARS.__parentDirname));
+        this.app.use(express.static(APPS_VARS.__contrastchainDir));
+        this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
+        this.app.use('/fonts', express.static(path.join(APPS_VARS.__contrastDir, 'fonts')));
+        this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));
+        this.app.use('/miniLogger', express.static(path.join(APPS_VARS.__contrastDir, 'miniLogger')));
         
-        this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__parentDirname + '/front/explorer.html'); });
+        this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/explorer.html'); });
         const server = this.app.listen(this.port, () => { console.log(`Server running on http://${'???'}:${this.port}`); });
         
         this.wss = new WebSocketServer({ server });

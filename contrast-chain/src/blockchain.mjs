@@ -71,7 +71,7 @@ export class Blockchain {
         try {
             while (this.db.status === 'opening') { await new Promise(resolve => setTimeout(resolve, 100)); }
         } catch (error) {
-            console.error('Error while opening the databases:', error);
+            this.miniLogger.log(`Error while opening the databases: ${error}`, (m) => { console.error(m); });
         }
 
         // ensure consistency between the blockchain and the snapshot system
@@ -113,7 +113,7 @@ export class Blockchain {
             this.#setBlockInCache(block);
         }
 
-        console.log(`[DB -> CACHE] Blocks loaded from ${indexStart} to ${indexEnd}`);
+        this.miniLogger.log(`Blocks loaded from ${indexStart} to ${indexEnd}`, (m) => { console.debug(m); });
     }
     /** @param {BlockData} block */
     #setBlockInCache(block) {
@@ -168,7 +168,7 @@ export class Blockchain {
             erasableUntil = i;
         }
 
-        console.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`);
+        this.miniLogger.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`, (m) => { console.debug(m); });
         return { from: oldestHeight, to: erasableUntil };
     }
     /** Erases the cache from the oldest block to the specified height(included). */
@@ -186,7 +186,7 @@ export class Blockchain {
             erasedUntil = i;
         }
 
-        console.log(`Cache erased from ${fromHeight} to ${erasedUntil}`);
+        this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
         return { from: fromHeight, to: erasedUntil };
     }
     async eraseEntireDatabase() {
@@ -196,7 +196,7 @@ export class Blockchain {
             batch.del(key);
         }
         await batch.write();
-        console.info('[DB] Database erased');
+        this.miniLogger.log('Database erased', (m) => { console.info(m); });
     }
     async #eraseBlocksHigherThan(height = 0) {
         let erasedUntil = null;
@@ -225,7 +225,7 @@ export class Blockchain {
         await batch.write();
 
         if (erasedUntil === null) { return; }
-        console.info(`[DB] Blocks erased from ${height} to ${erasedUntil}`);
+        this.miniLogger.log(`Blocks erased from ${height} to ${erasedUntil}`, (m) => { console.info(m); });
     }
     /** Applies the changes from added blocks to the UTXO cache and VSS.
     * @param {UtxoCache} utxoCache - The UTXO cache to update.
@@ -356,11 +356,11 @@ export class Blockchain {
             batch.put(`${address}-txs`, Buffer.from(serialized));
             batch.put('addressesTxsRefsSnapHeight', Buffer.from(utils.fastConverter.numberTo6BytesUint8Array(indexEnd)));
         }
-        if (totalDuplicates > 0) { console.warn(`[DB] ${totalDuplicates} duplicate txs references found and removed`); }
 
+        if (totalDuplicates > 0) { this.miniLogger.log(`[DB] ${totalDuplicates} duplicate txs references found and removed`, (m) => { console.warn(m); }); }
         await batch.write();
             
-        console.info(`[DB] Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included)`);
+        this.miniLogger.log(`Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included)`, (m) => { console.info(m); });
     }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */
     async getTxsReferencesOfAddress(memPool, address, from = 0, to = this.currentHeight) {

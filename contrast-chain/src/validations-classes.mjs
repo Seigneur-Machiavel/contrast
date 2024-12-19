@@ -1,3 +1,4 @@
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { Transaction, TxOutput, UTXO, Transaction_Builder } from './transaction.mjs';
 import utils from './utils.mjs';
@@ -13,6 +14,9 @@ import utils from './utils.mjs';
 /*const validationObs = new PerformanceObserver((items) => { // TODO: disable in production
     items.getEntries().forEach((entry) => { console.log(`${entry.name}: ${entry.duration.toFixed(3)}ms`); });});
 validationObs.observe({ entryTypes: ['measure'] });*/
+
+const miniLogger = new MiniLogger('validation');
+
 export class TxValidation {
     /** ==> Simple hash control, low computation cost.
      * - control the transaction hash (SHA256) 
@@ -230,7 +234,7 @@ export class TxValidation {
             if (!addressToVerify) { throw new Error('addressToVerify not found'); }
 
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                console.log(`UTXO address: ${utils.addressUtils.formatAddress(addressToVerify)}`);
+                miniLogger.log(`UTXO address: ${utils.addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }
@@ -276,7 +280,7 @@ export class TxValidation {
             if (!addressToVerify) { throw new Error('addressToVerify not found'); }
 
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                console.log(`UTXO address: ${utils.addressUtils.formatAddress(addressToVerify)}`);
+                miniLogger.log(`UTXO address: ${utils.addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }
@@ -493,7 +497,7 @@ export class BlockValidation {
                     allDiscoveredPubKeysAddresses[pubKeyHex] = address;
                 }
             }
-            console.log(`[VALIDATION] Single thread ${blockData.Txs.length} txs validated in ${Date.now() - singleThreadStart} ms`);
+            miniLogger.log(`Single thread ${blockData.Txs.length} txs validated in ${Date.now() - singleThreadStart} ms`, (m) => { console.log(m); });
             return allDiscoveredPubKeysAddresses;
         }
 
@@ -555,8 +559,8 @@ export class BlockValidation {
         }
 
         if (remainingTxs === 0) {
-            console.log(`[VALIDATION] Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`);
-            console.log(`[VALIDATION] Fast treated txs: ${fastTreatedTxs}`);
+            miniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
+            miniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
             return allDiscoveredPubKeysAddresses;
         }
 
@@ -606,8 +610,8 @@ export class BlockValidation {
             }
         }
 
-        console.log(`[VALIDATION] Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`);
-        console.log(`[VALIDATION] Fast treated txs: ${fastTreatedTxs}`);
+        miniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
+        miniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
 
         return allDiscoveredPubKeysAddresses;
     }

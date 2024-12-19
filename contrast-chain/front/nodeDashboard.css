@@ -1,0 +1,558 @@
+/* ==============================================
+   1. Font Definitions
+   ============================================== */
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    src: url("../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Regular.woff") format("woff");
+    font-weight: 400;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    src: url("../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Medium.woff") format("woff");
+    font-weight: 500;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "IBM Plex Mono";
+    src: url("../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-SemiBold.woff") format("woff");
+    font-weight: 600;
+    font-style: normal;
+}
+
+
+/* ==============================================
+   2. Root Variables
+   ============================================== */
+
+:root {
+    --background: #1e1e1e; /* Darker background for better contrast */
+    --foreground: #d4d4d4; /* Light text color */
+    --accent: #569cd6;      /* Accent color for buttons and highlights */
+    --input-bg: #2d2d2d;    /* Input background */
+    --border: #3c3c3c;      /* Border color */
+}
+
+
+/* ==============================================
+   3. Global Styles
+   ============================================== */
+
+/* Reset margin, padding, and box-sizing for all elements */
+body {
+    font-family: "IBM Plex Mono", monospace;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    background-color: var(--background);
+    color: var(--foreground);
+}
+
+/* Utility class to hide elements */
+.hidden {
+    display: none !important;
+}
+
+/* Remove spinner arrows from number inputs in WebKit browsers */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+
+/* ==============================================
+   4. Typography
+   ============================================== */
+
+/* Heading Styles */
+h1 {
+    font-size: 1.5rem;
+    margin: 10px 0;
+    font-weight: 600;
+}
+
+h2 {
+    font-size: 1.25rem;
+    margin: 10px 0;
+    font-weight: 600;
+}
+
+h3 {
+    font-size: 1rem; 
+    margin: 8px 0;
+    font-weight: 600;
+}
+
+.container.validator h1,
+.container.miner h1,
+.global-info h1 {
+    font-size: 1.5rem; 
+}
+
+.spacedText h3,
+#topBar h3 {
+    font-size: 1rem; 
+}
+
+
+/* ==============================================
+   5. Button Styles
+   ============================================== */
+
+/* General Button Styles */
+button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 500;
+    background: var(--accent);
+    color: var(--foreground);
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+button:hover {
+    background: #6fa8dc; 
+}
+
+/* Specific Button Classes */
+.toggleAdminPanelButton {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 500;
+    background: var(--accent);
+    color: var(--foreground);
+    padding: 5px 10px;
+    cursor: pointer;
+    border: 1px solid var(--border);
+}
+
+.editButton {
+    cursor: pointer;
+    height: fit-content;
+    font-size: 18px; 
+    margin-left: 10px;
+}
+
+.editButton:hover {
+    transform: scale(1.1);
+}
+
+/* Modal Specific Buttons */
+#toggleModalInput {
+    padding: 10px;
+    background: var(--accent);
+    color: var(--foreground);
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.3s ease;
+    margin-bottom: 20px; 
+}
+
+#toggleModalInput:hover {
+    background: #6fa8dc;
+}
+
+
+/* Modal Confirmation and Cancel Buttons */
+#modalConfirmBtn {
+    background: #28a745;
+    border: none;
+}
+
+#modalConfirmBtn:hover {
+    background: #218838;
+}
+
+#modalCancelBtn {
+    background: #dc3545; 
+    border: none;
+}
+
+#modalCancelBtn:hover {
+    background: #c82333;
+}
+
+
+/* ==============================================
+   6. Input Styles
+   ============================================== */
+
+/* General Input Styles */
+input {
+    background: var(--input-bg);
+    color: var(--foreground);
+    text-align: center;
+    margin: 0 10px;
+    border: solid 1px var(--border);
+    font-size: large;
+}
+
+/* Text Input Specific Styles */
+input[type="text"] {
+    text-align: right;
+    width: 194px;
+    padding: 2px 10px;
+    margin: 0;
+}
+
+/* Incremental Input Styles */
+.incrementalInput {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.incrementalInput input {
+    background: var(--input-bg);
+    color: var(--foreground);
+    text-align: center;
+    margin: 0 10px;
+    border: solid 1px var(--border);
+    font-size: large;
+}
+
+.incrementalInput button:first-child,
+.incrementalInput button:last-child {
+    color: var(--foreground);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    font-size: large;
+    font-weight: 600;
+}
+
+
+/* ==============================================
+   7. Top Bar Styles
+   ============================================== */
+
+#topBar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    border-bottom: solid 1px var(--border);
+}
+
+#topBar h3 {
+    width: auto;
+    opacity: 0.8;
+    margin: 5px 0;
+    flex-grow: 1;
+    text-align: center;
+}
+
+#topBar .btnWrap {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease;
+}
+
+#topBar .btnWrap.visible {
+    max-height: 200px; 
+}
+
+#topBar .btnWrap div {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-around;
+    width: auto;
+    overflow: hidden;
+}
+
+#topBar .btnWrap div button {
+    cursor: pointer;
+    margin: 0 0 5px 0;
+}
+
+
+/* ==============================================
+   8. Admin Panel Styles
+   ============================================== */
+
+.adminPanelContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+}
+
+
+/* ==============================================
+   9. Modal Styles
+   ============================================== */
+
+/* Modal Wrapper */
+.modalsWrap {
+    position: fixed;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    top: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modalsWrap.hidden > .modalsWrapBackground {
+    backdrop-filter: blur(0px) !important;
+}
+
+.modalsWrap > .modalsWrapBackground {
+    backdrop-filter: blur(2px);
+}
+
+.modalsWrapBackground {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(2px);
+    transition: backdrop-filter 0.6s 0.4s;
+}
+
+/* Modal Content */
+.modalWrap {
+    z-index: 1;
+    width: 72%;
+    max-width: 600px;
+    max-height: 72vh;
+    padding: 4vh;
+    box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.5);
+    background: var(--background);
+    border: 1px solid var(--border);
+}
+
+.modalWrap .spacedText {
+    align-items: center;
+}
+
+.modalWrap .spacedText input {
+    width: 260px;
+    text-align: center;
+    background: var(--input-bg);
+    color: var(--foreground);
+    border: solid 1px var(--border);
+}
+
+/* Modal Input Section */
+#modalInputSection {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px; 
+}
+
+
+#modalInputLabel {
+    align-self: flex-start;
+    font-size: 1rem;
+}
+
+/* Modal Input Section Input */
+#modalInput {
+    flex: 1;
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    color: var(--foreground);
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+
+#modalInputWrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    max-width: 300px;
+}
+
+
+/* ==============================================
+   10. Dashboard Styles
+   ============================================== */
+
+.dashboard,
+.dashboard-inner {
+    display: flex;
+    justify-content: space-around;
+    margin: 40px;
+    background-color: var(--background);
+}
+
+.global-info {
+    width: 80% !important;
+    margin: 20px auto;
+    background-color: var(--input-bg);
+    padding: 20px;
+    border: 1px solid var(--border);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+#stakeInputWrap {
+    transform: translateY(26%);
+    height: 100%;
+    display: flex;
+}
+#stakeInputWrap button {
+    padding: 2px 10px;
+}
+
+/* ==============================================
+   11. Container Styles
+   ============================================== */
+
+.container {
+    width: 44%;
+    background-color: var(--input-bg);
+    padding: 10px 20px;
+    border: 1px solid var(--border);
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+
+}
+
+
+/* ==============================================
+   12. List and Peer Styles
+   ============================================== */
+
+#listenAddress li {
+    /*font-size: .8rem;*/
+    opacity: .8;
+}
+.network-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 10px 0;
+    max-height: 200px;
+    overflow-y: auto;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border);
+}
+
+.network-list li {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--foreground);
+}
+
+.network-list li:last-child {
+    border-bottom: none;
+}
+
+/* Peer Item */
+.peer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+}
+
+.peer-id {
+    flex: 1;
+    margin-right: 10px;
+}
+
+/* Peer Buttons */
+.disconnect-btn,
+.ask-sync-btn {
+    margin-left: 5px;
+    padding: 5px 10px;
+    font-size: 0.9em;
+    cursor: pointer;
+    border: none;
+    border-radius: 3px;
+    transition: background-color 0.3s;
+}
+
+.disconnect-btn {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.disconnect-btn:hover {
+    background-color: #c0392b;
+}
+
+.ask-sync-btn {
+    background-color: #3498db;
+    color: white;
+}
+
+.ask-sync-btn:hover {
+    background-color: #2980b9;
+}
+
+
+/* ==============================================
+   13. Utility Classes
+   ============================================== */
+
+/* Spaced Text */
+.spacedText {
+    display: flex;
+    justify-content: space-between;
+}
+.spacedText.column {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.spacedText:not(:last-child) {
+    border-bottom: solid 1px var(--border);
+}
+
+.heightText {
+    height: fit-content;
+    padding: 10px;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border);
+}
+.toggleWrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    width: 100%;
+}
+
+.toggleSpan {
+    min-width: 32px;
+    text-align: center;
+    padding: 2px 8px;
+}
+
+.toggleButton {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background-color: #4b5563; /* gray-600 */
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.toggleButton::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    background-color: white;
+    transition: transform 0.2s;
+}
+
+.toggleButton.active {
+    background-color: #3498db;
+}
+
+.toggleButton.active::after {
+    transform: translateX(20px);
+}
