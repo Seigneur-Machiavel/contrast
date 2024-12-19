@@ -1,45 +1,57 @@
 const fs = require('fs');
+const path = require('path');
 
-const HistoricalLog = (label = 'global', message = 'toto') => {
+const HistoricalLog = (type = 'log', message = 'toto') => {
+    /*
+    const date = new Date();
+    return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
+    */
     return {
-        time: () => {
-            const date = new Date();
-            return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
-        },
-        label,
+        time: Date.now(),
+        type: type,
         message
     }
 }
 
+/**
+ * @typedef MiniLoggerConfig
+ * @property {number} maxHistory
+ * @property {boolean} allActive
+ * @property {{ [key: string]: boolean }} activeCategories
+ */
 const MiniLoggerConfig = () => {
     return {
         maxHistory: 100,
         allActive: false,
-        activeLabels: { global: true }
+        activeCategories: { global: true }
     }
 }
 
 /** @returns {MiniLoggerConfig} */
 function loadDefaultConfig() {
-    const defaultConfig = JSON.parse(fs.readFileSync('./miniLogger/mini-logger-config.json'));
+    const defaultConfigPath = path.join(__dirname, 'mini-logger-config.json');
+    if (!fs.existsSync(defaultConfigPath)) return MiniLoggerConfig();
+
+    const defaultConfig = JSON.parse(fs.readFileSync(defaultConfigPath));
     return defaultConfig;
 }
 /** @returns {MiniLoggerConfig} */
 function loadMergedConfig() {
     const defaultConfig = loadDefaultConfig();
-    if (!fs.existsSync('./miniLogger/mini-logger-config-custom.json')) return defaultConfig;
+    const customConfigPath = path.join(__dirname, 'mini-logger-config-custom.json');
+    if (!fs.existsSync(customConfigPath)) return defaultConfig;
 
-    const customConfig = JSON.parse(fs.readFileSync('./miniLogger/mini-logger-config-custom.json'));
+    const customConfig = JSON.parse(fs.readFileSync(customConfigPath));
     const config = {
         maxHistory: customConfig.maxHistory === undefined ? defaultConfig.maxHistory : customConfig.maxHistory,
         allActive: customConfig.allActive === undefined ? defaultConfig.allActive : customConfig.allActive,
-        activeLabels: defaultConfig.activeLabels
+        activeCategories: defaultConfig.activeCategories
     };
 
-    for (const key in defaultConfig.activeLabels) {
-        if (customConfig.activeLabels === undefined) break;
-        if (customConfig.activeLabels[key] === undefined) continue;
-        config.activeLabels[key] = customConfig.activeLabels[key];
+    for (const key in defaultConfig.activeCategories) {
+        if (customConfig.activeCategories === undefined) break;
+        if (customConfig.activeCategories[key] === undefined) continue;
+        config.activeCategories[key] = customConfig.activeCategories[key];
     }
 
     return config;
@@ -47,22 +59,26 @@ function loadMergedConfig() {
 
 class MiniLogger {
     /** @param {MiniLoggerConfig} miniLoggerConfig */
-    constructor(miniLoggerConfig) {
-        this.maxHistory = miniLoggerConfig.maxHistory || 100;
+    constructor(category = 'global', miniLoggerConfig) {
+        this.category = category;
+        this.filePath = path.join(__dirname, 'history', `${this.category}.json`);
         this.history = this.#loadHistory();
-        this.allActive = miniLoggerConfig.allActive || false;
-        this.activeLabels = miniLoggerConfig.activeLabels || { global: true };
+        /** @type {MiniLoggerConfig} */
+        this.miniLoggerConfig = miniLoggerConfig || loadMergedConfig();
+        this.shouldLog = this.#isCategoryActive();
+        if (!fs.existsSync(path.join(__dirname, 'history'))) { fs.mkdirSync(path.join(__dirname, 'history')); }
     }
-    initFromConfig(miniLoggerConfig) {
-        this.maxHistory = miniLoggerConfig.maxHistory || 100;
-        this.allActive = miniLoggerConfig.allActive || false;
-        this.activeLabels = miniLoggerConfig.activeLabels || { global: true };
+
+    #isCategoryActive() {
+        const allActive = this.miniLoggerConfig.allActive;
+        const categoryActive = this.miniLoggerConfig.activeCategories[this.category];
+        return allActive || categoryActive;
     }
     #loadHistory() {
-        if (!fs.existsSync('./history.json')) { return []; }
+        if (!fs.existsSync(this.filePath)) { return []; }
         
         try {
-            const history = JSON.parse(fs.readFileSync('./history.json'));
+            const history = JSON.parse(fs.readFileSync(this.filePath));
             return history;
         } catch (error) {
             console.error('Error while loading history:', error);
@@ -70,46 +86,22 @@ class MiniLogger {
         }
     }
     #saveHistory() {
-        fs.writeFileSync('./miniLogger/history.json', JSON.stringify(this.history));
+        fs.writeFileSync(this.filePath, JSON.stringify(this.history));
     }
-    #saveLog(label, message) {
-        const historicalLog = HistoricalLog(label, message);
+    #saveLog(type, message) {
+        const historicalLog = HistoricalLog(type, message);
         this.history.push(historicalLog);
 
-        if (this.history.length > this.maxHistory) { this.history.shift(); }
+        if (this.history.length > this.miniLoggerConfig.maxHistory) { this.history.shift(); }
 
         this.#saveHistory();
     }
-    log(label = 'global', message) {
-        this.#saveLog(label, message);
-        if (this.activeLabels[label] !== true && this.allActive !== true) return;
+    log(message, callback = (m) => { console.log(m); }) {
+        const type = callback.toString().split('console.')[1].split('(')[0].trim();
+        this.#saveLog(type, message);
 
-        console.log(`${message}`);
-    }
-    info(label = 'global', message) {
-        this.#saveLog(label, message);
-        if (this.activeLabels[label] !== true && this.allActive !== true) return;
-
-        console.info(`${message}`);
-    }
-    debug(label = 'global', message) {
-        this.#saveLog(label, message);
-        if (this.activeLabels[label] !== true && this.allActive !== true) return;
-
-        console.debug(`${message}`);
-    }
-    error(label = 'global', message) {
-        this.#saveLog(label, message);
-        if (this.activeLabels[label] !== true && this.allActive !== true) return;
-
-        console.error(`${message}`);
-    }
-    warn(label = 'global', message) {
-        this.#saveLog(label, message);
-        if (this.activeLabels[label] !== true && this.allActive !== true) return;
-
-        console.warn(`${message}`);
+        if (this.shouldLog && typeof callback === 'function') { callback(message); }
     }
 }
 
-module.exports = { MiniLogger, loadDefaultConfig, loadMergedConfig };
+module.exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };

@@ -71,20 +71,20 @@
                 document.getElementById('new-label-input').value = '';
     
                 const listElement = createLabelElement(key, true);
-                activeLabelsList.insertBefore(listElement, newLabelWrap);
+                activeCategoriesList.insertBefore(listElement, newLabelWrap);
             }
 
             const config = loadMergedConfig();
             document.getElementById('max-history').value = config.maxHistory || 100;
             document.getElementById('all-active').checked = config.allActive || false;
     
-            const activeLabelsList = document.getElementById('active-labels');
+            const activeCategoriesList = document.getElementById('active-labels');
             const newLabelWrap = document.querySelector('.new-label-wrap');
             const newLabelButton = document.getElementById('new-label');
 
-            for (const key in config.activeLabels) {
-                const listElement = createLabelElement(key, config.activeLabels[key]);
-                activeLabelsList.insertBefore(listElement, newLabelWrap);
+            for (const key in config.activeCategories) {
+                const listElement = createLabelElement(key, config.activeCategories[key]);
+                activeCategoriesList.insertBefore(listElement, newLabelWrap);
             }
 
             document.getElementById('new-label').onclick = () => {
@@ -98,22 +98,22 @@
                 const defaultConfig = loadDefaultConfig();
                 const maxHistory = document.getElementById('max-history').value;
                 const allActive = document.getElementById('all-active').checked;
-                const activeLabels = {};
-                for (const listElement of activeLabelsList.children) {
+                const activeCategories = {};
+                for (const listElement of activeCategoriesList.children) {
                     if (!listElement.classList.contains('label-input-wrap')) continue;
 
                     // set custom active labels
                     const key = listElement.children[0].textContent;
                     const value = listElement.children[1].children[0].checked;
-                    activeLabels[key] = value;
+                    activeCategories[key] = value;
 
-                    if (defaultConfig.activeLabels[key]) { continue; }
+                    if (defaultConfig.activeCategories[key]) { continue; }
                     
                     // add key to default config if it doesn't exist
-                    defaultConfig.activeLabels[key] = true;
+                    defaultConfig.activeCategories[key] = true;
                 }
 
-                const newConfig = { maxHistory, allActive, activeLabels };
+                const newConfig = { maxHistory, allActive, activeCategories };
                 fs.writeFileSync('./miniLogger/mini-logger-config-custom.json', JSON.stringify(newConfig, null, 4));
                 fs.writeFileSync('./miniLogger/mini-logger-config.json', JSON.stringify(defaultConfig, null, 4));
 

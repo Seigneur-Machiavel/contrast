@@ -1,20 +1,21 @@
 if (false) {
     const { BrowserWindow } = require('electron');
-    const { MiniLogger } = require('../../../miniLogger/mini-logger.js');
 }
 
 /**
  * @typedef {{name: string, size: number, type: string, content: Uint8Array}} FileData
- */
+*/
 
+const { MiniLogger } = require('../../../miniLogger/mini-logger.js');
 const { ipcMain, dialog, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
 class P2PChatHandler {
-    /** @param {BrowserWindow} mainWindow @param {MiniLogger} miniLogger */
-    constructor(mainWindow, miniLogger) {
-        this.miniLogger = miniLogger;
+    /** @param {BrowserWindow} mainWindow */
+    constructor(mainWindow) {
+        /** @type {MiniLogger} */
+        this.miniLogger = new MiniLogger('chat');
         /** @type {BrowserWindow} */
         this.mainWindow = mainWindow;
         this.p2p = null;
@@ -40,23 +41,11 @@ class P2PChatHandler {
         this.P2P = P2P;
     }
 
-    /**
-     * @param {'info'|'error'|'success'|'file'|'network'|'peer'} type
-     * @param {string} action
-     */
-    log(type, action, data) {
-        const emojis = {
-            info: '📝', error: '❌', success: '✅', 
-            file: '📁', network: '🔗', peer: '👤'
-        };
-        this.miniLogger.log('chat', `${emojis[type]} [${action}]`, data);
-    }
-
     setupP2PEvents(p2pInstance) {
-        this.log('network', 'setup', 'Initializing P2P events');
+        this.miniLogger.log('Setting up P2P events', (m) => { console.log(m); });
         this.events.forEach(event => {
             const handler = data => {
-                this.log('info', event, data);
+                this.miniLogger.log(`P2P event ${event} received`, (m) => { console.log(m); });
                 this.mainWindow.webContents.send(event, data);
             };
             p2pInstance.on(event, handler);
@@ -66,18 +55,19 @@ class P2PChatHandler {
     /** @param {string} nickname */
     async startChat(event, nickname, listenAddr) {
         while (!this.P2P) {
-            this.miniLogger.warn('chat', 'P2P module not initialized yet');
+            this.miniLogger.log('P2P module not initialized yet', (m) => { console.warn(m); });
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
         try {
-            console.log('Starting chat with', nickname, listenAddr);
+            this.miniLogger.log(`Starting chat with ${nickname} on ${listenAddr}`, (m) => { console.log(m); });
             this.p2p = new this.P2P(nickname, listenAddr);
             this.setupP2PEvents(this.p2p);
             const addr = await this.p2p.start();
-            this.log('success', 'chat-started', { nickname, addr });
+            
+            this.miniLogger.log(`Chat started with ${nickname} on ${addr}`, (m) => { console.log(m); });
             return { success: true, addr };
         } catch (err) {
-            this.log('error', 'start-chat-failed', err);
+            this.miniLogger.log(err, (m) => { console.error(m); });
             return { success: false, error: err.message };
         }
     }
@@ -85,27 +75,27 @@ class P2PChatHandler {
     /** @param {{channel: string, file: FileData}} param1 */
     async shareFile(event, { channel, file }) {
         if (!file?.content) {
-            this.log('error', 'share-failed', 'Invalid file data received');
+            this.miniLogger.log('Invalid file data received', (m) => { console.error(m); });
             return { success: false, error: 'Invalid file data received' };
         }
         
-        this.log('file', 'share-start', { name: file.name, size: file.size });
+        this.miniLogger.log(`Sharing file on channel ${channel}: ${file.name}`, (m) => { console.log(m); });
         try {
             const fileId = await this.p2p.shareFile(channel, {
                 ...file,
                 stream: async function* () { yield new Uint8Array(file.content); }
             });
-            this.log('success', 'share-complete', { fileId, name: file.name });
+            this.miniLogger.log(`File shared on channel ${channel}: ${file.name}`, (m) => { console.log(m); });
             return { success: true, fileId };
         } catch (err) {
-            this.log('error', 'share-failed', err);
+            this.miniLogger.log(err, (m) => { console.error(m); });
             return { success: false, error: err.message };
         }
     }
 
     /** @param {{cid: string}} param1 */
     async downloadFile(event, { cid }) {
-        this.log('file', 'download-start', { cid });
+        this.miniLogger.log(`Downloading file ${cid}`, (m) => { console.log(m); });
         try {
             const { content, metadata } = await this.p2p.downloadFile(cid);
             const { filePath } = await dialog.showSaveDialog(this.mainWindow, {
@@ -114,15 +104,15 @@ class P2PChatHandler {
             });
             
             if (!filePath) {
-                this.log('info', 'download-cancelled', { cid });
+                this.miniLogger.log('Save cancelled by user', (m) => { console.log(m); });
                 return { success: false, error: 'Save cancelled by user' };
             }
             
             fs.writeFileSync(filePath, Buffer.from(content));
-            this.log('success', 'download-complete', { path: filePath, metadata });
+            this.miniLogger.log(`File downloaded to ${filePath}`, (m) => { console.log(m); });
             return { success: true, metadata, path: filePath };
         } catch (err) {
-            this.log('error', 'download-failed', err);
+            this.miniLogger.log(err, (m) => { console.error(m); });
             return { success: false, error: err.message };
         }
     }
@@ -131,10 +121,10 @@ class P2PChatHandler {
     async sendMessage(event, { channel, content }) {
         try {
             await this.p2p.sendMessage(channel, content);
-            this.log('success', 'message-sent', { channel, content: content.slice(0, 50) });
+            this.miniLogger.log(`Message sent to ${channel}: ${content.slice(0, 50)}`, (m) => { console.log(m); });
             return { success: true };
         } catch (err) {
-            this.log('error', 'message-failed', err);
+            this.miniLogger.log(err, (m) => { console.error(m); });
             return { success: false, error: err.message };
         }
     }
@@ -143,10 +133,10 @@ class P2PChatHandler {
     async joinChannel(event, channel) {
         try {
             await this.p2p.joinChannel(channel);
-            this.log('success', 'channel-joined', { channel });
+            this.miniLogger.log(`Joined channel ${channel}`, (m) => { console.log(m); });
             return { success: true };
         } catch (err) {
-            this.log('error', 'join-failed', err);
+            this.miniLogger.log(err, (m) => { console.error(m); });
             return { success: false, error: err.message };
         }
     }
@@ -155,26 +145,26 @@ class P2PChatHandler {
     async connectPeer(event, addr) {
         try {
             const connected = await this.p2p.connectToPeer(addr);
-            this.log('network', 'connect-peer', `Connection ${connected ? 'succeeded' : 'failed'} to ${addr}`);
+            this.miniLogger.log(`Connection ${connected ? 'succeeded' : 'failed'} to ${addr}`, (m) => { console.log(m); });
             return { 
                 success: connected,
                 error: connected ? null : 'Failed to establish connection'
             };
         } catch (err) {
-            this.log('error', 'connect-peer', `Connection failed to ${addr}: ${err.message}`);
+            this.miniLogger.log(err, (m) => { console.error(m); });
             return { success: false, error: err.message };
         }
     }
 
     setupHandlers() {
-        this.log('info', 'setup', 'Registering IPC handlers');
+        this.miniLogger.log('Registering IPC handlers', (m) => { console.log(m); });
         for (const [name, handler] of Object.entries(this.handlers)) {
             ipcMain.handle(name, async (event, ...args) => {
                 try {
-                    this.log('info', `${name}-called`, args);
+                    this.miniLogger.log(`IPC handler ${name} called`, (m) => { console.log(m); });
                     return await handler(event, ...args);
                 } catch (err) {
-                    this.log('error', name, err);
+                    this.miniLogger.log(err, (m) => { console.error(m); });
                     return { success: false, error: err.message };
                 }
             });
@@ -187,9 +177,9 @@ class P2PChatHandler {
             try {
                 await this.p2p.stop();
                 this.p2p = null;
-                this.log('success', 'cleanup', 'P2P network stopped cleanly');
+                this.miniLogger.log('P2P network stopped cleanly', (m) => { console.log(m); });
             } catch (err) {
-                this.log('error', 'cleanup', `Failed to stop P2P: ${err.message}`);
+                this.miniLogger.log(err, (m) => { console.error(m); });
                 throw err;
             }
         }

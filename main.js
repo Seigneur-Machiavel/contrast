@@ -5,8 +5,7 @@ const setShortcuts = require('./preferences/shortcuts.js');
 const { MiniLogger, loadMergedConfig } = require('./miniLogger/mini-logger.js');
 
 Menu.setApplicationMenu(null);
-const miniLoggerConfig = loadMergedConfig();
-const miniLogger = new MiniLogger(miniLoggerConfig);
+const mainLogger = new MiniLogger('main');
 
 const isDev = true;
 function checkArrayOfArraysDuplicate(handlersKeys = []) {
@@ -25,16 +24,7 @@ function createLoggerSettingWindow() {
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
 
-    loggerWindow.on('close', (e) => {
-        e.preventDefault();
-
-        const actualizedMiniLoggerConfig = loadMergedConfig();
-        miniLogger.initFromConfig(actualizedMiniLoggerConfig);
-
-        miniLogger.log('global', 'Logger settings swapped');
-        loggerWindow.hide();
-    });
-
+    loggerWindow.on('close', (e) => { e.preventDefault(); loggerWindow.hide(); });
     loggerWindow.loadFile('./miniLogger/miniLoggerSetting.html');
     return loggerWindow;
 }
@@ -72,13 +62,13 @@ app.on('ready', async () => {
 
     const mainWindow = await createMainWindow();
     const handlersKeys = [];
-    const chatHandler = new P2PChatHandler(mainWindow, miniLogger);
+    const chatHandler = new P2PChatHandler(mainWindow);
     handlersKeys.push(Object.keys(chatHandler.setupHandlers()));
 
     const duplicates = checkArrayOfArraysDuplicate(handlersKeys);
-    if (duplicates) { miniLogger.error('Duplicate IPC handlers detected:', duplicates); return; }
+    if (duplicates) { mainLogger.log(`Duplicate IPC handlers detected: ${duplicates}`, (m) => { console.warn(m); }); }
 
-    setShortcuts(miniLogger, loggerWindow, handlersKeys, isDev);
+    setShortcuts(loggerWindow, handlersKeys, isDev);
     BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
 });
 

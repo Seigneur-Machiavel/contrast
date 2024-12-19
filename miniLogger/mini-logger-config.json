@@ -1,7 +1,7 @@
 {
     "maxHistory": "100",
     "allActive": false,
-    "activeLabels": {
+    "activeCategories": {
         "global": true,
         "main": true,
         "shortcuts": true,
