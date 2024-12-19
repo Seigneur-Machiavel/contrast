@@ -1,22 +1,20 @@
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 
 //#region Libs imports and type definitions
-import ed25519 from '../externalLibs/noble-ed25519-03-2024.mjs';
+import ed25519 from '../../libs/noble-ed25519-03-2024.mjs';
 import { Transaction, UTXO } from './transaction.mjs';
-import { xxHash32 } from '../externalLibs/xxhash32.mjs';
+import { xxHash32 } from '../../libs/xxhash32.mjs';
 async function msgPackLib() {
     if (isNode) {
-        const m = await import('../externalLibs/msgpack.min.js');
+        const m = await import('../../libs/msgpack.min.js');
         return m.default;
     }
     return MessagePack;
 };
 const msgpack = await msgPackLib();
-//import { BinarySerializer } from '../externalLibs/gpt-serializer.mjs';
-//const msgpack = new BinarySerializer();
 
 const cryptoLib = crypto;
-async function getArgon2Lib() {
+/*async function getArgon2Lib() {
     if (isNode) {
         const a = await import('argon2');
         a.limits.timeCost.min = 1; // ByPass the minimum time cost
@@ -31,11 +29,13 @@ async function getArgon2Lib() {
     } catch (error) { }
 
     console.log('trying import argon2 ES6 and inject in window');
-    const argon2Import = await import('../externalLibs/argon2-ES6.min.mjs');
+    const argon2Import = await import('../../libs/argon2-ES6.min.mjs');
     window.argon2 = argon2Import.default;
     return argon2Import.default;
 };
-const argon2Lib = await getArgon2Lib();
+const argon2Lib = await getArgon2Lib();*/
+import argon2Lib from 'argon2';
+argon2Lib.limits.timeCost.min = 1; // ByPass the minimum time cost
 
 /**
 * @typedef {import("./block-classes.mjs").Block} Block

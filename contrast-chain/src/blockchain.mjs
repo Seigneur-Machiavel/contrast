@@ -3,7 +3,7 @@ import path from 'path';
 const url = await import('url');
 import LevelUp from 'levelup';
 import LevelDown from 'leveldown';
-import pino from 'pino';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
 import utils from './utils.mjs';
@@ -59,16 +59,11 @@ export class Blockchain {
         this.snapshotInterval = snapshotInterval;
         /** @type {BlockMiningData[]} */
         this.blockMiningData = []; // .csv mining datas research
-        /** @type {pino.Logger} */
-        this.logger = pino({
-            level: logLevel,
-            transport: {
-                target: 'pino-pretty',
-                options: { colorize: true }
-            }
-        });
+        /** @type {MiniLogger} */
+        this.miniLogger = new MiniLogger('blockchain');
 
-        this.logger.info({ dbPath: './databases/blockchainDB-' + nodeId, snapshotInterval }, 'Blockchain instance created');
+        //this.logger.info({ dbPath: './databases/blockchainDB-' + nodeId, snapshotInterval }, 'Blockchain instance created');
+        this.miniLogger.log(`Blockchain instance created: dbPath=${this.dbPath}, snapshotInterval=${snapshotInterval}`, (m) => { console.info(m); });
     }
     /** @param {SnapshotSystem} snapshotSystem */
     async load(snapshotSystem) {
@@ -135,7 +130,8 @@ export class Blockchain {
      * @throws {Error} If the block is invalid or cannot be added. */
     async addConfirmedBlocks(utxoCache, blocks, persistToDisk = true, saveBlockInfo = true, totalFees) {
         for (const block of blocks) {
-            this.logger.info({ blockHeight: block.index, blockHash: block.hash }, 'Adding new block');
+            //this.logger.info({ blockHeight: block.index, blockHash: block.hash }, 'Adding new block');
+            this.miniLogger.log(`Adding new block: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
             try {
                 this.#setBlockInCache(block);
                 this.lastBlock = block;
@@ -150,10 +146,12 @@ export class Blockchain {
                 const blockInfo = saveBlockInfo ? await BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
                 if (saveBlockInfo) { promises.push(this.#persistBlockInfoToDisk(blockInfo)) }
 
-                this.logger.info({ blockHeight: block.index, blockHash: block.hash }, 'Block successfully added');
+                //this.logger.info({ blockHeight: block.index, blockHash: block.hash }, 'Block successfully added');
+                this.miniLogger.log(`Block successfully added: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
                 return blockInfo;
             } catch (error) {
-                this.logger.error({ error, blockHash: block.hash }, 'Failed to add block');
+                //this.logger.error({ error, blockHash: block.hash }, 'Failed to add block');
+                this.miniLogger.log(`Failed to add block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
                 throw error;
             }
         }
@@ -242,7 +240,8 @@ export class Blockchain {
                 this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
                 vss.newStakes(newStakesOutputs);
             } catch (error) {
-                this.logger.error({ error, blockHash: block.hash }, 'Failed to apply block');
+                //this.logger.error({ error, blockHash: block.hash }, 'Failed to apply block');
+                this.miniLogger.log(`Failed to apply block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
                 throw error;
             }
         }
@@ -252,7 +251,8 @@ export class Blockchain {
      * @param {BlockData} finalizedBlock - The block to persist.
      * @returns {Promise<void>} */
     async #persistBlockToDisk(finalizedBlock) { // now using serializer v3
-        this.logger.debug({ blockHash: finalizedBlock.hash }, 'Persisting block to disk');
+        //this.logger.debug({ blockHash: finalizedBlock.hash }, 'Persisting block to disk');
+        this.miniLogger.log(`Persisting block to disk: blockHash=${finalizedBlock.hash}`, (m) => { console.debug(m); });
         try {
             // TRYING THE BEST PRACTICE: full batch write
             const txsIds = [];
@@ -276,24 +276,29 @@ export class Blockchain {
 
             await batch.write();
 
-            this.logger.debug({ blockHash: finalizedBlock.hash }, 'Block persisted to disk');
+            //this.logger.debug({ blockHash: finalizedBlock.hash }, 'Block persisted to disk');
+            this.miniLogger.log(`Block persisted to disk: blockHash=${finalizedBlock.hash}`, (m) => { console.debug(m); });
         } catch (error) {
-            this.logger.error({ error, blockHash: finalizedBlock.hash }, 'Failed to persist block to disk');
+            //this.logger.error({ error, blockHash: finalizedBlock.hash }, 'Failed to persist block to disk');
+            this.miniLogger.log(`Failed to persist block to disk: blockHash=${finalizedBlock.hash}, error=${error}`, (m) => { console.error(m); });
             throw error;
         }
     }
     /** @param {BlockInfo} blockInfo */
     async #persistBlockInfoToDisk(blockInfo) {
         const blockHash = blockInfo.header.hash;
-        this.logger.debug({ blockHash }, 'Persisting block info to disk');
+        //this.logger.debug({ blockHash }, 'Persisting block info to disk');
+        this.miniLogger.log(`Persisting block info to disk: blockHash=${blockHash}`, (m) => { console.debug(m); });
         try {
             const serializedBlockInfo = utils.serializer.rawData.toBinary_v1(blockInfo);
             const buffer = Buffer.from(serializedBlockInfo);
             await this.db.put(`info-${blockHash}`, buffer);
 
-            this.logger.debug({ blockHash }, 'Block info persisted to disk');
+            //this.logger.debug({ blockHash }, 'Block info persisted to disk');
+            this.miniLogger.log(`Block info persisted to disk: blockHash=${blockHash}`, (m) => { console.debug(m); });
         } catch (error) {
-            this.logger.error({ error, blockHash }, 'Failed to persist block info to disk');
+            //this.logger.error({ error, blockHash }, 'Failed to persist block info to disk');
+            this.miniLogger.log(`Failed to persist block info to disk: blockHash=${blockHash}, error=${error}`, (m) => { console.error(m); });
             throw error;
         }
     }
@@ -446,7 +451,8 @@ export class Blockchain {
      * @returns {Promise<BlockData>} The retrieved block.
      * @throws {Error} If the block is not found. */
     async getBlockByHash(hash) {
-        this.logger.debug({ blockHash: hash }, 'Retrieving block');
+        //this.logger.debug({ blockHash: hash }, 'Retrieving block');
+        this.miniLogger.log(`Retrieving block: blockHash=${hash}`, (m) => { console.debug(m); });
 
         const block = this.cache.blocksByHash.has(hash)
         ? this.cache.blocksByHash.get(hash)
@@ -454,12 +460,14 @@ export class Blockchain {
 
         if (block) { return block; }
 
-        this.logger.error({ blockHash: hash }, 'Block not found');
+        //this.logger.error({ blockHash: hash }, 'Block not found');
+        this.miniLogger.log(`Block not found: blockHash=${hash}`, (m) => { console.error(m); });
         throw new Error(`Block not found: ${hash}`);
     }
     /** Retrieves a block by its height. @param {number} height - The height of the block to retrieve. */
     async getBlockByHeight(height, deserialize = true) {
-        this.logger.debug({ blockHeight: height }, 'Retrieving block');
+        //this.logger.debug({ blockHeight: height }, 'Retrieving block');
+        this.miniLogger.log(`Retrieving block: blockHeight=${height}`, (m) => { console.debug(m); });
 
         if (deserialize && this.cache.blocksHashByHeight.has(height)) {
             return this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(height));
@@ -468,7 +476,8 @@ export class Blockchain {
         const block = await this.#getBlockFromDiskByHeight(height, deserialize);
         if (block) { return block; }
 
-        this.logger.error({ blockHeight: height }, 'Block not found');
+        //this.logger.error({ blockHeight: height }, 'Block not found');
+        this.miniLogger.log(`Block not found: blockHeight=${height}`, (m) => { console.error(m); });
         return null;
     }
     /** Retrieves a block from disk by its hash. @param {string} hash - The hash of the block to retrieve. */
@@ -535,7 +544,8 @@ export class Blockchain {
             return this.deserializeTransaction(serializedTx);
         } catch (error) {
             // If the transaction is not found or deserialization fails, return null.
-            this.logger.error({ txReference }, 'Transaction not found or failed to deserialize');
+            //this.logger.error({ txReference }, 'Transaction not found or failed to deserialize');
+            this.miniLogger.log(`Transaction not found or failed to deserialize: txReference=${txReference}`, (m) => { console.error(m); });
             return null;
         }
     }
@@ -544,17 +554,20 @@ export class Blockchain {
         try { // Try fast deserialization first.
             return utils.serializerFast.deserialize.transaction(serializedTx);
         } catch (error) {
-            this.logger.debug({ error }, 'Failed to fast deserialize transaction');
+            //this.logger.debug({ error }, 'Failed to fast deserialize transaction');
+            this.miniLogger.log(`Failed to fast deserialize transaction: error=${error}`, (m) => { console.debug(m); });
         }
 
         try { // Try the special transaction deserialization if fast deserialization fails.
             return utils.serializer.transaction.fromBinary_v2(serializedTx);
         } catch (error) {
-            this.logger.debug({ error }, 'Failed to deserialize special transaction');
+            //this.logger.debug({ error }, 'Failed to deserialize special transaction');
+            this.miniLogger.log(`Failed to deserialize special transaction: error=${error}`, (m) => { console.debug(m); });
         }
 
         // Return null if deserialization fails for all strategies.
-        this.logger.error('luid-9f54fbca Unable to deserialize transaction using available strategies');
+        //this.logger.error('luid-9f54fbca Unable to deserialize transaction using available strategies');
+        this.miniLogger.log('Unable to deserialize transaction using available strategies', (m) => { console.error(m); });
         return null;
     }
 

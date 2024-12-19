@@ -1,5 +1,5 @@
 import utils from './utils.mjs';
-import { xxHash32 } from '../externalLibs/xxhash32.mjs';
+import { xxHash32 } from '../../libs/xxhash32.mjs';
 
 class Argon2Unified {
     static createArgon2Params(pass = "averylongpassword123456", salt = "saltsaltsaltsaltsalt", time = 1, mem = 2**10, parallelism = 1, type = 2, hashLen = 32) {

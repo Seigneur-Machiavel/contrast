@@ -2,9 +2,9 @@ const path = require('path');
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
 const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./preferences/shortcuts.js');
-const { MiniLogger, loadMergedConfig } = require('./miniLogger/mini-logger.js');
+const { MiniLogger } = require('./miniLogger/mini-logger.js');
 
-(() => { import('./contrast-chain/run/dashboard.mjs'); })();
+(() => { import('./contrast-chain/run/dashboard.mjs'); })(); // can be async
 
 Menu.setApplicationMenu(null);
 const mainLogger = new MiniLogger('main');

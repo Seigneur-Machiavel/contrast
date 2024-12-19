@@ -1,5 +1,6 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+const __dirname = path.resolve('miniLogger');
 
 const HistoricalLog = (type = 'log', message = 'toto') => {
     /*
@@ -28,7 +29,7 @@ const MiniLoggerConfig = () => {
 }
 
 /** @returns {MiniLoggerConfig} */
-function loadDefaultConfig() {
+export function loadDefaultConfig() {
     const defaultConfigPath = path.join(__dirname, 'mini-logger-config.json');
     if (!fs.existsSync(defaultConfigPath)) return MiniLoggerConfig();
 
@@ -36,7 +37,7 @@ function loadDefaultConfig() {
     return defaultConfig;
 }
 /** @returns {MiniLoggerConfig} */
-function loadMergedConfig() {
+export function loadMergedConfig() {
     const defaultConfig = loadDefaultConfig();
     const customConfigPath = path.join(__dirname, 'mini-logger-config-custom.json');
     if (!fs.existsSync(customConfigPath)) return defaultConfig;
@@ -57,7 +58,7 @@ function loadMergedConfig() {
     return config;
 }
 
-class MiniLogger {
+export class MiniLogger {
     /** @param {MiniLoggerConfig} miniLoggerConfig */
     constructor(category = 'global', miniLoggerConfig) {
         this.category = category;
@@ -102,8 +103,4 @@ class MiniLogger {
 
         if (this.shouldLog && typeof callback === 'function') { callback(message); }
     }
-}
-
-if (typeof module !== 'undefined') {
-    module.exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };
 }

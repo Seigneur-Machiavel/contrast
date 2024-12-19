@@ -5,6 +5,10 @@
         "global": true,
         "main": true,
         "shortcuts": true,
-        "chat": true
+        "chat": true,
+        "P2PNetwork": true,
+        "blockchain": true,
+        "node": true,
+        "sync": true
     }
 }

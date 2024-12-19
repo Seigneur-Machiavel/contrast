@@ -7,3 +7,6 @@ miniLogger/history
 contrast-chain/storage/nodeSettings.json
 contrast-chain/storage/blocks
 contrast-chain/storage/accounts
+contrast-chain/nodes-data
+contrast-chain/application.log
+contrast-chain/config.json
