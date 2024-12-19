@@ -3,3 +3,7 @@ ipfs
 contrast-win32-x64
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
+
+contrast-chain/storage/nodeSettings.json
+contrast-chain/storage/blocks
+contrast-chain/storage/accounts
