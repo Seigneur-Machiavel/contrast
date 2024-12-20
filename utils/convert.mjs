@@ -10,12 +10,6 @@ export const Convert = {
     },
     formatNumberAsCurrencyChange: (num) => {
         const prefix = num < 0 ? '-' : '+';
-        if (prefix === '-') { num = Math.abs(num); }
-
-        if (num < 1_000_000) { return `${prefix}0.${num.toString().padStart(6, '0')}`; }
-        const num2last6 = num.toString().slice(-6);
-        const numRest = num.toString().slice(0, -6);
-        const separedNum = numRest.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        return `${prefix}${separedNum}.${num2last6}`;
+        return `${prefix}${Convert.formatNumberAsCurrency(Math.abs(num))}`;
     }
 };

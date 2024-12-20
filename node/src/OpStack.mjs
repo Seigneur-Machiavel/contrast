@@ -1,3 +1,4 @@
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import utils from './utils.mjs';
 /**
 * @typedef {import("./syncHandler.mjs").SyncHandler} SyncHandler
@@ -25,9 +26,9 @@ export class OpStack {
         lastDigestTime: null,
         lastSyncTime: null,
         lastReorgCheckTime: null,
-        delayBeforeReorgCheck: utils.SETTINGS.targetBlockTime,
-        delayBeforeSyncCheck: utils.SETTINGS.targetBlockTime * 2.5,
-        delayBeforeRestart: utils.SETTINGS.targetBlockTime * 5
+        delayBeforeReorgCheck: BLOCKCHAIN_SETTINGS.targetBlockTime,
+        delayBeforeSyncCheck: BLOCKCHAIN_SETTINGS.targetBlockTime * 2.5,
+        delayBeforeRestart: BLOCKCHAIN_SETTINGS.targetBlockTime * 5
     }
 
     /** @param {Node} node */

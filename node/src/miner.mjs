@@ -1,5 +1,6 @@
 import { BlockData, BlockUtils } from './block-classes.mjs';
 import { MinerWorker } from '../workers/workers-classes.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import utils from './utils.mjs';
 
 /**
@@ -79,7 +80,7 @@ export class Miner {
         const bets = [];
         for (let i = 0; i < nbOfBets; i++) {
             if (!this.useBetTimestamp) { bets.push(0); continue; }
-            const targetBlockTime = utils.SETTINGS.targetBlockTime;
+            const targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime;
             const betBasis = targetBlockTime * this.betRange.min;
             const betRandom = Math.random() * (this.betRange.max - this.betRange.min) * targetBlockTime;
             const bet = Math.floor(betBasis + betRandom);

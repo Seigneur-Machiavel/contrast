@@ -1,3 +1,4 @@
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import utils from './utils.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { BlockUtils } from './block-classes.mjs';
@@ -318,7 +319,7 @@ export class Transaction_Builder {
         const utxos = Transaction_Builder.extractNecessaryUtxosForAmount(UTXOs, totalSpent + fee);
         const { change } = Transaction_Builder.calculateFeeAndChange(utxos, totalSpent, estimatedWeight, feePerByte, feeSupplement);
 
-        const changeOutput = change > utils.SETTINGS.unspendableUtxoAmount ? TxIO_Builder.newOutput(change, 'sig', senderAddress) : undefined;
+        const changeOutput = change > BLOCKCHAIN_SETTINGS.unspendableUtxoAmount ? TxIO_Builder.newOutput(change, 'sig', senderAddress) : undefined;
         return { utxos, changeOutput };
     }
     /** @param {UTXO[]} utxos @param {number} amount */
@@ -393,7 +394,7 @@ export class Transaction_Builder {
      * @param {number} feeSupplement
      */
     static calculateFeeAndChange(utxos, totalSpent, estimatedWeight, feePerByte, feeSupplement = 0) {
-        if (feePerByte < utils.SETTINGS.minTransactionFeePerByte) { throw new Error(`Invalid feePerByte: ${feePerByte}`); }
+        if (feePerByte < BLOCKCHAIN_SETTINGS.minTransactionFeePerByte) { throw new Error(`Invalid feePerByte: ${feePerByte}`); }
         const totalInputAmount = utxos.reduce((a, b) => a + b.amount, 0);
 
         const remainingAmount = totalInputAmount - totalSpent;

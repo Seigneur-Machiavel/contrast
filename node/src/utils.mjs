@@ -1,6 +1,7 @@
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 
 //#region Libs imports and type definitions
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 import ed25519 from '../../libs/noble-ed25519-03-2024.mjs';
 import { Transaction, UTXO } from './transaction.mjs';
 import { xxHash32 } from '../../libs/xxhash32.mjs';
@@ -65,24 +66,6 @@ function newWorker(scriptPath, workerCode) {
     }
 }
 
-const SETTINGS = {
-    // BLOCK
-    targetBlockTime: 120_000, // 120_000, // 2 min
-    maxBlockSize: 200_000, // ~200KB
-    maxTransactionSize: 200_000, // ~200KB
-    
-    // DISTRIBUTION
-    rewardMagicNb1: 102_334_155, // Fibonacci n+2
-    rewardMagicNb2: 63_245_986, // Fibonacci n+1
-    blockReward: 102_334_155 - 63_245_986, // Fibonacci n = 39_088_169
-    minBlockReward: 1,
-    halvingInterval: 262_980, // 1 year at 2 min per block
-    maxSupply: 27_000_000_000_000, // last 6 zeros are considered as decimals ( can be stored as 8 bytes )
-
-    // TRANSACTION
-    minTransactionFeePerByte: 1,
-    unspendableUtxoAmount: 200
-};
 const UTXO_RULES_GLOSSARY = {
     sig: { code: 0, description: 'Simple signature verification' },
     sigOrSlash: { code: 1, description: "Open right to slash the UTXO if validator's fraud proof is provided", withdrawLockBlocks: 144 },
@@ -99,23 +82,6 @@ const UTXO_RULESNAME_FROM_CODE = {
     3: 'multiSigCreate',
     4: 'p2pExchange'
 };
-const MINING_PARAMS = {
-    // a difficulty incremented by 16 means 1 more zero in the hash - then 50% more difficult to find a valid hash
-    // a difference of 1 difficulty means 3.125% harder to find a valid hash
-    argon2: {
-        time: 1,
-        mem: 2 ** 20,
-        parallelism: 1,
-        type: 2,
-        hashLen: 32,
-    },
-    nonceLength: 4,
-    blocksBeforeAdjustment: 30, // ~120sec * 30 = ~3600 sec = ~1 hour
-    thresholdPerDiffIncrement: 3.2, // meaning 3.4% threshold for 1 diff point
-    maxDiffIncrementPerAdjustment: 32, // 32 diff points = 100% of diff
-    diffAdjustPerLegitimacy: 16, // 16 diff points = 50% of diff
-    maxTimeDifferenceAdjustment: 128, // in difficutly points, affect max penalty, but max bonus is infinite
-};
 
 class ProgressLogger {
     constructor(total, msgPrefix = '[LOADING] digestChain') {
@@ -127,7 +93,7 @@ class ProgressLogger {
         this.stepTime = Date.now();
     }
 
-    logProgress(current) {
+    logProgress(current, logCallBack = (m) => { console.log(m); }) {
         const progress = current === this.total - 1 ? 100 : (current / this.total) * 100;
         const currentStep = Math.floor(progress / this.stepSizePercent);
         if (currentStep <= this.lastLoggedStep) { return; }
@@ -135,12 +101,12 @@ class ProgressLogger {
         const timeDiff = Date.now() - this.stepTime;
         this.lastLoggedStep = currentStep;
         this.stepTime = Date.now();
-        console.log(`${this.msgPrefix} : ${progress.toFixed(1)}% (${current}/${this.total}) - step: ${timeDiff}ms`);
+        logCallBack(`${this.msgPrefix} : ${progress.toFixed(1)}% (${current}/${this.total}) - step: ${timeDiff}ms`);
 
         if (current === this.total - 1) {
             const totalTime = Date.now() - this.startTime;
             const avgTime = totalTime / this.total;
-            console.log(`[TASK COMPLETED] - Total time: ${totalTime}ms - Average time per step: ${avgTime.toFixed(2)}ms`);
+            logCallBack(`[TASK COMPLETED] - Total time: ${totalTime}ms - Average time per step: ${avgTime.toFixed(2)}ms`);
         }
     }
 };
@@ -1955,7 +1921,7 @@ const mining = {
 
         if (blockIndex % MINING_PARAMS.blocksBeforeAdjustment !== 0) { return difficulty; }
 
-        const deviation = 1 - (averageBlockTimeMS / SETTINGS.targetBlockTime);
+        const deviation = 1 - (averageBlockTimeMS / BLOCKCHAIN_SETTINGS.targetBlockTime);
         const deviationPercentage = deviation * 100; // over zero = too fast / under zero = too slow
 
         if (logs) {
@@ -1979,19 +1945,19 @@ const mining = {
     calculateNextCoinbaseReward(blockData) {
         if (!blockData) { throw new Error('Invalid blockData'); }
 
-        const halvings = Math.floor( (blockData.index + 1) / SETTINGS.halvingInterval );
-        const coinBases = [SETTINGS.rewardMagicNb1, SETTINGS.rewardMagicNb2];
+        const halvings = Math.floor( (blockData.index + 1) / BLOCKCHAIN_SETTINGS.halvingInterval );
+        const coinBases = [BLOCKCHAIN_SETTINGS.rewardMagicNb1, BLOCKCHAIN_SETTINGS.rewardMagicNb2];
         for (let i = 0; i < halvings + 1; i++) {
             coinBases.push(coinBases[coinBases.length - 2] - coinBases[coinBases.length - 1]);
         }
 
-        const coinBase = Math.max(coinBases[coinBases.length - 1], SETTINGS.minBlockReward);
-        const maxSupplyWillBeReached = blockData.supply + coinBase >= SETTINGS.maxSupply;
-        return maxSupplyWillBeReached ? SETTINGS.maxSupply - blockData.supply : coinBase;
+        const coinBase = Math.max(coinBases[coinBases.length - 1], BLOCKCHAIN_SETTINGS.minBlockReward);
+        const maxSupplyWillBeReached = blockData.supply + coinBase >= BLOCKCHAIN_SETTINGS.maxSupply;
+        return maxSupplyWillBeReached ? BLOCKCHAIN_SETTINGS.maxSupply - blockData.supply : coinBase;
     },
     /** @param {BlockData} lastBlock @param {BlockData} olderBlock */
     calculateAverageBlockTime: (lastBlock, olderBlock) => {
-        if (!olderBlock) { return SETTINGS.targetBlockTime; }
+        if (!olderBlock) { return BLOCKCHAIN_SETTINGS.targetBlockTime; }
         const periodInterval = lastBlock.timestamp - olderBlock.posTimestamp;
         return periodInterval / MINING_PARAMS.blocksBeforeAdjustment;
     },
@@ -2021,12 +1987,12 @@ const mining = {
     },
     getBlockFinalDifficulty: (blockData) => {
         const { difficulty, legitimacy, posTimestamp, timestamp } = blockData;
-        const powTimestamp = timestamp || posTimestamp + SETTINGS.targetBlockTime;
+        const powTimestamp = timestamp || posTimestamp + BLOCKCHAIN_SETTINGS.targetBlockTime;
 
         if (!typeValidation.numberIsPositiveInteger(posTimestamp)) { throw new Error('Invalid posTimestamp'); }
         if (!typeValidation.numberIsPositiveInteger(powTimestamp)) { throw new Error('Invalid timestamp'); }
 
-        const differenceRatio = (powTimestamp - posTimestamp) / SETTINGS.targetBlockTime;
+        const differenceRatio = (powTimestamp - posTimestamp) / BLOCKCHAIN_SETTINGS.targetBlockTime;
         const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
         
         const legitimacyAdjustment = legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
@@ -2068,15 +2034,12 @@ const devParams = {
 };
 
 const utils = {
-    blockchainSettings: SETTINGS,
-    MINING_PARAMS,
     ed25519,
     base58Alphabet,
     isNode,
     cryptoLib,
     argon2: argon2Lib,
     newWorker,
-    SETTINGS,
     ProgressLogger,
     addressUtils,
     typeValidation,

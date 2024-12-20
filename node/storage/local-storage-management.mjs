@@ -103,7 +103,7 @@ async function loadBlockchainLocally(node, saveBlocksInfo = false) {
         node.blockchain.lastBlock = chainPart[chainPart.length - 1];
 
         blockLoadedCount += chainPart.length;
-        progressLogger.logProgress(blockLoadedCount);
+        progressLogger.logProgress(blockLoadedCount, (m) => { console.log(m); });
     }
 }
 function getListOfFoldersInBlocksDirectory(id) {

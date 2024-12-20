@@ -1,4 +1,5 @@
 import { Transaction, UTXO, Transaction_Builder } from './transaction.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import utils from './utils.mjs';
 
 /**
@@ -192,7 +193,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             const { address, amount, rule } = transaction.outputs[i];
             const anchor = `${blockIndex}:${transaction.id}:${i}`
             const utxo = UTXO(anchor, amount, rule, address); // unspent
-            if (utxo.amount < utils.SETTINGS.unspendableUtxoAmount) { continue; }
+            if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) { continue; }
 
             if (rule === "sigOrSlash") {
                 const involvedUTXOs = await this.extractInvolvedUTXOsOfTx(transaction);

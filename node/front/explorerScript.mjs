@@ -4,6 +4,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 }
 
 //import { StakeReference } from '../src/vss.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 import utils from '../src/utils.mjs';
 import { BlockData } from '../src/block-classes.mjs';
 import { Transaction_Builder, utxoExtraction } from '../src/transaction.mjs';
@@ -221,9 +222,9 @@ const eHTML = {
 }
 //#region HTML ONE-SHOT FILLING -------------------------------------------
 if (SETTINGS.ROLES.includes('chainExplorer')) {
-    document.getElementById('cbe-maxSupply').textContent = utils.convert.number.formatNumberAsCurrency(utils.blockchainSettings.maxSupply)
-    document.getElementById('cbe-targetBlocktime').textContent = `${utils.blockchainSettings.targetBlockTime / 1000}s`;
-    document.getElementById('cbe-targetBlockday').textContent = `${(24 * 60 * 60) / (utils.blockchainSettings.targetBlockTime / 1000)}`;
+    document.getElementById('cbe-maxSupply').textContent = utils.convert.number.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply)
+    document.getElementById('cbe-targetBlocktime').textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
+    document.getElementById('cbe-targetBlockday').textContent = `${(24 * 60 * 60) / (BLOCKCHAIN_SETTINGS.targetBlockTime / 1000)}`;
 }
 //#endregion --------------------------------------------------------------
 

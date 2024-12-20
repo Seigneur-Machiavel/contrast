@@ -171,7 +171,7 @@ export class Wallet {
 
             iterationsPerAccount += iterations;
             this.accounts[addressPrefix].push(account);
-            progressLogger.logProgress(this.accounts[addressPrefix].length - nbOfExistingAccounts);
+            progressLogger.logProgress(this.accounts[addressPrefix].length - nbOfExistingAccounts, (m) => { console.log(m); });
         }
 
         if (this.accounts[addressPrefix].length !== nbOfAccounts) {

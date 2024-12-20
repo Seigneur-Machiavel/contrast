@@ -1,4 +1,5 @@
 import localStorage_v1 from '../storage/local-storage-management.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 import { BlockValidation } from './validations-classes.mjs';
 import { OpStack } from './OpStack.mjs';
 import { Vss } from './vss.mjs';
@@ -58,7 +59,7 @@ export class Node {
         this.blockCandidate = null;
 
         /** @type {Vss} */
-        this.vss = new Vss(utils.SETTINGS.maxSupply);
+        this.vss = new Vss(BLOCKCHAIN_SETTINGS.maxSupply);
         /** @type {MemPool} */
         this.memPool = new MemPool();
         /** @type {number} */
@@ -421,14 +422,14 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
 
         // Create the block candidate, genesis block if no lastBlockData
-        let blockCandidate = BlockData(0, 0, utils.SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', Txs, posTimestamp);
+        let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', Txs, posTimestamp);
         if (this.blockchain.lastBlock) {
             await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
             const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
             if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
-            const olderBlock = await this.blockchain.getBlockByHeight(this.blockchain.lastBlock.index - utils.MINING_PARAMS.blocksBeforeAdjustment);
+            const olderBlock = await this.blockchain.getBlockByHeight(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
             const averageBlockTimeMS = utils.mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
             this.blockchainStats.averageBlockTime = averageBlockTimeMS;
             const newDifficulty = utils.mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);

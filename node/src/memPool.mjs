@@ -1,5 +1,6 @@
 import { TxValidation } from './validations-classes.mjs';
 import { Transaction_Builder, Transaction } from './transaction.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import utils from './utils.mjs';
 import { UtxoCache } from './utxoCache.mjs';
 import { TransactionPriorityQueue } from './memPool-tx-queue.mjs';
@@ -144,7 +145,7 @@ export class MemPool {
     }
     /** @param {UtxoCache} utxoCache */
     async getMostLucrativeTransactionsBatch(utxoCache) {
-        const totalBytesTrigger = utils.SETTINGS.maxBlockSize * 0.98;
+        const totalBytesTrigger = BLOCKCHAIN_SETTINGS.maxBlockSize * 0.98;
         const transactions = [];
         let totalBytes = 0;
 
@@ -163,7 +164,7 @@ export class MemPool {
             if (!txCanBeAdded) { continue; }
 
             const txWeight = tx.byteWeight;
-            if (totalBytes + txWeight > utils.SETTINGS.maxBlockSize) { continue; }
+            if (totalBytes + txWeight > BLOCKCHAIN_SETTINGS.maxBlockSize) { continue; }
 
             // clean up the transaction's details before returning it
             const clone = Transaction_Builder.clone(tx);

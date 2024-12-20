@@ -1,6 +1,7 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { Transaction, TxOutput, UTXO, Transaction_Builder } from './transaction.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import utils from './utils.mjs';
 /**
  * @typedef {import("./vss.mjs").Vss} Vss
@@ -106,7 +107,7 @@ export class TxValidation {
 
         let fee = 0;
         for (const output of transaction.outputs) {
-            if (output.amount < utils.SETTINGS.unspendableUtxoAmount) { continue; }
+            if (output.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) { continue; }
             fee -= output.amount || 0; 
         }
 

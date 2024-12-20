@@ -142,7 +142,7 @@ export class SyncHandler {
 
             this.peerHeights.set(peerId, response.currentHeight);
             //this.logger.debug('luid-0c8cccd8 Got peer status', { peerMultiaddr, currentHeight: response.currentHeight, id: peerId });
-            this.miniLogger.log('Got peer status', (m) => { console.debug(m); });
+            this.miniLogger.log(`Got peer status => height: #${response.currentHeight}`, (m) => { console.debug(m); });
 
             return response;
         }
@@ -297,7 +297,7 @@ export class SyncHandler {
             }
 
             //this.logger.info('luid-09a78e43 Synchronized blocks from peer', { count: serializedBlocks.length, nextBlock: desiredBlock });
-            this.miniLogger.log(`Synchronized blocks from peer, next block: ${desiredBlock}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Synchronized blocks from peer, next block: #${desiredBlock}`, (m) => { console.info(m); });
             // Update the peer's height when necessary
             if (peerHeight === this.node.blockchain.currentHeight) {
                 peerHeight = await this.#updatedPeerHeight(p2pNetwork, peerMultiaddr, peerId);
@@ -396,12 +396,14 @@ export class SyncHandler {
     
         // Sort peers by currentHeight in descending order
         peerStatuses.sort((a, b) => b.currentHeight - a.currentHeight);
-        const highestPeerHeight = peerStatuses[0].currentHeight;
+        let highestPeerHeight = peerStatuses[0].currentHeight;
         const peersHeight = {};
         for (const peer of peerStatuses) {
             const height = peer.currentHeight;
             if (!peersHeight[height]) { peersHeight[height] = 0; }
             peersHeight[height]++;
+
+            if (height > highestPeerHeight) { highestPeerHeight = height; }
         }
 
         const consensus = { height: 0, peers: 0 };

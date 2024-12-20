@@ -1,3 +1,5 @@
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import utils from './utils.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
@@ -7,7 +9,6 @@ import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
 import { bootstrap } from '@libp2p/bootstrap';
 import { lpStream } from 'it-length-prefixed-stream';
-import utils from './utils.mjs';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
 import { yamux } from '@chainsafe/libp2p-yamux';
@@ -212,17 +213,17 @@ class P2PNetwork extends EventEmitter {
                 case 'new_transaction':
 
                     this.miniLogger.log(`Received new transaction from ${from}`, (m) => { console.debug(m); });
-                    if (data.byteLength > utils.SETTINGS.maxTransactionSize * 1.02) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
+                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = utils.serializerFast.deserialize.transaction(data);
                     break;
                 case 'new_block_candidate':
                     this.miniLogger.log(`Received new block candidate from ${from}`, (m) => { console.debug(m); });
-                    if (data.byteLength > utils.SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block candidate size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
+                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block candidate size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = utils.serializer.block_candidate.fromBinary_v4(data);
                     break;
                 case 'new_block_finalized':
                     this.miniLogger.log(`Received new block finalized from ${from}`, (m) => { console.debug(m); });
-                    if (data.byteLength > utils.SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block finalized size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
+                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block finalized size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = utils.serializer.block_finalized.fromBinary_v4(data);
                     break;
                 default:
@@ -362,14 +363,14 @@ class P2PNetwork extends EventEmitter {
             // Write with timeout
             await Promise.race([ lp.write(serialized), createTimeout(timeoutMs) ]);
 
-            this.miniLogger.log(`Message written to stream with length ${serialized.length}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
             // Read with timeout
             const res = await Promise.race([ lp.read(), createTimeout(timeoutMs) ]);
 
             if (!res) { throw new Error('No response received (unexpected end of input)'); }
 
-            this.miniLogger.log(`Response read from stream with length ${res.length}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
             const response = utils.serializer.rawData.fromBinary_v1(res.subarray());
             if (response.status !== 'error') {
