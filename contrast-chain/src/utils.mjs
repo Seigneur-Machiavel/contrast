@@ -65,7 +65,7 @@ function newWorker(scriptPath, workerCode) {
     }
 }
 
-const SETTINGS = { // The Fibonacci based distribution
+const SETTINGS = {
     // BLOCK
     targetBlockTime: 120_000, // 120_000, // 2 min
     maxBlockSize: 200_000, // ~200KB
@@ -269,50 +269,6 @@ export const addressUtils = {
         // WWRMJagpT6ZK95Mc2cqh => WWRM-Jagp-T6ZK-95Mc-2cqh or WWRM.Jagp.T6ZK.95Mc.2cqh
         const formated = addressBase58.match(/.{1,4}/g).join(separator);
         return formated;
-    },
-};
-const utxoUtils = {
-    /** @param {UTXO[]} UTXOs */
-    extractBalances: (UTXOs) => {
-        let totalBalance = 0;
-        let spendableBalance = 0;
-        let stakedBalance = 0;
-        let lockedBalance = 0;
-        let p2pExchangeBalance = 0;
-
-        for (let i = 0; i < UTXOs.length; i++) {
-            const rule = UTXOs[i].rule;
-            const amount = UTXOs[i].amount;
-
-            totalBalance += amount;
-            switch (rule) {
-                case 'sigOrSlash':
-                    stakedBalance += amount;
-                    break;
-                case 'lockUntilBlock':
-                    lockedBalance += amount;
-                    break;
-                case 'p2pExchange':
-                    p2pExchangeBalance += amount;
-                    break;
-                default:
-                    spendableBalance += amount;
-                    break;
-            }
-        }
-
-        return { totalBalance, stakedBalance, spendableBalance, lockedBalance, p2pExchangeBalance };
-    },
-    /** @param {UTXO[]} UTXOs */
-    extractUTXOsByRules: (UTXOs) => {
-        /** @type {Object<string, UTXO[]>} */
-        const utxosByRule = {};
-        for (let i = 0; i < UTXOs.length; i++) {
-            const rule = UTXOs[i].rule;
-            if (!utxosByRule[rule]) { utxosByRule[rule] = []; }
-            utxosByRule[rule].push(UTXOs[i]);
-        }
-        return utxosByRule;
     },
 };
 const typeValidation = {
@@ -2122,7 +2078,6 @@ const utils = {
     SETTINGS,
     ProgressLogger,
     addressUtils,
-    utxoUtils,
     typeValidation,
     serializer,
     serializerFast,

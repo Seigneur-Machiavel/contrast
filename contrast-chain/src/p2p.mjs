@@ -9,20 +9,17 @@ import { bootstrap } from '@libp2p/bootstrap';
 import { lpStream } from 'it-length-prefixed-stream';
 import utils from './utils.mjs';
 import { multiaddr } from '@multiformats/multiaddr';
-import ReputationManager from './peers-reputation.mjs'; // Import the ReputationManager
+import ReputationManager from './peers-reputation.mjs';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
-
-// We convert logger to miniLogger, example usage :
-// this.miniLogger.log(`Duplicate IPC handlers detected: ${duplicates}`, (m) => { console.warn(m); });
 
 /**
  * @typedef {import("../src/time.mjs").TimeSynchronizer} TimeSynchronizer
  */
 
 class P2PNetwork extends EventEmitter {
-    /** @param {Object} [options={}] */
+    /** @param {Object} [options={}] @param {TimeSynchronizer} timeSynchronizer */
     constructor(options = {}, timeSynchronizer) {
         super();
         /** @type {TimeSynchronizer} */

@@ -85,6 +85,50 @@ export const TxInput = (anchor) => { return anchor; }
 export const UTXO = (anchor, amount, rule, address, spent = false) => {
     return { anchor, amount, rule, address, spent };
 }
+export const utxoExtraction = {
+    /** @param {UTXO[]} UTXOs */
+    balances: (UTXOs) => {
+        let totalBalance = 0;
+        let spendableBalance = 0;
+        let stakedBalance = 0;
+        let lockedBalance = 0;
+        let p2pExchangeBalance = 0;
+
+        for (let i = 0; i < UTXOs.length; i++) {
+            const rule = UTXOs[i].rule;
+            const amount = UTXOs[i].amount;
+
+            totalBalance += amount;
+            switch (rule) {
+                case 'sigOrSlash':
+                    stakedBalance += amount;
+                    break;
+                case 'lockUntilBlock':
+                    lockedBalance += amount;
+                    break;
+                case 'p2pExchange':
+                    p2pExchangeBalance += amount;
+                    break;
+                default:
+                    spendableBalance += amount;
+                    break;
+            }
+        }
+
+        return { totalBalance, stakedBalance, spendableBalance, lockedBalance, p2pExchangeBalance };
+    },
+    /** @param {UTXO[]} UTXOs */
+    byRules: (UTXOs) => {
+        /** @type {Object<string, UTXO[]>} */
+        const utxosByRule = {};
+        for (let i = 0; i < UTXOs.length; i++) {
+            const rule = UTXOs[i].rule;
+            if (!utxosByRule[rule]) { utxosByRule[rule] = []; }
+            utxosByRule[rule].push(UTXOs[i]);
+        }
+        return utxosByRule;
+    },
+};
 
 /**
  * @typedef {Object} Transaction

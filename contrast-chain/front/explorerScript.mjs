@@ -6,7 +6,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 //import { StakeReference } from '../src/vss.mjs';
 import utils from '../src/utils.mjs';
 import { BlockData } from '../src/block-classes.mjs';
-import { Transaction_Builder } from '../src/transaction.mjs';
+import { Transaction_Builder, utxoExtraction } from '../src/transaction.mjs';
 import { TxValidation } from '../src/validations-classes.mjs';
 /**
 * @typedef {import("../src/block-classes.mjs").BlockHeader} BlockHeader
@@ -1073,28 +1073,29 @@ export class BlockExplorerWidget {
     }
 }
 class AddressInfo {
+    /** @param {UTXO[]} UTXOs */
     constructor(UTXOs) {
-        this.balances = utils.utxoUtils.extractBalances(UTXOs);
-        this.UTXOsByRules = utils.utxoUtils.extractUTXOsByRules(UTXOs);
+        this.UTXOs = utxoExtraction.balances(UTXOs);
+        this.UTXOsByRules = utxoExtraction.byRules(UTXOs);
     }
 }
 export class AddressExhaustiveData {
     /** @param {UTXO[]} UTXOs @param {string[]} addressTxsReferences */
     constructor(UTXOs, addressTxsReferences) {
-        this.balances = utils.utxoUtils.extractBalances(UTXOs);
-        this.UTXOsByRules = utils.utxoUtils.extractUTXOsByRules(UTXOs);
+        this.balances = utxoExtraction.balances(UTXOs);
+        this.UTXOsByRules = utxoExtraction.byRules(UTXOs);
         /** @type {Object<string, string[]>} */
         this.addressTxsReferences = addressTxsReferences;
     }
-
+    /** @param {UTXO[]} UTXOs */
     mergeNewUTXOs(UTXOs) {
-        const newBalances = utils.utxoUtils.extractBalances(UTXOs);
+        const newBalances = utxoExtraction.balances(UTXOs);
         for (const key in newBalances) {
             if (this.balances[key]) { this.balances[key] += newBalances[key]; }
             else { this.balances[key] = newBalances[key]; }
         }
        
-        const newUTXOsByRules = utils.utxoUtils.extractUTXOsByRules(UTXOs);
+        const newUTXOsByRules = utxoExtraction.byRules(UTXOs);
         for (const rule in newUTXOsByRules) {
             if (this.UTXOsByRules[rule]) { this.UTXOsByRules[rule].push(...newUTXOsByRules[rule]); }
             else { this.UTXOsByRules[rule] = newUTXOsByRules[rule]; }
