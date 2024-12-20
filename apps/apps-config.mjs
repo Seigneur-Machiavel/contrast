@@ -15,7 +15,7 @@ export const AppConfig = (appName, appConfig) => {
 		preload: appConfig.preload || false,
 		minWidth: appConfig.minWidth || undefined,
 		minHeight: appConfig.minHeight || undefined,
-		icon: appConfig.icon || `apps/${appName}/img/icon_128.png`,
+		icon: appConfig.icon || `../apps/${appName}/img/icon_128.png`,
 		iconWidth: appConfig.iconWidth || '50%',
 		title: appConfig.title || 'App_Title',
 		content: appConfig.content || 'This is a default app.',
@@ -29,7 +29,7 @@ export const appsConfig = {
 		minWidth: 300,
 		minHeight: 300,
 		title: 'CHAT',
-		content: 'apps/chat/chat-content.html',
+		content: '../apps/chat/chat-content.html',
 		mainClass: 'ChatUI',
 		setGlobal: true
 	},
@@ -42,7 +42,7 @@ export const appsConfig = {
 		preload: false,
 		iconWidth: '68%',
 		title: 'VAULT',
-		content: 'apps/vault/vault-content.html',
+		content: '../apps/vault/vault-content.html',
 	},
 	node: {
 		preload: false,

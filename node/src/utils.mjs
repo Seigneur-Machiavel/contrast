@@ -70,6 +70,7 @@ const SETTINGS = {
     targetBlockTime: 120_000, // 120_000, // 2 min
     maxBlockSize: 200_000, // ~200KB
     maxTransactionSize: 200_000, // ~200KB
+    
     // DISTRIBUTION
     rewardMagicNb1: 102_334_155, // Fibonacci n+2
     rewardMagicNb2: 63_245_986, // Fibonacci n+1

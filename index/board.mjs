@@ -100,12 +100,12 @@ class SubWindow {
 		const foldButton = newElement('img', ['fold-button'], '', buttonsWrap);
 		foldButton.dataset.appName = this.appName;
 		foldButton.dataset.action = 'fold';
-		foldButton.src = 'img/fold_64.png';
+		foldButton.src = '../img/fold_64.png';
 
 		const expandButton = newElement('img', ['expand-button'], '', buttonsWrap);
 		expandButton.dataset.appName = this.appName;
 		expandButton.dataset.action = 'expand';
-		expandButton.src = 'img/expand_64.png';
+		expandButton.src = '../img/expand_64.png';
 
 		return titleBar;
 	}
@@ -146,7 +146,7 @@ class SubWindow {
 		if (!expandButton) return;
 
 		expandButton.dataset.action = 'detach';
-		expandButton.src = 'img/detach_window_64.png';
+		expandButton.src = '../img/detach_window_64.png';
 		
 		this.windowSize.width = this.element.offsetWidth;
 		this.windowSize.height = this.element.offsetHeight;
@@ -171,7 +171,7 @@ class SubWindow {
 		const expandButton = this.element.querySelector('.expand-button');
 		if (!expandButton) return;
 		expandButton.dataset.action = 'expand';
-		expandButton.src = 'img/expand_64.png';
+		expandButton.src = '../img/expand_64.png';
 		
 		this.element.style.width = this.element.offsetWidth + 'px';
 		this.element.style.height = this.element.offsetHeight + 'px';

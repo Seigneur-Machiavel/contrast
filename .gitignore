@@ -4,9 +4,9 @@ contrast-win32-x64
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
-contrast-chain/storage/nodeSettings.json
-contrast-chain/storage/blocks
-contrast-chain/storage/accounts
-contrast-chain/nodes-data
-contrast-chain/application.log
-contrast-chain/config.json
+node/storage/nodeSettings.json
+node/storage/blocks
+node/storage/accounts
+node/nodes-data
+node/application.log
+node/config.json

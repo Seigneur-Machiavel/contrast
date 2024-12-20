@@ -4,7 +4,7 @@ const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 
-(() => { import('./contrast-chain/run/dashboard.mjs'); })(); // can be async
+(() => { import('./node/run/dashboard.mjs'); })(); // can be async
 
 Menu.setApplicationMenu(null);
 const mainLogger = new MiniLogger('main');
@@ -44,7 +44,7 @@ async function createMainWindow() {
         }
     });
 
-    mainWindow.loadFile('index.html');
+    mainWindow.loadFile('index/index.html');
 
     let loaded;
     mainWindow.webContents.on('did-finish-load', () => { loaded = true; });

@@ -84,7 +84,7 @@ export class Node {
         /** @type {ValidationWorker[]} */
         this.workers = [];
         this.nbOfWorkers = 4;
-        this.configManager = new ConfigManager("contrast-chain/config.json");
+        this.configManager = new ConfigManager("node/config.json");
 
         this.blockchainStats = {};
         this.delayBeforeSendingCandidate = 10000;
