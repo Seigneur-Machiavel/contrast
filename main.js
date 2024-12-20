@@ -1,7 +1,7 @@
 const path = require('path');
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
 const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
-const setShortcuts = require('./preferences/shortcuts.js');
+const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 
 (() => { import('./contrast-chain/run/dashboard.mjs'); })(); // can be async

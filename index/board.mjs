@@ -4,7 +4,7 @@ if (false) { // Just for better completion
 	
 } // For better completion ---------------
 
-import { AppConfig, appsConfig } from './apps-config.mjs';
+import { AppConfig, appsConfig } from '../apps/apps-config.mjs';
 const appsMainClasses = {
 	'ChatUI': ChatUI
 }

@@ -1,6 +1,6 @@
 const { BrowserWindow } = require('electron');
 const { ipcMain, globalShortcut } = require('electron');
-const { MiniLogger } = require('../miniLogger/mini-logger.js');
+const { MiniLogger } = require('./miniLogger/mini-logger.js');
 const shortcutsLogger = new MiniLogger('shortcuts');
 
 const shortcutsKeys = {
