@@ -469,9 +469,13 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                         this.miniLogger.log(`#${data.index} | highest #${this.miner.highestBlockIndex} -> skip`, (m) => { console.info(m); });
                         return;
                     }
-                    if (lastBlockIndex +1 > data.index) {
-                        this.miniLogger.log(`#${data.index} +1 > lastBlockIndex #${lastBlockIndex} -> skip & syncWithPeers`, (m) => { console.info(m); });
+                    if (lastBlockIndex +10 > data.index) {
+                        this.miniLogger.log(`#${data.index} +10 > lastBlockIndex #${lastBlockIndex} -> syncWithPeers`, (m) => { console.info(m); });
                         this.opStack.pushFirst('syncWithPeers', null);
+                        return;
+                    }
+                    if (lastBlockIndex +1 > data.index) {
+                        this.miniLogger.log(`#${data.index} +1 > lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
                         return;
                     }
                     if (lastBlockIndex +1 < data.index) {
