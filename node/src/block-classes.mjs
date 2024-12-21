@@ -1,4 +1,4 @@
-import utils from './utils.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { Transaction_Builder, Transaction } from './transaction.mjs';
 import { TxValidation } from './validations-classes.mjs';
@@ -191,7 +191,7 @@ export class BlockUtils {
         const nonce = `${headerNonce}${coinbaseNonce}`;
 
         const argon2Fnc = useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
-        const blockHash = await utils.mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
+        const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
         if (!blockHash) { throw new Error('Invalid block hash'); }
 
         return { hex: blockHash.hex, bitsArrayAsString: blockHash.bitsArray.join('') };

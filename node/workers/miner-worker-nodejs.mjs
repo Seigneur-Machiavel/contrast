@@ -1,5 +1,5 @@
 import { parentPort } from 'worker_threads';
-import utils from '../src/utils.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from '../src/conCrypto.mjs';
 import { BlockUtils } from '../src/block-classes.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
@@ -8,17 +8,12 @@ import { Transaction_Builder } from '../src/transaction.mjs';
  * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
  */
 
-/**
- * @param {BlockData} blockCandidate
- * @param {string} signatureHex
- * @param {string} nonce
- * @param {boolean} useDevArgon2
- */
+/** @param {BlockData} blockCandidate @param {string} signatureHex @param {string} nonce @param {boolean} useDevArgon2 */
 async function mineBlock(blockCandidate, signatureHex, nonce, useDevArgon2) {
 	try {
 		//console.log('useDevArgon2', useDevArgon2);
 		const argon2Fnc = useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
-		const blockHash = await utils.mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
+		const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
 		if (!blockHash) { throw new Error('Invalid block hash'); }
 
 		blockCandidate.hash = blockHash.hex;
@@ -46,7 +41,7 @@ async function mineBlockUntilValid() {
 				minerVars.hashCount = 0;
 			}
 
-			const { conform } = utils.mining.verifyBlockHashConformToDifficulty(mined.bitsArrayAsString, mined.finalizedBlock);
+			const { conform } = mining.verifyBlockHashConformToDifficulty(mined.bitsArrayAsString, mined.finalizedBlock);
 			if (!conform) { continue; }
 
 			const now = Date.now() + minerVars.timeOffset;
@@ -67,8 +62,8 @@ async function prepareBlockCandidateBeforeMining() {
 	const clonedCandidate = BlockUtils.cloneBlockData(blockCandidate);
 	//console.log(`prepareNextBlock: ${performance.now() - time}ms`); time = performance.now();
 
-	const headerNonce = utils.mining.generateRandomNonce().Hex;
-	const coinbaseNonce = utils.mining.generateRandomNonce().Hex;
+	const headerNonce = mining.generateRandomNonce().Hex;
+	const coinbaseNonce = mining.generateRandomNonce().Hex;
 	clonedCandidate.nonce = headerNonce;
 
 	const now = Date.now() + minerVars.timeOffset;

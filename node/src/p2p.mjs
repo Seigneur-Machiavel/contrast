@@ -1,6 +1,6 @@
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { serializer, serializerFast } from '../../utils/serializer.mjs';
-import utils from './utils.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
@@ -59,7 +59,7 @@ class P2PNetwork extends EventEmitter {
     static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
 
     async start(_uniqueHash) {
-        let uniqueHash = _uniqueHash ? _uniqueHash : utils.mining.generateRandomNonce(32).Hex;
+        let uniqueHash = _uniqueHash ? _uniqueHash : mining.generateRandomNonce(32).Hex;
         const hashUint8Array = this.toUint8Array(uniqueHash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
         try {

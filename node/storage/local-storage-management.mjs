@@ -193,10 +193,7 @@ function loadBlockDataJSON(blockIndexStr, blocksFolderPath) {
 }
 function loadBlockDataBinary_v1(blockIndexStr, blocksFolderPath) {
     const blockDataPath = path.join(blocksFolderPath, `${blockIndexStr}.bin`);
-    //const compressed = fs.readFileSync(blockDataPath);
-    //const decompressed = utils.compression.msgpack_Zlib.finalizedBlock.fromBinary_v1(compressed, true);
-    //return decompressed;
-    
+
     const encoded = fs.readFileSync(blockDataPath);
     const decoded = serializer.block_finalized.fromBinary_v2(encoded);
     return decoded;

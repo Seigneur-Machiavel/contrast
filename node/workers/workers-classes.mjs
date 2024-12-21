@@ -1,5 +1,4 @@
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
-import utils from '../src/utils.mjs';
 
 /**
  * @typedef {import("../src/block-classes.mjs").BlockData} BlockData

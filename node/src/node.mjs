@@ -12,7 +12,7 @@ import P2PNetwork from './p2p.mjs';
 import { typeValidation } from '../../utils/type-validation.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import utils from './utils.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
 import { Blockchain } from './blockchain.mjs';
 import { SyncHandler } from './nodes-synchronizer.mjs';
 import { SnapshotSystem } from './snapshot-system.mjs';
@@ -101,7 +101,6 @@ export class Node {
         this.configManager.init();
         await this.timeSynchronizer.syncTimeWithRetry(5, 500);
 
-        //this.logger.info(`luid-cdb9b88e Node ${this.id} (${this.roles.join('_')}) => started at time: ${this.timeSynchronizer.getCurrentTime()}`);
         this.miniLogger.log(`Node ${this.id} (${this.roles.join('_')}) => started at time: ${this.timeSynchronizer.getCurrentTime()}`, (m) => { console.info(m); });
 
         for (let i = 0; i < this.nbOfWorkers; i++) { this.workers.push(new ValidationWorker(i)); }
@@ -124,9 +123,7 @@ export class Node {
         if (this.roles.includes('miner')) { this.miner.startWithWorker(); }
 
         const nbOfPeers = await this.#waitSomePeers();
-        //if (!nbOfPeers || nbOfPeers < 1) { this.logger.error('luid-74daf64d Failed to connect to peers, stopping the node'); return; }
         if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
-        //this.logger.info('luid-6681548e P2P network is ready - we are connected baby!');
         this.miniLogger.log('P2P network is ready - we are connected baby', (m) => { console.info(m); });
 
         if (!this.roles.includes('validator')) { return; }
@@ -135,7 +132,6 @@ export class Node {
         this.opStack.pushFirst('syncWithPeers', null);
     }
     async stop() {
-        //this.logger.info(`luid-ffbfdf64 Node ${this.id} (${this.roles.join('_')}) => stopped`);
         this.miniLogger.log(`Node ${this.id} (${this.roles.join('_')}) => stopped`, (m) => { console.info(m); });
     }
     requestRestart(from = 'unknown') {
@@ -166,7 +162,6 @@ export class Node {
                 
                 let peerCount = checkPeerCount();
                 if (peerCount >= nbOfPeers) {
-                    //this.logger.info(`luid-60b1e366 Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`);
                     this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
                     return peerCount;
                 }
@@ -175,13 +170,11 @@ export class Node {
                 peerCount = checkPeerCount();
                 
                 if (peerCount >= nbOfPeers) {
-                    //this.logger.info(`luid-ec98dc8a Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''} after connecting to bootstrap nodes`);
                     this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''} after connecting to bootstrap nodes`, (m) => { console.info(m); });
                     this.opStack.pushFirst('syncWithPeers', null);
                     return peerCount;
                 }
     
-                //this.logger.info(`luid-f97443bb Waiting for ${nbOfPeers} peer${nbOfPeers !== 1 ? 's' : ''}, currently connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`);
                 this.miniLogger.log(`Waiting for ${nbOfPeers} peer${nbOfPeers !== 1 ? 's' : ''}, currently connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
             }
             //throw new Error(`Failed to connect to ${nbOfPeers} peers within ${maxAttempts} attempts`);
@@ -195,11 +188,7 @@ export class Node {
                     setTimeout(() => reject(new Error(`P2P network failed to find peers within ${timeOut / 1000} seconds`)), timeOut)
                 )
             ]);
-        } catch (error) {
-            //this.logger.error(error.message);
-            this.miniLogger.log(error.message, (m) => { console.error(m); });
-            return false;
-        }
+        } catch (error) { this.miniLogger.log(error.message, (m) => { console.error(m); }); return false; }
     }
     async createBlockCandidateAndBroadcast() {
         this.blockchainStats.state = "creating block candidate";
@@ -212,11 +201,7 @@ export class Node {
 
             await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
             return true;
-        } catch (error) {
-            //this.logger.error(error);
-            this.miniLogger.log(error, (m) => { console.error(m); });
-            return false;
-        }
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return false; }
     }
     //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
 
@@ -224,13 +209,11 @@ export class Node {
     async loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
         if (snapshotIndex < 0) { return; }
 
-        //this.logger.warn(`luid-ae479c11 Last known snapshot index: ${snapshotIndex}`);
         this.miniLogger.log(`Last known snapshot index: ${snapshotIndex}`, (m) => { console.warn(m); });
         this.blockchain.currentHeight = snapshotIndex;
         this.blockCandidate = null;
         await this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
-        //this.logger.warn(`luid-0d64a766 Snapshot loaded: ${snapshotIndex}`);
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.warn(m); });
         if (snapshotIndex < 1) { await this.blockchain.eraseEntireDatabase(); }
 
@@ -272,7 +255,6 @@ export class Node {
         timer.startPhase('total-validation');
         
         try { timer.startPhase('block-index-check'); BlockValidation.checkBlockIndexIsNumber(finalizedBlock); timer.endPhase('block-index-check'); }
-        //catch (error) { this.logger.error(`luid-fc711a87 [NODE-${this.id.slice(0, 6)}] #${finalizedBlock.index} -> ${error.message} Miner: ${minerId} | Validator: ${validatorId}`); throw error; }
         catch (error) { this.miniLogger.log(`#${finalizedBlock.index} -> ${error.message} Miner: ${minerId} | Validator: ${validatorId}`, (m) => { console.error(m); }); throw error; }
 
         timer.startPhase('miner-hash');
@@ -288,16 +270,15 @@ export class Node {
             timer.endPhase('height-timestamp-hash');
             
             timer.startPhase('legitimacy'); await BlockValidation.validateLegitimacy(finalizedBlock, this.vss); timer.endPhase('legitimacy');
-        //} catch (error) { this.logger.error(`luid-74fcfb49 [NODE-${this.id.slice(0, 6)}] #${finalizedBlock.index} -> ${error.message} ~ Miner: ${minerId} | Validator: ${validatorId}`); throw error; }
         } catch (error) { this.miniLogger.log(`#${finalizedBlock.index} -> ${error.message} ~ Miner: ${minerId} | Validator: ${validatorId}`, (m) => { console.error(m); }); throw error; }
 
         timer.startPhase('difficulty-check');
-        const hashConfInfo = utils.mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
+        const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
         if (!hashConfInfo.conform) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (difficulty): ${finalizedBlock.hash} -> ${hashConfInfo.message}`);
         timer.endPhase('difficulty-check');
     
         timer.startPhase('rewards-validation');
-        const expectedCoinBase = utils.mining.calculateNextCoinbaseReward(this.blockchain.lastBlock || finalizedBlock);
+        const expectedCoinBase = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock || finalizedBlock);
         if (finalizedBlock.coinBase !== expectedCoinBase) throw new Error(`!banBlock! !applyOffense! Invalid #${finalizedBlock.index} coinbase: ${finalizedBlock.coinBase} - expected: ${expectedCoinBase}`);
         const { powReward, posReward, totalFees } = await BlockUtils.calculateBlockReward(this.utxoCache, finalizedBlock);
         try { await BlockValidation.areExpectedRewards(powReward, posReward, finalizedBlock); } 
@@ -369,7 +350,6 @@ export class Node {
         timer.endPhase('block-storage');
     
         if (blockBytes > 102_400 && !skipValidation) {
-            //this.logger.info(`luid-f1779d54 #${finalizedBlock.index} blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`);
             this.miniLogger.log(`#${finalizedBlock.index} blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
             if (this.logValidationTime){ timer.displayResults();}
         }
@@ -379,9 +359,6 @@ export class Node {
               validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
     
         if (!isLoading && !isSync) {
-            /*this.logger.important(`luid-baafdc71 [NODE-${this.id.slice(0, 6)}-BLOCK] #${finalizedBlock.index} -> validator: ${validatorId} | miner: ${minerId}\n` +
-                `( diff: ${hashConfInfo.difficulty} + timeAdj: ${hashConfInfo.timeDiffAdjustment} + leg: ${hashConfInfo.legitimacy} ) = finalDiff: ${hashConfInfo.finalDifficulty} | ` +
-                `z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`);*/
             this.miniLogger.log(`#${finalizedBlock.index} -> validator: ${validatorId} | miner: ${minerId}
 ( diff: ${hashConfInfo.difficulty} + timeAdj: ${hashConfInfo.timeDiffAdjustment} + leg: ${hashConfInfo.legitimacy} ) = finalDiff: ${hashConfInfo.finalDifficulty} | 
 z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
@@ -391,7 +368,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         if (!isLoading) await this.#saveSnapshot(finalizedBlock);
         const waitStart = Date.now();
         const nbOfPeers = await this.#waitSomePeers();
-        //if (!nbOfPeers || nbOfPeers < 1) { this.logger.error('luid-74541797 Failed to connect to peers, stopping the node'); return; }
         if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
         timer.endPhase('snapshot-and-peer-wait');
     
@@ -410,7 +386,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                 if (this.wsCallbacks.onBroadcastNewCandidate) 
                     this.wsCallbacks.onBroadcastNewCandidate.execute(BlockUtils.getBlockHeader(this.blockCandidate));
             } catch (error) {
-                //this.logger.error(`luid-2fb4ecd4 Failed to broadcast new block candidate: ${error.message}`);
                 this.miniLogger.log(`Failed to broadcast new block candidate: ${error.message}`, (m) => { console.error(m); });
             }
         }, Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)));
@@ -433,10 +408,10 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
             const olderBlock = await this.blockchain.getBlockByHeight(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
-            const averageBlockTimeMS = utils.mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
+            const averageBlockTimeMS = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
             this.blockchainStats.averageBlockTime = averageBlockTimeMS;
-            const newDifficulty = utils.mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
-            const coinBaseReward = utils.mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
+            const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
+            const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
             blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, this.blockchain.lastBlock.hash, Txs, posTimestamp);
         }
 
@@ -447,7 +422,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         blockCandidate.Txs.unshift(signedPosFeeTx);
         blockCandidate.powReward = powReward; // for the miner
 
-        //if (blockCandidate.Txs.length > 3) { this.logger.info(`luid-8705e45a (Height:${blockCandidate.index}) => ${blockCandidate.Txs.length} txs, block candidate created in ${(Date.now() - startTime)}ms`); }
         if (blockCandidate.Txs.length > 3) { this.miniLogger.log(`(Height:${blockCandidate.index}) => ${blockCandidate.Txs.length} txs, block candidate created in ${(Date.now() - startTime)}ms`, (m) => { console.info(m); }); }
         this.blockchainStats.lastLegitimacy = blockCandidate.legitimacy;
         return blockCandidate;
@@ -492,17 +466,14 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
 
                     const lastBlockIndex = this.blockchain.lastBlock ? this.blockchain.lastBlock.index : -1;
                     if (this.miner.highestBlockIndex > data.index) { // avoid processing old blocks
-                        //this.logger.info(`luid-b1e558fc [P2P-HANDLER] ${topic} #${data.index} | highest #${this.miner.highestBlockIndex} -> skip`);
                         this.miniLogger.log(`#${data.index} | highest #${this.miner.highestBlockIndex} -> skip`, (m) => { console.info(m); });
                         return;
                     }
                     if (lastBlockIndex +1 > data.index) {
-                        //this.logger.info(`luid-ef83b893 [P2P-HANDLER] ${topic} #${data.index} | lastBlockIndex #${lastBlockIndex} -> skip`);
                         this.miniLogger.log(`#${data.index} | lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
                         return;
                     }
                     if (lastBlockIndex +1 < data.index) {
-                        //this.logger.info(`luid-59df1dde [P2P-HANDLER] ${topic} #${data.index} | lastBlockIndex #${lastBlockIndex} -> skip`);
                         this.miniLogger.log(`#${data.index} | lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
                         return;
                     }
@@ -511,7 +482,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                     const validatorAddress = data.Txs[0].inputs[0].split(':')[0];
                     const validatorLegitimacy = this.vss.getAddressLegitimacy(validatorAddress);
                     if (validatorLegitimacy !== data.legitimacy) {
-                        //this.logger.info(`luid-bc5b2c47 [P2P-HANDLER] ${topic} -> #${data.index} -> Invalid legitimacy!`);
                         this.miniLogger.log(`${topic} -> #${data.index} -> Invalid legitimacy!`, (m) => { console.info(m); });
                         return;
                     }
@@ -525,24 +495,18 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
 
                     if (!this.roles.includes('validator')) { break; }
                     if (this.reorganizator.isFinalizedBlockInCache(message.content)) {
-                        //this.logger.warn(`luid-b58f689b [P2P-HANDLER] ${topic} -> Already processed #${message.content.index} -> skip`);
                         this.miniLogger.log(`Already processed ${topic} #${message.content.index} -> skip`, (m) => { console.warn(m); });
                         return;
                     }
                     this.opStack.push('digestPowProposal', message);
                     break;
                 case 'test':
-                    //this.logger.warn(`luid-5ccb3f76 [TEST] heavy msg bytes: ${new Uint8Array(Object.values(data)).length}`);
                     this.miniLogger.log(`[TEST] heavy msg bytes: ${new Uint8Array(Object.values(data)).length}`, (m) => { console.warn(m); });
                     break;
                 default:
-                    //this.logger.error(`luid-de0a77c8 [P2P-HANDLER] ${topic} -> Unknown topic`);
                     this.miniLogger.log(`Unknown topic ${topic}`, (m) => { console.error(m); });
             }
-        } catch (error) {
-            //this.logger.error(`luid-ce83715d [P2P-HANDLER] ${topic} -> Failed! `, error);
-            this.miniLogger.log(`${topic} -> Failed! ${error}`, (m) => { console.error(m); });
-        }
+        } catch (error) { this.miniLogger.log(`${topic} -> Failed! ${error}`, (m) => { console.error(m); }); }
     }
     /** @param {string} topic @param {any} message */
     async p2pBroadcast(topic, message) {
@@ -565,7 +529,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             await this.p2pNetwork.broadcast('new_block_finalized', block);
             sentSequence.push(block.index);
         }
-        //this.logger.info(`luid-32f01c6b [NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`);
         this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
     }
     //#region - API -------------------------------------------------------------------------------
@@ -587,7 +550,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             const consumedUTXOs = transaction.inputs;
             return { broadcasted: true, pushedInLocalMempool: true, consumedUTXOs, error: null };
         } catch (error) {
-            //this.logger.error(`luid-71bc9641 Tx ${transaction.id} rejected: ${error.message}`);
             this.miniLogger.log(`Tx ${transaction.id} rejected: ${error.message}`, (m) => { console.error(m); });
             return { broadcasted: false, pushedInLocalMempool: false, consumedUTXOs: [], error: error.message };
         }
@@ -605,11 +567,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             }
 
             return blocksInfo;
-        } catch (error) {
-            //this.logger.error("luid-4548e3d2 ",error);
-            this.miniLogger.log(error, (m) => { console.error(m); });
-            return [];
-        }
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return []; }
     }
     async getExhaustiveBlocksDataByHeight(fromHeight = 0, toHeight = null) {
         try {
@@ -627,11 +585,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             }
 
             return blocksData;
-        } catch (error) {
-            //this.logger.error("luid-52b90003 ",error);
-            this.miniLogger.log(error, (m) => { console.error(m); });
-            return [];
-        }
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return []; }
     }
     async getExhaustiveBlockDataByHash(hash) {
         try {
@@ -639,11 +593,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             const blockInfo = await this.blockchain.getBlockInfoFromDiskByHeight(blockData.index);
 
             return this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo);
-        } catch (error) {
-            //this.logger.error("luid-f94f2924 ",error);
-            this.miniLogger.log(error, (m) => { console.error(m); });
-            return null;
-        }
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return null; }
     }
     /** @param {BlockData} blockData @param {BlockInfo} blockInfo */
     #exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo) {
@@ -696,7 +646,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
 
             return result;
         } catch (error) {
-            //this.logger.error("luid-380ae263 ",error);
             this.miniLogger.log(error, (m) => { console.error(m); });
             return { transaction: undefined, balanceChange: undefined };
         }
@@ -711,8 +660,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             if (associatedMemPoolTx) { continue; } // pending spent UTXO
 
             const utxo = await this.utxoCache.getUTXO(anchor);
-            //if (!utxo) {this.logger.error(`luid-ba6f45e3 UTXO not removed from AddressAnchors: ${anchor}`); continue; } // should not happen
-            //if (utxo.spent) { this.logger.error(`luid-94f2bd71 UTXO spent but not removed from AddressAnchors: ${anchor}`); continue; } // should not happen
             if (!utxo) { this.miniLogger.log(`UTXO not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
             if (utxo.spent) { this.miniLogger.log(`UTXO spent but not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
 
@@ -733,8 +680,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             if (associatedMemPoolTx) { continue; } // pending spent UTXO
 
             const utxo = await this.utxoCache.getUTXO(anchor);
-            //if (!utxo) { this.logger.error(`luid-a92cbd34 UTXO not removed from AddressAnchors: ${anchor}`); continue; } // should not happen
-            //if (utxo.spent) { this.logger.error(`luid-d5256233 UTXO spent but not removed from AddressAnchors: ${anchor}`); continue; } // should not happen
             if (!utxo) { this.miniLogger.log(`UTXO not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
             if (utxo.spent) { this.miniLogger.log(`UTXO spent but not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
 

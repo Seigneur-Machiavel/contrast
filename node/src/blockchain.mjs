@@ -8,7 +8,6 @@ import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
 import { convert, FastConverter } from '../../utils/converters.mjs';
 import { serializer, serializerFast } from '../../utils/serializer.mjs';
-import utils from './utils.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 
 /**

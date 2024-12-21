@@ -1,15 +1,16 @@
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import utils from './utils.mjs';
+import ReputationManager from "./peers-reputation.mjs";
+
 /**
 * @typedef {import("./syncHandler.mjs").SyncHandler} SyncHandler
 * @typedef {import("./node.mjs").Node} Node
 * @typedef {import("./block-classes.mjs").BlockData} BlockData
 */
 
-import ReputationManager from "./peers-reputation.mjs";
-
 // Simple task manager, used to avoid vars overwriting in the callstack
 export class OpStack {
+    miniLogger = new MiniLogger('OpStack');
     /** @type {Node} */
     node = null;
     /** @type {object[]} */
@@ -18,8 +19,7 @@ export class OpStack {
     isReorging = false;
     terminated = false;
     paused = false;
-    txBatchSize = 10; // will treat transactions in batches of 10
-    lastExecutedTask = null;
+    executingTask = null;
 
     // will replace the timeout with a simple loop
     healthInfo = {
@@ -52,7 +52,7 @@ export class OpStack {
             const timeSinceLastDigestOrSync = now - lastDigestOrSyncTime;
 
             if (timeSinceLastDigestOrSync > this.healthInfo.delayBeforeRestart) {
-                console.warn(`[OpStack] Restart requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`);
+                this.miniLogger.log(`[OpStack] Restart requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                 this.node.requestRestart('OpStack.healthCheckLoop() -> delayBeforeRestart reached!');
                 this.terminate();
                 continue;
@@ -60,7 +60,7 @@ export class OpStack {
 
             if (!this.syncRequested && timeSinceLastDigestOrSync > this.healthInfo.delayBeforeSyncCheck) {
                 this.pushFirst('syncWithPeers', null);
-                console.warn(`[OpStack] syncWithPeers requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`);
+                this.miniLogger.log(`syncWithPeers requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                 continue;
             }
             
@@ -94,26 +94,14 @@ export class OpStack {
 
             await new Promise(resolve => setImmediate(resolve));
 
-            // keep it simple!
             const task = this.tasks.shift();
             if (!task) { continue; }
 
-            this.lastExecutedTask = task;
+            this.executingTask = task;
             await this.#executeTask(task);
-
-            /*for (let i = 0; i < this.txBatchSize; i++) {
-                const task = this.tasks.shift();
-                if (!task) { break; }
-                
-                this.lastExecutedTask = task;
-                await this.#executeTask(task);
-
-                if (task.type !== 'pushTransaction') { break; }
-            }*/
         }
-        console.info('------------------');
-        console.info('OpStack terminated');
-        console.info('------------------');
+
+        this.miniLogger.log('--------- OpStack terminated ---------', (m) => console.info(m));
     }
     async #executeTask(task) {
         if (!task) { return; }
@@ -130,11 +118,13 @@ export class OpStack {
                     } catch (error) {
                         if (error.message.includes('Transaction already in mempool')) { break; }
                         if (error.message.includes('Conflicting UTXOs')) { break; }
-                        console.error(error.message); 
+
+                        this.miniLogger.log(`[OpStack] Error while pushing transaction:`, (m) => console.error(m));
+                        this.miniLogger.log(error, (m) => console.error(m));
                     }
                     break;
                 case 'digestPowProposal':
-                    if (content.Txs[0].inputs[0] === undefined) { console.error('Invalid coinbase nonce'); return; }
+                    if (content.Txs[1].inputs[0] === undefined) { this.miniLogger.log(`[OpStack] Invalid block validator`, (m) => console.error(m)); return; }
                     try {
                         await this.node.digestFinalizedBlock(content, options, byteLength);
                     } catch (error) {
@@ -157,19 +147,20 @@ export class OpStack {
                 case 'syncWithPeers':
                     if (this.node.miner) { this.node.miner.canProceedMining = false; }
 
-                    console.warn(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers started, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`);
+                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers started, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                     const syncSuccessful = await this.node.syncHandler.syncWithPeers();
                     if (!syncSuccessful) {
                         await new Promise(resolve => setTimeout(resolve, 1000));
-                        console.warn(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers failed, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`);
+                        this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers failed, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
+
                         this.terminate();
                         if (!this.node.restartRequested) { this.node.requestRestart('OpStack.syncWithPeers() -> force!'); }
-                        console.log(`restartRequested: ${this.node.restartRequested}`);
+                        this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] Restart requested by syncWithPeers`, (m) => console.warn(m));
                         break;
                     }
 
                     this.healthInfo.lastSyncTime = Date.now();
-                    console.warn(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`);
+                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                     this.syncRequested = false;
                     break;
                 case 'createBlockCandidateAndBroadcast':
@@ -186,41 +177,41 @@ export class OpStack {
                     this.healthInfo.lastReorgCheckTime = Date.now();
                     const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('reorg_end');
                     if (!reorgTasks) {
-                        console.info(`[OpStack] Reorg ended, no legitimate branch > ${this.node.blockchain.lastBlock.index}`);
+                        this.miniLogger.log(`[OpStack] Reorg ended, no legitimate branch > ${this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
                         break;
                     }
 
-                    console.info(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`);
+                    this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
                     this.securelyPushFirst(reorgTasks);
                     break;
                 default:
-                    console.error(`[OpStack] Unknown task type: ${task.type}`);
+                    this.miniLogger.log(`[OpStack] Unknown task type: ${task.type}`, (m) => console.error(m));
             }
-        } catch (error) { console.error(error.stack); }
+        } catch (error) { this.miniLogger.log(error, (m) => console.error(m)); }
     }
     // HANDLERS
     /** @param {Error} error @param {BlockData} block @param {object} task */
     async #digestPowProposalErrorHandler(error, block, task) {
         if (error.message.includes('Anchor not found')) {
-            console.error(`\n#${block.index} **CRITICAL ERROR** Validation of the finalized doesn't spot missing anchor! `); }
+            this.miniLogger.log(`**CRITICAL ERROR** Validation of the finalized doesn't spot missing anchor!`, (m) => console.error(m)); }
         if (error.message.includes('invalid prevHash')) {
-            console.error(`\n#${block.index} **SOFT FORK** Finalized block prevHash doesn't match the last block hash! `); }
+            this.miniLogger.log(`**SOFT FORK** Finalized block prevHash doesn't match the last block hash!`, (m) => console.error(m)); }
 
         // reorg management
-        if (error.message.includes('!store!')) {
-            this.node.reorganizator.storeFinalizedBlockInCache(block);
-        }
+        if (error.message.includes('!store!')) { this.node.reorganizator.storeFinalizedBlockInCache(block); }
+
         if (error.message.includes('!reorg!')) {
             this.healthInfo.lastReorgCheckTime = Date.now();
             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('digestPowProposal: !reorg!');
             if (reorgTasks) {
-                console.info(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`);
+                this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
                 this.securelyPushFirst(reorgTasks);
             }
         }
 
+        // ban/offenses management
         if (error.message.includes('!banBlock!')) {
-            console.info(`[OpStack] Finalized block #${block.index} has been banned, reason: ${error.message}`);
+            this.miniLogger.log(`[OpStack] Finalized block #${block.index} has been banned, reason: ${error.message}`, (m) => console.warn(m));
             this.node.reorganizator.banFinalizedBlock(block); // avoid using the block in future reorgs
         }
         if (error.message.includes('!applyMinorOffense!')) {
@@ -246,15 +237,12 @@ export class OpStack {
             || error.message.includes('!banBlock!')
             || error.message.includes('!ignore!')) { return; }
         
-        // sync management
-        if (error.message.includes('!sync!')) {
-            console.error(error.stack);
-            this.pushFirst('syncWithPeers', null);
-            console.log(`restartRequested: ${this.node.restartRequested}`);
-            return;
-        }
+        this.miniLogger.log(error, (m) => console.error(m));
+        if (!error.message.includes('!sync!')) { return; }
 
-        console.error(error.stack);
+        // sync management
+        this.pushFirst('syncWithPeers', null);
+        this.miniLogger.log(`restartRequested: ${this.node.restartRequested}`, (m) => console.error(m));
     }
 
     /** @param {string} type @param {object} data */
@@ -274,11 +262,11 @@ export class OpStack {
     securelyPushFirst(tasks) {
         this.paused = true;
         for (const task of tasks) {
-            //console.info(`[OpStack] securelyPushFirst: ${JSON.stringify(task)}`);
+            //this.miniLogger.log(`[OpStack] securelyPushFirst: ${JSON.stringify(task)}`, (m) => console.info(m));
             if (task === 'reorg_start' && this.isReorging) { return; }
-            if (task === 'reorg_start') { console.info('[OpStack] --- reorg_start'); }
-            if (task.type === 'rollBackTo') { console.info(`[OpStack] --- rollBackTo -> #${task.data}`); }
-            if (task.type === 'digestPowProposal') { console.info(`[OpStack] --- digestPowProposal -> #${task.data.index}`); }
+            if (task === 'reorg_start') { this.miniLogger.log(`[OpStack] --- reorg_start`, (m) => console.info(m)); }
+            if (task.type === 'rollBackTo') { this.miniLogger.log(`[OpStack] --- rollBackTo -> #${task.data}`, (m) => console.info(m)); }
+            if (task.type === 'digestPowProposal') { this.miniLogger.log(`[OpStack] --- digestPowProposal -> #${task.data.index}`, (m) => console.info(m)); }
             this.tasks.unshift(task);
         }
         this.paused = false;

@@ -2,7 +2,7 @@ import { BlockData, BlockUtils } from './block-classes.mjs';
 import { MinerWorker } from '../workers/workers-classes.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { convert } from '../../utils/converters.mjs';
-import utils from './utils.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
 
 /**
  * @typedef {import("./wallet.mjs").Account} Account
@@ -103,8 +103,8 @@ export class Miner {
         }
 
         if (this.bestCandidate && blockCandidate.index === this.bestCandidate.index) {
-            const newCandidateFinalDiff = utils.mining.getBlockFinalDifficulty(blockCandidate);
-            const bestCandidateFinalDiff = utils.mining.getBlockFinalDifficulty(this.bestCandidate);
+            const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate);
+            const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate);
             if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return; }
             console.info(`[MINER] easier block, final diffs: before = ${bestCandidateFinalDiff.finalDifficulty} | after = ${newCandidateFinalDiff.finalDifficulty}`);
         }
