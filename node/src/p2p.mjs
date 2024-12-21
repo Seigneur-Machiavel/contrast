@@ -271,11 +271,12 @@ class P2PNetwork extends EventEmitter {
             }
 
             await this.p2pNode.services.pubsub.publish(topic, serialized);
-            this.miniLogger.log(`Broadcast complete on topic ${topic}`, (m) => { console.debug(m); });
+            this.miniLogger.log(`Broadcast complete on topic **${topic}**`, (m) => { console.debug(m); });
             return 'success';
         } catch (error) {
             if (error.message === "PublishError.NoPeersSubscribedToTopic") { return error; }
-            this.miniLogger.log(`Broadcast error on topic ${topic}, error: ${error}`, (m) => { console.error(m); });
+            this.miniLogger.log(`Broadcast error on topic **${topic}**`, (m) => { console.error(m); });
+            this.miniLogger.log(error, (m) => { console.error(m); });
             return error;
         }
     }

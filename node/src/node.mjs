@@ -470,11 +470,12 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                         return;
                     }
                     if (lastBlockIndex +1 > data.index) {
-                        this.miniLogger.log(`#${data.index} | lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
+                        this.miniLogger.log(`#${data.index} +1 > lastBlockIndex #${lastBlockIndex} -> skip & syncWithPeers`, (m) => { console.info(m); });
+                        this.opStack.pushFirst('syncWithPeers', null);
                         return;
                     }
                     if (lastBlockIndex +1 < data.index) {
-                        this.miniLogger.log(`#${data.index} | lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
+                        this.miniLogger.log(`#${data.index} +1 < lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
                         return;
                     }
 
