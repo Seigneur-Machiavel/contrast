@@ -1,6 +1,7 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
-import utils from './utils.mjs';
+import { ProgressLogger } from '../../utils/progress-logger.mjs';
+import { addressUtils } from '../../utils/addressUtils.mjs';
 import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
 
 /**
@@ -8,8 +9,9 @@ import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
 * @typedef {import("../src/transaction.mjs").UTXO} UTXO
 */
 
+const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 async function localStorage_v1Lib() {
-    if (utils.isNode) {
+    if (isNode) {
         const l = await import("../storage/local-storage-management.mjs");
         return l.default;
     }
@@ -130,7 +132,7 @@ export class Wallet {
         const accountToGenerate = nbOfAccounts - nbOfExistingAccounts < 0 ? 0 : nbOfAccounts - nbOfExistingAccounts;
         this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`, (m) => { console.info(m); });
         
-        const progressLogger = new utils.ProgressLogger(accountToGenerate, '[WALLET] deriving accounts');
+        const progressLogger = new ProgressLogger(accountToGenerate, '[WALLET] deriving accounts');
         let iterationsPerAccount = 0;
 
         const accountToLoad = Math.min(nbOfExistingAccounts, nbOfAccounts);
@@ -189,7 +191,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
     }
     async tryDerivationUntilValidAccountUsingWorkers(accountIndex = 0, desiredPrefix = "C") {
         /** @type {AddressTypeInfo} */
-        const addressTypeInfo = utils.addressUtils.glossary[desiredPrefix];
+        const addressTypeInfo = addressUtils.glossary[desiredPrefix];
         if (addressTypeInfo === undefined) { throw new Error(`Invalid desiredPrefix: ${desiredPrefix}`); }
 
         // To be sure we have enough iterations, but avoid infinite loop
@@ -235,7 +237,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
     }
     async tryDerivationUntilValidAccount(accountIndex = 0, desiredPrefix = "C") { // SINGLE THREAD
         /** @type {AddressTypeInfo} */
-        const addressTypeInfo = utils.addressUtils.glossary[desiredPrefix];
+        const addressTypeInfo = addressUtils.glossary[desiredPrefix];
         if (addressTypeInfo === undefined) { throw new Error(`Invalid desiredPrefix: ${desiredPrefix}`); }
 
         // To be sure we have enough iterations, but avoid infinite loop
@@ -277,13 +279,13 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
     }
     async #deriveAccount(pubKeyHex, desiredPrefix = "C") {
         const argon2Fnc = this.useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
-        const addressBase58 = await utils.addressUtils.deriveAddress(argon2Fnc, pubKeyHex);
+        const addressBase58 = await addressUtils.deriveAddress(argon2Fnc, pubKeyHex);
         if (!addressBase58) { throw new Error('Failed to derive address'); }
 
         if (addressBase58.substring(0, 1) !== desiredPrefix) { return false; }
 
-        utils.addressUtils.conformityCheck(addressBase58);
-        await utils.addressUtils.securityCheck(addressBase58, pubKeyHex);
+        addressUtils.conformityCheck(addressBase58);
+        await addressUtils.securityCheck(addressBase58, pubKeyHex);
 
         return addressBase58;
     }

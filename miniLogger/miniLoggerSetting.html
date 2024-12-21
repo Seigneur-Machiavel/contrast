@@ -35,7 +35,7 @@
         }
     </style>
     <script>
-        window.onload = () => {
+        window.onload = async () => {
             const fs = require('fs');
             const { loadDefaultConfig, loadMergedConfig } = require('./mini-logger.js');
 
@@ -74,7 +74,7 @@
                 activeCategoriesList.insertBefore(listElement, newLabelWrap);
             }
 
-            const config = loadMergedConfig();
+            const config = await loadMergedConfig();
             document.getElementById('max-history').value = config.maxHistory || 100;
             document.getElementById('all-active').checked = config.allActive || false;
     

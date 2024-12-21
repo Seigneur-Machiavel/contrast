@@ -4,7 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import localStorage_v1 from '../storage/local-storage-management.mjs';
-import contrast from '../src/contrast.mjs'; //? Not all libs needed
+import { addressUtils } from '../../utils/addressUtils.mjs';
+import { serializerFast } from '../../utils/serializer.mjs';
+import { Wallet } from '../src/wallet.mjs';
 import { exec } from 'child_process';
 import { CallBackManager } from '../src/websocketCallback.mjs';
 
@@ -19,7 +21,7 @@ import { CallBackManager } from '../src/websocketCallback.mjs';
 const APPS_VARS = {
     __filename: fileURLToPath(import.meta.url),
     __dirname: path.dirname( fileURLToPath(import.meta.url) ),
-    __contrastchainDir: path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ),
+    __nodeDir: path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ),
     __contrastDir: path.dirname( path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ) ),
     /*__httpsOptions: {
         cert: fs.readFileSync('/chemin/vers/votre/certificate.crt'),
@@ -126,7 +128,7 @@ export class DashboardWsApp {
     async init(privateKey) {
         if (this.app === null) {
             this.app = express();
-            this.app.use(express.static(APPS_VARS.__contrastchainDir));
+            this.app.use(express.static(APPS_VARS.__nodeDir));
             this.app.use(express.json({ limit: '1mb' }));
             this.app.use(express.urlencoded({ extended: true }));
             this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
@@ -134,9 +136,9 @@ export class DashboardWsApp {
             this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));
             this.app.use('/miniLogger', express.static(path.join(APPS_VARS.__contrastDir, 'miniLogger')));
             
-            this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/nodeDashboard.html'); });
-            this.app.get('/log-config', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/log-config.html'); });
-            this.app.get('/log-viewer', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/log-viewer.html'); });
+            this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/nodeDashboard.html'); });
+            this.app.get('/log-config', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/log-config.html'); });
+            this.app.get('/log-viewer', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/log-viewer.html'); });
 
             // Add the API endpoints
             this.app.get('/api/log-config', (req, res) => {
@@ -211,7 +213,7 @@ export class DashboardWsApp {
         this.#injectCallbacks();
     }
     async initMultiNode(nodePrivateKey = 'ff', local = false, useDevArgon2 = false) {
-        const wallet = new contrast.Wallet(nodePrivateKey, useDevArgon2);
+        const wallet = new Wallet(nodePrivateKey, useDevArgon2);
         const restored = await wallet.restore();
         if (!restored) { console.error('Failed to restore wallet.'); return; }
         wallet.loadAccounts();
@@ -333,7 +335,7 @@ export class DashboardWsApp {
             case 'set_validator_address':
                 if (!this.node) { console.error('No active node'); break; }
                 try {
-                    contrast.utils.addressUtils.conformityCheck(data)
+                    addressUtils.conformityCheck(data)
                     this.#nodesSettings[this.node.id].validatorRewardAddress = data;
 
                     this.#injectNodeSettings(this.node.id);
@@ -346,7 +348,7 @@ export class DashboardWsApp {
                 if (!this.node) { console.error('No active node'); break; }
                 if (!this.node.miner) { console.error('No miner found'); break; }
                 try {
-                    contrast.utils.addressUtils.conformityCheck(data)
+                    addressUtils.conformityCheck(data)
                     this.#nodesSettings[this.node.id].minerAddress = data;
 
                     this.#injectNodeSettings(this.node.id);
@@ -467,7 +469,7 @@ export class DashboardWsApp {
     }
     async #modifyAccountAndRestartNode(nodeId, newPrivateKey) {
         console.log('Modifying account and restarting node id:', nodeId);
-        const wallet = new contrast.Wallet(newPrivateKey, false);
+        const wallet = new Wallet(newPrivateKey, false);
         const restored = await wallet.restore();
         if (!restored) { console.error('Failed to restore wallet.'); return; }
         wallet.loadAccounts();
@@ -509,13 +511,18 @@ export class ObserverWsApp {
         if (!this.node.roles.includes('validator')) { throw new Error('ObserverWsApp must be used with a validator node'); }
         if (!this.node.roles.includes('observer')) { throw new Error('ObserverWsApp must be used with an observer node'); }
 
-        this.app.use(express.static(APPS_VARS.__contrastchainDir));
+        this.app.use(express.static(APPS_VARS.__dirname));
+        //this.app.use(express.static(APPS_VARS.__nodeDir));
+        
+        this.app.use('/front', express.static(path.join(APPS_VARS.__nodeDir, 'front')));
+        this.app.use('/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
+        this.app.use('/node/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
         this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
         this.app.use('/fonts', express.static(path.join(APPS_VARS.__contrastDir, 'fonts')));
         this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));
         this.app.use('/miniLogger', express.static(path.join(APPS_VARS.__contrastDir, 'miniLogger')));
         
-        this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__contrastchainDir + '/front/explorer.html'); });
+        this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/explorer.html'); });
         const server = this.app.listen(this.port, () => { console.log(`Server running on http://${'???'}:${this.port}`); });
         
         this.wss = new WebSocketServer({ server });
@@ -669,7 +676,7 @@ export class ObserverWsApp {
                     ws.send(JSON.stringify({ type: 'subscribed_best_block_candidate_change' }));
                     break;
                 case 'broadcast_transaction':
-                    //const deserializeTx = contrast.utils.serializerFast.deserialize.transaction(data);
+                    //const deserializeTx = serializerFast.deserialize.transaction(data);
                     const { broadcasted, pushedInLocalMempool, error } = await this.node.pushTransaction(data.transaction);
                     if (error) { console.error('Error broadcasting transaction', error); }
 

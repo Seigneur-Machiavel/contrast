@@ -1,5 +1,29 @@
-import utils from './utils.mjs';
+const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
+
+import { convert, FastConverter } from '../../utils/converters.mjs';
+import ed25519 from '../../libs/noble-ed25519-03-2024.mjs';
 import { xxHash32 } from '../../libs/xxhash32.mjs';
+
+async function getArgon2Lib() {
+    if (isNode) {
+        const a = await import('argon2');
+        a.limits.timeCost.min = 1; // ByPass the minimum time cost
+        return a;
+    }
+
+    try {
+        if (argon2) { 
+            console.log('Argon2 loaded as a global variable');
+            return argon2; 
+        }
+    } catch (error) { }
+
+    console.log('trying import argon2 ES6 and inject in window');
+    const argon2Import = await import('../../libs/argon2-ES6.min.mjs');
+    window.argon2 = argon2Import.default;
+    return argon2Import.default;
+};
+const argon2Lib = await getArgon2Lib();
 
 class Argon2Unified {
     static createArgon2Params(pass = "averylongpassword123456", salt = "saltsaltsaltsaltsalt", time = 1, mem = 2**10, parallelism = 1, type = 2, hashLen = 32) {
@@ -13,15 +37,15 @@ class Argon2Unified {
             hashLength: hashLen,
             parallelism,
             type,
-            salt: utils.isNode ? Buffer.from(salt) : salt,
+            salt: isNode ? Buffer.from(salt) : salt,
         };
     }
     static standardizeArgon2FromEncoded(encoded = '$argon2id$v=19$m=1048576,t=1,p=1$c2FsdHNhbHRzYWx0c2FsdHNhbHQ$UamPN/XTTX4quPewQNw4/s3y1JJeS22cRroh5l7OTMM') {
         const splited = encoded.split('$');
         const base64 = splited.pop();
-        const hash = utils.convert.base64.toUint8Array(base64);
-        const hex = utils.convert.uint8Array.toHex(hash);
-        const bitsArray = utils.convert.hex.toBits(hex);
+        const hash = convert.base64.toUint8Array(base64);
+        const hex = convert.uint8Array.toHex(hash);
+        const bitsArray = convert.hex.toBits(hex);
         if (!bitsArray) { return false; }
     
         return { encoded, hash, hex, bitsArray };
@@ -38,7 +62,7 @@ class Argon2Unified {
  * @param {number} hashLen - Length of the hash in bytes */
 export const argon2Hash = async (pass, salt, time = 1, mem = 2**20, parallelism = 1, type = 2, hashLen = 32) => {
     const params = Argon2Unified.createArgon2Params(pass, salt, time, mem, parallelism, type, hashLen);
-    const hashResult = utils.isNode ? await utils.argon2.hash(pass, params) : await utils.argon2.hash(params);
+    const hashResult = isNode ? await argon2Lib.hash(pass, params) : await argon2Lib.hash(params);
     if (!hashResult) { return false; }
 
     const encoded = hashResult.encoded ? hashResult.encoded : hashResult;
@@ -48,14 +72,14 @@ export const argon2Hash = async (pass, salt, time = 1, mem = 2**20, parallelism 
     return result;
 }
 const devArgon2Hash = async (pass, salt, time = 1, mem = 2**10, parallelism = 1, type = 2, hashLen = 32) => {
-    const pauseBasis = utils.isNode ? 56 : 56 * 8; // ms - Ryzen 5900HX
+    const pauseBasis = isNode ? 56 : 56 * 8; // ms - Ryzen 5900HX
     //const pauseBasis = 1; // ms // -> fast mode
     const memBasis = 2**16; // KiB
     const effectivePause = Math.round(pauseBasis * (mem / memBasis));
     await new Promise(resolve => setTimeout(resolve, effectivePause)); // Simulate a slow hash
 
     const params = Argon2Unified.createArgon2Params(pass, salt, time, 2**10, parallelism, type, hashLen);
-    const hashResult = utils.isNode ? await utils.argon2.hash(pass, params) : await utils.argon2.hash(params);
+    const hashResult = isNode ? await argon2Lib.hash(pass, params) : await argon2Lib.hash(params);
     if (!hashResult) { return false; }
     
     const encoded = hashResult.encoded ? hashResult.encoded : hashResult;
@@ -64,6 +88,8 @@ const devArgon2Hash = async (pass, salt, time = 1, mem = 2**10, parallelism = 1,
 
     return result;
 }
+
+const fastConverter = new FastConverter();
 export class HashFunctions {
     static Argon2 = argon2Hash;
     static devArgon2 = devArgon2Hash;
@@ -75,10 +101,10 @@ export class HashFunctions {
     }
 
     static async SHA256(message) {
-        const messageUint8 = utils.fastConverter.stringToUint8Array(message);
-        const arrayBuffer = await utils.cryptoLib.subtle.digest('SHA-256', messageUint8);
+        const messageUint8 = fastConverter.stringToUint8Array(message);
+        const arrayBuffer = await crypto.subtle.digest('SHA-256', messageUint8);
         const uint8Array = new Uint8Array(arrayBuffer);
-        const hashHex = utils.fastConverter.uint8ArrayToHex(uint8Array);
+        const hashHex = fastConverter.uint8ArrayToHex(uint8Array);
         return hashHex;
     }
 };
@@ -88,8 +114,8 @@ export class AsymetricFunctions {
         if (privKeyHex.length !== 64) { console.error('Hash must be 32 bytes long (hex: 64 chars)'); return false; }
         
         // Calculer la clé publique à partir de la clé privée
-        const publicKey = await utils.ed25519.getPublicKeyAsync(privKeyHex);
-        const pubKeyHex = utils.convert.uint8Array.toHex(publicKey);
+        const publicKey = await ed25519.getPublicKeyAsync(privKeyHex);
+        const pubKeyHex = convert.uint8Array.toHex(publicKey);
     
         return { privKeyHex, pubKeyHex };
     }
@@ -105,10 +131,10 @@ export class AsymetricFunctions {
         if (typeof privKeyHex !== 'string') { result.error = 'Invalid privKeyHex type'; return result; }
         if (privKeyHex.length !== 64) { result.error = 'Hash must be 32 bytes long (hex: 64 chars)'; return result; }
         
-        const signature = await utils.ed25519.signAsync(messageHex, privKeyHex);
+        const signature = await ed25519.signAsync(messageHex, privKeyHex);
         if (!signature) { result.error = 'Failed to sign the message'; return result; }
         
-        result.signatureHex = utils.convert.uint8Array.toHex(signature);
+        result.signatureHex = convert.uint8Array.toHex(signature);
 
         // If pubKeyHex isn't provided, we can't verify the signature...
         if (pubKeyHex === undefined) { result.isValid = true; return result; }
@@ -125,6 +151,6 @@ export class AsymetricFunctions {
      */
     static async verifySignature(signature, messageHex, pubKeyHex) {
         /** @type {boolean} */
-        return await utils.ed25519.verifyAsync(signature, messageHex, pubKeyHex);
+        return await ed25519.verifyAsync(signature, messageHex, pubKeyHex);
     }
 };

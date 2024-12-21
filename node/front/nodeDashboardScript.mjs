@@ -1,5 +1,5 @@
 //import { Transaction_Builder, UTXO } from '../src/transaction.mjs';
-import { Convert } from '../../utils/convert.mjs';
+import { convert } from '../../utils/converters.mjs';
 
 /**
  * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
@@ -95,8 +95,8 @@ function connectWS() {
             case 'balance_updated':
                 //console.log('balance_updated', data);
                 return; // not used anymore, we fetch node_info frequently
-                if(trigger === eHTML.validatorAddress.textContent) { eHTML.validatorBalance.textContent = Convert.formatNumberAsCurrency(data); }
-                if(trigger === eHTML.minerAddress.textContent) { eHTML.minerBalance.textContent = Convert.formatNumberAsCurrency(data); }
+                if(trigger === eHTML.validatorAddress.textContent) { eHTML.validatorBalance.textContent = convert.formatNumberAsCurrency(data); }
+                if(trigger === eHTML.minerAddress.textContent) { eHTML.minerBalance.textContent = convert.formatNumberAsCurrency(data); }
                 break;
             default:
                 console.error(`Unknown message type: ${message.type}`);
@@ -207,13 +207,13 @@ function displayNodeInfo(data) {
     // Update Validator information
     eHTML.validatorAddress.textContent = data.validatorAddress ? data.validatorAddress : ''; 
     eHTML.validatorRewardAddress.textContent = data.validatorRewardAddress ? data.validatorRewardAddress : '';
-    eHTML.validatorBalance.textContent = Convert.formatNumberAsCurrency(validatorBalance);
+    eHTML.validatorBalance.textContent = convert.formatNumberAsCurrency(validatorBalance);
     eHTML.validatorHeight.textContent = data.currentHeight ? data.currentHeight : 0;
-    eHTML.validatorStaked.textContent = Convert.formatNumberAsCurrency(validatorStaked);
+    eHTML.validatorStaked.textContent = convert.formatNumberAsCurrency(validatorStaked);
 
     // Update Miner information
     eHTML.minerAddress.textContent = data.minerAddress ? data.minerAddress : '';
-    eHTML.minerBalance.textContent = Convert.formatNumberAsCurrency(minerBalance);
+    eHTML.minerBalance.textContent = convert.formatNumberAsCurrency(minerBalance);
     eHTML.minerHeight.textContent = data.highestBlockIndex ? data.highestBlockIndex : 0;
     eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 1;
     eHTML.hashRate.textContent = data.minerHashRate ? data.minerHashRate.toFixed(2) : 0;
@@ -626,7 +626,7 @@ document.addEventListener('focusout', async (event) => {
         event.target.value = parseFloat(event.target.value).toFixed(6);
 
         const amountMicro = parseInt(event.target.value.replace('.',''));
-        const formatedValue = Convert.formatNumberAsCurrency(amountMicro);
+        const formatedValue = convert.formatNumberAsCurrency(amountMicro);
         event.target.value = formatedValue;
     }
 });

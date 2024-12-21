@@ -9,6 +9,9 @@ import { BlockData, BlockUtils } from './block-classes.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { Miner } from './miner.mjs';
 import P2PNetwork from './p2p.mjs';
+import { typeValidation } from '../../utils/type-validation.mjs';
+import { addressUtils } from '../../utils/addressUtils.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import utils from './utils.mjs';
 import { Blockchain } from './blockchain.mjs';
 import { SyncHandler } from './nodes-synchronizer.mjs';
@@ -16,7 +19,7 @@ import { SnapshotSystem } from './snapshot-system.mjs';
 import { performance, PerformanceObserver } from 'perf_hooks';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
 import { ConfigManager } from './config-manager.mjs';
-import { TimeSynchronizer } from '../src/time.mjs';
+import { TimeSynchronizer } from '../../utils/time.mjs';
 //import { Logger } from '../plugins/logger.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { Reorganizator } from './blockchain-reorganizator.mjs';
@@ -333,7 +336,7 @@ export class Node {
         if (this.restartRequested) return;
     
         timer.startPhase('initialization');
-        const blockBytes = byteLength || utils.serializer.block_finalized.toBinary_v4(finalizedBlock).byteLength;
+        const blockBytes = byteLength || serializer.block_finalized.toBinary_v4(finalizedBlock).byteLength;
         const { skipValidation = false, broadcastNewCandidate = true, isSync = false, isLoading = false, persistToDisk = true, storeAsFiles = false } = options;
         if (!finalizedBlock || !this.roles.includes('validator') || (this.syncHandler.isSyncing && !isSync)) 
             throw new Error(!finalizedBlock ? 'Invalid block candidate' : !this.roles.includes('validator') ? 'Only validator can process PoW block' : "Node is syncing, can't process block");
@@ -664,7 +667,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     /** @param {string} txReference - ex: 12:0f0f0f @param {string} address - optional: also return balanceChange for this address */
     async getTransactionByReference(txReference, address = undefined) {
         try {
-            if (address) { utils.addressUtils.conformityCheck(address); }
+            if (address) { addressUtils.conformityCheck(address); }
             const result = { transaction: undefined, balanceChange: 0, inAmount: 0, outAmount: 0, fee: 0 };
             const transaction = await this.blockchain.getTransactionByReference(txReference);
             result.transaction = transaction;
@@ -676,7 +679,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             }
 
             for (const anchor of transaction.inputs) {
-                if (!utils.types.anchor.isConform(anchor)) { continue; }
+                if (!typeValidation.isConformAnchor(anchor)) { continue; }
                 const txRef = `${anchor.split(":")[0]}:${anchor.split(":")[1]}`;
                 const utxoRelatedTx = await this.blockchain.getTransactionByReference(txRef);
                 const outputIndex = parseInt(anchor.split(":")[2]);

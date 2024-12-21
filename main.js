@@ -71,7 +71,9 @@ app.on('ready', async () => {
     if (duplicates) { mainLogger.log(`Duplicate IPC handlers detected: ${duplicates}`, (m) => { console.warn(m); }); }
 
     setShortcuts(loggerWindow, handlersKeys, isDev);
-    BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
+    mainWindow.webContents.toggleDevTools(); // dev tools on start
+
+    // BrowserWindow.getFocusedWindow() -> to get focused window
 });
 
 app.on('will-quit', () => { globalShortcut.unregisterAll(); });

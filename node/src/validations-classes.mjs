@@ -1,8 +1,11 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { Transaction, TxOutput, UTXO, Transaction_Builder } from './transaction.mjs';
+import { UTXO_RULES_GLOSSARY } from '../../utils/utxo-rules.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import utils from './utils.mjs';
+import { typeValidation } from '../../utils/type-validation.mjs';
+import { addressUtils } from '../../utils/addressUtils.mjs';
+
 /**
  * @typedef {import("./vss.mjs").Vss} Vss
  * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
@@ -73,7 +76,7 @@ export class TxValidation {
             if (specialTx) { continue; }
 
             const anchor = input;
-            if (!utils.types.anchor.isConform(anchor)) { throw new Error('Invalid anchor'); }
+            if (!typeValidation.isConformAnchor(anchor)) { throw new Error('Invalid anchor'); }
 
             const utxo = involvedUTXOs[anchor];
             if (!utxo) { throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${anchor}`); }
@@ -87,9 +90,9 @@ export class TxValidation {
         if (txOutput.amount % 1 !== 0) { throw new Error('Invalid amount value: not integer'); }
 
         if (typeof txOutput.rule !== 'string') { throw new Error('Invalid rule !== string'); }
-        if (utils.UTXO_RULES_GLOSSARY[txOutput.rule] === undefined) { throw new Error(`Invalid rule name: ${txOutput.rule}`); }
+        if (UTXO_RULES_GLOSSARY[txOutput.rule] === undefined) { throw new Error(`Invalid rule name: ${txOutput.rule}`); }
 
-        utils.addressUtils.conformityCheck(txOutput.address);
+        addressUtils.conformityCheck(txOutput.address);
     }
 
     /** ==> Second validation, low computation cost.
@@ -174,8 +177,8 @@ export class TxValidation {
 
         if (signature.length !== 128) { throw new Error('Invalid signature size'); }
         if (pubKeyHex.length !== 64) { throw new Error('Invalid pubKey size'); }
-        if (!utils.typeValidation.hex(signature)) { throw new Error(`Invalid signature: ${signature} !== hex`); }
-        if (!utils.typeValidation.hex(pubKeyHex)) { throw new Error(`Invalid pubKey: ${pubKeyHex} !== hex`); }
+        if (!typeValidation.hex(signature)) { throw new Error(`Invalid signature: ${signature} !== hex`); }
+        if (!typeValidation.hex(pubKeyHex)) { throw new Error(`Invalid pubKey: ${pubKeyHex} !== hex`); }
 
         return { signature, pubKeyHex };
     }
@@ -209,10 +212,10 @@ export class TxValidation {
             }
             
             const argon2Fnc = useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
-            const derivedAddressBase58 = await utils.addressUtils.deriveAddress(argon2Fnc, pubKeyHex);
+            const derivedAddressBase58 = await addressUtils.deriveAddress(argon2Fnc, pubKeyHex);
             if (!derivedAddressBase58) { throw new Error('Invalid derived address'); }
 
-            await utils.addressUtils.securityCheck(derivedAddressBase58, pubKeyHex);
+            await addressUtils.securityCheck(derivedAddressBase58, pubKeyHex);
             
             transactionWitnessesAddresses.push(derivedAddressBase58);
             discoveredPubKeysAddresses[pubKeyHex] = derivedAddressBase58; // store the derived address for future use
@@ -235,7 +238,7 @@ export class TxValidation {
             if (!addressToVerify) { throw new Error('addressToVerify not found'); }
 
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                miniLogger.log(`UTXO address: ${utils.addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
+                miniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }
@@ -281,7 +284,7 @@ export class TxValidation {
             if (!addressToVerify) { throw new Error('addressToVerify not found'); }
 
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                miniLogger.log(`UTXO address: ${utils.addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
+                miniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }

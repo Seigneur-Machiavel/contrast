@@ -4,18 +4,18 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 }
 
 //import { StakeReference } from '../src/vss.mjs';
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
-import utils from '../src/utils.mjs';
-import { BlockData } from '../src/block-classes.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { convert } from '../../utils/converters.mjs';
+import { typeValidation } from '../../utils/type-validation.mjs';
+import { addressUtils } from '../../utils/addressUtils.mjs';
 import { Transaction_Builder, utxoExtraction } from '../src/transaction.mjs';
-import { TxValidation } from '../src/validations-classes.mjs';
+
 /**
 * @typedef {import("../src/block-classes.mjs").BlockHeader} BlockHeader
 * @typedef {import("../src/block-classes.mjs").BlockInfo} BlockInfo
 * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
 * @typedef {import("../src/transaction.mjs").Transaction} Transaction
 * @typedef {import("../src/transaction.mjs").UTXO} UTXO
-* @typedef {import("../src/validations-classes.mjs").TxValidation} TxValidation
 */
 
 /** @type {BlockExplorerWidget} */
@@ -55,8 +55,9 @@ const SETTINGS = {
     AUTO_CHOSE_BEST_NODES: true,
     CURRENT_NODE_INDEX: 0,
     NODES_LIST: [ // used for redondant connections
-        'wss://contrast.observer',
+        'ws://pariah.monster:27270',
         'ws://pinkparrot.science:27270',
+        'wss://contrast.observer',
         'ws://pinkparrot.observer'
     ],
 
@@ -179,17 +180,17 @@ function connectWS() {
 
     console.log(`Connecting to ${url}`);
     ws = new WebSocket(url);
-    ws.onopen = onOpen;
-    ws.onclose = onClose(url);
-    ws.onerror = onError;
-    ws.onmessage = onMessage;
+    ws.onopen = () => { onOpen(); };
+    ws.onclose = () => { onClose(url); };
+    ws.onerror = (error) => { onError(error); };
+    ws.onmessage = (event) => { onMessage(event); };
 }
 async function connectWSLoop() {
     connectWS();
     while (true) {
         await new Promise((resolve) => { setTimeout(() => { resolve(); }, SETTINGS.RECONNECT_INTERVAL); });
         if (ws && ws.readyState === 1) { continue; }
-        // if connecting await 
+        // if connecting, wait... 
         while(ws && ws.readyState === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
 
         console.info('--- reseting blockExplorerWidget >>>');
@@ -222,7 +223,7 @@ const eHTML = {
 }
 //#region HTML ONE-SHOT FILLING -------------------------------------------
 if (SETTINGS.ROLES.includes('chainExplorer')) {
-    document.getElementById('cbe-maxSupply').textContent = utils.convert.number.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply)
+    document.getElementById('cbe-maxSupply').textContent = convert.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply)
     document.getElementById('cbe-targetBlocktime').textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
     document.getElementById('cbe-targetBlockday').textContent = `${(24 * 60 * 60) / (BLOCKCHAIN_SETTINGS.targetBlockTime / 1000)}`;
 }
@@ -430,8 +431,8 @@ export class BlockExplorerWidget {
 
                 const isNumber = !isNaN(inputText);
                 const isHash = inputText.length === 64;
-                const isAnchor = utils.types.anchor.isConform(inputText);
-                const isTxReference = utils.types.txReference.isConform(inputText);
+                const isAnchor = typeValidation.isConformAnchor(inputText);
+                const isTxReference = typeValidation.isConformTxReference(inputText);
 
                 if (isNumber) { this.navigationTarget.blockReference = Number(inputText); }
                 if (isHash) { this.navigationTarget.blockReference = inputText; }
@@ -449,7 +450,7 @@ export class BlockExplorerWidget {
                 }
 
                 try {
-                    utils.addressUtils.conformityCheck(inputText); // throw error if not conform
+                    addressUtils.conformityCheck(inputText); // throw error if not conform
                     console.log('address conform:', inputText);
 
                     this.navigationTarget.address = inputText;
@@ -475,7 +476,7 @@ export class BlockExplorerWidget {
                 const transaction = this.#getTransactionFromMemoryOrSendRequest(txReference, address);
                 if (transaction === 'request sent') { return; }
 
-                txAmountElement.textContent = utils.convert.number.formatNumberAsCurrencyChange(transaction.balanceChange);
+                txAmountElement.textContent = convert.formatNumberAsCurrencyChange(transaction.balanceChange);
             }
         }
         this.initBlockExplorerContent();
@@ -669,8 +670,8 @@ export class BlockExplorerWidget {
     }
     /** @param {BlockData} blockData */
     #fillModalContentWithBlockData(blockData) {
-        utils.addressUtils.conformityCheck(blockData.minerAddress); // throw error if not conform
-        utils.addressUtils.conformityCheck(blockData.validatorAddress); // throw error if not conform
+        addressUtils.conformityCheck(blockData.minerAddress); // throw error if not conform
+        addressUtils.conformityCheck(blockData.validatorAddress); // throw error if not conform
         console.log(blockData);
         
         const modalContent = this.cbeHTML.modalContent();
@@ -691,10 +692,10 @@ export class BlockExplorerWidget {
         const twoContainerWrap = createHtmlElement('div', undefined, ['cbe-twoContainerWrap'], contentWrap);
 
         const leftContainer = createHtmlElement('div', undefined, ['cbe-leftContainer'], twoContainerWrap);
-        createSpacedTextElement('Supply', [], `${utils.convert.number.formatNumberAsCurrency(blockData.supply)}`, [], leftContainer);
+        createSpacedTextElement('Supply', [], `${convert.formatNumberAsCurrency(blockData.supply)}`, [], leftContainer);
         createSpacedTextElement('Size', [], `${(blockData.blockBytes / 1024).toFixed(2)} Ko`, [], leftContainer);
         createSpacedTextElement('Transactions', [], `${blockData.nbOfTxs}`, [], leftContainer);
-        createSpacedTextElement('Total fees', [], `${utils.convert.number.formatNumberAsCurrency(blockData.totalFees)}`, [], leftContainer);
+        createSpacedTextElement('Total fees', [], `${convert.formatNumberAsCurrency(blockData.totalFees)}`, [], leftContainer);
         const minerAddressElmnt = createSpacedTextElement('Miner', [], blockData.minerAddress, [], leftContainer);
         minerAddressElmnt.children[1].innerHTML = `<span class="cbe-addressSpan">${blockData.minerAddress}</span>`;
         const validatorAddressElmnt = createSpacedTextElement('Validator', [], blockData.validatorAddress, [], leftContainer);
@@ -702,11 +703,11 @@ export class BlockExplorerWidget {
         
         const rightContainer = createHtmlElement('div', undefined, ['cbe-rightContainer'], twoContainerWrap);
         createSpacedTextElement('Legitimacy', [], blockData.legitimacy, [], rightContainer);
-        createSpacedTextElement('CoinBase', [], `${utils.convert.number.formatNumberAsCurrency(blockData.coinBase)}`, [], rightContainer);
-        createSpacedTextElement('Lower fee', [], `${utils.convert.number.formatNumberAsCurrency(blockData.lowerFeePerByte)}c/byte`, [], rightContainer);
-        createSpacedTextElement('Higher fee', [], `${utils.convert.number.formatNumberAsCurrency(blockData.higherFeePerByte)}c/byte`, [], rightContainer);
-        createSpacedTextElement('Miner reward', [], `${utils.convert.number.formatNumberAsCurrency(blockData.powReward)}`, [], rightContainer);
-        createSpacedTextElement('Validator reward', [], `${utils.convert.number.formatNumberAsCurrency(blockData.posReward)}`, [], rightContainer);
+        createSpacedTextElement('CoinBase', [], `${convert.formatNumberAsCurrency(blockData.coinBase)}`, [], rightContainer);
+        createSpacedTextElement('Lower fee', [], `${convert.formatNumberAsCurrency(blockData.lowerFeePerByte)}c/byte`, [], rightContainer);
+        createSpacedTextElement('Higher fee', [], `${convert.formatNumberAsCurrency(blockData.higherFeePerByte)}c/byte`, [], rightContainer);
+        createSpacedTextElement('Miner reward', [], `${convert.formatNumberAsCurrency(blockData.powReward)}`, [], rightContainer);
+        createSpacedTextElement('Validator reward', [], `${convert.formatNumberAsCurrency(blockData.posReward)}`, [], rightContainer);
         
         this.#createTransactionsTableElement(blockData, ['cbe-TxsTable', 'cbe-Table'], contentWrap);
     }
@@ -728,8 +729,8 @@ export class BlockExplorerWidget {
         const addressTxRows = document.querySelectorAll(`.cbe-addressTxRow`);
         for (const addressTxRow of addressTxRows) {
             if (addressTxRow.querySelector('.cbe-addressTxReference').textContent === txReference) {
-                addressTxRow.querySelector('.cbe-addressTxAmount').textContent = utils.convert.number.formatNumberAsCurrencyChange(balanceChange);
-                addressTxRow.querySelector('.cbe-addressTxFee').textContent = utils.convert.number.formatNumberAsCurrency(fee);
+                addressTxRow.querySelector('.cbe-addressTxAmount').textContent = convert.formatNumberAsCurrencyChange(balanceChange);
+                addressTxRow.querySelector('.cbe-addressTxFee').textContent = convert.formatNumberAsCurrency(fee);
                 return;
             }
         }
@@ -845,7 +846,7 @@ export class BlockExplorerWidget {
         row.classList.add('cbe-TxRow');
         createHtmlElement('td', undefined, [], row).textContent = txIndex;
         createHtmlElement('td', undefined, [], row).textContent = tx.id;
-        createHtmlElement('td', undefined, [], row).textContent = `${utils.convert.number.formatNumberAsCurrency(outputsAmount)} c`;
+        createHtmlElement('td', undefined, [], row).textContent = `${convert.formatNumberAsCurrency(outputsAmount)} c`;
         createHtmlElement('td', undefined, [], row).textContent = `${weight} B`;
 
         tbodyDiv.appendChild(row);
@@ -888,29 +889,22 @@ export class BlockExplorerWidget {
             const inputDiv = createHtmlElement('div', `cbe-TxInput-${anchor}`, ['cbe-TxInput'], inputsWrap);
             if (isMinerTx) { inputDiv.textContent = anchor; continue; }
             // check conformity of anchor to avoid code injection
-            if (!utils.types.anchor.isConform(anchor)) { console.error(`Invalid anchor: ${anchor}`); return; }
+            if (!typeValidation.isConformAnchor(anchor)) { console.error(`Invalid anchor: ${anchor}`); return; }
             inputDiv.innerHTML = `<span class="cbe-anchorSpan">${anchor}</span>`;
         }
 
         const outputsWrap = createHtmlElement('div', undefined, ['cbe-TxOutputsWrap'], threeContainerWrap);
         createHtmlElement('h3', undefined, [], outputsWrap).textContent = `(${tx.outputs.length}) Outputs`;
         for (const output of tx.outputs) {
-            try { // we check conformity of output to avoid code injection
-                TxValidation.isConformOutput(output);
-            } catch (error) {
-                console.error(error);
-                return;
-            }
-
             const { address, amount, rule } = output;
             const outputDiv = createHtmlElement('div', undefined, ['cbe-TxOutput'], outputsWrap);
             const addressSpanAsText = `<span class="cbe-addressSpan">${address}</span>`;
 
-            outputDiv.innerHTML = `${utils.convert.number.formatNumberAsCurrency(amount)} >>> ${addressSpanAsText} (${rule})`;
+            outputDiv.innerText = `${convert.formatNumberAsCurrency(amount)} >>> ${addressSpanAsText} (${rule})`;
         }
         if (tx.fee) {
             const feeDiv = createHtmlElement('div', undefined, ['cbe-TxFee'], outputsWrap);
-            feeDiv.textContent = `Fee: ${utils.convert.number.formatNumberAsCurrency(tx.fee)}`;
+            feeDiv.textContent = `Fee: ${convert.formatNumberAsCurrency(tx.fee)}`;
         } else {
             console.info('tx fee not found');
         }
@@ -927,7 +921,7 @@ export class BlockExplorerWidget {
         //for (const { key, value } of addressInfo.balances) { // misstake, we need to iterate over the object
         for (const key in addressExhaustiveData.balances) {
             const value = addressExhaustiveData.balances[key];
-            createSpacedTextElement(key, [], `${utils.convert.number.formatNumberAsCurrency(value)}`, [], balancesWrap);
+            createSpacedTextElement(key, [], `${convert.formatNumberAsCurrency(value)}`, [], balancesWrap);
         }
 
         //createHtmlElement('div', undefined, ['cbe-modalContentSeparator'], addressInfoElement);
@@ -974,9 +968,9 @@ export class BlockExplorerWidget {
             const transaction = this.transactionsByReference[txReference];
             const row = createHtmlElement('tr', undefined, ['cbe-addressTxRow'], tbody);
             const amountText = createHtmlElement('td', undefined, ['cbe-addressTxAmount'], row);
-            amountText.textContent = transaction ? utils.convert.number.formatNumberAsCurrencyChange(transaction.balanceChange) : '...';
+            amountText.textContent = transaction ? convert.formatNumberAsCurrencyChange(transaction.balanceChange) : '...';
             const feeText = createHtmlElement('td', undefined, ['cbe-addressTxFee'], row);
-            feeText.textContent = transaction ? utils.convert.number.formatNumberAsCurrency(transaction.fee) : '...';
+            feeText.textContent = transaction ? convert.formatNumberAsCurrency(transaction.fee) : '...';
             createHtmlElement('td', undefined, ['cbe-addressTxReference'], row).textContent = txReference;
         }
         
@@ -997,10 +991,10 @@ export class BlockExplorerWidget {
         
         const tbody = document.createElement('tbody');
         for (const UTXO of UTXOs) {
-            if (!utils.types.anchor.isConform(UTXO.anchor)) { console.error(`Invalid anchor: ${UTXO.anchor}`); return; }
+            if (!typeValidation.isConformAnchor(UTXO.anchor)) { console.error(`Invalid anchor: ${UTXO.anchor}`); return; }
             const row = document.createElement('tr');
             createHtmlElement('td', undefined, ['cbe-anchorSpan'], row).textContent = UTXO.anchor;
-            createHtmlElement('td', undefined, [], row).innerHTML = `${utils.convert.number.formatNumberAsCurrency(UTXO.amount)} c`;
+            createHtmlElement('td', undefined, [], row).innerHTML = `${convert.formatNumberAsCurrency(UTXO.amount)} c`;
             tbody.appendChild(row);
         }
 
@@ -1281,7 +1275,7 @@ function displayLastConfirmedBlock(blockHeader) {
     // 1. contrastChainExplorer
     if (SETTINGS.ROLES.includes('chainExplorer')) {
         eHTML.chainHeight.textContent = blockHeader.index;
-        eHTML.circulatingSupply.textContent = utils.convert.number.formatNumberAsCurrency(blockHeader.supply + blockHeader.coinBase);
+        eHTML.circulatingSupply.textContent = convert.formatNumberAsCurrency(blockHeader.supply + blockHeader.coinBase);
         eHTML.lastBlocktime.textContent = `${((blockHeader.timestamp - blockHeader.posTimestamp) / 1000).toFixed(2)}s`;
     }
 

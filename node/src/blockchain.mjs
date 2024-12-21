@@ -6,6 +6,8 @@ import LevelDown from 'leveldown';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
+import { convert, FastConverter } from '../../utils/converters.mjs';
+import { serializer, serializerFast } from '../../utils/serializer.mjs';
 import utils from './utils.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 
@@ -23,6 +25,7 @@ import { Transaction_Builder } from './transaction.mjs';
 export class Blockchain {
     __parentFolderPath = path.dirname(url.fileURLToPath(import.meta.url));
     __parentPath = path.join(this.__parentFolderPath, '..');
+    fastConverter = new FastConverter();
     /** Creates a new Blockchain instance.
      * @param {string} dbPath - The path to the LevelDB database.
      * @param {Object} [options] - Configuration options for the blockchain.
@@ -260,18 +263,18 @@ export class Blockchain {
             for (let i = 0; i < finalizedBlock.Txs.length; i++) {
                 const tx = finalizedBlock.Txs[i];
                 const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : false;
-                const serializedTx = specialTx ? utils.serializer.transaction.toBinary_v2(tx) : utils.serializerFast.serialize.transaction(tx);
+                const serializedTx = specialTx ? serializer.transaction.toBinary_v2(tx) : serializerFast.serialize.transaction(tx);
                 txsIds.push(tx.id);
                 batch.put(`${finalizedBlock.index}:${tx.id}`, Buffer.from(serializedTx));
             }
 
-            const serializedTxsIds = utils.serializer.array_of_tx_ids.toBinary_v3(txsIds);
+            const serializedTxsIds = serializer.array_of_tx_ids.toBinary_v3(txsIds);
             batch.put(`height-${finalizedBlock.index}-txIds`, Buffer.from(serializedTxsIds));
 
-            const serializedHeader = utils.serializer.blockHeader_finalized.toBinary_v3(finalizedBlock);
+            const serializedHeader = serializer.blockHeader_finalized.toBinary_v3(finalizedBlock);
             batch.put(finalizedBlock.hash, Buffer.from(serializedHeader));
 
-            const serializedHash = utils.convert.hex.toUint8Array(finalizedBlock.hash);
+            const serializedHash = convert.hex.toUint8Array(finalizedBlock.hash);
             batch.put(`height-${finalizedBlock.index}`, Buffer.from(serializedHash));
 
             await batch.write();
@@ -290,7 +293,7 @@ export class Blockchain {
         //this.logger.debug({ blockHash }, 'Persisting block info to disk');
         this.miniLogger.log(`Persisting block info to disk: blockHash=${blockHash}`, (m) => { console.debug(m); });
         try {
-            const serializedBlockInfo = utils.serializer.rawData.toBinary_v1(blockInfo);
+            const serializedBlockInfo = serializer.rawData.toBinary_v1(blockInfo);
             const buffer = Buffer.from(serializedBlockInfo);
             await this.db.put(`info-${blockHash}`, buffer);
 
@@ -308,7 +311,7 @@ export class Blockchain {
         if (indexStart > indexEnd) { return; }
 
         const addressesTxsRefsSnapHeightSerialized = await this.db.get('addressesTxsRefsSnapHeight').catch(() => null);
-        const addressesTxsRefsSnapHeight = addressesTxsRefsSnapHeightSerialized ? utils.fastConverter.uint86BytesToNumber(addressesTxsRefsSnapHeightSerialized) : -1;
+        const addressesTxsRefsSnapHeight = addressesTxsRefsSnapHeightSerialized ? this.fastConverter.uint86BytesToNumber(addressesTxsRefsSnapHeightSerialized) : -1;
         if (addressesTxsRefsSnapHeight >= indexEnd) { console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`); return; }
 
         /** @type {Object<string, string[]>} */
@@ -328,7 +331,7 @@ export class Blockchain {
             for (const [address, newTxsReferences] of Object.entries(transactionsReferencesSortedByAddress)) {
                 if (addressesTransactionsPromises[address]) {
                     const serialized = await addressesTransactionsPromises[address];
-                    const deserialized = utils.serializerFast.deserialize.txsReferencesArray(serialized);
+                    const deserialized = serializerFast.deserialize.txsReferencesArray(serialized);
                     actualizedAddressesTxsRefs[address] = deserialized;
                 }
                 if (!actualizedAddressesTxsRefs[address]) { actualizedAddressesTxsRefs[address] = []; }
@@ -352,9 +355,9 @@ export class Blockchain {
             }
             if (duplicate > 0) { totalDuplicates += duplicate; };
 
-            const serialized = utils.serializerFast.serialize.txsReferencesArray(actualizedAddressTxsRefs);
+            const serialized = serializerFast.serialize.txsReferencesArray(actualizedAddressTxsRefs);
             batch.put(`${address}-txs`, Buffer.from(serialized));
-            batch.put('addressesTxsRefsSnapHeight', Buffer.from(utils.fastConverter.numberTo6BytesUint8Array(indexEnd)));
+            batch.put('addressesTxsRefsSnapHeight', Buffer.from(this.fastConverter.numberTo6BytesUint8Array(indexEnd)));
         }
 
         if (totalDuplicates > 0) { this.miniLogger.log(`[DB] ${totalDuplicates} duplicate txs references found and removed`, (m) => { console.warn(m); }); }
@@ -372,7 +375,7 @@ export class Blockchain {
             if (from >= cacheStartIndex) { throw new Error('Data in cache, no need to get from disk'); }
 
             const txsRefsSerialized = await this.db.get(`${address}-txs`);
-            txsRefs = utils.serializerFast.deserialize.txsReferencesArray(txsRefsSerialized);
+            txsRefs = serializerFast.deserialize.txsReferencesArray(txsRefsSerialized);
         } catch (error) {};
 
         // remove duplicates
@@ -484,11 +487,11 @@ export class Blockchain {
     async #getBlockFromDiskByHash(hash, deserialize = true) {
         try {
             const serializedHeader = await this.db.get(hash);
-            const blockHeader = utils.serializer.blockHeader_finalized.fromBinary_v3(serializedHeader);
+            const blockHeader = serializer.blockHeader_finalized.fromBinary_v3(serializedHeader);
             const height = blockHeader.index;
             const serializedTxsIds = await this.db.get(`height-${height}-txIds`);
 
-            const txsIds = utils.serializer.array_of_tx_ids.fromBinary_v3(serializedTxsIds);
+            const txsIds = serializer.array_of_tx_ids.fromBinary_v3(serializedTxsIds);
             const txsPromises = txsIds.map(txId => this.db.get(`${height}:${txId}`));
 
             if (!deserialize) { return { header: serializedHeader, txs: await Promise.all(txsPromises) }; }
@@ -504,12 +507,12 @@ export class Blockchain {
         try {
             const serializedHash = await this.db.get(`height-${height}`);
             if (!serializedHash) { return null; }
-            const blockHash = utils.convert.uint8Array.toHex(serializedHash);
+            const blockHash = convert.uint8Array.toHex(serializedHash);
 
             const serializedHeader = this.db.get(blockHash);
             const serializedTxsIds = this.db.get(`height-${height}-txIds`);
 
-            const txsIds = utils.serializer.array_of_tx_ids.fromBinary_v3(await serializedTxsIds);
+            const txsIds = serializer.array_of_tx_ids.fromBinary_v3(await serializedTxsIds);
             const txsPromises = txsIds.map(txId => this.db.get(`${height}:${txId}`));
 
             if (!deserialize) { return { header: await serializedHeader, txs: await Promise.all(txsPromises) }; }
@@ -525,11 +528,11 @@ export class Blockchain {
             const serializedHash = await this.db.get(`height-${height}`);
             if (!serializedHash) { return null; }
 
-            const blockHash = utils.convert.uint8Array.toHex(serializedHash);
+            const blockHash = convert.uint8Array.toHex(serializedHash);
             const blockInfoUint8Array = await this.db.get(`info-${blockHash}`);
             
             /** @type {BlockInfo} */
-            const blockInfo = utils.serializer.rawData.fromBinary_v1(blockInfoUint8Array);
+            const blockInfo = serializer.rawData.fromBinary_v1(blockInfoUint8Array);
             return blockInfo;
         } catch (error) {
             if (error.type === 'NotFoundError') { return null; }
@@ -552,14 +555,14 @@ export class Blockchain {
     /** @param {Uint8Array} serializedTx - The serialized transaction data */
     deserializeTransaction(serializedTx) {
         try { // Try fast deserialization first.
-            return utils.serializerFast.deserialize.transaction(serializedTx);
+            return serializerFast.deserialize.transaction(serializedTx);
         } catch (error) {
             //this.logger.debug({ error }, 'Failed to fast deserialize transaction');
             this.miniLogger.log(`Failed to fast deserialize transaction: error=${error}`, (m) => { console.debug(m); });
         }
 
         try { // Try the special transaction deserialization if fast deserialization fails.
-            return utils.serializer.transaction.fromBinary_v2(serializedTx);
+            return serializer.transaction.fromBinary_v2(serializedTx);
         } catch (error) {
             //this.logger.debug({ error }, 'Failed to deserialize special transaction');
             this.miniLogger.log(`Failed to deserialize special transaction: error=${error}`, (m) => { console.debug(m); });

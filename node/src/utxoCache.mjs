@@ -1,6 +1,6 @@
 import { Transaction, UTXO, Transaction_Builder } from './transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import utils from './utils.mjs';
+import { serializerFast } from '../../utils/serializer.mjs';
 
 /**
 * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
@@ -66,7 +66,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const serializedAnchors = this.addressesAnchors[address];
         if (!serializedAnchors) { return []; }
 
-        const anchors = utils.serializerFast.deserialize.anchorsArray(serializedAnchors);
+        const anchors = serializerFast.deserialize.anchorsArray(serializedAnchors);
         return anchors;
     }
     /** @param {string} anchors */
@@ -81,7 +81,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
                 missingAnchors.push(anchor);
                 continue; 
             }
-            const { amount, rule, address } = utils.serializerFast.deserialize.miniUTXO(miniUtxoSerialized);
+            const { amount, rule, address } = serializerFast.deserialize.miniUTXO(miniUtxoSerialized);
             utxosObj[anchor] = UTXO(anchor, amount, rule, address); // unspent
         }
 
@@ -111,7 +111,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     async getUTXO(anchor) {
         const miniUtxoSerialized = this.unspentMiniUtxos[anchor];
         if (miniUtxoSerialized) {
-            const { amount, rule, address } = utils.serializerFast.deserialize.miniUTXO(miniUtxoSerialized);
+            const { amount, rule, address } = serializerFast.deserialize.miniUTXO(miniUtxoSerialized);
             return UTXO(anchor, amount, rule, address); // unspent
         }
 
@@ -166,13 +166,13 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const start = performance.now();
         const anchors = Object.keys(this.unspentMiniUtxos);
         for (const anchor of anchors) {
-            const { address } = utils.serializerFast.deserialize.miniUTXO(this.unspentMiniUtxos[anchor]);
+            const { address } = serializerFast.deserialize.miniUTXO(this.unspentMiniUtxos[anchor]);
             if (!addressesAnchors[address]) { addressesAnchors[address] = {}; }
             addressesAnchors[address][anchor] = true;
         }
 
         for (const address of Object.keys(addressesAnchors)) {
-            this.addressesAnchors[address] = utils.serializerFast.serialize.anchorsObjToArray(addressesAnchors[address]);
+            this.addressesAnchors[address] = serializerFast.serialize.anchorsObjToArray(addressesAnchors[address]);
         }
     }
     // ----- PRIVATE METHODS -----
@@ -181,7 +181,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const serializedAnchors = this.addressesAnchors[address];
         if (!serializedAnchors) { return []; }
 
-        const anchors = utils.serializerFast.deserialize.anchorsObjFromArray(serializedAnchors);
+        const anchors = serializerFast.deserialize.anchorsObjFromArray(serializedAnchors);
         return anchors;
     }
     /** Sort the new UTXOs and Stakes Outputs from a transaction
@@ -232,7 +232,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         if (this.logPerformance) { performance.mark('digestNewUtxos-setUTXOs start'); }
         const newAnchorsByAddress = {};
         for (const utxo of newUtxos) {
-            const serializedMiniUtxo = utils.serializerFast.serialize.miniUTXO(utxo);
+            const serializedMiniUtxo = serializerFast.serialize.miniUTXO(utxo);
             this.unspentMiniUtxos[utxo.anchor] = serializedMiniUtxo;
             this.totalOfBalances += utxo.amount;
 
@@ -246,7 +246,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
                 if (addressAnchors[anchor]) { throw new Error('Anchor already exists'); }
                 addressAnchors[anchor] = true;
             }
-            this.addressesAnchors[address] = utils.serializerFast.serialize.anchorsObjToArray(addressAnchors);
+            this.addressesAnchors[address] = serializerFast.serialize.anchorsObjToArray(addressAnchors);
             if (this.wsCallbacks.onBalanceUpdated) { this.wsCallbacks.onBalanceUpdated.execute('balance_updated', address); }
         }
 
@@ -280,7 +280,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             }
 
             if (Object.keys(addressAnchors).length === 0) { delete this.addressesAnchors[address]; continue; }
-            this.addressesAnchors[address] = utils.serializerFast.serialize.anchorsObjToArray(addressAnchors);
+            this.addressesAnchors[address] = serializerFast.serialize.anchorsObjToArray(addressAnchors);
             if (this.wsCallbacks.onBalanceUpdated) { this.wsCallbacks.onBalanceUpdated.execute('balance_updated', address); }
         }
     }

@@ -2,6 +2,7 @@ import utils from './utils.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { Transaction_Builder, Transaction } from './transaction.mjs';
 import { TxValidation } from './validations-classes.mjs';
+import { serializer, serializerFast } from '../../utils/serializer.mjs';
 
 /**
 * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
@@ -269,12 +270,12 @@ export class BlockUtils {
     /** @param {Uint8Array} serializedHeader @param {Uint8Array[]} serializedTxs */
     static blockDataFromSerializedHeaderAndTxs(serializedHeader, serializedTxs) { // Better in utils serializer ?
         /** @type {BlockData} */
-        const blockData = utils.serializer.blockHeader_finalized.fromBinary_v3(serializedHeader);
+        const blockData = serializer.blockHeader_finalized.fromBinary_v3(serializedHeader);
         blockData.Txs = [];
         for (let i = 0; i < serializedTxs.length; i++) {
             const serializedTx = serializedTxs[i];
             const specialTx = i < 2 ? true : false;
-            const tx = specialTx ? utils.serializer.transaction.fromBinary_v2(serializedTx) : utils.serializerFast.deserialize.transaction(serializedTx);
+            const tx = specialTx ? serializer.transaction.fromBinary_v2(serializedTx) : serializerFast.deserialize.transaction(serializedTx);
             blockData.Txs.push(tx);
         }
 
@@ -288,7 +289,7 @@ export class BlockUtils {
             totalFees: totalFees || await this.calculateTxsTotalFees(utxoCache, blockData.Txs),
             lowerFeePerByte: 0,
             higherFeePerByte: 0,
-            blockBytes: utils.serializer.block_finalized.toBinary_v4(blockData).length,
+            blockBytes: serializer.block_finalized.toBinary_v4(blockData).length,
             nbOfTxs: blockData.Txs.length
         };
         

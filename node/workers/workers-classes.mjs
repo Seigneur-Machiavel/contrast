@@ -1,8 +1,19 @@
+const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 import utils from '../src/utils.mjs';
 
 /**
  * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
  */
+
+const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
+function newWorker(scriptPath, workerCode) {
+    if (isNode) {
+        return new WorkerModule(new URL(scriptPath, import.meta.url));
+    } else {
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        return new Worker(URL.createObjectURL(blob));
+    }
+}
 
 // CLASS FOR EASY USAGE OF THE WORKER
 export class ValidationWorker {
@@ -11,7 +22,7 @@ export class ValidationWorker {
         this.state = 'idle';
 
         /** @type {Worker} worker */
-        this.worker = utils.newWorker('../workers/validation-worker-nodejs.mjs');
+        this.worker = newWorker('./validation-worker-nodejs.mjs');
         this.worker.on('exit', (code) => { console.log(`ValidationWorker ${this.id} stopped with exit code ${code}`); });
         this.worker.on('close', () => { console.log('ValidationWorker ${this.id} closed'); });
     }
@@ -75,7 +86,7 @@ export class MinerWorker {
         this.startTime = Date.now();
 
         /** @type {Worker} worker */
-        this.worker = utils.newWorker('../workers/miner-worker-nodejs.mjs');
+        this.worker = newWorker('./miner-worker-nodejs.mjs');
         this.worker.on('close', () => { console.log('MinerWorker closed'); });
         this.worker.on('message', (message) => {
             if (message.hashCount) {
@@ -188,21 +199,21 @@ export class AccountDerivationWorker {
         this.state = 'idle';
 
         /** @type {Worker} worker */
-        this.worker = utils.isNode ?
-        utils.newWorker('../workers/account-worker-nodejs.mjs') :
-        utils.newWorker(undefined, accountWorkerCode);
+        this.worker = isNode ?
+        newWorker('./account-worker-nodejs.mjs') :
+        newWorker(undefined, accountWorkerCode);
     }
     async derivationUntilValidAccount(seedModifierStart, maxIterations, masterHex, desiredPrefix) {
         this.state = 'working';
 
-        if (utils.isNode) {
+        if (isNode) {
             this.worker.removeAllListeners();
         } else {
             this.worker.onmessage = null;
         }
         //this.promise = new Promise((resolve, reject) => {
         const promise = new Promise((resolve, reject) => {
-            if (utils.isNode) {
+            if (isNode) {
                 this.state = 'working';
                 this.worker.on('exit', (code) => { console.log(`DerivationWorker ${this.id} stopped with exit code ${code}`); });
                 this.worker.on('close', () => { console.log('DerivationWorker ${this.id} closed'); });

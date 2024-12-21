@@ -1,6 +1,7 @@
 import { BlockData, BlockUtils } from './block-classes.mjs';
 import { MinerWorker } from '../workers/workers-classes.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { convert } from '../../utils/converters.mjs';
 import utils from './utils.mjs';
 
 /**
@@ -8,7 +9,7 @@ import utils from './utils.mjs';
  * @typedef {import("./node.mjs").Node} Node
  * @typedef {import("./OpStack.mjs").OpStack} OpStack
  * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack
- * @typedef {import("../src/time.mjs").TimeSynchronizer} TimeSynchronizer
+ * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
  */
 
 export class Miner {
@@ -151,7 +152,7 @@ to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
         const validatorId = validatorAddress.slice(0, 6);
         const minerId = this.address.slice(0, 6);
         console.info(`[MINER-${this.address.slice(0, 6)}] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
-(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${utils.convert.number.formatNumberAsCurrency(finalizedBlock.coinBase)}`);
+(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${convert.formatNumberAsCurrency(finalizedBlock.coinBase)}`);
         
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
 

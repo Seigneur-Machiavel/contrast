@@ -1,5 +1,6 @@
 import { BlockData, BlockUtils } from "../src/block-classes.mjs";
-import utils from '../src/utils.mjs';
+import { ProgressLogger } from '../../utils/progress-logger.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 
 /**
 * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
@@ -82,7 +83,7 @@ async function loadBlockchainLocally(node, saveBlocksInfo = false) {
     const id = node.id;
     const blocksFolders = getListOfFoldersInBlocksDirectory(id);
     const nbOfBlocksInStorage = countFilesInBlocksDirectory(id, blocksFolders, 'bin');
-    const progressLogger = new utils.ProgressLogger(nbOfBlocksInStorage);
+    const progressLogger = new ProgressLogger(nbOfBlocksInStorage);
     
     /** @type {BlockData} */
     let blockLoadedCount = 0;
@@ -197,7 +198,7 @@ function loadBlockDataBinary_v1(blockIndexStr, blocksFolderPath) {
     //return decompressed;
     
     const encoded = fs.readFileSync(blockDataPath);
-    const decoded = utils.serializer.block_finalized.fromBinary_v2(encoded);
+    const decoded = serializer.block_finalized.fromBinary_v2(encoded);
     return decoded;
 }
 //#endregion -----------------------------
@@ -262,7 +263,7 @@ function saveBlockDataBinary_v1(blockData, blocksFolderPath) {
     const blockDataPath = path.join(blocksFolderPath, `${blockData.index}.bin`);
     const cloneOfBlockData = BlockUtils.cloneBlockData(blockData);
 
-    const encoded = utils.serializer.block_finalized.toBinary_v2(cloneOfBlockData);
+    const encoded = serializer.block_finalized.toBinary_v2(cloneOfBlockData);
     fs.writeFileSync(blockDataPath, encoded);
 }
 //#endregion -----------------------------

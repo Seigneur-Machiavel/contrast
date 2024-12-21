@@ -1,5 +1,7 @@
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import utils from './utils.mjs';
+import { conditionnals } from '../../utils/conditionnals.mjs';
+import { typeValidation } from '../../utils/type-validation.mjs';
+import { serializer, serializerFast } from '../../utils/serializer.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { BlockUtils } from './block-classes.mjs';
 
@@ -208,7 +210,7 @@ export class Transaction_Builder {
     /** @param {UTXO[]} utxos */
     static checkMalformedAnchorsInUtxosArray(utxos) {
         for (const utxo of utxos) {
-            if (!utils.types.anchor.isConform(utxo.anchor)) { throw new Error(`UTXO anchor malformed in UTXO: ${utxo.anchor}`); }
+            if (!typeValidation.isConformAnchor(utxo.anchor)) { throw new Error(`UTXO anchor malformed in UTXO: ${utxo.anchor}`); }
         }
     }
     /** @param {UTXO[]} utxos */
@@ -216,7 +218,7 @@ export class Transaction_Builder {
         if (utxos.length === 0) { throw new Error('No UTXO to check'); }
 
         const anchors = utxos.map(utxo => utxo.anchor);
-        if (utils.conditionnals.arrayIncludeDuplicates(anchors)) { throw new Error('Duplicate UTXO anchors in UTXOs'); }
+        if (conditionnals.arrayIncludeDuplicates(anchors)) { throw new Error('Duplicate UTXO anchors in UTXOs'); }
     }
     static createLighthouse(nodeVersion = 1) {
         const lighthouseOutput = TxIO_Builder.newOutput(0, 'lighthouse', 'Cv6XXKBTALRPSCzuU6k4');
@@ -281,7 +283,7 @@ export class Transaction_Builder {
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress);
         if (changeOutput) { outputs.push(changeOutput); }
 
-        if (utils.conditionnals.arrayIncludeDuplicates(outputs)) { throw new Error('Duplicate outputs'); }
+        if (conditionnals.arrayIncludeDuplicates(outputs)) { throw new Error('Duplicate outputs'); }
 
         return await this.#newTransaction(utxos, outputs);
     }
@@ -308,7 +310,7 @@ export class Transaction_Builder {
 
         if (changeOutput) { outputs.push(changeOutput); }
 
-        if (utils.conditionnals.arrayIncludeDuplicates(outputs)) { throw new Error('Duplicate outputs'); }
+        if (conditionnals.arrayIncludeDuplicates(outputs)) { throw new Error('Duplicate outputs'); }
 
         return await this.#newTransaction(utxos, outputs);
     }
@@ -361,11 +363,11 @@ export class Transaction_Builder {
     /** @param {Transaction} transaction */
     static getTxWeight(transaction, specialTx) {
         if (specialTx) {
-            const serialized = utils.serializer.transaction.toBinary_v2(transaction);
+            const serialized = serializer.transaction.toBinary_v2(transaction);
             return serialized.byteLength;
         }
 
-        const serialized = utils.serializerFast.serialize.transaction(transaction);
+        const serialized = serializerFast.serialize.transaction(transaction);
         return serialized.byteLength;
     }
     /**
@@ -448,13 +450,13 @@ export class Transaction_Builder {
     /** @param {Transaction} transaction */
     static clone(transaction, specialTx = false) {
         if (specialTx) {
-            const serialized = utils.serializer.transaction.toBinary_v2(transaction);
-            const clone = utils.serializer.transaction.fromBinary_v2(serialized);
+            const serialized = serializer.transaction.toBinary_v2(transaction);
+            const clone = serializer.transaction.fromBinary_v2(serialized);
             return clone;
         }
         
-        const serialized = utils.serializerFast.serialize.transaction(transaction);
-        const clone = utils.serializerFast.deserialize.transaction(serialized);
+        const serialized = serializerFast.serialize.transaction(transaction);
+        const clone = serializerFast.deserialize.transaction(serialized);
         return clone;
     }
     // Multi-functions methods

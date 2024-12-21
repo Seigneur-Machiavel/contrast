@@ -1,4 +1,4 @@
-import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 import ntpClient from 'ntp-client';
 
 class TimeSynchronizer {

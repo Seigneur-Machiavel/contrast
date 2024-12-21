@@ -1,6 +1,15 @@
-import fs from 'fs';
-import path from 'path';
-const __dirname = path.resolve('miniLogger');
+const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
+
+let fs;
+let path;
+let __dirname;
+(async () => {
+    if (!isNode) { return; }
+
+    fs = await import('fs');
+    path = await import('path');
+    __dirname = path.resolve('miniLogger');
+})();
 
 const HistoricalLog = (type = 'log', message = 'toto') => {
     /*
@@ -28,8 +37,14 @@ const MiniLoggerConfig = () => {
     }
 }
 
+async function loadedImports() {
+    while (!fs || !path || !__dirname) { await new Promise(resolve => setTimeout(resolve, 100)); }
+}
+
 /** @returns {MiniLoggerConfig} */
-export function loadDefaultConfig() {
+export async function loadDefaultConfig() {
+    await loadedImports();
+
     const defaultConfigPath = path.join(__dirname, 'mini-logger-config.json');
     if (!fs.existsSync(defaultConfigPath)) return MiniLoggerConfig();
 
@@ -37,8 +52,10 @@ export function loadDefaultConfig() {
     return defaultConfig;
 }
 /** @returns {MiniLoggerConfig} */
-export function loadMergedConfig() {
-    const defaultConfig = loadDefaultConfig();
+export async function loadMergedConfig() {
+    await loadedImports();
+
+    const defaultConfig = await loadDefaultConfig();
     const customConfigPath = path.join(__dirname, 'mini-logger-config-custom.json');
     if (!fs.existsSync(customConfigPath)) return defaultConfig;
 
@@ -59,47 +76,69 @@ export function loadMergedConfig() {
 }
 
 export class MiniLogger {
+    filePath;
+    saveRequested = false;
     /** @param {MiniLoggerConfig} miniLoggerConfig */
     constructor(category = 'global', miniLoggerConfig) {
         this.category = category;
-        this.filePath = path.join(__dirname, 'history', `${this.category}.json`);
-        this.history = this.#loadHistory();
+        this.history = [];
         /** @type {MiniLoggerConfig} */
-        this.miniLoggerConfig = miniLoggerConfig || loadMergedConfig();
-        this.shouldLog = this.#isCategoryActive();
-        if (!fs.existsSync(path.join(__dirname, 'history'))) { fs.mkdirSync(path.join(__dirname, 'history')); }
-    }
+        this.miniLoggerConfig = miniLoggerConfig || {};
+        this.shouldLog = true;
 
-    #isCategoryActive() {
+        this.#init();
+    }
+    async #init() {
+        if (!isNode) { return; }
+
+        await loadedImports();
+
+        this.filePath = path.join(__dirname, 'history', `${this.category}-history.json`);
+        this.history = await this.#loadAndConcatHistory();
+
+        this.miniLoggerConfig = await loadMergedConfig();
+
         const allActive = this.miniLoggerConfig.allActive;
         const categoryActive = this.miniLoggerConfig.activeCategories[this.category];
-        return allActive || categoryActive;
+        this.shouldLog = allActive || categoryActive;
+
+        this.#saveHistoryLoop();
     }
-    #loadHistory() {
+    async #loadAndConcatHistory() {
+        if (!fs.existsSync(path.join(__dirname, 'history'))) { fs.mkdirSync(path.join(__dirname, 'history')); };
         if (!fs.existsSync(this.filePath)) { return []; }
         
         try {
-            const history = JSON.parse(fs.readFileSync(this.filePath));
-            return history;
+            const loadedHistory = JSON.parse(fs.readFileSync(this.filePath));
+            if (!Array.isArray(loadedHistory)) { return []; }
+
+            return loadedHistory.concat(this.history);
         } catch (error) {
             console.error('Error while loading history:', error);
             return [];
         }
     }
-    #saveHistory() {
-        fs.writeFileSync(this.filePath, JSON.stringify(this.history));
+    async #saveHistoryLoop() {
+        while (true) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            if (!this.saveRequested) { continue; }
+
+            fs.writeFileSync(this.filePath, JSON.stringify(this.history));
+            this.saveRequested = false;
+        }
     }
     #saveLog(type, message) {
         const historicalLog = HistoricalLog(type, message);
         this.history.push(historicalLog);
 
-        if (this.history.length > this.miniLoggerConfig.maxHistory) { this.history.shift(); }
+        const maxHistory = this.miniLoggerConfig.maxHistory || 100;
+        if (this.history.length > maxHistory) { this.history.shift(); }
 
-        this.#saveHistory();
+        this.saveRequested = true;
     }
     log(message, callback = (m) => { console.log(m); }) {
         const type = callback.toString().split('console.')[1].split('(')[0].trim();
-        this.#saveLog(type, message);
+        if (isNode) { this.#saveLog(type, message); }
 
         if (this.shouldLog && typeof callback === 'function') { callback(message); }
     }
