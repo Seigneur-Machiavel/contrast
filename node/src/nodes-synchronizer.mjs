@@ -372,7 +372,7 @@ export class SyncHandler {
     
         // Sort peers by currentHeight in descending order
         peerStatuses.sort((a, b) => b.currentHeight - a.currentHeight);
-        let highestPeerHeight = peerStatuses[0].currentHeight;
+        let highestPeerHeight = this.node.blockchain.currentHeight;
         const peersHeight = {};
         for (const peer of peerStatuses) {
             const height = peer.currentHeight;

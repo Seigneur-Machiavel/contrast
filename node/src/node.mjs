@@ -506,20 +506,20 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
 
                     const lastBlockIndex = this.blockchain.lastBlock ? this.blockchain.lastBlock.index : -1;
                     if (this.miner.highestBlockIndex > data.index) { // avoid processing old blocks
-                        this.miniLogger.log(`#${data.index} | highest #${this.miner.highestBlockIndex} -> skip`, (m) => { console.info(m); });
+                        this.miniLogger.log(`highest #${this.miner.highestBlockIndex} > #${data.index} -> skip`, (m) => { console.info(m); });
                         return;
                     }
                     if (lastBlockIndex +10 > data.index) {
-                        this.miniLogger.log(`#${data.index} +10 > lastBlockIndex #${lastBlockIndex} -> syncWithPeers`, (m) => { console.info(m); });
+                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +10 > #${data.index} -> syncWithPeers`, (m) => { console.info(m); });
                         this.opStack.pushFirst('syncWithPeers', null);
                         return;
                     }
                     if (lastBlockIndex +1 > data.index) {
-                        this.miniLogger.log(`#${data.index} +1 > lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
+                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 > #${data.index} -> skip`, (m) => { console.info(m); });
                         return;
                     }
                     if (lastBlockIndex +1 < data.index) {
-                        this.miniLogger.log(`#${data.index} +1 < lastBlockIndex #${lastBlockIndex} -> skip`, (m) => { console.info(m); });
+                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 < #${data.index} -> skip`, (m) => { console.info(m); });
                         return;
                     }
 
