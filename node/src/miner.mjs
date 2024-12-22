@@ -183,9 +183,11 @@ to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
         return readyWorkers;
     }
     async terminateUnusedWorkers() {
+        const promises = [];
         for (let i = this.nbOfWorkers; i < this.workers.length; i++) {
-            await this.workers[i].terminateAsync();
+            promises.push(this.workers[i].terminateAsync());
         }
+        await Promise.all(promises);
         this.workers = this.workers.slice(0, this.nbOfWorkers);
     }
     /** DON'T AWAIT THIS FUNCTION */
@@ -248,10 +250,11 @@ to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
         console.info(`[MINER-${this.address.slice(0, 6)}] Stopped`);
     }
     async terminate() {
-        //this.workers.forEach(worker => worker.terminateAsync());
+        const promises = [];
         for (const worker of this.workers) {
-            await worker.terminateAsync();
+            promises.push(worker.terminateAsync());
         }
+        await Promise.all(promises);
         this.terminated = true;
     }
 }

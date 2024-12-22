@@ -93,7 +93,7 @@ export class NodeFactory {
         await targetNode.blockchain.db.close();
         await targetNode.p2pNetwork.stop();
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise(resolve => setTimeout(resolve, 4000));
         
         const newNode = await this.createNode(
             nodeSettings.account,

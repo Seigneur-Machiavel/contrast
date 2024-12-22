@@ -149,7 +149,7 @@ export class Node {
         for (const role of this.roles) { topicsToSubscribe.push(...rolesTopics[role]); }
         return [...new Set(topicsToSubscribe)];
     }
-    async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
+    /*async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
         const checkPeerCount = () => {
             const peersIds = this.p2pNetwork.getConnectedPeers();
             const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
@@ -189,6 +189,44 @@ export class Node {
                 )
             ]);
         } catch (error) { this.miniLogger.log(error.message, (m) => { console.error(m); }); return false; }
+    }*/
+    async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
+        const checkPeerCount = () => {
+            const peersIds = this.p2pNetwork.getConnectedPeers();
+            const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
+            return peersIds.length - (peersIds.includes(myPeerId) ? 1 : 0);
+        };
+
+        const attemptConnection = async () => {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                let peerCount = checkPeerCount();
+                if (peerCount >= nbOfPeers) {
+                    this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
+                    return peerCount;
+                }
+
+                await this.p2pNetwork.connectToBootstrapNodes();
+                peerCount = checkPeerCount();
+                
+                if (peerCount >= nbOfPeers) {
+                    this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''} after connecting to bootstrap nodes`, (m) => { console.info(m); });
+                    this.opStack.pushFirst('syncWithPeers', null);
+                    return peerCount;
+                }
+
+                this.miniLogger.log(`Waiting for ${nbOfPeers} peer${nbOfPeers !== 1 ? 's' : ''}, currently connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+
+            this.miniLogger.log(`Failed to connect to ${nbOfPeers} peers within ${maxAttempts} attempts`, (m) => { console.error(m); });
+            return 0;
+        };
+
+        const result = await Promise.race([
+            attemptConnection(),
+            new Promise((resolve) => setTimeout(() => resolve(0), timeOut))
+        ]);
+        return result;
     }
     async createBlockCandidateAndBroadcast() {
         this.blockchainStats.state = "creating block candidate";
