@@ -226,6 +226,8 @@ export class Node {
             attemptConnection(),
             new Promise((resolve) => setTimeout(() => resolve(0), timeOut))
         ]);
+
+        if (result < nbOfPeers) { this.miniLogger.log(`Failed to connect to ${nbOfPeers} peers within ${timeOut / 1000} seconds`, (m) => { console.error(m); }); }
         return result;
     }
     async createBlockCandidateAndBroadcast() {
