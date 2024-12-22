@@ -12,7 +12,6 @@ import { addressUtils } from '../../utils/addressUtils.mjs';
  * @typedef {import("./memPool.mjs").MemPool} MemPool
  * @typedef {import("./block-classes.mjs").BlockData} BlockData
  * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker
- * @typedef {import("../workers/workers-classes.mjs").ValidationWorker_v2} ValidationWorker_v2
  */
 
 /*const validationObs = new PerformanceObserver((items) => { // TODO: disable in production
@@ -393,7 +392,6 @@ export class TxValidation {
 }
 
 export class BlockValidation {
-
     /** @param {BlockData} blockData @param {BlockData} prevBlockData */
     static isTimestampsValid(blockData, prevBlockData) {
         if (blockData.posTimestamp <= prevBlockData.timestamp) { throw new Error(`Invalid PoS timestamp: ${blockData.posTimestamp} <= ${prevBlockData.timestamp}`); }
@@ -428,9 +426,9 @@ export class BlockValidation {
     static validateBlockHash(block, lastBlock) {
         const lastBlockHash = lastBlock ? lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
         const prevHashEquals = lastBlockHash === block.prevHash;
-        if (!prevHashEquals) {
-            throw new Error(`!store! !reorg! Rejected: #${block.index} -> invalid prevHash: ${block.prevHash} - expected: ${lastBlockHash}`);
-        }
+        if (prevHashEquals) { return; }
+        
+        throw new Error(`!store! !reorg! Rejected: #${block.index} -> invalid prevHash: ${block.prevHash} - expected: ${lastBlockHash}`);
     }
     /** @param {BlockData} block @param {BlockData} lastBlock @param {number} currentTime */
     static validateTimestamps(block, lastBlock, currentTime) {
@@ -443,6 +441,7 @@ export class BlockValidation {
         // verify final timestamp
         if (typeof block.timestamp !== 'number') { throw new Error('!banBlock! !applyOffense! Invalid block timestamp'); }
         if (Number.isInteger(block.timestamp) === false) { throw new Error('!banBlock! !applyOffense! Invalid block timestamp'); }
+        
         const timeDiffFinal = block.timestamp - currentTime;
         if (timeDiffFinal > 1000) { throw new Error(`!applyMinorOffense! Rejected: #${block.index} -> ${timeDiffFinal} > timestamp_diff_tolerance: 1000`); }
     }
@@ -475,7 +474,7 @@ export class BlockValidation {
      * @param {BlockData} blockData
      * @param {UtxoCache} utxoCache
      * @param {MemPool} memPool
-     * @param {ValidationWorker_v2[]} workers
+     * @param {ValidationWorker[]} workers
      * @param {boolean} useDevArgon2 */
     static async fullBlockTxsValidation(blockData, utxoCache, memPool, workers, useDevArgon2 = false) {
         const involvedUTXOs = await utxoCache.extractInvolvedUTXOsOfTxs(blockData.Txs);
@@ -487,8 +486,7 @@ export class BlockValidation {
         const allDiscoveredPubKeysAddresses = {};
 
         const singleThreadStart = Date.now();
-        if (nbOfWorkers === 0 || blockData.Txs.length <= minTxsToUseWorkers) { // TODO: ACTIVE AGAIN
-            //if (true) { // Test // TODO: DISABLE TEST
+        if (nbOfWorkers === 0 || blockData.Txs.length <= minTxsToUseWorkers) {
             for (let i = 0; i < blockData.Txs.length; i++) {
                 const tx = blockData.Txs[i];
                 let specialTx = false;
@@ -516,9 +514,7 @@ export class BlockValidation {
             if (i < 2) { specialTx = Transaction_Builder.isMinerOrValidatorTx(tx) } // coinbase Tx / validator Tx
 
             const { fee, success, impliedKnownPubkeysAddresses } = await TxValidation.partialTransactionValidation(involvedUTXOs, memPool, tx, specialTx, utxoCache.nodeVersion);
-            if (!success) {
-                throw new Error(`Invalid transaction: ${tx.id}`);
-            }
+            if (!success) { throw new Error(`Invalid transaction: ${tx.id}`); }
 
             for (let [pubKeyHex, address] of Object.entries(impliedKnownPubkeysAddresses)) {
                 allImpliedKnownPubkeysAddresses[pubKeyHex] = address;
@@ -605,9 +601,7 @@ export class BlockValidation {
             if (workersPromises[worker.id] === null) { continue; } // no task sent
 
             const resolved = await workersPromises[worker.id];
-            if (!resolved.isValid) {
-                throw new Error(resolved.error);
-            }
+            if (!resolved.isValid) { throw new Error(resolved.error); }
 
             for (let [pubKeyHex, address] of Object.entries(resolved.discoveredPubKeysAddresses)) {
                 allDiscoveredPubKeysAddresses[pubKeyHex] = address;

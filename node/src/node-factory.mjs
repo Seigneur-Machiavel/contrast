@@ -1,8 +1,10 @@
 import { Node } from './node.mjs';
 import { Account } from './wallet.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 export class NodeFactory {
     constructor(nodePort = 27260) {
+        this.miniLogger = new MiniLogger('NodeFactory');
         this.nodePort = nodePort;
         /** @type {Map<string, Node>} */
         this.nodes = new Map();
@@ -53,10 +55,10 @@ export class NodeFactory {
      */
     async forceRestartNode(nodeId, startFromScratch = false, newAccount = null, newMinerAddress = null) {
         /** @type {Node} */
-        console.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`);
-        console.log(`Forcing restart of node ${nodeId} with account ${newAccount ? newAccount.address : 'unchanged'}`);
-        console.log(`---- Already restarted ${this.restartCounter} times ----`);
-        console.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`);
+        this.miniLogger.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`, (m) => { console.log(m); });
+        this.miniLogger.log(`Forcing restart of node ${nodeId} with account ${newAccount ? newAccount.address : 'unchanged'}`, (m) => { console.log(m); });
+        this.miniLogger.log(`---- Already restarted ${this.restartCounter} times ----`, (m) => { console.log(m); });
+        this.miniLogger.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`, (m) => { console.log(m); });
 
         const targetNode = this.getNode(nodeId);
         if (!targetNode) { console.error(`Node ${nodeId} not found`); return; }
@@ -64,11 +66,11 @@ export class NodeFactory {
         targetNode.restarting = true;
         if (!targetNode.restartRequested) {
             targetNode.requestRestart('NodeFactory.forceRestartNode()');
-            console.log(`Node ${nodeId} has been requested to restart...`);
+            this.miniLogger.log(`Node ${nodeId} has been requested to restart...`, (m) => { console.log(m); });
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
 
-        console.log(`Restarting node ${nodeId}, requested by ${targetNode.restartRequested}`);
+        this.miniLogger.log(`Restarting node ${nodeId}, requested by ${targetNode.restartRequested}`, (m) => { console.log(m); });
 
         const nodeAccount = newAccount || targetNode.account;
         const nodeMinerAddress = newMinerAddress || targetNode.minerAddress;
@@ -104,8 +106,8 @@ export class NodeFactory {
 
         await newNode.start(startFromScratch);
         newNode.validatorRewardAddress = nodeSettings.validatorRewardAddress;
-        console.log(`\nNode ${nodeId} has been restarted${newAccount ? ' with a new account' : ''}.`);
-        console.info(`Restart counter: ${this.restartCounter}\n`);
+        this.miniLogger.log(`\nNode ${nodeId} has been restarted${newAccount ? ' with a new account' : ''}.`, (m) => { console.log(m); });
+        this.miniLogger.info(`Restart counter: ${this.restartCounter}\n`, (m) => { console.log(m); });
         
         this.nodes.set(nodeId, newNode);
         this.restartCounter++;

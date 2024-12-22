@@ -4,10 +4,15 @@ const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 
-(() => { import('./node/run/dashboard.mjs'); })(); // can be async
-
 Menu.setApplicationMenu(null);
 const mainLogger = new MiniLogger('main');
+
+//(async () => { import('./node/run/dashboard.mjs'); })(); // can be async
+// create a worker for the dashboard
+const { Worker } = require('worker_threads');
+const worker = new Worker('./node/run/dashboard.mjs');
+worker.on('error', (err) => { mainLogger.log(err), (m) => { console.error(m); }; });
+worker.on('exit', (code) => { mainLogger.log(`Worker stopped with exit code ${code}`), (m) => { console.log(m); }; });
 
 const isDev = true;
 function checkArrayOfArraysDuplicate(handlersKeys = []) {
@@ -44,17 +49,17 @@ async function createMainWindow() {
         }
     });
 
-    mainWindow.loadFile('index/index.html');
+    await mainWindow.loadFile('index/index.html');
 
-    let loaded;
+    /*let loaded;
     mainWindow.webContents.on('did-finish-load', () => { loaded = true; });
+    while(!loaded) { await new Promise(resolve => setTimeout(resolve, 100)); }*/
 
 	/*mainWindow.webContents.on('will-navigate', async (event) => { // EXPERIMENTAL and useless
 		await chatHandler.cleanup();
 		globalShortcut.unregisterAll();
 	});*/
 
-    while(!loaded) { await new Promise(resolve => setTimeout(resolve, 100)); }
     return mainWindow;
 }
 
@@ -71,9 +76,11 @@ app.on('ready', async () => {
     if (duplicates) { mainLogger.log(`Duplicate IPC handlers detected: ${duplicates}`, (m) => { console.warn(m); }); }
 
     setShortcuts(loggerWindow, handlersKeys, isDev);
-    mainWindow.webContents.toggleDevTools(); // dev tools on start
+    if (isDev) mainWindow.webContents.toggleDevTools(); // dev tools on start
+    //BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
 
-    // BrowserWindow.getFocusedWindow() -> to get focused window
+    // BrowserWindow.getFocusedWindow()
+    //(async () => { import('./node/run/dashboard.mjs'); })(); // -> trying as worker
 });
 
 app.on('will-quit', () => { globalShortcut.unregisterAll(); });
