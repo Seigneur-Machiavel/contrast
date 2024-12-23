@@ -338,10 +338,10 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
                 if (!this.worker) { return; }
                 this.worker.terminate();
                 await new Promise(resolve => setTimeout(resolve, 1000));
-
-                this.worker = null;
             }
         });
+
+        console.log('NodeAppWorker started');
     }
 
     requestRestart() {

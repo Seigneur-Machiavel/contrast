@@ -13,13 +13,10 @@ new ObserverWsApp(factory, observerPort);
 
 (async () => {
     while (closeWhenFactoryStops) {
-    if (factory.stopped) {
-        //process.exit(0);
-        //parentPort.close(); // close the worker
-        // send message
-        parentPort.postMessage({ type: 'factory-stopped' });
-    }
-    await new Promise(resolve => setTimeout(resolve, 1000));
+        if (factory.stopped) {
+            parentPort.postMessage({ type: 'factory-stopped' });
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
 })();
 

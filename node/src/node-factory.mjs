@@ -21,7 +21,7 @@ export class NodeFactory {
 
             if (!this.isWorker) { await this.forceRestartNode(node.id); return; }
 
-            // if is worker
+            if (this.stopped) { return; }
             await this.stopNode(this.getFirstNode().id);
             this.stopped = true;
         }

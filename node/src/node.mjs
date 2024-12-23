@@ -377,8 +377,8 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         timer.startPhase('snapshot-and-peer-wait');
         if (!isLoading) await this.#saveSnapshot(finalizedBlock);
         const waitStart = Date.now();
-        const nbOfPeers = await this.#waitSomePeers();
-        if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
+        //const nbOfPeers = await this.#waitSomePeers();
+        //if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
         timer.endPhase('snapshot-and-peer-wait');
     
         if (!broadcastNewCandidate) return true;
