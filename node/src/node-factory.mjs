@@ -71,7 +71,6 @@ export class NodeFactory {
         this.miniLogger.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`, (m) => { console.log(m); });
         this.miniLogger.log(`Forcing restart of node ${nodeId} with account ${newAccount ? newAccount.address : 'unchanged'}`, (m) => { console.log(m); });
         this.miniLogger.log(`---- Already restarted ${this.restartCounter} times ----`, (m) => { console.log(m); });
-        this.miniLogger.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`, (m) => { console.log(m); });
 
         const targetNode = this.getNode(nodeId);
         if (!targetNode) { console.error(`Node ${nodeId} not found`); return; }
@@ -84,6 +83,7 @@ export class NodeFactory {
         }
 
         this.miniLogger.log(`Restarting node ${nodeId}, requested by ${targetNode.restartRequested}`, (m) => { console.log(m); });
+        this.miniLogger.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`, (m) => { console.log(m); });
 
         const nodeAccount = newAccount || targetNode.account;
         const nodeMinerAddress = newMinerAddress || targetNode.minerAddress;

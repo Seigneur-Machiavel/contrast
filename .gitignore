@@ -1,6 +1,5 @@
 node_modules
 ipfs
-contrast-win32-x64
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
@@ -10,3 +9,7 @@ node/storage/accounts
 node/nodes-data
 node/application.log
 node/config.json
+
+npm_install_log.txt
+release-builds
+contrast-win32-x64

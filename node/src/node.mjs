@@ -130,6 +130,15 @@ export class Node {
 
         this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
         this.opStack.pushFirst('syncWithPeers', null);
+
+        this.connexionsMaintenerLoop();
+    }
+    async connexionsMaintenerLoop() {
+        while(true) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            const nbOfPeers = await this.#waitSomePeers();
+            if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop'; return; }
+        }
     }
     async stop() {
         this.miniLogger.log(`Node ${this.id} (${this.roles.join('_')}) => stopped`, (m) => { console.info(m); });
@@ -160,10 +169,11 @@ export class Node {
         const attemptConnection = async () => {
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
                 let peerCount = checkPeerCount();
-                if (peerCount >= nbOfPeers) {
+                if (peerCount >= nbOfPeers) { return peerCount; }
+                /*if (peerCount >= nbOfPeers) {
                     this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
                     return peerCount;
-                }
+                }*/
 
                 await this.p2pNetwork.connectToBootstrapNodes();
                 peerCount = checkPeerCount();
