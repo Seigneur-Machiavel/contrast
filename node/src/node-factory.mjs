@@ -22,8 +22,8 @@ export class NodeFactory {
             if (!this.isWorker) { await this.forceRestartNode(node.id); return; }
 
             if (this.stopped) { return; }
-            await this.stopNode(this.getFirstNode().id);
             this.stopped = true;
+            await this.stopNode(this.getFirstNode().id);
         }
     }
     async #autoRestartControlLoop() {
@@ -101,15 +101,17 @@ export class NodeFactory {
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         await targetNode.miner.terminate();
-        for (const worker of targetNode.workers) { worker.terminate(); }
-            //await worker.terminateAsync(); }
+        const promises = [];
+        for (const worker of targetNode.workers) { promises.push(worker.terminateAsync()); }
+        await Promise.all(promises);
+
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         // stop level db
         await targetNode.blockchain.db.close();
         await targetNode.p2pNetwork.stop();
 
-        await new Promise(resolve => setTimeout(resolve, 4000));
+        await new Promise(resolve => setTimeout(resolve, 10000));
 
         return nodeSettings;
     }

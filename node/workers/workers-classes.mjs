@@ -337,7 +337,10 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
             if (message.type === 'factory-stopped') {
                 if (!this.worker) { return; }
                 this.worker.terminate();
-                await new Promise(resolve => setTimeout(resolve, 1000));
+                await new Promise(resolve => setTimeout(resolve, 10000));
+
+                console.log('NodeAppWorker factory-stopped -> worker terminated');
+                return;
             }
         });
 
