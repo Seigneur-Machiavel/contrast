@@ -137,7 +137,7 @@ export class Node {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 10000));
             const nbOfPeers = await this.#waitSomePeers();
-            if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop'; return; }
+            if (!nbOfPeers || nbOfPeers < 1) { this.requestRestart('connexionsMaintenerLoop'); return; }
         }
     }
     async stop() {

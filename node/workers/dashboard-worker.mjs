@@ -24,7 +24,7 @@ parentPort.on('message', async (message) => {
     if (message.type === 'request-restart') {
         const node = factory.getFirstNode();
         if (!node) { return; }
-        node.restartRequested = true;
+        node.requestRestart('dashboard-worker');
     }
 });
 process.on('uncaughtException', (error) => {
