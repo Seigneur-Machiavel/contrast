@@ -3,16 +3,31 @@ const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
 const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
+//const { NodeAppWorker } = require('./node/workers/workers-classes.mjs');
+
 
 Menu.setApplicationMenu(null);
 const mainLogger = new MiniLogger('main');
 
-//(async () => { import('./node/run/dashboard.mjs'); })(); // can be async
-// create a worker for the dashboard
-const { Worker } = require('worker_threads');
-const worker = new Worker('./node/run/dashboard.mjs');
-worker.on('error', (err) => { mainLogger.log(err), (m) => { console.error(m); }; });
-worker.on('exit', (code) => { mainLogger.log(`Worker stopped with exit code ${code}`), (m) => { console.log(m); }; });
+// v1 -> //(async () => { import('./node/run/dashboard.mjs'); })(); // can be async
+
+// v2 -> // create a worker for the dashboard
+//const { Worker } = require('worker_threads');
+//const worker = new Worker('./node/run/dashboard.mjs');
+//worker.on('error', (err) => { mainLogger.log(err), (m) => { console.error(m); }; });
+//worker.on('exit', (code) => { mainLogger.log(`Worker stopped with exit code ${code}`), (m) => { console.log(m); }; });
+
+// v3 -> use proper class
+let dashboardWorker;
+(async () => {
+    const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
+    dashboardWorker = new NodeAppWorker('dashboard', 27260, 27271, 27270);
+
+    await new Promise(resolve => setTimeout(resolve, 30000));
+
+    dashboardWorker.requestRestart();
+})();
+
 
 const isDev = true;
 function checkArrayOfArraysDuplicate(handlersKeys = []) {

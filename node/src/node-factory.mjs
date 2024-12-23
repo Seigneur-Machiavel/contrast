@@ -1,24 +1,32 @@
+import { parentPort } from 'worker_threads';
 import { Node } from './node.mjs';
 import { Account } from './wallet.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 export class NodeFactory {
-    constructor(nodePort = 27260) {
+    stopped = false;
+    constructor(nodePort = 27260, asWorker = false) {
+        this.isWorker = asWorker;
         this.miniLogger = new MiniLogger('NodeFactory');
         this.nodePort = nodePort;
         /** @type {Map<string, Node>} */
         this.nodes = new Map();
         this.nodesCreationSettings = {};
         this.restartCounter = 0;
-        this.#controlLoop();
+        this.#autoRestartControlLoop();
     }
     async #restartNodesWhoRequestedIt() {
         for (const node of this.nodes.values()) {
             if (!node.restartRequested || node.restarting) { continue; }
-            await this.forceRestartNode(node.id);
+
+            if (!this.isWorker) { await this.forceRestartNode(node.id); return; }
+
+            // if is worker
+            await this.stopNode(this.getFirstNode().id);
+            this.stopped = true;
         }
     }
-    async #controlLoop() {
+    async #autoRestartControlLoop() {
         while (true) {
             await this.#restartNodesWhoRequestedIt();
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -54,6 +62,11 @@ export class NodeFactory {
      * @param {boolean} startFromScratch - if true, the node will start from the genesis block
      */
     async forceRestartNode(nodeId, startFromScratch = false, newAccount = null, newMinerAddress = null) {
+        const nodeSettings = await this.stopNode(nodeId, newAccount, newMinerAddress);
+        await this.startNode(nodeId, nodeSettings, startFromScratch);
+        this.restartCounter++;
+    }
+    async stopNode(nodeId, newAccount = null, newMinerAddress = null) {
         /** @type {Node} */
         this.miniLogger.log(`°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°`, (m) => { console.log(m); });
         this.miniLogger.log(`Forcing restart of node ${nodeId} with account ${newAccount ? newAccount.address : 'unchanged'}`, (m) => { console.log(m); });
@@ -82,21 +95,25 @@ export class NodeFactory {
             roles: targetNode.roles,
             p2pOptions: targetNode.p2pOptions
         };
-        
+
         targetNode.opStack.terminate();
         targetNode.timeSynchronizer.stop = true;
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         await targetNode.miner.terminate();
-        for (const worker of targetNode.workers) { await worker.terminateAsync(); }
+        for (const worker of targetNode.workers) { worker.terminate(); }
+            //await worker.terminateAsync(); }
         await new Promise(resolve => setTimeout(resolve, 1000));
-        
+
         // stop level db
         await targetNode.blockchain.db.close();
         await targetNode.p2pNetwork.stop();
 
         await new Promise(resolve => setTimeout(resolve, 4000));
-        
+
+        return nodeSettings;
+    }
+    async startNode(nodeId, nodeSettings, startFromScratch = false) {
         const newNode = await this.createNode(
             nodeSettings.account,
             nodeSettings.roles,
@@ -110,10 +127,11 @@ export class NodeFactory {
         this.miniLogger.info(`Restart counter: ${this.restartCounter}\n`, (m) => { console.log(m); });
         
         this.nodes.set(nodeId, newNode);
-        this.restartCounter++;
     }
     getFirstNode() {
-        return this.nodes.values().next().value;
+        /** @type {Node} */
+        const node = this.nodes.values().next().value;
+        return node;
     }
     /** @param {string} nodeId */
     getNode(nodeId) {

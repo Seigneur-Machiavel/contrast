@@ -149,47 +149,7 @@ export class Node {
         for (const role of this.roles) { topicsToSubscribe.push(...rolesTopics[role]); }
         return [...new Set(topicsToSubscribe)];
     }
-    /*async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
-        const checkPeerCount = () => {
-            const peersIds = this.p2pNetwork.getConnectedPeers();
-            const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
-            return peersIds.length - (peersIds.includes(myPeerId) ? 1 : 0);
-        };
-    
-        const attemptConnection = async () => {
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                if (attempt > 0) await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                let peerCount = checkPeerCount();
-                if (peerCount >= nbOfPeers) {
-                    this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
-                    return peerCount;
-                }
-    
-                await this.p2pNetwork.connectToBootstrapNodes();
-                peerCount = checkPeerCount();
-                
-                if (peerCount >= nbOfPeers) {
-                    this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''} after connecting to bootstrap nodes`, (m) => { console.info(m); });
-                    this.opStack.pushFirst('syncWithPeers', null);
-                    return peerCount;
-                }
-    
-                this.miniLogger.log(`Waiting for ${nbOfPeers} peer${nbOfPeers !== 1 ? 's' : ''}, currently connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
-            }
-            //throw new Error(`Failed to connect to ${nbOfPeers} peers within ${maxAttempts} attempts`);
-            return false;
-        };
-    
-        try {
-            return await Promise.race([
-                attemptConnection(),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error(`P2P network failed to find peers within ${timeOut / 1000} seconds`)), timeOut)
-                )
-            ]);
-        } catch (error) { this.miniLogger.log(error.message, (m) => { console.error(m); }); return false; }
-    }*/
+
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
         const checkPeerCount = () => {
             const peersIds = this.p2pNetwork.getConnectedPeers();
@@ -511,11 +471,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                     }
                     if (lastBlockIndex +1 > data.index) {
                         this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 > #${data.index} -> skip`, (m) => { console.info(m); });
-                        return;
-                    }
-                    if (lastBlockIndex +10 < data.index) {
-                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +10 < #${data.index} -> syncWithPeers`, (m) => { console.info(m); });
-                        this.opStack.pushFirst('syncWithPeers', null);
                         return;
                     }
                     if (lastBlockIndex +1 < data.index) {

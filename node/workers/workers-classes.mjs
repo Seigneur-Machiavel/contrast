@@ -5,9 +5,9 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
  */
 
 const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
-function newWorker(scriptPath, workerCode) {
+function newWorker(scriptPath, workerCode, workerData = {}) {
     if (isNode) {
-        return new WorkerModule(new URL(scriptPath, import.meta.url));
+        return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
     } else {
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         return new Worker(URL.createObjectURL(blob));
@@ -65,6 +65,9 @@ export class ValidationWorker {
                 resolve();
             });
         });
+    }
+    terminate() {
+        this.worker.terminate();
     }
 }
 
@@ -286,5 +289,62 @@ export class AccountDerivationWorker {
                 resolve();
             });
         });
+    }
+}
+
+export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
+    /** @type {Worker} */
+    worker = null;
+    autoRestart = true;
+    constructor (app = "dashboard", nodePort = 27260, dashboardPort = 27271, observerPort = 27270) {
+        this.app = app;
+        this.nodePort = nodePort;
+        this.dashboardPort = dashboardPort;
+        this.observerPort = observerPort;
+        this.autoRestartLoop();
+        this.initWorker();
+    }
+
+    async autoRestartLoop() {
+        while (true) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (!this.autoRestart) { continue; }
+            if (this.worker) { continue; }
+            
+            console.log('NodeAppWorker autoRestartLoop => restarting...');
+            this.initWorker();
+        }
+    }
+    initWorker() {
+        if (this.worker) {
+            console.log('NodeAppWorker terminate...');
+            this.worker.terminate();
+        }
+
+        const app = this.app;
+        const nodePort = this.nodePort;
+        const dashboardPort = this.dashboardPort;
+        const observerPort = this.observerPort;
+
+        const worker = newWorker(`./${app}-worker.mjs`, '', { nodePort, dashboardPort, observerPort });
+        this.worker = worker;
+        this.worker.on('exit', (code) => {
+            console.log(`NodeAppWorker stopped with exit code ${code}`);
+            this.worker = null;
+        });
+        this.worker.on('close', () => {  console.log('NodeAppWorker closed'); });
+        this.worker.on('message', async (message) => {
+            if (message.type === 'factory-stopped') {
+                if (!this.worker) { return; }
+                this.worker.terminate();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                this.worker = null;
+            }
+        });
+    }
+
+    requestRestart() {
+        this.worker.postMessage({ type: 'request-restart' });
     }
 }
