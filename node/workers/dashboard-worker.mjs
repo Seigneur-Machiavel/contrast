@@ -8,8 +8,16 @@ const observerPort = workerData.observerPort || 27270;
 const closeWhenFactoryStops = workerData.closeWhenFactoryStops || true;
 
 const factory = new NodeFactory(nodePort, true);
-new DashboardWsApp(factory, dashboardPort);
-new ObserverWsApp(factory, observerPort);
+//new DashboardWsApp(factory, dashboardPort);
+//new ObserverWsApp(factory, observerPort);
+
+parentPort.on('message', async (message) => {
+    if (message.type === 'request-restart') {
+        const node = factory.getFirstNode();
+        if (!node) { return; }
+        node.requestRestart('dashboard-worker');
+    }
+});
 
 (async () => {
     while (closeWhenFactoryStops) {
@@ -19,14 +27,6 @@ new ObserverWsApp(factory, observerPort);
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
 })();
-
-parentPort.on('message', async (message) => {
-    if (message.type === 'request-restart') {
-        const node = factory.getFirstNode();
-        if (!node) { return; }
-        node.requestRestart('dashboard-worker');
-    }
-});
 process.on('uncaughtException', (error) => {
     console.error('Uncatched exception:', error.stack);
 });
