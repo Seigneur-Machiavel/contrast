@@ -1,8 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-const url = await import('url');
-import LevelUp from 'levelup';
-import LevelDown from 'leveldown';
+import { BlockchainStorage } from '../../utils/storage-manager.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
@@ -22,25 +18,13 @@ import { Transaction_Builder } from './transaction.mjs';
 
 /** Represents the blockchain and manages its operations. */
 export class Blockchain {
-    __parentFolderPath = path.dirname(url.fileURLToPath(import.meta.url));
-    __parentPath = path.join(this.__parentFolderPath, '..');
     fastConverter = new FastConverter();
-    /** Creates a new Blockchain instance.
-     * @param {string} dbPath - The path to the LevelDB database.
-     * @param {Object} [options] - Configuration options for the blockchain.
-     * @param {string} [options.logLevel='info'] - The logging level for Pino.
-     * @param {number} [options.snapshotInterval=100] - Interval at which to take full snapshots. */
-    constructor(nodeId, options = {}) {
-        this.nodeId = nodeId;
-        const {
-            logLevel = 'silent', // 'silent',
-            snapshotInterval = 100,
-        } = options;
-        this.dbPath = path.join(this.__parentPath, 'nodes-data', nodeId, 'blockchain');
-        // ensure folder exists
-        if (!fs.existsSync(this.dbPath)) { fs.mkdirSync(this.dbPath, { recursive: true }); }
-        this.db = LevelUp(LevelDown(this.dbPath));
+    miniLogger = new MiniLogger('blockchain');
 
+    /** @param {string} nodeId - The ID of the node. */
+    constructor(nodeId) {
+        this.nodeId = nodeId;
+        this.blockStorage = new BlockchainStorage();
         this.cache = {
             /** @type {Map<string, BlockData>} */
             blocksByHash: new Map(),
@@ -54,31 +38,18 @@ export class Blockchain {
             }
         };
         /** @type {number} */
-        this.currentHeight = -1;
+        this.currentHeight = this.blockStorage.lastBlockIndex;
         /** @type {BlockData|null} */
         this.lastBlock = null;
-        /** @type {number} */
-        this.snapshotInterval = snapshotInterval;
         /** @type {BlockMiningData[]} */
         this.blockMiningData = []; // .csv mining datas research
-        /** @type {MiniLogger} */
-        this.miniLogger = new MiniLogger('blockchain');
 
-        //this.logger.info({ dbPath: './databases/blockchainDB-' + nodeId, snapshotInterval }, 'Blockchain instance created');
-        this.miniLogger.log(`Blockchain instance created: dbPath=${this.dbPath}, snapshotInterval=${snapshotInterval}`, (m) => { console.info(m); });
+        this.miniLogger.log(`Blockchain instance created`, (m) => { console.info(m); });
     }
     /** @param {SnapshotSystem} snapshotSystem */
     async load(snapshotSystem) {
-        // OPENNING BLOCKCHAIN DATABASE
-        try {
-            while (this.db.status === 'opening') { await new Promise(resolve => setTimeout(resolve, 100)); }
-        } catch (error) {
-            this.miniLogger.log(`Error while opening the databases: ${error}`, (m) => { console.error(m); });
-        }
-
-        // ensure consistency between the blockchain and the snapshot system
-        const lastSavedBlockHeight = await this.getLastKnownHeight();
-        snapshotSystem.eraseSnapshotsHigherThan(lastSavedBlockHeight);
+        // Ensure consistency between the blockchain and the snapshot system
+        snapshotSystem.eraseSnapshotsHigherThan(this.currentHeight);
 
         const snapshotsHeights = snapshotSystem.getSnapshotsHeights();
         const olderSnapshotHeight = snapshotsHeights[0] ? snapshotsHeights[0] : 0;
@@ -86,32 +57,27 @@ export class Blockchain {
         const startHeight = isNaN(youngerSnapshotHeight) ? -1 : youngerSnapshotHeight;
 
         // Cache the blocks from the last snapshot +1 to the last block
-        // cacheStart : 0, 11, 21, etc...
+        // cacheStart : 0, 11, 21, etc... (depending on the modulo)
         const snapModulo = snapshotSystem.snapshotHeightModulo;
         const cacheStart = olderSnapshotHeight > snapModulo ? olderSnapshotHeight - (snapModulo-1) : 0;
-        await this.#loadBlocksFromStorageToCache(cacheStart, startHeight);
+        this.#loadBlocksFromStorageToCache(cacheStart, startHeight);
         this.currentHeight = startHeight;
-        this.lastBlock = await this.getBlockByHeight(startHeight);
+        this.lastBlock = this.getBlockByHeight(startHeight);
 
-        // cache + db cleanup
-        await this.#eraseBlocksHigherThan(startHeight);
-        if (startHeight === -1) { // no snapshot to load
-            await this.eraseEntireDatabase();
-        }
+        // Cache + db cleanup
+        this.blockStorage.removeBlocksHigherThan(startHeight);
+
+        if (startHeight === -1) { this.reset(); } // no snapshot to load => reset the db
 
         return startHeight;
     }
-    async #loadBlocksFromStorageToCache(indexStart = 0, indexEnd = 9) {
+    #loadBlocksFromStorageToCache(indexStart = 0, indexEnd = 9) {
         if (indexStart > indexEnd) { return; }
 
-        const blocksPromises = [];
         for (let i = indexStart; i <= indexEnd; i++) {
-            blocksPromises.push(this.#getBlockFromDiskByHeight(i));
-        }
-
-        for (const blockPromise of blocksPromises) {
-            const block = await blockPromise;
+            const block = this.getBlockByHeight(i);
             if (!block) { break; }
+
             this.#setBlockInCache(block);
         }
 
@@ -125,37 +91,31 @@ export class Blockchain {
     }
     /** Adds a new confirmed block to the blockchain.
      * @param {UtxoCache} utxoCache - The UTXO cache to use for the block.
-     * @param {BlockData[]} blocks - The blocks to add. ordered by height
+     * @param {BlockData} block - The block to add.
      * @param {boolean} [persistToDisk=true] - Whether to persist the block to disk.
      * @param {boolean} [saveBlockInfo=true] - Whether to save the block info.
      * @param {Object<string, string>} [blockPubKeysAddresses] - The block public keys and addresses.
      * @throws {Error} If the block is invalid or cannot be added. */
-    async addConfirmedBlocks(utxoCache, blocks, persistToDisk = true, saveBlockInfo = true, totalFees) {
-        for (const block of blocks) {
-            //this.logger.info({ blockHeight: block.index, blockHash: block.hash }, 'Adding new block');
-            this.miniLogger.log(`Adding new block: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
-            try {
-                this.#setBlockInCache(block);
-                this.lastBlock = block;
-                this.currentHeight = block.index;
+    async addConfirmedBlock(utxoCache, block, persistToDisk = true, saveBlockInfo = true, totalFees) {
+        this.miniLogger.log(`Adding new block: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
+        try {
+            const blockInfo = saveBlockInfo ? await BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
+            
+            this.#setBlockInCache(block);
+            this.lastBlock = block;
+            this.currentHeight = block.index;
 
-                const promises = [];
-                if (persistToDisk) {
-                    promises.push(this.#persistBlockToDisk(block));
-                    promises.push(this.db.put('currentHeight', this.currentHeight.toString()));
-                }
+            const promises = [];
+            if (persistToDisk) { promises.push(this.#persistBlockToDisk(block)); }
+            if (saveBlockInfo) { promises.push(this.#persistBlockInfoToDisk(blockInfo)) }
 
-                const blockInfo = saveBlockInfo ? await BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
-                if (saveBlockInfo) { promises.push(this.#persistBlockInfoToDisk(blockInfo)) }
+            await Promise.all(promises);
 
-                //this.logger.info({ blockHeight: block.index, blockHash: block.hash }, 'Block successfully added');
-                this.miniLogger.log(`Block successfully added: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
-                return blockInfo;
-            } catch (error) {
-                //this.logger.error({ error, blockHash: block.hash }, 'Failed to add block');
-                this.miniLogger.log(`Failed to add block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
-                throw error;
-            }
+            this.miniLogger.log(`Block successfully added: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
+            return blockInfo;
+        } catch (error) {
+            this.miniLogger.log(`Failed to add block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
+            throw error;
         }
     }
     /** returns the height of erasable blocks without erasing them. @param {number} height */
@@ -191,118 +151,36 @@ export class Blockchain {
         this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
         return { from: fromHeight, to: erasedUntil };
     }
-    async eraseEntireDatabase() {
-        const batch = this.db.batch();
-        const stream = this.db.createKeyStream();
-        for await (const key of stream) {
-            batch.del(key);
-        }
-        await batch.write();
-        this.miniLogger.log('Database erased', (m) => { console.info(m); });
-    }
-    async #eraseBlocksHigherThan(height = 0) {
-        let erasedUntil = null;
-        const batch = this.db.batch();
-        let i = height + 1;
-        while (true) {
-            const block = await this.getBlockByHeight(i);
-            if (!block) { break; }
-            
-            const blockHash = block.hash;
-            batch.del(blockHash);
-            batch.del(`height-${i}`);
-            batch.del(`height-${i}-txIds`);
-
-            for (const tx of block.Txs) {
-                batch.del(`${i}:${tx.id}`);
-            }
-
-            this.cache.blocksHashByHeight.delete(i);
-            this.cache.blockHeightByHash.delete(blockHash);
-            this.cache.blocksByHash.delete(blockHash);
-
-            erasedUntil = i;
-            i++;
-        }
-        await batch.write();
-
-        if (erasedUntil === null) { return; }
-        this.miniLogger.log(`Blocks erased from ${height} to ${erasedUntil}`, (m) => { console.info(m); });
-    }
     /** Applies the changes from added blocks to the UTXO cache and VSS.
     * @param {UtxoCache} utxoCache - The UTXO cache to update.
     * @param {Vss} vss - The VSS to update.
-    * @param {BlockData[]} blocksData - The blocks to apply.
+    * @param {BlockData} block - The block to apply.
     * @param {boolean} [storeAddAddressAnchors=false] - Whether to store added address anchors. */
-    async applyBlocks(utxoCache, vss, blocksData, storeAddAddressAnchors = false) {
-        for (const block of blocksData) {
-            const blockDataCloneToDigest = BlockUtils.cloneBlockData(block); // clone to avoid modification
-            try {
-                const newStakesOutputs = await utxoCache.digestFinalizedBlocks([blockDataCloneToDigest], storeAddAddressAnchors);
-                this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
-                vss.newStakes(newStakesOutputs);
-            } catch (error) {
-                //this.logger.error({ error, blockHash: block.hash }, 'Failed to apply block');
-                this.miniLogger.log(`Failed to apply block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
-                throw error;
-            }
-        }
-    }
-
-    /** Persists a block to disk.
-     * @param {BlockData} finalizedBlock - The block to persist.
-     * @returns {Promise<void>} */
-    async #persistBlockToDisk(finalizedBlock) { // now using serializer v3
-        //this.logger.debug({ blockHash: finalizedBlock.hash }, 'Persisting block to disk');
-        this.miniLogger.log(`Persisting block to disk: blockHash=${finalizedBlock.hash}`, (m) => { console.debug(m); });
+    async applyBlock(utxoCache, vss, block, storeAddAddressAnchors = false) {
+        const blockDataCloneToDigest = BlockUtils.cloneBlockData(block); // clone to avoid modification
         try {
-            // TRYING THE BEST PRACTICE: full batch write
-            const txsIds = [];
-            const batch = this.db.batch();
-            for (let i = 0; i < finalizedBlock.Txs.length; i++) {
-                const tx = finalizedBlock.Txs[i];
-                const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : false;
-                const serializedTx = specialTx ? serializer.transaction.toBinary_v2(tx) : serializerFast.serialize.transaction(tx);
-                txsIds.push(tx.id);
-                batch.put(`${finalizedBlock.index}:${tx.id}`, Buffer.from(serializedTx));
-            }
-
-            const serializedTxsIds = serializer.array_of_tx_ids.toBinary_v3(txsIds);
-            batch.put(`height-${finalizedBlock.index}-txIds`, Buffer.from(serializedTxsIds));
-
-            const serializedHeader = serializer.blockHeader_finalized.toBinary_v3(finalizedBlock);
-            batch.put(finalizedBlock.hash, Buffer.from(serializedHeader));
-
-            const serializedHash = convert.hex.toUint8Array(finalizedBlock.hash);
-            batch.put(`height-${finalizedBlock.index}`, Buffer.from(serializedHash));
-
-            await batch.write();
-
-            //this.logger.debug({ blockHash: finalizedBlock.hash }, 'Block persisted to disk');
-            this.miniLogger.log(`Block persisted to disk: blockHash=${finalizedBlock.hash}`, (m) => { console.debug(m); });
+            const newStakesOutputs = await utxoCache.digestFinalizedBlocks([blockDataCloneToDigest], storeAddAddressAnchors);
+            this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
+            vss.newStakes(newStakesOutputs);
         } catch (error) {
-            //this.logger.error({ error, blockHash: finalizedBlock.hash }, 'Failed to persist block to disk');
-            this.miniLogger.log(`Failed to persist block to disk: blockHash=${finalizedBlock.hash}, error=${error}`, (m) => { console.error(m); });
+            this.miniLogger.log(`Failed to apply block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
             throw error;
         }
+    }
+    /** @param {BlockData} finalizedBlock */
+    async #persistBlockToDisk(finalizedBlock) {
+        this.miniLogger.log(`Persisting block to disk: blockHash=${finalizedBlock.hash}`, (m) => { console.debug(m); });
+        this.blockStorage.addBlock(finalizedBlock);
     }
     /** @param {BlockInfo} blockInfo */
     async #persistBlockInfoToDisk(blockInfo) {
-        const blockHash = blockInfo.header.hash;
-        this.miniLogger.log(`Persisting block info to disk: blockHash=${blockHash}`, (m) => { console.debug(m); });
-        try {
-            const serializedBlockInfo = serializer.rawData.toBinary_v1(blockInfo);
-            const buffer = Buffer.from(serializedBlockInfo);
-            await this.db.put(`info-${blockHash}`, buffer);
-
-            this.miniLogger.log(`Block info persisted to disk: blockHash=${blockHash}`, (m) => { console.debug(m); });
-        } catch (error) {
-            this.miniLogger.log(`Failed to persist block info to disk: blockHash=${blockHash}, error=${error}`, (m) => { console.error(m); });
-            throw error;
-        }
+        this.miniLogger.log(`Persisting block info to disk: blockHash=${blockInfo.header.hash}`, (m) => { console.debug(m); });
+        this.blockStorage.addBlockInfo(blockInfo);
     }
     /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
-    async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
+    async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) { // DEPRECATED
+        return; // disabled
+
         indexStart = Math.max(0, indexStart);
         if (indexStart > indexEnd) { return; }
 
@@ -313,7 +191,7 @@ export class Blockchain {
         /** @type {Object<string, string[]>} */
         const actualizedAddressesTxsRefs = {};
         for (let i = indexStart; i <= indexEnd; i++) {
-            const finalizedBlock = await this.getBlockByHeight(i);
+            const finalizedBlock = this.getBlockByHeight(i);
             if (!finalizedBlock) { console.error('Block not found'); continue; }
             const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(finalizedBlock, memPool.knownPubKeysAddresses);
 
@@ -362,7 +240,9 @@ export class Blockchain {
         this.miniLogger.log(`Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included)`, (m) => { console.info(m); });
     }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */
-    async getTxsReferencesOfAddress(memPool, address, from = 0, to = this.currentHeight) {
+    async getTxsReferencesOfAddress(memPool, address, from = 0, to = this.currentHeight) { // DEPRECATED
+        return []; // disabled
+
         const cacheStartIndex = this.cache.oldestBlockHeight();
 
         // try to get the txs references from the DB first
@@ -439,102 +319,51 @@ export class Blockchain {
 
         const blocksData = [];
         for (let i = fromHeight; i <= toHeight; i++) {
-            const blockData = await this.getBlockByHeight(i, deserialize);
+            const blockData = this.getBlockByHeight(i, deserialize);
             if (!blockData) { break; }
             blocksData.push(blockData);
         }
         return blocksData;
     }
-    /** Retrieves a block by its hash.
-     * @param {string} hash - The hash of the block to retrieve.
-     * @returns {Promise<BlockData>} The retrieved block.
-     * @throws {Error} If the block is not found. */
-    async getBlockByHash(hash) {
+    /** Retrieves a block by its height. @param {number} height - The height of the block to retrieve. */
+    getBlockByHeight(height, deserialize = true) {
+        if (deserialize && this.cache.blocksHashByHeight.has(height)) {
+            return this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(height));
+        }
+
+        const block = this.blockStorage.getBlockByIndex(height, deserialize);
+        if (block) { return block; }
+
+        this.miniLogger.log(`Block not found: blockHeight=${height}`, (m) => { console.error(m); });
+        return null;
+    }
+    getBlockByHash(hash) {
         const block = this.cache.blocksByHash.has(hash)
         ? this.cache.blocksByHash.get(hash)
-        : await this.#getBlockFromDiskByHash(hash, true);
+        : this.blockStorage.getBlockByHash(hash);
 
         if (block) { return block; }
 
         this.miniLogger.log(`Block not found: blockHash=${hash}`, (m) => { console.error(m); });
         throw new Error(`Block not found: ${hash}`);
     }
-    /** Retrieves a block by its height. @param {number} height - The height of the block to retrieve. */
-    async getBlockByHeight(height, deserialize = true) {
-        if (deserialize && this.cache.blocksHashByHeight.has(height)) {
-            return this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(height));
-        }
-
-        const block = await this.#getBlockFromDiskByHeight(height, deserialize);
-        if (block) { return block; }
-
-        this.miniLogger.log(`Block not found: blockHeight=${height}`, (m) => { console.error(m); });
-        return null;
-    }
-    /** Retrieves a block from disk by its hash. @param {string} hash - The hash of the block to retrieve. */
-    async #getBlockFromDiskByHash(hash, deserialize = true) {
-        try {
-            const serializedHeader = await this.db.get(hash);
-            const blockHeader = serializer.blockHeader_finalized.fromBinary_v3(serializedHeader);
-            const height = blockHeader.index;
-            const serializedTxsIds = await this.db.get(`height-${height}-txIds`);
-
-            const txsIds = serializer.array_of_tx_ids.fromBinary_v3(serializedTxsIds);
-            const txsPromises = txsIds.map(txId => this.db.get(`${height}:${txId}`));
-
-            if (!deserialize) { return { header: serializedHeader, txs: await Promise.all(txsPromises) }; }
-
-            return BlockUtils.blockDataFromSerializedHeaderAndTxs(serializedHeader, await Promise.all(txsPromises));
-        } catch (error) {
-            if (error.type === 'NotFoundError') { return null; }
-            throw error;
-        }
-    }
-    /** Retrieves a block from disk by its height. @param {number} height - The height of the block to retrieve. */
-    async #getBlockFromDiskByHeight(height, deserialize = true) {
-        try {
-            const serializedHash = await this.db.get(`height-${height}`);
-            if (!serializedHash) { return null; }
-            const blockHash = convert.uint8Array.toHex(serializedHash);
-
-            const serializedHeader = this.db.get(blockHash);
-            const serializedTxsIds = this.db.get(`height-${height}-txIds`);
-
-            const txsIds = serializer.array_of_tx_ids.fromBinary_v3(await serializedTxsIds);
-            const txsPromises = txsIds.map(txId => this.db.get(`${height}:${txId}`));
-
-            if (!deserialize) { return { header: await serializedHeader, txs: await Promise.all(txsPromises) }; }
-
-            return BlockUtils.blockDataFromSerializedHeaderAndTxs(await serializedHeader, await Promise.all(txsPromises));
-        } catch (error) {
-            if (error.type === 'NotFoundError') { return null; }
-            throw error;
-        }
-    }
-    async getBlockInfoFromDiskByHeight(height = 0) {
-        try {
-            const serializedHash = await this.db.get(`height-${height}`);
-            if (!serializedHash) { return null; }
-
-            const blockHash = convert.uint8Array.toHex(serializedHash);
-            const blockInfoUint8Array = await this.db.get(`info-${blockHash}`);
-            
-            /** @type {BlockInfo} */
-            const blockInfo = serializer.rawData.fromBinary_v1(blockInfoUint8Array);
-            return blockInfo;
-        } catch (error) {
-            if (error.type === 'NotFoundError') { return null; }
-            throw error;
-        }
+    getBlockInfoByHeight(height = 0) {
+        return this.blockStorage.getBlockInfoByIndex(height);
     }
     /** @param {string} txReference - The transaction reference in the format "height:txId" */
     async getTransactionByReference(txReference) {
         const [height, txId] = txReference.split(':');
         try {
-            const serializedTx = await this.db.get(`${height}:${txId}`);
-            return this.deserializeTransaction(serializedTx);
+            /** @type {BlockData} */
+            const block = this.getBlockByHeight(parseInt(height, 10));
+            if (!block) { throw new Error('Block not found'); }
+
+            const tx = block.Txs.find(tx => tx.id === txId);
+            if (!tx) { throw new Error('Transaction not found'); }
+
+            return tx;
         } catch (error) {
-            this.miniLogger.log(`Transaction not found or failed to deserialize: txReference=${txReference}`, (m) => { console.error(m); });
+            this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); });
             return null;
         }
     }
@@ -555,14 +384,13 @@ export class Blockchain {
         this.miniLogger.log('Unable to deserialize transaction using available strategies', (m) => { console.error(m); });
         return null;
     }
-
-    async getLastKnownHeight() {
-        const storedHeight = await this.db.get('currentHeight').catch(() => '-1');
-        const storedHeightInt = parseInt(storedHeight, 10);
-        return storedHeightInt;
-    }
+    
     /** @returns {string} The hash of the latest block */
-    getLatestBlockHash() {
+    getLastBlockHash() {
         return this.lastBlock ? this.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000";
+    }
+    reset() {
+        this.blockStorage.reset();
+        this.miniLogger.log('Database erased', (m) => { console.info(m); });
     }
 }

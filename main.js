@@ -13,8 +13,8 @@ let dashboardWorker;
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     dashboardWorker = new NodeAppWorker('dashboard', 27260, 27271, 27270);
 
-    // -- test restart -- (works)
-    await new Promise(resolve => setTimeout(resolve, 20000));
+    // -- test restart after 60s --
+    await new Promise(resolve => setTimeout(resolve, 60000));
     dashboardWorker.stop(); // but auto restarts
 })();
 

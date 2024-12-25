@@ -400,31 +400,6 @@ export const serializer = {
             return blockData;
         }
     },
-    blocks_finalized: {
-        /** @param {BlockData[]} blocksData */
-        toBinary_v3(blocksData, applyMsgPack = true) {
-            const blocksAsArray = [];
-            for (let i = 0; i < blocksData.length; i++) {
-                blocksAsArray.push(serializer.block_finalized.toBinary_v3(blocksData[i], false));
-            }
-
-            if (!applyMsgPack) { return blocksAsArray; }
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(blocksAsArray);
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedBlocks */
-        fromBinary_v3(encodedBlocks, applyMsgPack = true) {
-            const decodedBlocks = applyMsgPack ? msgpack.decode(encodedBlocks) : encodedBlocks;
-            const blocksData = [];
-            for (let i = 0; i < decodedBlocks.length; i++) {
-                blocksData.push(serializer.block_finalized.fromBinary_v3(decodedBlocks[i], false));
-            }
-
-            return blocksData;
-        }
-    },
     blockHeader_finalized: {
         /** @param {BlockData} blockData */
         toBinary_v3(blockData, applyMsgPack = true) {
@@ -509,8 +484,7 @@ export const serializerFast = {
         anchorsObjToArray(anchors) {
             return this.anchorsArray(Object.keys(anchors));
         },
-        /** serialize the UTXO as a miniUTXO: address, amount, rule (23 bytes)
-         * @param {UTXO} utxo */
+        /** serialize the UTXO as a miniUTXO: address, amount, rule (23 bytes) @param {UTXO} utxo */
         miniUTXO(utxo) {
             const utxoBuffer = new ArrayBuffer(23);
             const bufferView = new Uint8Array(utxoBuffer); // 23 bytes (6 + 1 + 16)

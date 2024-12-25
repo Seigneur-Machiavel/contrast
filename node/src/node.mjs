@@ -1,4 +1,4 @@
-import localStorage_v1 from '../storage/local-storage-management.mjs';
+import { Storage } from '../../utils/storage-manager.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 import { BlockValidation } from './validations-classes.mjs';
 import { OpStack } from './OpStack.mjs';
@@ -224,9 +224,9 @@ export class Node {
         await this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.warn(m); });
-        if (snapshotIndex < 1) { await this.blockchain.eraseEntireDatabase(); }
+        if (snapshotIndex < 1) { this.blockchain.reset(); }
 
-        this.blockchain.lastBlock = await this.blockchain.getBlockByHeight(snapshotIndex);
+        this.blockchain.lastBlock = this.blockchain.getBlockByHeight(snapshotIndex);
         if (!eraseHigher) { return; }
 
         // place snapshot to trash folder, we can restaure it if needed
@@ -318,7 +318,6 @@ export class Node {
      * @param {boolean} [options.isSync] - default: false
      * @param {boolean} [options.isLoading] - default: false
      * @param {boolean} [options.persistToDisk] - default: true
-     * @param {boolean} [options.storeAsFiles] - default: false
      */
     async digestFinalizedBlock(finalizedBlock, options = {}, byteLength) {
         const timer = new BlockDigestionTimer();
@@ -327,7 +326,7 @@ export class Node {
     
         timer.startPhase('initialization');
         const blockBytes = byteLength || serializer.block_finalized.toBinary_v4(finalizedBlock).byteLength;
-        const { skipValidation = false, broadcastNewCandidate = true, isSync = false, isLoading = false, persistToDisk = true, storeAsFiles = false } = options;
+        const { skipValidation = false, broadcastNewCandidate = true, isSync = false, isLoading = false, persistToDisk = true } = options;
         if (!finalizedBlock || !this.roles.includes('validator') || (this.syncHandler.isSyncing && !isSync)) 
             throw new Error(!finalizedBlock ? 'Invalid block candidate' : !this.roles.includes('validator') ? 'Only validator can process PoW block' : "Node is syncing, can't process block");
         timer.endPhase('initialization');
@@ -343,19 +342,18 @@ export class Node {
     
         timer.startPhase('add-confirmed-block');
         if (!skipValidation && !hashConfInfo?.conform) throw new Error('Failed to validate block');
-        const blockInfo = await this.blockchain.addConfirmedBlocks(this.utxoCache, [finalizedBlock], persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
+        const blockInfo = await this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
         timer.endPhase('add-confirmed-block');
     
         timer.startPhase('apply-blocks'),
-        await this.blockchain.applyBlocks(this.utxoCache, this.vss, [finalizedBlock], this.roles.includes('observer')),
+        await this.blockchain.applyBlock(this.utxoCache, this.vss, finalizedBlock, this.roles.includes('observer')),
         timer.endPhase('apply-blocks'),
         timer.startPhase('mempool-cleanup'),
-        this.memPool.removeFinalizedBlocksTransactions([finalizedBlock]),
+        this.memPool.removeFinalizedBlocksTransactions(finalizedBlock),
         timer.endPhase('mempool-cleanup');
     
-        timer.startPhase('block-storage');
+        timer.startPhase('block-storage'); // callback ?
         if (!skipValidation && this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
-        if (storeAsFiles) this.#storeConfirmedBlock(finalizedBlock);
         timer.endPhase('block-storage');
     
         if (blockBytes > 102_400 && !skipValidation) {
@@ -416,7 +414,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
-            const olderBlock = await this.blockchain.getBlockByHeight(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
+            const olderBlock = this.blockchain.getBlockByHeight(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
             const averageBlockTimeMS = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
             this.blockchainStats.averageBlockTime = averageBlockTimeMS;
             const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
@@ -435,14 +433,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         this.blockchainStats.lastLegitimacy = blockCandidate.legitimacy;
         return blockCandidate;
     }
-    /** @param {BlockData} blockData */
-    #storeConfirmedBlock(blockData) {
-        if (blockData.index >= 1000) { return; }
-        // save the block in local storage definitively
-        const clone = BlockUtils.cloneBlockData(blockData); // clone to avoid modification
-        localStorage_v1.saveBlockDataLocally(this.id, clone, 'json');
-        localStorage_v1.saveBlockDataLocally(this.id, clone, 'bin');
-    } // Used by developer to check the block data manually
     //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
 
     /** @param {string} topic @param {object} message */
@@ -527,17 +517,16 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     async #reSendBlocks(finalizedBlockHeight = 10) {
         const sequence = [-10, -8, -6, -4, -2];
         const sentSequence = [];
-        const blocksToReSendPromises = [];
+
         for (const index of sequence) {
-            blocksToReSendPromises.push(this.blockchain.getBlockByHeight(finalizedBlockHeight + index));
-        }
-        for (const blockPromise of blocksToReSendPromises) {
-            const block = await blockPromise;
+            const block = this.blockchain.getBlockByHeight(finalizedBlockHeight + index);
             if (!block) { continue; }
-            await new Promise(resolve => setTimeout(resolve, 400));
+
+            await new Promise(resolve => setTimeout(resolve, 200));
             await this.p2pNetwork.broadcast('new_block_finalized', block);
             sentSequence.push(block.index);
         }
+
         this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
     }
     //#region - API -------------------------------------------------------------------------------
@@ -563,7 +552,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             return { broadcasted: false, pushedInLocalMempool: false, consumedUTXOs: [], error: error.message };
         }
     }
-    async getBlocksInfo(fromHeight = 0, toHeight = 10) {
+    getBlocksInfo(fromHeight = 0, toHeight = 10) {
         try {
             if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
             //if (toHeight - fromHeight > 10) { throw new Error('Cannot retrieve more than 10 blocks at once'); }
@@ -571,7 +560,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             /** @type {BlockInfo[]} */
             const blocksInfo = [];
             for (let i = fromHeight; i <= toHeight; i++) {
-                const blockInfo = await this.blockchain.getBlockInfoFromDiskByHeight(i);
+                const blockInfo = this.blockchain.getBlockInfoByHeight(i);
                 blocksInfo.push(blockInfo);
             }
 
@@ -587,8 +576,8 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             /** @type {BlockData[]} */
             const blocksData = [];
             for (let i = fromHeight; i <= toHeight; i++) {
-                const blockData = await this.blockchain.getBlockByHeight(i);
-                const blockInfo = await this.blockchain.getBlockInfoFromDiskByHeight(i);
+                const blockData = this.blockchain.getBlockByHeight(i);
+                const blockInfo = this.blockchain.getBlockInfoByHeight(i);
 
                 blocksData.push(this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo));
             }
@@ -596,10 +585,10 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             return blocksData;
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return []; }
     }
-    async getExhaustiveBlockDataByHash(hash) {
+    getExhaustiveBlockDataByHash(hash) {
         try {
-            const blockData = await this.blockchain.getBlockByHash(hash);
-            const blockInfo = await this.blockchain.getBlockInfoFromDiskByHeight(blockData.index);
+            const blockData = this.blockchain.getBlockByHash(hash);
+            const blockInfo = this.blockchain.getBlockInfoByHeight(blockData.index);
 
             return this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo);
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return null; }

@@ -103,7 +103,7 @@ export class SyncHandler {
         switch (msg.type) {
             case 'getBlocks':
                 this.miniLogger.log(`"getBlocks request" Received: #${msg.startIndex} to #${msg.endIndex}`, (m) => { console.debug(m); });
-                const blocks = await this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false);
+                const blocks = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false);
 
                 this.miniLogger.log(`Sending ${blocks.length} blocks in response`, (m) => { console.debug(m); });
                 return { status: 'success', blocks };
@@ -114,7 +114,7 @@ export class SyncHandler {
                 return {
                     status: 'success',
                     currentHeight: this.node.blockchain.currentHeight,
-                    latestBlockHash: this.node.blockchain.getLatestBlockHash(),
+                    latestBlockHash: this.node.blockchain.getLastBlockHash(),
                 };
             default:
                 this.miniLogger.log('Invalid request type', (m) => { console.warn(m); });
@@ -262,13 +262,9 @@ export class SyncHandler {
             if (!serializedBlocks) { this.miniLogger.log(`Failed to get serialized blocks`, (m) => { console.error(m); }); break; }
             if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks found`, (m) => { console.error(m); }); break; }
             
-            // Process blocks
             for (const serializedBlock of serializedBlocks) {
                 try {
-                    const block = BlockUtils.blockDataFromSerializedHeaderAndTxs(
-                        serializedBlock.header,
-                        serializedBlock.txs
-                    );
+                    const block = BlockUtils.blockDataFromSerializedHeaderAndTxs( serializedBlock.header, serializedBlock.txs );
                     await this.node.digestFinalizedBlock(block, { skipValidation: false, broadcastNewCandidate: false, isSync: true, persistToDisk: true });
                     desiredBlock++;
                 } catch (blockError) {

@@ -3,7 +3,7 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
-import localStorage_v1 from '../storage/local-storage-management.mjs';
+import { Storage } from '../../utils/storage-manager.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
 import { serializerFast } from '../../utils/serializer.mjs';
 import { Wallet } from './wallet.mjs';
@@ -142,7 +142,7 @@ export class DashboardWsApp {
             // Add the API endpoints
             this.app.get('/api/log-config', (req, res) => {
                 try {
-                    const logConfig = localStorage_v1.loadJSON('logConfig') || {};
+                    const logConfig = Storage.loadJSON('logConfig') || {};
                     res.json(logConfig);
                 } catch (error) {
                     console.error('Error loading log config:', error);
@@ -162,11 +162,11 @@ export class DashboardWsApp {
                     }
             
                     console.log('About to save config to localStorage');
-                    const saved = localStorage_v1.saveJSON('logConfig', newConfig); // Note: case sensitive!
+                    const saved = Storage.saveJSON('logConfig', newConfig); // Note: case sensitive!
                     console.log('Save result:', saved);
                     
                     // Verify the save worked by trying to read it back
-                    const verification = localStorage_v1.loadJSON('logConfig');
+                    const verification = Storage.loadJSON('logConfig');
                     console.log('Verification read:', verification);
             
                     res.json({ success: true, message: 'Configuration saved successfully' });
@@ -401,11 +401,11 @@ export class DashboardWsApp {
         }
     }
     #saveNodeSettings() {
-        localStorage_v1.saveJSON('nodeSettings', this.#nodesSettings);
+        Storage.saveJSON('nodeSettings', this.#nodesSettings);
         console.log(`Nodes settings saved: ${Object.keys(this.#nodesSettings).length}`);
     }
     #loadNodeSettings() {
-        const nodeSettings = localStorage_v1.loadJSON('nodeSettings');
+        const nodeSettings = Storage.loadJSON('nodeSettings');
         if (!nodeSettings || Object.keys(nodeSettings).length === 0) {
             console.log(`No nodes settings found`);
             return;
@@ -470,9 +470,6 @@ export class DashboardWsApp {
 
         this.miniLogger.log(`----- All Workers terminated -----`, (m) => { console.log(m); });
 
-        // stop level db
-        await this.node.blockchain.db.close();
-        this.miniLogger.log(`----- DB closed -----`, (m) => { console.log(m); });
         await this.node.p2pNetwork.stop();
         this.miniLogger.log(`----- P2P stopped -----`, (m) => { console.log(m); });
 
@@ -556,11 +553,11 @@ export class ObserverWsApp {
         const messageHandler = (message) => { this.#onMessage(message, ws); };
         ws.on('message', messageHandler);
     }
-    async #initConnectionMessage(ws) {
+    #initConnectionMessage(ws) {
         const nbOfBlocks = 5 - 1; // 5 last blocks
         const toHeight = this.node.blockchain.currentHeight - 1 < 0 ? 0 : this.node.blockchain.currentHeight;
         const startHeight = toHeight - nbOfBlocks < 0 ? 0 : toHeight - nbOfBlocks;
-        const last5BlocksInfo = this.node.blockchain.lastBlock ? await this.node.getBlocksInfo(startHeight, toHeight) : [];
+        const last5BlocksInfo = this.node.blockchain.lastBlock ? this.node.getBlocksInfo(startHeight, toHeight) : [];
         ws.send(JSON.stringify({ type: 'last_confirmed_blocks', data: last5BlocksInfo }));
 
         const time = this.node.timeSynchronizer.getCurrentTime();
@@ -600,7 +597,7 @@ export class ObserverWsApp {
                     ws.send(JSON.stringify({ type: 'blocks_data_requested', data: exhaustiveBlockData }));
                     break;
                 case 'get_blocks_data_by_hash':
-                    exhaustiveBlockData = await this.node.getExhaustiveBlockDataByHash(data);
+                    exhaustiveBlockData = this.node.getExhaustiveBlockDataByHash(data);
                     ws.send(JSON.stringify({ type: 'blocks_data_requested', data: exhaustiveBlockData }));
                     break;
                 case 'get_address_utxos':

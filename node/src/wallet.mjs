@@ -12,12 +12,12 @@ import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 async function localStorage_v1Lib() {
     if (isNode) {
-        const l = await import("../storage/local-storage-management.mjs");
-        return l.default;
+        const l = await import("../../utils/storage-manager.mjs");
+        return l;
     }
     return null;
 };
-const localStorage_v1 = await localStorage_v1Lib();
+const { Storage } = await localStorage_v1Lib();
 
 export class AddressTypeInfo {
     name = '';
@@ -113,12 +113,12 @@ export class Wallet {
     saveAccounts() {
         const id = this.masterHex.slice(0, 6);
         const folder = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
-        localStorage_v1.saveJSON(folder, this.accountsGenerated);
+        Storage.saveJSON(folder, this.accountsGenerated);
     }
     loadAccounts() {
         const id = this.masterHex.slice(0, 6);
         const folder = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
-        const accountsGenerated = localStorage_v1.loadJSON(folder);
+        const accountsGenerated = Storage.loadJSON(folder);
         if (!accountsGenerated) { return false; }
 
         this.accountsGenerated = accountsGenerated;

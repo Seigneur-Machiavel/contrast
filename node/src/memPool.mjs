@@ -80,21 +80,19 @@ export class MemPool {
             this.knownPubKeysAddresses[pubKeyHex] = address;
         }
     }
-    /** @param {BlockData[]} blocksData */
-    removeFinalizedBlocksTransactions(blocksData) {
-        for (const blockData of blocksData) {
-            const Txs = blockData.Txs;
-            if (!Array.isArray(Txs)) { throw new Error('Txs is not an array'); }
+    /** @param {BlockData[]} blockData */
+    removeFinalizedBlocksTransactions(blockData) {
+        const Txs = blockData.Txs;
+        if (!Array.isArray(Txs)) { throw new Error('Txs is not an array'); }
 
-            // Remove the transactions included in the block that collide with the mempool
-            for (const tx of Txs) {
-                if (Transaction_Builder.isMinerOrValidatorTx(tx)) { continue; }
+        // Remove the transactions included in the block that collide with the mempool
+        for (const tx of Txs) {
+            if (Transaction_Builder.isMinerOrValidatorTx(tx)) { continue; }
 
-                const colliding = this.#caughtTransactionsAnchorsCollision(tx);
-                if (!colliding) { continue; }
+            const colliding = this.#caughtTransactionsAnchorsCollision(tx);
+            if (!colliding) { continue; }
 
-                this.#removeMempoolTransaction(colliding.tx);
-            }
+            this.#removeMempoolTransaction(colliding.tx);
         }
     }
     /** @param {UtxoCache} utxoCache @param {Transaction} transaction */

@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import localStorage_v1 from '../storage/local-storage-management.mjs';
+import { Storage } from '../../utils/storage-manager.mjs';
 /**
  * @typedef {Object} PeerInfo
  * @property {string} [peerId] - The unique identifier of the peer.
@@ -118,7 +118,7 @@ class ReputationManager extends EventEmitter {
      * Load scores and bans from disk when the node starts.
      */
     loadScoresFromDisk() {
-        const loaded = localStorage_v1.loadJSON(this.options.scoreFilePath);
+        const loaded = Storage.loadJSON(this.options.scoreFilePath);
         if (loaded) {
             try {
                 const data = loaded;
@@ -197,7 +197,7 @@ class ReputationManager extends EventEmitter {
                 uniqueAssociations.entries()
             ).map(([key, set]) => [key, Array.from(set)]),
         };
-        localStorage_v1.saveJSON(this.options.scoreFilePath, data);
+        Storage.saveJSON(this.options.scoreFilePath, data);
     }
 
     /**

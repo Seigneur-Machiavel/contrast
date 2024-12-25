@@ -18,7 +18,7 @@ import { addressUtils } from '../../utils/addressUtils.mjs';
     items.getEntries().forEach((entry) => { console.log(`${entry.name}: ${entry.duration.toFixed(3)}ms`); });});
 validationObs.observe({ entryTypes: ['measure'] });*/
 
-const miniLogger = new MiniLogger('validation');
+const ValidationMiniLogger = new MiniLogger('validation');
 
 export class TxValidation {
     /** ==> Simple hash control, low computation cost.
@@ -237,7 +237,7 @@ export class TxValidation {
             if (!addressToVerify) { throw new Error('addressToVerify not found'); }
 
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                miniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
+                ValidationMiniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }
@@ -283,7 +283,7 @@ export class TxValidation {
             if (!addressToVerify) { throw new Error('addressToVerify not found'); }
 
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                miniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
+                ValidationMiniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }
@@ -499,7 +499,7 @@ export class BlockValidation {
                     allDiscoveredPubKeysAddresses[pubKeyHex] = address;
                 }
             }
-            miniLogger.log(`Single thread ${blockData.Txs.length} txs validated in ${Date.now() - singleThreadStart} ms`, (m) => { console.log(m); });
+            ValidationMiniLogger.log(`Single thread ${blockData.Txs.length} txs validated in ${Date.now() - singleThreadStart} ms`, (m) => { console.log(m); });
             return allDiscoveredPubKeysAddresses;
         }
 
@@ -559,8 +559,8 @@ export class BlockValidation {
         }
 
         if (remainingTxs === 0) {
-            miniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
-            miniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
+            ValidationMiniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
+            ValidationMiniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
             return allDiscoveredPubKeysAddresses;
         }
 
@@ -608,8 +608,8 @@ export class BlockValidation {
             }
         }
 
-        miniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
-        miniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
+        ValidationMiniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
+        ValidationMiniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
 
         return allDiscoveredPubKeysAddresses;
     }

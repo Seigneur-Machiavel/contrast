@@ -13,6 +13,7 @@
         "validation": true,
         "wallet": true,
         "dashboard": true,
-        "TimeSynchronizer": true
+        "TimeSynchronizer": true,
+        "storage": true
     }
 }

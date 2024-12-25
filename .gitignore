@@ -5,10 +5,14 @@ miniLogger/history
 
 node/storage/nodeSettings.json
 node/storage/blocks
+node/storage/snapshots
+node/storage/trash
 node/storage/accounts
+
 node/nodes-data
 node/application.log
 node/config.json
+node/test-storage
 
 npm_install_log.txt
 release-builds

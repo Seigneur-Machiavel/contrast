@@ -100,7 +100,7 @@ export class MiniLogger {
 
         const allActive = this.miniLoggerConfig.allActive;
         const categoryActive = this.miniLoggerConfig.activeCategories[this.category];
-        this.shouldLog = allActive || categoryActive;
+        this.shouldLog = allActive || (categoryActive === undefined ? true : categoryActive);
 
         this.#saveHistoryLoop();
     }
