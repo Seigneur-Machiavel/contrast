@@ -20,7 +20,6 @@ import { performance, PerformanceObserver } from 'perf_hooks';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
 import { ConfigManager } from './config-manager.mjs';
 import { TimeSynchronizer } from '../../utils/time.mjs';
-//import { Logger } from '../plugins/logger.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { Reorganizator } from './blockchain-reorganizator.mjs';
 
@@ -699,4 +698,38 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     }
 
     //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
+}
+
+class BaseBlockTimer {
+    constructor(type = 'Base') {
+        this.measurements = [];
+        this.startTime = Date.now();
+        this.type = type;
+    }
+
+    startPhase(phase) { performance.mark(`${phase}-start`); }
+
+    endPhase(phase) {
+        performance.mark(`${phase}-end`);
+        performance.measure(phase, `${phase}-start`, `${phase}-end`);
+        this.measurements.push({ phase, duration: performance.getEntriesByName(phase)[0].duration.toFixed(2) });
+        ['start', 'end'].forEach(t => performance.clearMarks(`${phase}-${t}`));
+        performance.clearMeasures(phase);
+    }
+
+    getTotalTime() { return ((Date.now() - this.startTime) / 1000).toFixed(2); }
+
+    displayResults() {
+        const totalDuration = this.measurements.reduce((sum, m) => sum + parseFloat(m.duration), 0);
+        console.group(`Block ${this.type} Performance Metrics`);
+        console.table(this.measurements);
+        console.log(`Total ${this.type.toLowerCase()} time: ${totalDuration.toFixed(2)}ms`);
+        console.groupEnd();
+    }
+}
+class BlockValidationTimer extends BaseBlockTimer {
+    constructor() { super('Validation'); }
+}
+class BlockDigestionTimer extends BaseBlockTimer {
+    constructor() { super('Digestion'); }
 }

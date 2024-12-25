@@ -6,16 +6,16 @@ import { WebSocketServer } from 'ws';
 import localStorage_v1 from '../storage/local-storage-management.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
 import { serializerFast } from '../../utils/serializer.mjs';
-import { Wallet } from '../src/wallet.mjs';
+import { Wallet } from './wallet.mjs';
+import { Node } from './node.mjs';
 import { exec } from 'child_process';
-import { CallBackManager } from '../src/websocketCallback.mjs';
+import { CallBackManager } from './websocketCallback.mjs';
 
 /**
-* @typedef {import("../src/wallet.mjs").Account} Account
-* @typedef {import("../src/node-factory.mjs").NodeFactory} NodeFactory
-* @typedef {import("../src/node.mjs").Node} Node
-* @typedef {import("../src/block-classes.mjs").BlockData} BlockData
-* @typedef {import("../src/block-classes.mjs").BlockUtils} BlockUtils
+* @typedef {import("./wallet.mjs").Account} Account
+* @typedef {import("./node.mjs").Node} Node
+* @typedef {import("./block-classes.mjs").BlockData} BlockData
+* @typedef {import("./block-classes.mjs").BlockUtils} BlockUtils
 */
 
 const APPS_VARS = {
@@ -106,25 +106,24 @@ class AppStaticFncs {
 
 export class DashboardWsApp {
     #nodesSettings = {};
-    /** @param {NodeFactory} factory */
-    constructor(factory, port = 27271, autoInit = true) {
+    stopped = false;
+    /** @param {Node} node */
+    constructor(node, port = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
-        /** @type {NodeFactory} */
-        this.factory = factory;
+        /** @type {Node} */
+        this.node = node;
         /** @type {CallBackManager} */
         this.callBackManager = null;
         /** @type {express.Application} */
         this.app = null;
         this.port = port;
         /** @type {WebSocketServer} */
-        this.wss =  null;
+        this.wss = null;
 
         this.readableNow = () => { return `${new Date().toLocaleTimeString()}:${new Date().getMilliseconds()}` };
         if (autoInit) this.init();
-        this.#nodeRestartCheckLoop();
+        this.#stopNodeIfRequestedLoop();
     }
-    /** @type {Node} */
-    get node() { return this.factory.getFirstNode(); }
     async init(privateKey) {
         if (this.app === null) {
             this.app = express();
@@ -192,11 +191,7 @@ export class DashboardWsApp {
         const defaultSettings = this.#nodesSettings[defaultNodeId];
         const defaultPrivKey = defaultSettings ? defaultSettings.privateKey : null;
         const usablePrivKey = privateKey || defaultPrivKey;
-        if (!this.node && usablePrivKey) {
-            /** @type {Node} */
-            await this.initMultiNode(usablePrivKey);
-            //this.factory.nodes.set(multiNode.id, multiNode);
-        }
+        if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey); }
 
         if (!this.node) { console.info("Not active Node and No private keys provided, can't auto init node..."); return; }
         
@@ -214,25 +209,27 @@ export class DashboardWsApp {
     }
     async initMultiNode(nodePrivateKey = 'ff', local = false, useDevArgon2 = false) {
         const wallet = new Wallet(nodePrivateKey, useDevArgon2);
-        const restored = await wallet.restore();
-        if (!restored) { console.error('Failed to restore wallet.'); return; }
+        //const restored = await wallet.restore();
+        //if (!restored) { console.error('Failed to restore wallet.'); return; }
         wallet.loadAccounts();
+
         const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(2, "C");
         if (!derivedAccounts) { console.error('Failed to derive addresses.'); return; }
         wallet.saveAccounts();
 
-        const multiNode = await this.factory.createNode(
-            derivedAccounts[0], // validator account
-            ['validator', 'miner', 'observer'], // roles
-            {listenAddress: local ? '/ip4/0.0.0.0/tcp/0' : '/ip4/0.0.0.0/tcp/27260'},
-            derivedAccounts[1].address // miner address
+        this.node = new Node(
+            derivedAccounts[0],
+            ['validator', 'miner', 'observer'],
+            {listenAddress: local ? '/ip4/0.0.0.0/tcp/0' : '/ip4/0.0.0.0/tcp/27260'}
         );
-        multiNode.useDevArgon2 = useDevArgon2; // we remove that one ?
-        await multiNode.start();
-        multiNode.memPool.useDevArgon2 = useDevArgon2;
+        this.node.minerAddress = derivedAccounts[1].address;
 
-        console.log(`Multi node started, account : ${multiNode.account.address}`);
-        return multiNode;
+        this.node.useDevArgon2 = useDevArgon2; // we remove that one ?
+        await this.node.start();
+        this.node.memPool.useDevArgon2 = useDevArgon2;
+
+        console.log(`Multi node started, account : ${this.node.account.address}`);
+        return this.node;
     }
     #onConnection(ws, req, localonly = false) {
         const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
@@ -256,7 +253,7 @@ export class DashboardWsApp {
         }
     }
     #injectNodeSettings(nodeId) {
-        const node = this.factory.getNode(nodeId);
+        const node = this.node;
         if (!node) { console.error(`Node ${nodeId} not found`); return; }
 
         const associatedValidatorRewardAddress = this.#nodesSettings[nodeId].validatorRewardAddress;
@@ -282,22 +279,6 @@ export class DashboardWsApp {
         this.callBackManager = new CallBackManager(this.node);
         this.callBackManager.initAllCallbacksOfMode(callbacksModes, this.wss.clients);
     }
-    async #nodeRestartCheckLoop() {
-        let restartCounter = 0;
-        while (true) {
-            if (this.factory.restartCounter > restartCounter) {
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                this.callBackManager = new CallBackManager(this.node);
-                this.#injectCallbacks();
-
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                console.info(`[DASHBOARD] Node restarted, counter: ${restartCounter}, closing connections`);
-                this.#closeAllConnections();
-                restartCounter = this.factory.restartCounter;
-            }
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }   
     #closeAllConnections() {
         this.wss.clients.forEach((client) => {
             if (client.readyState === 1) {
@@ -321,10 +302,6 @@ export class DashboardWsApp {
                 await this.init(data);
                 this.#nodesSettings[this.node.id].privateKey = data;
                 this.#saveNodeSettings();
-                break;
-            case 'reset_wallet':    
-                console.log('Resetting wallet');
-                await this.#modifyAccountAndRestartNode(this.node.id, data);
                 break;
             case 'update_git':
                 this.#updateAndClose();
@@ -358,24 +335,22 @@ export class DashboardWsApp {
                 }
                 break;
             case 'force_restart':
-                ws.send(JSON.stringify({ type: 'node_restarting', data }));
+                console.info(`Forcing restart of node ${data} - not implemented`);
+                /*ws.send(JSON.stringify({ type: 'node_restarting', data }));
                 console.info(`Forcing restart of node ${data}`);
                 await this.factory.forceRestartNode(data);
                 
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                ws.send(JSON.stringify({ type: 'node_restarted', data }));
+                ws.send(JSON.stringify({ type: 'node_restarted', data }));*/
                 break;
             case 'force_restart_revalidate_blocks':
-                ws.send(JSON.stringify({ type: 'node_restarting', data }));
-                //this.wss.close(); // close the websocket server
-                //this.app.delete('/'); // close the express server
-                //await new Promise(resolve => setTimeout(resolve, 1000));
-
+                console.info(`Forcing restart of node ${data} and revalidating blocks - not implemented`);
+                /*ws.send(JSON.stringify({ type: 'node_restarting', data }));
                 console.info(`Forcing restart of node ${data} with revalidation of blocks`);
                 await this.factory.forceRestartNode(data, true);
                 
                 await new Promise(resolve => setTimeout(resolve, 1000));
-                ws.send(JSON.stringify({ type: 'node_restarted', data }));
+                ws.send(JSON.stringify({ type: 'node_restarted', data }));*/
                 break;
             case 'get_node_info':
                 const nodeInfo = await AppStaticFncs.extractPrivateNodeInfo(this.node);
@@ -467,25 +442,52 @@ export class DashboardWsApp {
             process.exit(0);
         });
     }
-    async #modifyAccountAndRestartNode(nodeId, newPrivateKey) {
-        console.log('Modifying account and restarting node id:', nodeId);
-        const wallet = new Wallet(newPrivateKey, false);
-        const restored = await wallet.restore();
-        if (!restored) { console.error('Failed to restore wallet.'); return; }
-        wallet.loadAccounts();
-        const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(2, "C");
-        if (!derivedAccounts) { console.error('Failed to derive addresses.'); return; }
-        wallet.saveAccounts();
 
-        await this.factory.forceRestartNode(nodeId, true, derivedAccounts[0], derivedAccounts[1].address);
+    async #stopNodeIfRequestedLoop() {
+        while (true) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (!this.node || !this.node.restartRequested) { continue; }
+            this.miniLogger.log(`Node ${this.node.id} restart requested by ${this.node.restartRequested}`, (m) => { console.log(m); });
+
+            if (!this.stopped) { await this.stop(); }
+            return;
+        }
+    }
+    async stop() {
+        this.#closeAllConnections();
+        this.wss.close();
+
+        if (!this.node) { return; }
+
+        this.node.opStack.terminate();
+        this.node.timeSynchronizer.stop = true;
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        await this.node.miner.terminate();
+        const promises = [];
+        for (const worker of this.node.workers) { promises.push(worker.terminateAsync()); }
+        await Promise.all(promises);
+
+        this.miniLogger.log(`----- All Workers terminated -----`, (m) => { console.log(m); });
+
+        // stop level db
+        await this.node.blockchain.db.close();
+        this.miniLogger.log(`----- DB closed -----`, (m) => { console.log(m); });
+        await this.node.p2pNetwork.stop();
+        this.miniLogger.log(`----- P2P stopped -----`, (m) => { console.log(m); });
+
+        await new Promise(resolve => setTimeout(resolve, 7000));
+
+        this.miniLogger.log(`----- Dashboard stopped -----`, (m) => { console.log(m); });
+        this.stopped = true;
     }
 }
 
 export class ObserverWsApp {
-    /** @param {NodeFactory} factory */
-    constructor(factory, port = 27270) {
-        /** @type {NodeFactory} */
-        this.factory = factory;
+    /** @param {Node} node */
+    constructor(node, port = 27270) {
+        /** @type {Node} */
+        this.node = node;
         /** @type {CallBackManager} */
         this.callBackManager = null;
         /** @type {express.Application} */
@@ -498,13 +500,10 @@ export class ObserverWsApp {
 
         this.readableNow = () => { return `${new Date().toLocaleTimeString()}:${new Date().getMilliseconds()}` };
         this.init();
-        this.#nodeRestartCheckLoop();
     }
-    /** @type {Node} */
-    get node() { return this.factory.getFirstNode(); }
     async init() {
         while (!this.node) { 
-            console.log('[OBSERVER] Waiting for node to be initialized...'); 
+            console.log('[OBSERVER] Waiting for node to be initialized...');
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
 
@@ -567,22 +566,6 @@ export class ObserverWsApp {
         const time = this.node.timeSynchronizer.getCurrentTime();
         ws.send(JSON.stringify({ type: 'current_time', data: time }));
     }
-    async #nodeRestartCheckLoop() {
-        let restartCounter = 0;
-        while (true) {
-            if (this.factory.restartCounter > restartCounter) {
-                await new Promise(resolve => setTimeout(resolve, 2000));
-                this.callBackManager = new CallBackManager(this.node);
-                this.callBackManager.initAllCallbacksOfMode('observer', this.wss.clients);
-
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                console.info(`[DASHBOARD] Node restarted, counter: ${restartCounter}, closing connections`);
-                this.#closeAllConnections();
-                restartCounter = this.factory.restartCounter;
-            }
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-    }   
     #closeAllConnections() {
         this.wss.clients.forEach((client) => {
             if (client.readyState === 1) {

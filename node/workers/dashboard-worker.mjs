@@ -1,28 +1,28 @@
 import { parentPort, workerData } from 'worker_threads';
-import { DashboardWsApp, ObserverWsApp } from '../run/apps.mjs';
-import { NodeFactory } from '../src/node-factory.mjs';
+import { DashboardWsApp, ObserverWsApp } from '../src/apps.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 const nodePort = workerData.nodePort || 27260;
 const dashboardPort = workerData.dashboardPort || 27271;
 const observerPort = workerData.observerPort || 27270;
-const closeWhenFactoryStops = workerData.closeWhenFactoryStops || true;
 
-const factory = new NodeFactory(nodePort, true);
-//new DashboardWsApp(factory, dashboardPort);
+const dashApp = new DashboardWsApp(undefined, dashboardPort);
 //new ObserverWsApp(factory, observerPort);
 
 parentPort.on('message', async (message) => {
-    if (message.type === 'request-restart') {
-        const node = factory.getFirstNode();
-        if (!node) { return; }
-        node.requestRestart('dashboard-worker');
+    if (message.type === 'stop') {
+        await dashApp.stop();
+        //parentPort.close();
+        process.exit(0);
     }
 });
 
 (async () => {
-    while (closeWhenFactoryStops) {
-        if (factory.stopped) {
-            parentPort.postMessage({ type: 'factory-stopped' });
+    while (true) {
+        if (dashApp.node && dashApp.node.restartRequested) {
+            await dashApp.stop();
+            parentPort.postMessage({ type: 'stopped' });
+            return;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
     }

@@ -1,5 +1,5 @@
-import { DashboardWsApp, ObserverWsApp } from '../src/apps.mjs';
-import { NodeFactory } from '../src/node-factory.mjs';
+import { DashboardWsApp, ObserverWsApp } from './src/apps.mjs';
+import { NodeFactory } from './src/node-factory.mjs';
 
 let dashboardPort = 27271; // network port 27271
 let observerPort = 27270; // network port 27270
@@ -25,7 +25,7 @@ if (args.includes('-np')) {
 
 const factory = new NodeFactory(nodePort);
 new DashboardWsApp(factory, dashboardPort);
-new ObserverWsApp(factory, observerPort);
+//new ObserverWsApp(factory, observerPort);
 
 process.on('uncaughtException', (error) => {
     console.error('Uncatched exception:', error.stack);

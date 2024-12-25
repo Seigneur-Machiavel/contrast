@@ -53,7 +53,7 @@ export class ValidationWorker {
     }
     terminateAsync() {
         //console.info(`ValidationWorker ${this.id} terminating...`);
-        this.worker.postMessage({ type: 'terminate', id: this.id });
+        setTimeout(() => { this.worker.postMessage({ type: 'terminate', id: this.id }); }, 1000);
         return new Promise((resolve, reject) => {
             this.worker.on('message', (message) => {
                 if (message.id !== this.id) { return; }
@@ -64,6 +64,12 @@ export class ValidationWorker {
             this.worker.on('exit', (code) => {
                 resolve();
             });
+
+            setTimeout(() => {
+                console.error('ValidationWorker termination timeout');
+                this.worker.terminate();
+                resolve();
+            }, 20000);
         });
     }
     terminate() {
@@ -176,7 +182,7 @@ export class MinerWorker {
     }
     terminateAsync() {
         this.terminate = true;
-        this.worker.postMessage({ type: 'terminate' });
+        setTimeout(() => { this.worker.postMessage({ type: 'terminate' }); }, 1000);
         return new Promise((resolve, reject) => {
             this.worker.on('exit', (code) => {
                 console.log(`MinerWorker stopped with exit code ${code}`);
@@ -189,8 +195,9 @@ export class MinerWorker {
 
             setTimeout(() => {
                 console.error('MinerWorker termination timeout');
+                this.worker.terminate();
                 resolve();
-            }, 5000);
+            }, 20000);
         });
     }
 }
@@ -277,7 +284,7 @@ export class AccountDerivationWorker {
     }
     terminateAsync() {
         //console.info(`DerivationWorker ${this.id} terminating...`);
-        this.worker.postMessage({ type: 'terminate', id: this.id });
+        setTimeout(() => { this.worker.postMessage({ type: 'terminate', id: this.id }); }, 1000);
         return new Promise((resolve, reject) => {
             this.worker.on('message', (message) => {
                 if (message.id !== this.id) { return; }
@@ -301,53 +308,42 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
         this.nodePort = nodePort;
         this.dashboardPort = dashboardPort;
         this.observerPort = observerPort;
-        this.autoRestartLoop();
         this.initWorker();
+        this.autoRestartLoop();
     }
-
+    stop() {
+        this.worker.postMessage({ type: 'stop' });
+    }
     async autoRestartLoop() {
         while (true) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             if (!this.autoRestart) { continue; }
-            if (this.worker) { continue; }
-            
+            if (this.worker && this.worker.threadId !== -1) { continue; }
+
+            console.log('-----------------------------------------------');
             console.log('NodeAppWorker autoRestartLoop => restarting...');
+            console.log('-----------------------------------------------');
+
+            await new Promise(resolve => setTimeout(resolve, 1000));
             this.initWorker();
+
+            await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
-    initWorker() {
-        if (this.worker) {
-            console.log('NodeAppWorker terminate...');
-            this.worker.terminate();
-        }
-
+    async initWorker() {
         const app = this.app;
         const nodePort = this.nodePort;
         const dashboardPort = this.dashboardPort;
         const observerPort = this.observerPort;
 
-        const worker = newWorker(`./${app}-worker.mjs`, '', { nodePort, dashboardPort, observerPort });
-        this.worker = worker;
-        this.worker.on('exit', (code) => {
-            console.log(`NodeAppWorker stopped with exit code ${code}`);
-            this.worker = null;
-        });
-        this.worker.on('close', () => {  console.log('NodeAppWorker closed'); });
-        this.worker.on('message', async (message) => {
-            if (message.type === 'factory-stopped') {
-                if (!this.worker) { return; }
-                this.worker.terminate();
-                await new Promise(resolve => setTimeout(resolve, 10000));
+        this.worker = null;
+        this.worker = newWorker(`./${app}-worker.mjs`, '', { nodePort, dashboardPort, observerPort });
 
-                console.log('NodeAppWorker factory-stopped -> worker terminated');
-                return;
-            }
-        });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        this.worker.on('exit', (code) => { console.log(`NodeAppWorker stopped with exit code ${code} -> should restart`); });
+        this.worker.on('close', () => {  console.log('NodeAppWorker closed'); });
 
         console.log('NodeAppWorker started');
-    }
-
-    requestRestart() {
-        this.worker.postMessage({ type: 'request-restart' });
     }
 }
