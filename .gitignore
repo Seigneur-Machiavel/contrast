@@ -5,6 +5,7 @@ miniLogger/history
 
 node/storage/nodeSettings.json
 node/storage/blocks
+node/storage/blocks-info
 node/storage/snapshots
 node/storage/trash
 node/storage/accounts
