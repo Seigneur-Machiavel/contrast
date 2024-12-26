@@ -29,25 +29,9 @@ const PATH = {
     BLOCKS: path.join(__dirname, 'storage', 'blocks'),
     BLOCKS_INFO: path.join(__dirname, 'storage', 'blocks-info'),
     TXS_REFS: path.join(__dirname, 'storage', 'addresses-txs-refs'),
-    //SNAPSHOTS: path.join(__dirname, 'storage', 'snapshots'),
-    //TRASH: path.join(__dirname, 'storage', 'trash'),
     TEST_STORAGE: path.join(__dirname, 'test-storage'),
 }
-if (path && !fs.existsSync(PATH.STORAGE)) { fs.mkdirSync(PATH.STORAGE); }
-if (path && !fs.existsSync(PATH.BLOCKS)) { fs.mkdirSync(PATH.BLOCKS); }
-if (path && !fs.existsSync(PATH.BLOCKS_INFO)) { fs.mkdirSync(PATH.BLOCKS_INFO); }
-if (path && !fs.existsSync(PATH.TXS_REFS)) { fs.mkdirSync(PATH.TXS_REFS); }
-//if (path && !fs.existsSync(PATH.SNAPSHOTS)) { fs.mkdirSync(PATH.SNAPSHOTS); }
-//if (path && !fs.existsSync(PATH.TRASH)) { fs.mkdirSync(PATH.TRASH); }
-if (path && !fs.existsSync(PATH.TEST_STORAGE)) { fs.mkdirSync(PATH.TEST_STORAGE); }
-
-function getListOfFoldersInBlocksDirectory() {
-    const blocksFolders = fs.readdirSync(PATH.BLOCKS).filter(fileName => fs.lstatSync(path.join(PATH.BLOCKS, fileName)).isDirectory());
-    
-    // named as 0-999, 1000-1999, 2000-2999, etc... => sorting by the first number
-    const blocksFoldersSorted = blocksFolders.sort((a, b) => parseInt(a.split('-')[0], 10) - parseInt(b.split('-')[0], 10));
-    return blocksFoldersSorted;
-}
+for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
 
 // DEV FONCTIONS (USING JSON FORMAT - slow but useful for debugging)
 /** @param {number} blockIndex @param {string} dirPath */
@@ -234,7 +218,8 @@ export class BlockchainStorage {
     /** @param {BlockData} blockData */
     #saveBlockBinary(blockData) {
         try {
-            const binary = serializer.rawData.toBinary_v1(blockData);
+            //const binary = serializer.rawData.toBinary_v1(blockData);
+            const binary = serializer.block_finalized.toBinary_v4(blockData);
 
             const batchFolderName = this.#batchFolderFromBlockIndex(blockData.index);
             const batchFolderPath = path.join(PATH.BLOCKS, batchFolderName);
@@ -258,7 +243,8 @@ export class BlockchainStorage {
         if (!deserialize) { return serialized; }
 
         /** @type {BlockData} */
-        const blockData = serializer.rawData.fromBinary_v1(serialized);
+        //const blockData = serializer.rawData.fromBinary_v1(serialized);
+        const blockData = serializer.block_finalized.fromBinary_v4(serialized);
         return blockData;
     }
 
@@ -403,7 +389,7 @@ async function test() {
 }
 test();
 
-/* 1100 txs
+/* 1100 files of 200 bytes each or 220KB => 1 block
 Time to load a big file: 0.74550ms
 Time to load multiple small files: 194.24940ms (~0.17657ms per tx)
 

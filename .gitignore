@@ -10,7 +10,6 @@ node/storage/snapshots
 node/storage/trash
 node/storage/accounts
 node/storage/addresses-txs-refs
-node/storage/addresses-txs-refs-snap-height.json
 
 node/nodes-data
 node/application.log

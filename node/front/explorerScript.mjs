@@ -898,10 +898,11 @@ export class BlockExplorerWidget {
         createHtmlElement('h3', undefined, [], outputsWrap).textContent = `(${tx.outputs.length}) Outputs`;
         for (const output of tx.outputs) {
             const { address, amount, rule } = output;
+            if (!addressUtils.conformityCheck(address)) { console.error(`Invalid address: ${address}`); return; }
             const outputDiv = createHtmlElement('div', undefined, ['cbe-TxOutput'], outputsWrap);
             const addressSpanAsText = `<span class="cbe-addressSpan">${address}</span>`;
 
-            outputDiv.innerText = `${convert.formatNumberAsCurrency(amount)} >>> ${addressSpanAsText} (${rule})`;
+            outputDiv.innerHTML = `${convert.formatNumberAsCurrency(amount)} >>> ${addressSpanAsText} (${rule})`;
         }
         if (tx.fee) {
             const feeDiv = createHtmlElement('div', undefined, ['cbe-TxFee'], outputsWrap);

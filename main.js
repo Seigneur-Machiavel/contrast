@@ -14,8 +14,8 @@ let dashboardWorker;
     dashboardWorker = new NodeAppWorker('dashboard', 27260, 27271, 27270);
 
     // -- test restart after 60s --
-    await new Promise(resolve => setTimeout(resolve, 60000));
-    dashboardWorker.stop(); // but auto restarts
+    //await new Promise(resolve => setTimeout(resolve, 60000));
+    //dashboardWorker.stop(); // but auto restarts
 })();
 
 function checkArrayOfArraysDuplicate(handlersKeys = []) {

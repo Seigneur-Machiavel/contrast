@@ -51,12 +51,30 @@ export class SnapshotSystem {
 
 		return heightPath;
 	}
+	#controlSnapshotQuality(dirName = '') {
+		const dirPath = path.join(this.__snapshotPath, dirName);
+		const files = fs.readdirSync(dirPath);
+		if (!files.includes('memPool.bin')) { return "memPool.bin missing"; }
+		if (!files.includes('utxoCache.bin')) { return "utxoCache.bin missing"; }
+		if (!files.includes('vss.bin')) { return "vss.bin missing"; }
+
+		return "ok";
+	}
 	/** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
 	getSnapshotsHeights() {
 		try {
 			const dirs = fs.readdirSync(this.__snapshotPath);
 			if (dirs.length === 0) { return []; }
-			const snapshotsHeights = dirs.map(dirName => Number(dirName));
+
+			const snapshotsHeights = [];
+			for (const dirName of dirs) {
+				const control = this.#controlSnapshotQuality(dirName);
+				if (control === "ok") { snapshotsHeights.push(Number(dirName)); continue; }
+
+				console.error(`Snapshot #${dirName} is corrupted: ${control}`);
+				this.#eraseSnapshot(Number(dirName));
+			}
+
 			snapshotsHeights.sort((a, b) => a - b);
 			return snapshotsHeights;
 		} catch (error) {
