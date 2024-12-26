@@ -42,7 +42,7 @@ export class Node {
         /** @type {string} */
         this.id = account.address;
         /** @type {SnapshotSystem} */
-        this.snapshotSystem = new SnapshotSystem(this.id);
+        this.snapshotSystem = new SnapshotSystem();
         /** @type {string[]} */
         this.roles = roles; // 'miner', 'validator', ...
         /** @type {OpStack} */
@@ -226,7 +226,7 @@ export class Node {
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.warn(m); });
         if (snapshotIndex < 1) { this.blockchain.reset(); }
 
-        this.blockchain.lastBlock = this.blockchain.getBlockByHeight(snapshotIndex);
+        this.blockchain.lastBlock = this.blockchain.getBlock(snapshotIndex);
         if (!eraseHigher) { return; }
 
         // place snapshot to trash folder, we can restaure it if needed
@@ -239,10 +239,10 @@ export class Node {
         const eraseUnder = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve;
 
         // erase the outdated blocks cache and persist the addresses transactions references to disk
-        const cacheErasable = this.blockchain.erasableCacheLowerThan(finalizedBlock.index - (eraseUnder - 1));
+        const cacheErasable = this.blockchain.cache.erasableLowerThan(finalizedBlock.index - (eraseUnder - 1));
         if (cacheErasable !== null && cacheErasable.from < cacheErasable.to) {
             await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, cacheErasable.from, cacheErasable.to);
-            this.blockchain.eraseCacheFromTo(cacheErasable.from, cacheErasable.to);
+            this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 
         await this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool);
@@ -414,7 +414,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
-            const olderBlock = this.blockchain.getBlockByHeight(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
+            const olderBlock = this.blockchain.getBlock(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
             const averageBlockTimeMS = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
             this.blockchainStats.averageBlockTime = averageBlockTimeMS;
             const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
@@ -519,7 +519,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         const sentSequence = [];
 
         for (const index of sequence) {
-            const block = this.blockchain.getBlockByHeight(finalizedBlockHeight + index);
+            const block = this.blockchain.getBlock(finalizedBlockHeight + index);
             if (!block) { continue; }
 
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -560,7 +560,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             /** @type {BlockInfo[]} */
             const blocksInfo = [];
             for (let i = fromHeight; i <= toHeight; i++) {
-                const blockInfo = this.blockchain.getBlockInfoByHeight(i);
+                const blockInfo = this.blockchain.blockStorage.getBlockInfoByIndex(i);
                 blocksInfo.push(blockInfo);
             }
 
@@ -576,8 +576,8 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             /** @type {BlockData[]} */
             const blocksData = [];
             for (let i = fromHeight; i <= toHeight; i++) {
-                const blockData = this.blockchain.getBlockByHeight(i);
-                const blockInfo = this.blockchain.getBlockInfoByHeight(i);
+                const blockData = this.blockchain.getBlock(i);
+                const blockInfo = this.blockchain.blockStorage.getBlockInfoByIndex(i);
 
                 blocksData.push(this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo));
             }
@@ -587,8 +587,9 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     }
     getExhaustiveBlockDataByHash(hash) {
         try {
-            const blockData = this.blockchain.getBlockByHash(hash);
-            const blockInfo = this.blockchain.getBlockInfoByHeight(blockData.index);
+            const blockData = this.blockchain.getBlock(hash);
+            const blockInfo = this.blockchain.blockStorage.getBlockInfoByIndex(blockData.index);
+            if (!blockData || !blockInfo) { throw new Error(`Block not found: ${hash}`); }
 
             return this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo);
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return null; }

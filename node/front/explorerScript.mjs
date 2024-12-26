@@ -55,6 +55,7 @@ const SETTINGS = {
     AUTO_CHOSE_BEST_NODES: true,
     CURRENT_NODE_INDEX: 0,
     NODES_LIST: [ // used for redondant connections
+        'ws://localhost:27270',
         'ws://pinkparrot.observer',
         'ws://pinkparrot.science:27270',
         'wss://contrast.observer',

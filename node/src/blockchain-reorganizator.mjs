@@ -50,8 +50,8 @@ export class Reorganizator {
             preLastBlock: null,
             preLastHeight: snapshotsHeights[snapshotsHeights.length - 2]
         }
-        usableSnapshots.lastBlock = this.node.blockchain.getBlockByHeight(usableSnapshots.lastHeight);
-        usableSnapshots.preLastBlock = this.node.blockchain.getBlockByHeight(usableSnapshots.preLastHeight);
+        usableSnapshots.lastBlock = this.node.blockchain.getBlock(usableSnapshots.lastHeight);
+        usableSnapshots.preLastBlock = this.node.blockchain.getBlock(usableSnapshots.preLastHeight);
 
         const lastBlock = this.node.blockchain.lastBlock;
         if (!lastBlock) { return legitimateReorg; }

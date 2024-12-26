@@ -29,15 +29,15 @@ const PATH = {
     STORAGE: path.join(__dirname, 'storage'),
     BLOCKS: path.join(__dirname, 'storage', 'blocks'),
     BLOCKS_INFO: path.join(__dirname, 'storage', 'blocks-info'),
-    SNAPSHOTS: path.join(__dirname, 'storage', 'snapshots'),
-    TRASH: path.join(__dirname, 'storage', 'trash'),
+    //SNAPSHOTS: path.join(__dirname, 'storage', 'snapshots'),
+    //TRASH: path.join(__dirname, 'storage', 'trash'),
     TEST_STORAGE: path.join(__dirname, 'test-storage'),
 }
 if (path && !fs.existsSync(PATH.STORAGE)) { fs.mkdirSync(PATH.STORAGE); }
 if (path && !fs.existsSync(PATH.BLOCKS)) { fs.mkdirSync(PATH.BLOCKS); }
 if (path && !fs.existsSync(PATH.BLOCKS_INFO)) { fs.mkdirSync(PATH.BLOCKS_INFO); }
-if (path && !fs.existsSync(PATH.SNAPSHOTS)) { fs.mkdirSync(PATH.SNAPSHOTS); }
-if (path && !fs.existsSync(PATH.TRASH)) { fs.mkdirSync(PATH.TRASH); }
+//if (path && !fs.existsSync(PATH.SNAPSHOTS)) { fs.mkdirSync(PATH.SNAPSHOTS); }
+//if (path && !fs.existsSync(PATH.TRASH)) { fs.mkdirSync(PATH.TRASH); }
 if (path && !fs.existsSync(PATH.TEST_STORAGE)) { fs.mkdirSync(PATH.TEST_STORAGE); }
 
 function getListOfFoldersInBlocksDirectory() {
@@ -189,28 +189,39 @@ export class BlockchainStorage {
     }
     /** @param {BlockInfo} blockInfo */
     addBlockInfo(blockInfo) {
+        const batchFolderName = this.#batchFolderFromBlockIndex(blockInfo.header.index);
+        const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
+        if (!fs.existsSync(batchFolderPath)) { fs.mkdirSync(batchFolderPath); }
+
         const binary = serializer.rawData.toBinary_v1(blockInfo);
-        const filePath = path.join(PATH.BLOCKS_INFO, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
+        const filePath = path.join(batchFolderPath, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
         fs.writeFileSync(filePath, binary);
     }
-    getBlockByIndex(blockIndex = 0, deserialize = true) {
-        if (!this.hashByIndex[blockIndex]) { return null; }
-        const blockHash = this.hashByIndex[blockIndex];
-        
+    /** @param {number | string} heightOrHash - The height or the hash of the block to retrieve */
+    retreiveBlock(heightOrHash, deserialize = true) {
+        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') { return null; }
+
+        const blockHash = typeof heightOrHash === 'number' ? this.hashByIndex[heightOrHash] : heightOrHash;
+        const blockIndex = typeof heightOrHash === 'string' ? this.indexByHash[heightOrHash] : heightOrHash;
+        if (blockHash === undefined || blockIndex === undefined) { return null; }
+
         return this.#getBlock(blockIndex, blockHash, deserialize);
     }
-    getBlockByHash(blockHash = '', deserialize = true) {
-        if (!this.indexByHash[blockHash]) { return null; }
-        const blockIndex = this.indexByHash[blockHash];
-        
-        return this.#getBlock(blockIndex, blockHash, deserialize);
-    }
-    /** @param {number} blockIndex @returns {BlockInfo} */
     getBlockInfoByIndex(blockIndex = 0) {
-        const blockHash = this.hashByIndex[blockIndex];
-        const blockInfoFilePath = path.join(PATH.BLOCKS_INFO, `${blockIndex.toString()}-${blockHash}.bin`);
-        const buffer = fs.readFileSync(blockInfoFilePath);
-        return serializer.rawData.fromBinary_v1(buffer);
+        const batchFolderName = this.#batchFolderFromBlockIndex(blockIndex);
+        const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
+
+        try {
+            const blockHash = this.hashByIndex[blockIndex];
+            const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
+            const buffer = fs.readFileSync(blockInfoFilePath);
+            /** @type {BlockInfo} */
+            const blockInfo = serializer.rawData.fromBinary_v1(buffer);
+            return blockInfo;
+        } catch (error) {
+            storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+            return null;
+        }
     }
     removeBlock(blockIndex = 0) {
         const blockHash = this.hashByIndex[blockIndex];

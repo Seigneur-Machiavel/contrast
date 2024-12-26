@@ -108,7 +108,7 @@ export class DashboardWsApp {
     #nodesSettings = {};
     stopped = false;
     /** @param {Node} node */
-    constructor(node, port = 27271, autoInit = true) {
+    constructor(node, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
         /** @type {Node} */
         this.node = node;
@@ -116,7 +116,8 @@ export class DashboardWsApp {
         this.callBackManager = null;
         /** @type {express.Application} */
         this.app = null;
-        this.port = port;
+        this.nodePort = nodePort;
+        this.dashboardPort = dashboardPort;
         /** @type {WebSocketServer} */
         this.wss = null;
 
@@ -178,8 +179,7 @@ export class DashboardWsApp {
                     });
                 }
             });
-            //const server = this.app.listen(this.port,'127.0.0.1', () => { console.log(`Server running on http://${'???'}:${this.port}`); });
-            const server = this.app.listen(this.port, () => { console.log(`Server running on http://${'???'}:${this.port}`); });
+            const server = this.app.listen(this.dashboardPort, () => { console.log(`Server running on http://${'???'}:${this.dashboardPort}`); });
             this.wss = new WebSocketServer({ server });
         }
         
@@ -220,7 +220,7 @@ export class DashboardWsApp {
         this.node = new Node(
             derivedAccounts[0],
             ['validator', 'miner', 'observer'],
-            {listenAddress: local ? '/ip4/0.0.0.0/tcp/0' : '/ip4/0.0.0.0/tcp/27260'}
+            {listenAddress: local ? '/ip4/0.0.0.0/tcp/0' : `/ip4/0.0.0.0/tcp/${this.nodePort}`}
         );
         this.node.minerAddress = derivedAccounts[1].address;
 
@@ -335,7 +335,12 @@ export class DashboardWsApp {
                 }
                 break;
             case 'force_restart':
-                console.info(`Forcing restart of node ${data} - not implemented`);
+                ws.send(JSON.stringify({ type: 'node_restarting', data }));
+                this.node.restartRequested = `Dashboard app ${data}`;
+                this.miniLogger.log(`Node ${data} restart requested by dashboard`, (m) => { console.log(m); });
+
+                //console.info(`Forcing restart of node ${data} - not implemented`);
+
                 /*ws.send(JSON.stringify({ type: 'node_restarting', data }));
                 console.info(`Forcing restart of node ${data}`);
                 await this.factory.forceRestartNode(data);
@@ -345,6 +350,7 @@ export class DashboardWsApp {
                 break;
             case 'force_restart_revalidate_blocks':
                 console.info(`Forcing restart of node ${data} and revalidating blocks - not implemented`);
+
                 /*ws.send(JSON.stringify({ type: 'node_restarting', data }));
                 console.info(`Forcing restart of node ${data} with revalidation of blocks`);
                 await this.factory.forceRestartNode(data, true);

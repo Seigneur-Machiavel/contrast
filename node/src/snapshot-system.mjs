@@ -1,7 +1,8 @@
-import { Storage } from '../../utils/storage-manager.mjs';
 import fs from 'fs';
 import path from 'path';
 const url = await import('url');
+
+import { Storage } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer, serializerFast } from '../../utils/serializer.mjs';
 
@@ -28,21 +29,20 @@ function copyFolderRecursiveSync(src, dest) {
 
 export class SnapshotSystem {
 	__parentFolderPath = path.dirname(url.fileURLToPath(import.meta.url));
-	__parentPath = path.join(this.__parentFolderPath, '..');
-	__nodesDataPath = path.join(this.__parentPath, 'nodes-data');
+	__nodePath = path.dirname(this.__parentFolderPath);
+	__storagePath = path.join(this.__nodePath, 'storage');
+	__trashPath = path.join(this.__storagePath, 'trash');
+	__snapshotPath = path.join(this.__storagePath, 'snapshots');
 	fastConverter = new FastConverter();
-	constructor(nodeId) {
-		this.__nodeDataPath = path.join(this.__nodesDataPath, nodeId);
-		this.__snapshotPath = path.join(this.__nodeDataPath, 'snapshots');
+	constructor() {
 		this.loadedSnapshotHeight = 0;
-
 		this.snapshotHeightModulo = 5;
 		this.snapshotToConserve = 10;
 	}
 
 	#createMissingDirectories() {
-		if (!fs.existsSync(this.__nodesDataPath)) { fs.mkdirSync(this.__nodesDataPath); }
-		if (!fs.existsSync(this.__nodeDataPath)) { fs.mkdirSync(this.__nodeDataPath); }
+		if (!fs.existsSync(this.__storagePath)) { fs.mkdirSync(this.__storagePath); }
+		if (!fs.existsSync(this.__trashPath)) { fs.mkdirSync(this.__trashPath); }
 		if (!fs.existsSync(this.__snapshotPath)) { fs.mkdirSync(this.__snapshotPath); }
 	}
 	#createSnapshotSubDirectories(height) {
@@ -152,12 +152,7 @@ export class SnapshotSystem {
 	/** Erase a snapshot @param {number} height */
 	#eraseSnapshot(height) {
 		const utxoCacheSnapHeightPath = path.join(this.__snapshotPath, `${height}`);
-		//fs.rmSync(utxoCacheSnapHeightPath, { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
-		// move folder to "trash" instead of deleting it
-		const trashPath = path.join(this.__nodeDataPath, 'trash');
-		if (!fs.existsSync(trashPath)) { fs.mkdirSync(trashPath); }
-
-		const trashSnapPath = path.join(trashPath, `${height}`);
+		const trashSnapPath = path.join(this.__trashPath, `${height}`);
 		copyFolderRecursiveSync(utxoCacheSnapHeightPath, trashSnapPath);
 		fs.rmSync(utxoCacheSnapHeightPath, { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
 		
@@ -168,8 +163,7 @@ export class SnapshotSystem {
 		if (height === 0) { return false; }
 
 		const heightPath = path.join(this.__snapshotPath, `${height}`);
-		const trashPath = path.join(this.__nodeDataPath, 'trash');
-		const trashSnapPath = path.join(trashPath, `${height}`);
+		const trashSnapPath = path.join(this.__trashPath, `${height}`);
 
 		if (!fs.existsSync(trashSnapPath)) { return false; }
 		if (fs.existsSync(heightPath) && !overwrite) { return false; }
@@ -187,14 +181,13 @@ export class SnapshotSystem {
 		if (!clearTrash) { return true; }
 
 		// clear the trash
-		const trashSnapshots = fs.readdirSync(trashPath);
+		const trashSnapshots = fs.readdirSync(this.__trashPath);
 		for (const snap of trashSnapshots) {
-			fs.rmSync(path.join(trashPath, snap), { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
+			fs.rmSync(path.join(this.__trashPath, snap), { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
 		}
 
 		console.info('Trash cleared');
 	}
-	/** Erase all snapshots */
 	eraseAllSnapshots() {
 		const snapshotsHeights = this.getSnapshotsHeights();
 		for (const snapHeight of snapshotsHeights) {

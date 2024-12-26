@@ -16,27 +16,79 @@ import { Transaction_Builder } from './transaction.mjs';
 * @typedef {import("../src/snapshot-system.mjs").SnapshotSystem} SnapshotSystem
 */
 
+class BlocksCache {
+    /** @type {Map<string, BlockData>} */
+    blocksByHash = new Map();
+    /** @type {Map<number, string>} */
+    blocksHashByHeight = new Map();
+    /** @type {Map<string, number>} */
+    blockHeightByHash = new Map();
+
+    /** @param {MiniLogger} miniLogger */
+    constructor(miniLogger) {
+        /** @type {MiniLogger} */
+        this.miniLogger = miniLogger;
+    }
+
+    oldestBlockHeight() {
+        if (this.blocksHashByHeight.size === 0) { return -1; }
+        return Math.min(...this.blocksHashByHeight.keys());
+    }
+    /** @param {BlockData} block */
+    addBlock(block) {
+        this.blocksByHash.set(block.hash, block);
+        this.blocksHashByHeight.set(block.index, block.hash);
+        this.blockHeightByHash.set(block.hash, block.index);
+    }
+    /** @param {number} index @param {string} hash */
+    deleteBlock(index, hash) {
+        this.blocksHashByHeight.delete(index);
+        this.blockHeightByHash.delete(hash);
+        this.blocksByHash.delete(hash);
+    }
+    /** returns the height of erasable blocks without erasing them. @param {number} height */
+    erasableLowerThan(height = 0) {
+        let erasableUntil = null;
+        const oldestHeight = this.oldestBlockHeight();
+        if (oldestHeight >= height) { return null; }
+
+        for (let i = oldestHeight; i < height; i++) {
+            const blockHash = this.blocksHashByHeight.get(i);
+            if (!blockHash) { continue; }
+            erasableUntil = i;
+        }
+
+        this.miniLogger.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`, (m) => { console.debug(m); });
+        return { from: oldestHeight, to: erasableUntil };
+    }
+    /** Erases the cache from the oldest block to the specified height(included). */
+    eraseFromTo(fromHeight = 0, toHeight = 100) {
+        if (fromHeight > toHeight) { return; }
+
+        let erasedUntil = null;
+        for (let i = fromHeight; i <= toHeight; i++) {
+            const blockHash = this.blocksHashByHeight.get(i);
+            if (!blockHash) { continue; }
+
+            this.deleteBlock(i, blockHash);
+            erasedUntil = i;
+        }
+
+        this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
+        return { from: fromHeight, to: erasedUntil };
+    }
+}
+
 /** Represents the blockchain and manages its operations. */
 export class Blockchain {
     fastConverter = new FastConverter();
     miniLogger = new MiniLogger('blockchain');
+    cache = new BlocksCache(this.miniLogger);
+    blockStorage = new BlockchainStorage();
 
     /** @param {string} nodeId - The ID of the node. */
     constructor(nodeId) {
         this.nodeId = nodeId;
-        this.blockStorage = new BlockchainStorage();
-        this.cache = {
-            /** @type {Map<string, BlockData>} */
-            blocksByHash: new Map(),
-            /** @type {Map<number, string>} */
-            blocksHashByHeight: new Map(),
-            /** @type {Map<string, number>} */
-            blockHeightByHash: new Map(),
-            oldestBlockHeight: () => {
-                if (this.cache.blocksHashByHeight.size === 0) { return -1; }
-                return Math.min(...this.cache.blocksHashByHeight.keys());
-            }
-        };
         /** @type {number} */
         this.currentHeight = this.blockStorage.lastBlockIndex;
         /** @type {BlockData|null} */
@@ -62,7 +114,7 @@ export class Blockchain {
         const cacheStart = olderSnapshotHeight > snapModulo ? olderSnapshotHeight - (snapModulo-1) : 0;
         this.#loadBlocksFromStorageToCache(cacheStart, startHeight);
         this.currentHeight = startHeight;
-        this.lastBlock = this.getBlockByHeight(startHeight);
+        this.lastBlock = this.getBlock(startHeight);
 
         // Cache + db cleanup
         this.blockStorage.removeBlocksHigherThan(startHeight);
@@ -75,19 +127,13 @@ export class Blockchain {
         if (indexStart > indexEnd) { return; }
 
         for (let i = indexStart; i <= indexEnd; i++) {
-            const block = this.getBlockByHeight(i);
+            const block = this.getBlock(i);
             if (!block) { break; }
 
-            this.#setBlockInCache(block);
+            this.cache.addBlock(block);
         }
 
         this.miniLogger.log(`Blocks loaded from ${indexStart} to ${indexEnd}`, (m) => { console.debug(m); });
-    }
-    /** @param {BlockData} block */
-    #setBlockInCache(block) {
-        this.cache.blocksByHash.set(block.hash, block);
-        this.cache.blocksHashByHeight.set(block.index, block.hash);
-        this.cache.blockHeightByHash.set(block.hash, block.index);
     }
     /** Adds a new confirmed block to the blockchain.
      * @param {UtxoCache} utxoCache - The UTXO cache to use for the block.
@@ -101,15 +147,12 @@ export class Blockchain {
         try {
             const blockInfo = saveBlockInfo ? await BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
             
-            this.#setBlockInCache(block);
+            this.cache.addBlock(block);
             this.lastBlock = block;
             this.currentHeight = block.index;
 
-            const promises = [];
-            if (persistToDisk) { promises.push(this.#persistBlockToDisk(block)); }
-            if (saveBlockInfo) { promises.push(this.#persistBlockInfoToDisk(blockInfo)) }
-
-            await Promise.all(promises);
+            if (persistToDisk) this.blockStorage.addBlock(block);
+            if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
 
             this.miniLogger.log(`Block successfully added: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
             return blockInfo;
@@ -118,39 +161,7 @@ export class Blockchain {
             throw error;
         }
     }
-    /** returns the height of erasable blocks without erasing them. @param {number} height */
-    erasableCacheLowerThan(height = 0) {
-        let erasableUntil = null;
-        const oldestHeight = this.cache.oldestBlockHeight();
-        if (oldestHeight >= height) { return null; }
 
-        for (let i = oldestHeight; i < height; i++) {
-            const blockHash = this.cache.blocksHashByHeight.get(i);
-            if (!blockHash) { continue; }
-            erasableUntil = i;
-        }
-
-        this.miniLogger.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`, (m) => { console.debug(m); });
-        return { from: oldestHeight, to: erasableUntil };
-    }
-    /** Erases the cache from the oldest block to the specified height(included). */
-    eraseCacheFromTo(fromHeight = 0, toHeight = 100) {
-        if (fromHeight > toHeight) { return; }
-
-        let erasedUntil = null;
-        for (let i = fromHeight; i <= toHeight; i++) {
-            const blockHash = this.cache.blocksHashByHeight.get(i);
-            if (!blockHash) { continue; }
-
-            this.cache.blocksHashByHeight.delete(i);
-            this.cache.blockHeightByHash.delete(blockHash);
-            this.cache.blocksByHash.delete(blockHash);
-            erasedUntil = i;
-        }
-
-        this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
-        return { from: fromHeight, to: erasedUntil };
-    }
     /** Applies the changes from added blocks to the UTXO cache and VSS.
     * @param {UtxoCache} utxoCache - The UTXO cache to update.
     * @param {Vss} vss - The VSS to update.
@@ -167,16 +178,6 @@ export class Blockchain {
             throw error;
         }
     }
-    /** @param {BlockData} finalizedBlock */
-    async #persistBlockToDisk(finalizedBlock) {
-        this.miniLogger.log(`Persisting block to disk: blockHash=${finalizedBlock.hash}`, (m) => { console.debug(m); });
-        this.blockStorage.addBlock(finalizedBlock);
-    }
-    /** @param {BlockInfo} blockInfo */
-    async #persistBlockInfoToDisk(blockInfo) {
-        this.miniLogger.log(`Persisting block info to disk: blockHash=${blockInfo.header.hash}`, (m) => { console.debug(m); });
-        this.blockStorage.addBlockInfo(blockInfo);
-    }
     /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
     async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) { // DEPRECATED
         return; // disabled
@@ -191,7 +192,7 @@ export class Blockchain {
         /** @type {Object<string, string[]>} */
         const actualizedAddressesTxsRefs = {};
         for (let i = indexStart; i <= indexEnd; i++) {
-            const finalizedBlock = this.getBlockByHeight(i);
+            const finalizedBlock = this.getBlock(i);
             if (!finalizedBlock) { console.error('Block not found'); continue; }
             const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(finalizedBlock, memPool.knownPubKeysAddresses);
 
@@ -319,43 +320,43 @@ export class Blockchain {
 
         const blocksData = [];
         for (let i = fromHeight; i <= toHeight; i++) {
-            const blockData = this.getBlockByHeight(i, deserialize);
+            const blockData = this.getBlock(i, deserialize);
             if (!blockData) { break; }
             blocksData.push(blockData);
         }
         return blocksData;
     }
-    /** Retrieves a block by its height. @param {number} height - The height of the block to retrieve. */
-    getBlockByHeight(height, deserialize = true) {
-        if (deserialize && this.cache.blocksHashByHeight.has(height)) {
-            return this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(height));
+    /** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
+    getBlock(heightOrHash, deserialize = true) {
+        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') { return null; }
+        
+        /** @type {BlockData} */
+        let block;
+
+        // try to get the block from the cache
+        if (deserialize && typeof heightOrHash === 'number' && this.cache.blocksHashByHeight.has(heightOrHash)) {
+            block = this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(height));
+        }
+        if (deserialize && typeof heightOrHash === 'string' && this.cache.blocksByHash.has(hash)) {
+            block = this.cache.blocksByHash.get(hash);
         }
 
-        const block = this.blockStorage.getBlockByIndex(height, deserialize);
         if (block) { return block; }
 
-        this.miniLogger.log(`Block not found: blockHeight=${height}`, (m) => { console.error(m); });
+        // try to get the block from the storage
+        block = this.blockStorage.retreiveBlock(heightOrHash, deserialize);
+        if (block) { return block; }
+
+        this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m) => { console.error(m); });
         return null;
     }
-    getBlockByHash(hash) {
-        const block = this.cache.blocksByHash.has(hash)
-        ? this.cache.blocksByHash.get(hash)
-        : this.blockStorage.getBlockByHash(hash);
 
-        if (block) { return block; }
-
-        this.miniLogger.log(`Block not found: blockHash=${hash}`, (m) => { console.error(m); });
-        throw new Error(`Block not found: ${hash}`);
-    }
-    getBlockInfoByHeight(height = 0) {
-        return this.blockStorage.getBlockInfoByIndex(height);
-    }
     /** @param {string} txReference - The transaction reference in the format "height:txId" */
     async getTransactionByReference(txReference) {
         const [height, txId] = txReference.split(':');
         try {
             /** @type {BlockData} */
-            const block = this.getBlockByHeight(parseInt(height, 10));
+            const block = this.getBlock(parseInt(height, 10));
             if (!block) { throw new Error('Block not found'); }
 
             const tx = block.Txs.find(tx => tx.id === txId);
@@ -366,23 +367,6 @@ export class Blockchain {
             this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); });
             return null;
         }
-    }
-    /** @param {Uint8Array} serializedTx - The serialized transaction data */
-    deserializeTransaction(serializedTx) {
-        try { // Try fast deserialization first.
-            return serializerFast.deserialize.transaction(serializedTx);
-        } catch (error) {
-            this.miniLogger.log(`Failed to fast deserialize transaction: error=${error}`, (m) => { console.debug(m); });
-        }
-
-        try { // Try the special transaction deserialization if fast deserialization fails.
-            return serializer.transaction.fromBinary_v2(serializedTx);
-        } catch (error) {
-            this.miniLogger.log(`Failed to deserialize special transaction: error=${error}`, (m) => { console.debug(m); });
-        }
-
-        this.miniLogger.log('Unable to deserialize transaction using available strategies', (m) => { console.error(m); });
-        return null;
     }
     
     /** @returns {string} The hash of the latest block */
