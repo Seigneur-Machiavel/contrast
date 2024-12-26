@@ -30,7 +30,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
     // ----- PUBLIC METHODS -----
     /** Remove the consumed UTXOs and add the new UTXOs - Return the new stakes outputs @param {BlockData[]} blocksData */
-    async digestFinalizedBlocks(blocksData) {
+    digestFinalizedBlocks(blocksData) {
         try {
             /** @type {UTXO[]} */
             const batchNewStakesOutputs = [];
@@ -41,7 +41,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
             for (const blockData of blocksData) {
                 const Txs = blockData.Txs;
-                const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = await this.#digestFinalizedBlockTransactions(blockData.index, Txs);
+                const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = this.#digestFinalizedBlockTransactions(blockData.index, Txs);
 
                 const supplyFromBlock = blockData.supply;
                 const coinBase = blockData.coinBase;
@@ -52,8 +52,8 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
                 batchConsumedUtxoAnchors.push(...consumedUtxoAnchors);
             }
 
-            await this.#digestNewUtxos(batchNewUtxos);
-            await this.#digestConsumedUtxos(batchConsumedUtxoAnchors);
+            this.#digestNewUtxos(batchNewUtxos);
+            this.#digestConsumedUtxos(batchConsumedUtxoAnchors);
 
             return batchNewStakesOutputs;
         } catch (error) {
@@ -69,33 +69,25 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const anchors = serializerFast.deserialize.anchorsArray(serializedAnchors);
         return anchors;
     }
-    /** @param {string} anchors */
-    async getUTXOs(anchors) {
+    getUTXOs(anchors) {
         if (anchors.length === 0) { return {}; }
+
         /** @type {UTXO[]} */
         const utxosObj = {};
         const missingAnchors = [];
         for (const anchor of anchors) {
             const miniUtxoSerialized = this.unspentMiniUtxos[anchor];
-            if (!miniUtxoSerialized) { // is spent or unexistant - treated later
-                missingAnchors.push(anchor);
-                continue; 
-            }
+            if (!miniUtxoSerialized) { missingAnchors.push(anchor); continue; } // is spent or unexistant - treated later
+
             const { amount, rule, address } = serializerFast.deserialize.miniUTXO(miniUtxoSerialized);
             utxosObj[anchor] = UTXO(anchor, amount, rule, address); // unspent
         }
 
         // UTXO SPENT OR UNEXISTANT
-        const missingUtxosTxPromises = {};
-        for (const anchor of missingAnchors) {
-            const [height, txId] = anchor.split(':');
-            const txRef = `${height}:${txId}`;
-            missingUtxosTxPromises[txRef] = this.blockchain.getTransactionByReference(txRef);
-        }
-
         for (const anchor in missingAnchors) {
-            const outputIndex = Number(anchor.split(':')[2]);
-            const relatedTx = await missingUtxosTxPromises[anchor];
+            const [height, txId, outputIndex] = anchor.split(':');
+            const txRef = `${height}:${txId}`;
+            const relatedTx = this.blockchain.getTransactionByReference(txRef);
             if (!relatedTx) { utxosObj[anchor] = undefined; continue; } // doesn't exist
 
             const output = relatedTx.outputs[outputIndex];
@@ -108,7 +100,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         return utxosObj;
     }
     /** @param {string} anchor @returns {Promise<UTXO | undefined>} */
-    async getUTXO(anchor) {
+    getUTXO(anchor) {
         const miniUtxoSerialized = this.unspentMiniUtxos[anchor];
         if (miniUtxoSerialized) {
             const { amount, rule, address } = serializerFast.deserialize.miniUTXO(miniUtxoSerialized);
@@ -118,7 +110,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const height = anchor.split(':')[0];
         const txID = anchor.split(':')[1];
         const reference = `${height}:${txID}`;
-        const relatedTx = await this.blockchain.getTransactionByReference(reference);
+        const relatedTx = this.blockchain.getTransactionByReference(reference);
         if (!relatedTx) { return undefined; } // doesn't exist
 
         const outputIndex = Number(anchor.split(':')[2]);
@@ -129,17 +121,17 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         return UTXO(anchor, output.amount, output.rule, output.address, true); // spent
     }
     /** @param {Transaction} transaction */
-    async extractInvolvedUTXOsOfTx(transaction) { // BETTER RE USABILITY
+    extractInvolvedUTXOsOfTx(transaction) { // BETTER RE USABILITY
         if (transaction instanceof Array) { throw new Error('Transaction is an array: should be a single transaction'); }
 
         const involvedAnchors = [];
         for (const input of transaction.inputs) { involvedAnchors.push(input); }
 
-        const involvedUTXOs = await this.getUTXOs(involvedAnchors);
+        const involvedUTXOs = this.getUTXOs(involvedAnchors);
         return involvedUTXOs;
     }
     /** @param {Transaction[]} transactions */
-    async extractInvolvedUTXOsOfTxs(transactions) { // BETTER RE USABILITY
+    extractInvolvedUTXOsOfTxs(transactions) { // BETTER RE USABILITY
         if (!Array.isArray(transactions)) { throw new Error('Transactions is not an array'); }
 
         try {
@@ -152,11 +144,9 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
                 for (const input of transaction.inputs) { involvedAnchors.push(input); }
             }
     
-            const involvedUTXOs = await this.getUTXOs(involvedAnchors);
+            const involvedUTXOs = this.getUTXOs(involvedAnchors);
             return involvedUTXOs;  
-        } catch (error) {
-            return false;
-        }
+        } catch (error) { return false; }
     }
     /** Re build the addressesAnchors from the unspentMiniUtxos after loading or snapshot loading */
     buildAddressesAnchorsFromUnspentMiniUtxos() {
@@ -186,7 +176,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     }
     /** Sort the new UTXOs and Stakes Outputs from a transaction
      * @param {number} blockIndex @param {Transaction} transaction */
-    async #digestTransactionOutputs(blockIndex, transaction) {
+    #digestTransactionOutputs(blockIndex, transaction) {
         const newUtxosFromTx = [];
         const newStakesOutputsFromTx = [];
         for (let i = 0; i < transaction.outputs.length; i++) {
@@ -196,7 +186,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) { continue; }
 
             if (rule === "sigOrSlash") {
-                const involvedUTXOs = await this.extractInvolvedUTXOsOfTx(transaction);
+                const involvedUTXOs = this.extractInvolvedUTXOsOfTx(transaction);
                 if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
 
                 newStakesOutputsFromTx.push(utxo); // used to fill VSS stakes (for now we only create new range)
@@ -208,7 +198,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         return { newStakesOutputsFromTx, newUtxosFromTx };
     }
     /** Sort new UTXOs and consumed UTXOs of the block @param {number} blockIndex @param {Transaction[]} Txs */
-    async #digestFinalizedBlockTransactions(blockIndex, Txs) {
+    #digestFinalizedBlockTransactions(blockIndex, Txs) {
         if (!Array.isArray(Txs)) { throw new Error('Txs is not an array'); }
         //console.log(`Digesting block ${blockIndex} with ${Txs.length} transactions`);
         const newStakesOutputs = [];
@@ -217,7 +207,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
         for (let i = 0; i < Txs.length; i++) {
             const transaction = Txs[i];
-            const { newStakesOutputsFromTx, newUtxosFromTx } = await this.#digestTransactionOutputs(blockIndex, transaction);
+            const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(blockIndex, transaction);
             newStakesOutputs.push(...newStakesOutputsFromTx);
             newUtxos.push(...newUtxosFromTx);
 
@@ -228,7 +218,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         return { newStakesOutputs, newUtxos, consumedUtxoAnchors };
     }
     /** Fill the UTXOs and addressesAnchors with the new UTXOs @param {UTXO[]} newUtxos */
-    async #digestNewUtxos(newUtxos) {
+    #digestNewUtxos(newUtxos) {
         if (this.logPerformance) { performance.mark('digestNewUtxos-setUTXOs start'); }
         const newAnchorsByAddress = {};
         for (const utxo of newUtxos) {
@@ -258,10 +248,10 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         performance.measure('digestNewUtxos-setUTXOs', 'digestNewUtxos-setUTXOs start', 'digestNewUtxos-setUTXOs end');*/
     }
     /** Remove the UTXOs from utxoCache @param {string[]} consumedAnchors */
-    async #digestConsumedUtxos(consumedAnchors) {
+    #digestConsumedUtxos(consumedAnchors) {
         const consumedUtxosByAddress = {};
         for (const anchor of consumedAnchors) {
-            const utxo = await this.getUTXO(anchor); // fast access: cached miniUTXOs
+            const utxo = this.getUTXO(anchor); // fast access: cached miniUTXOs
             if (!utxo) { throw new Error('UTXO not found'); }
             if (utxo.spent) { throw new Error('UTXO already spent'); }
             

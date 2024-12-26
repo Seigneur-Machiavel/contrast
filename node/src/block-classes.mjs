@@ -214,23 +214,23 @@ export class BlockUtils {
         if (firstTx && Transaction_Builder.isMinerOrValidatorTx(firstTx)) { blockData.Txs.shift(); }
     }
     /** @param {UtxoCache} utxoCache @param {Transaction[]} Txs */
-    static async calculateTxsTotalFees(utxoCache, Txs) {
-        const involvedUTXOs = await utxoCache.extractInvolvedUTXOsOfTxs(Txs);
+    static #calculateTxsTotalFees(utxoCache, Txs) {
+        const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTxs(Txs);
         if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
         
         let totalFees = 0;
         for (const Tx of Txs) {
             if (Transaction_Builder.isMinerOrValidatorTx(Tx)) { continue; }
 
-            const fee = await TxValidation.calculateRemainingAmount(involvedUTXOs, Tx);
+            const fee = TxValidation.calculateRemainingAmount(involvedUTXOs, Tx);
             totalFees += fee;
         }
 
         return totalFees;
     }
     /** @param {UtxoCache} utxoCache @param {BlockData} blockData */
-    static async calculateBlockReward(utxoCache, blockData) {
-        const totalFees = await this.calculateTxsTotalFees(utxoCache, blockData.Txs);
+    static calculateBlockReward(utxoCache, blockData) {
+        const totalFees = this.#calculateTxsTotalFees(utxoCache, blockData.Txs);
         const totalReward = totalFees + blockData.coinBase;
         const powReward = Math.floor(totalReward / 2);
         const posReward = totalReward - powReward;
@@ -282,11 +282,11 @@ export class BlockUtils {
         return blockData;
     }
     /** @param {UtxoCache} utxoCache @param {BlockData} blockData */
-    static async getFinalizedBlockInfo(utxoCache, blockData, totalFees) {
+    static getFinalizedBlockInfo(utxoCache, blockData, totalFees) {
         /** @type {BlockInfo} */
         const blockInfo = {
             header: this.getBlockHeader(blockData),
-            totalFees: totalFees || await this.calculateTxsTotalFees(utxoCache, blockData.Txs),
+            totalFees: totalFees || this.#calculateTxsTotalFees(utxoCache, blockData.Txs),
             lowerFeePerByte: 0,
             higherFeePerByte: 0,
             blockBytes: serializer.block_finalized.toBinary_v4(blockData).length,
@@ -297,21 +297,21 @@ export class BlockUtils {
         const lastTx = blockData.Txs.length - 1 <= 2 ? firstTx : blockData.Txs[blockData.Txs.length - 1];
 
         if (firstTx) {
-            const involvedUTXOs = await utxoCache.extractInvolvedUTXOsOfTx(firstTx);
+            const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(firstTx);
             if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
 
             const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
             const firstTxWeight = Transaction_Builder.getTxWeight(firstTx, specialTx);
-            blockInfo.higherFeePerByte = specialTx ? 0 : Math.round(await TxValidation.calculateRemainingAmount(involvedUTXOs, firstTx) / firstTxWeight);
+            blockInfo.higherFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, firstTx) / firstTxWeight);
         }
         
         if (lastTx) {
-            const involvedUTXOs = await utxoCache.extractInvolvedUTXOsOfTx(lastTx);
+            const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(lastTx);
             if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
 
             const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
             const lastTxWeight = Transaction_Builder.getTxWeight(lastTx, specialTx);
-            blockInfo.lowerFeePerByte = specialTx ? 0 : Math.round(await TxValidation.calculateRemainingAmount(involvedUTXOs, lastTx) / lastTxWeight);
+            blockInfo.lowerFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, lastTx) / lastTxWeight);
         }
 
         return blockInfo;

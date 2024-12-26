@@ -37,7 +37,7 @@ export class TxValidation {
      * @param {boolean} specialTx - 'miner' || 'validator' or false
      * @param {boolean} checkSpendableUtxos
      */
-    static async isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos = true, nodeVersion) {
+    static isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos = true, nodeVersion) {
         if (!transaction) { throw new Error(`missing transaction: ${transaction}`); }
         if (typeof transaction.id !== 'string') { throw new Error('Invalid transaction ID !== string'); }
         if (typeof transaction.version !== 'number') { throw new Error('Invalid version !== number'); }
@@ -63,7 +63,7 @@ export class TxValidation {
             if (output.rule === "sigOrSlash") {
                 if (i !== 0) { throw new Error('sigOrSlash must be the first output'); }
 
-                const remainingAmount = await this.calculateRemainingAmount(involvedUTXOs, transaction);
+                const remainingAmount = this.calculateRemainingAmount(involvedUTXOs, transaction);
                 if (remainingAmount < output.amount) { throw new Error('SigOrSlash requires fee > amount'); }
             }
         }
@@ -104,7 +104,7 @@ export class TxValidation {
      * @param {Object<string, UTXO>} involvedUTXOs
      * @param {Transaction} transaction
      */
-    static async calculateRemainingAmount(involvedUTXOs, transaction) {
+    static calculateRemainingAmount(involvedUTXOs, transaction) {
         // AT THIS STAGE WE HAVE ENSURED THAT THE TRANSACTION IS CONFORM
 
         let fee = 0;
@@ -130,7 +130,7 @@ export class TxValidation {
      * - control the right to create outputs using the rule
      * @param {Transaction} transaction
      */
-    static async controlTransactionOutputsRulesConditions(transaction) { //TODO: NOT SURE IF WE CONSERVE THIS
+    static controlTransactionOutputsRulesConditions(transaction) { //TODO: NOT SURE IF WE CONSERVE THIS
         for (let i = 0; i < transaction.outputs.length; i++) {
             const inRule = transaction.inputs[i] ? transaction.inputs[i].rule : undefined;
             const inAmount = transaction.inputs[i] ? transaction.inputs[i].amount : undefined;
@@ -315,7 +315,7 @@ export class TxValidation {
         const result = { fee: 0, success: false, discoveredPubKeysAddresses: {} };
         const checkSpendableUtxos = false; // at this stage we already checked UTXOs are spendable
         performance.mark('startConformityValidation');
-        await TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos, nodeVersion); // also check spendable UTXOs
+        TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos, nodeVersion); // also check spendable UTXOs
         performance.mark('endConformityValidation');
 
         performance.mark('startControlTransactionHash');
@@ -337,7 +337,7 @@ export class TxValidation {
 
         if (specialTx === 'miner') { result.success = true; return result; }
         
-        if (!specialTx) { result.fee = await TxValidation.calculateRemainingAmount(involvedUTXOs, transaction); }
+        if (!specialTx) { result.fee = TxValidation.calculateRemainingAmount(involvedUTXOs, transaction); }
         performance.mark('startAddressOwnershipConfirmation');
         const discoveredPubKeysAddresses = await TxValidation.addressOwnershipConfirmation(involvedUTXOs, transaction, impliedKnownPubkeysAddresses, useDevArgon2, specialTx);
         result.discoveredPubKeysAddresses = discoveredPubKeysAddresses;
@@ -363,7 +363,7 @@ export class TxValidation {
     static async partialTransactionValidation(involvedUTXOs, memPool, transaction, specialTx, nodeVersion) {
         const result = { fee: 0, success: false, impliedKnownPubkeysAddresses: {} };
         const checkSpendableUtxos = false; // at this stage we already checked UTXOs are spendable
-        await TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos, nodeVersion); // also check spendable UTXOs
+        TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos, nodeVersion); // also check spendable UTXOs
         await TxValidation.controlTransactionHash(transaction);
 
         // if transaction is already in the memPool, we don't need to validate it again
@@ -384,7 +384,7 @@ export class TxValidation {
         result.impliedKnownPubkeysAddresses = impliedKnownPubkeysAddresses;
 
         if (specialTx === 'miner') { result.success = true; return result; }
-        if (!specialTx) { result.fee = await TxValidation.calculateRemainingAmount(involvedUTXOs, transaction); }
+        if (!specialTx) { result.fee = TxValidation.calculateRemainingAmount(involvedUTXOs, transaction); }
 
         result.success = true;
         return result;
@@ -477,7 +477,7 @@ export class BlockValidation {
      * @param {ValidationWorker[]} workers
      * @param {boolean} useDevArgon2 */
     static async fullBlockTxsValidation(blockData, utxoCache, memPool, workers, useDevArgon2 = false) {
-        const involvedUTXOs = await utxoCache.extractInvolvedUTXOsOfTxs(blockData.Txs);
+        const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTxs(blockData.Txs);
         if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
 
         const nbOfWorkers = workers.length;

@@ -110,7 +110,7 @@ export class Node {
         if (!startFromScratch) {
             this.blockchainStats.state = "loading";
             const startHeight = await this.blockchain.load(this.snapshotSystem);
-            await this.loadSnapshot(startHeight);
+            this.loadSnapshot(startHeight);
         }
 
         const bootstrapNodes = this.configManager.getBootstrapNodes();
@@ -215,13 +215,13 @@ export class Node {
     //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
 
     //#region - SNAPSHOT: LOAD/SAVE ---------------------------------------------------------------
-    async loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
+    loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
         if (snapshotIndex < 0) { return; }
 
         this.miniLogger.log(`Last known snapshot index: ${snapshotIndex}`, (m) => { console.warn(m); });
         this.blockchain.currentHeight = snapshotIndex;
         this.blockCandidate = null;
-        await this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
+        this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.warn(m); });
         if (snapshotIndex < 1) { this.blockchain.reset(); }
@@ -233,7 +233,7 @@ export class Node {
         this.snapshotSystem.eraseSnapshotsHigherThan(snapshotIndex - 1);
     }
     /** @param {BlockData} finalizedBlock */
-    async #saveSnapshot(finalizedBlock) {
+    #saveSnapshot(finalizedBlock) {
         if (finalizedBlock.index === 0) { return; }
         if (finalizedBlock.index % this.snapshotSystem.snapshotHeightModulo !== 0) { return; }
         const eraseUnder = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve;
@@ -241,11 +241,11 @@ export class Node {
         // erase the outdated blocks cache and persist the addresses transactions references to disk
         const cacheErasable = this.blockchain.cache.erasableLowerThan(finalizedBlock.index - (eraseUnder - 1));
         if (cacheErasable !== null && cacheErasable.from < cacheErasable.to) {
-            await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, cacheErasable.from, cacheErasable.to);
+            this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, cacheErasable.from, cacheErasable.to);
             this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 
-        await this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool);
+        this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool);
         this.snapshotSystem.eraseSnapshotsLowerThan(finalizedBlock.index - eraseUnder);
         // avoid gap between the loaded snapshot and the new one
         // at this stage we know that the loaded snapshot is consistent with the blockchain
@@ -289,7 +289,7 @@ export class Node {
         timer.startPhase('rewards-validation');
         const expectedCoinBase = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock || finalizedBlock);
         if (finalizedBlock.coinBase !== expectedCoinBase) throw new Error(`!banBlock! !applyOffense! Invalid #${finalizedBlock.index} coinbase: ${finalizedBlock.coinBase} - expected: ${expectedCoinBase}`);
-        const { powReward, posReward, totalFees } = await BlockUtils.calculateBlockReward(this.utxoCache, finalizedBlock);
+        const { powReward, posReward, totalFees } = BlockUtils.calculateBlockReward(this.utxoCache, finalizedBlock);
         try { await BlockValidation.areExpectedRewards(powReward, posReward, finalizedBlock); } 
         catch { throw new Error('!banBlock! !applyOffense! Invalid rewards'); }
         timer.endPhase('rewards-validation');
@@ -342,11 +342,11 @@ export class Node {
     
         timer.startPhase('add-confirmed-block');
         if (!skipValidation && !hashConfInfo?.conform) throw new Error('Failed to validate block');
-        const blockInfo = await this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
+        const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
         timer.endPhase('add-confirmed-block');
     
         timer.startPhase('apply-blocks'),
-        await this.blockchain.applyBlock(this.utxoCache, this.vss, finalizedBlock, this.roles.includes('observer')),
+        this.blockchain.applyBlock(this.utxoCache, this.vss, finalizedBlock, this.roles.includes('observer')),
         timer.endPhase('apply-blocks'),
         timer.startPhase('mempool-cleanup'),
         this.memPool.removeFinalizedBlocksTransactions(finalizedBlock),
@@ -372,7 +372,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         }
     
         timer.startPhase('snapshot-and-peer-wait');
-        if (!isLoading) await this.#saveSnapshot(finalizedBlock);
+        if (!isLoading) this.#saveSnapshot(finalizedBlock);
         const waitStart = Date.now();
         //const nbOfPeers = await this.#waitSomePeers();
         //if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
@@ -403,7 +403,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     async #createBlockCandidate() {
         const startTime = Date.now();
 
-        const Txs = await this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
+        const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
         const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
 
         // Create the block candidate, genesis block if no lastBlockData
@@ -423,7 +423,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         }
 
         // Sign the block candidate
-        const { powReward, posReward } = await BlockUtils.calculateBlockReward(this.utxoCache, blockCandidate);
+        const { powReward, posReward } = BlockUtils.calculateBlockReward(this.utxoCache, blockCandidate);
         const posFeeTx = await Transaction_Builder.createPosReward(posReward, blockCandidate, this.validatorRewardAddress, this.account.address);
         const signedPosFeeTx = await this.account.signTransaction(posFeeTx);
         blockCandidate.Txs.unshift(signedPosFeeTx);
@@ -608,17 +608,17 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         blockData.validatorAddress = blockData.Txs[1].inputs[0].split(':')[0];
         return blockData;
     }
-    async getAddressExhaustiveData(address, from = 0, to = this.blockchain.currentHeight) {
-        const addressTxsReferences = await this.blockchain.getTxsReferencesOfAddress(this.memPool, address, from, to);
-        const addressUTXOs = await this.getAddressUtxos(address);
+    getAddressExhaustiveData(address, from = 0, to = this.blockchain.currentHeight) {
+        const addressTxsReferences = this.blockchain.getTxsReferencesOfAddress(this.memPool, address, from, to);
+        const addressUTXOs = this.getAddressUtxos(address);
         return { addressUTXOs, addressTxsReferences };
     }
     /** @param {string} txReference - ex: 12:0f0f0f @param {string} address - optional: also return balanceChange for this address */
-    async getTransactionByReference(txReference, address = undefined) {
+    getTransactionByReference(txReference, address = undefined) {
         try {
             if (address) { addressUtils.conformityCheck(address); }
             const result = { transaction: undefined, balanceChange: 0, inAmount: 0, outAmount: 0, fee: 0 };
-            const transaction = await this.blockchain.getTransactionByReference(txReference);
+            const transaction = this.blockchain.getTransactionByReference(txReference);
             result.transaction = transaction;
             if (address === undefined) { return result; }
 
@@ -630,7 +630,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             for (const anchor of transaction.inputs) {
                 if (!typeValidation.isConformAnchor(anchor)) { continue; }
                 const txRef = `${anchor.split(":")[0]}:${anchor.split(":")[1]}`;
-                const utxoRelatedTx = await this.blockchain.getTransactionByReference(txRef);
+                const utxoRelatedTx = this.blockchain.getTransactionByReference(txRef);
                 const outputIndex = parseInt(anchor.split(":")[2]);
                 const output = utxoRelatedTx.outputs[outputIndex];
                 result.inAmount += output.amount;
@@ -649,7 +649,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             return { transaction: undefined, balanceChange: undefined };
         }
     }
-    async getAddressUtxos(address) {
+    getAddressUtxos(address) {
         const addressAnchors = this.utxoCache.getAddressAnchorsArray(address);
         let spendableBalance = 0;
         let balance = 0;
@@ -658,7 +658,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             const associatedMemPoolTx = this.memPool.transactionByAnchor[anchor];
             if (associatedMemPoolTx) { continue; } // pending spent UTXO
 
-            const utxo = await this.utxoCache.getUTXO(anchor);
+            const utxo = this.utxoCache.getUTXO(anchor);
             if (!utxo) { this.miniLogger.log(`UTXO not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
             if (utxo.spent) { this.miniLogger.log(`UTXO spent but not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
 
@@ -671,14 +671,14 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
 
         return { spendableBalance, balance, UTXOs };
     }
-    async getAddressUtxosOnly(address) {
+    getAddressUtxosOnly(address) { // UNUSED ATM
         const addressAnchors = this.utxoCache.getAddressAnchorsArray(address);
         const UTXOs = [];
         for (const anchor of addressAnchors) {
             const associatedMemPoolTx = this.memPool.transactionByAnchor[anchor];
             if (associatedMemPoolTx) { continue; } // pending spent UTXO
 
-            const utxo = await this.utxoCache.getUTXO(anchor);
+            const utxo = this.utxoCache.getUTXO(anchor);
             if (!utxo) { this.miniLogger.log(`UTXO not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
             if (utxo.spent) { this.miniLogger.log(`UTXO spent but not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
 

@@ -167,7 +167,7 @@ export class OpStack {
                     await this.node.createBlockCandidateAndBroadcast();
                     break;
                 case 'rollBackTo':
-                    await this.node.loadSnapshot(content, false);
+                    this.node.loadSnapshot(content, false);
                     break;
                 case 'reorg_start':
                     this.isReorging = true;

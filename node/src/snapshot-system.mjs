@@ -68,7 +68,7 @@ export class SnapshotSystem {
 	 * @param {UtxoCache} utxoCache 
 	 * @param {Vss} vss 
 	 * @param {MemPool} memPool */
-	async newSnapshot(utxoCache, vss, memPool) {
+	newSnapshot(utxoCache, vss, memPool) {
 		const logPerf = false;
 		const currentHeight = utxoCache.blockchain.currentHeight
 
@@ -110,7 +110,7 @@ export class SnapshotSystem {
 	 * @param {UtxoCache} utxoCache 
 	 * @param {Vss} vss 
 	 * @param {MemPool} memPool */
-	async rollBackTo(height, utxoCache, vss, memPool) {
+	rollBackTo(height, utxoCache, vss, memPool) {
 		const logPerf = true;
 		const heightPath = path.join(this.__snapshotPath, `${height}`);
 

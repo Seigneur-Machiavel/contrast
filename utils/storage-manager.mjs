@@ -1,5 +1,5 @@
 import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
-import { serializer } from './serializer.mjs';
+import { serializer, serializerFast } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /**
@@ -18,7 +18,6 @@ const parentFolder = path.dirname(__filename);
 const __dirname = path.join(path.dirname(parentFolder), 'node');
 
 // A primitive way to store the blockchain data and wallet data etc...
-// Only few functions are exported, the rest are used internally
 // As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
 
 // GLOBALS
@@ -29,6 +28,7 @@ const PATH = {
     STORAGE: path.join(__dirname, 'storage'),
     BLOCKS: path.join(__dirname, 'storage', 'blocks'),
     BLOCKS_INFO: path.join(__dirname, 'storage', 'blocks-info'),
+    TXS_REFS: path.join(__dirname, 'storage', 'addresses-txs-refs'),
     //SNAPSHOTS: path.join(__dirname, 'storage', 'snapshots'),
     //TRASH: path.join(__dirname, 'storage', 'trash'),
     TEST_STORAGE: path.join(__dirname, 'test-storage'),
@@ -36,6 +36,7 @@ const PATH = {
 if (path && !fs.existsSync(PATH.STORAGE)) { fs.mkdirSync(PATH.STORAGE); }
 if (path && !fs.existsSync(PATH.BLOCKS)) { fs.mkdirSync(PATH.BLOCKS); }
 if (path && !fs.existsSync(PATH.BLOCKS_INFO)) { fs.mkdirSync(PATH.BLOCKS_INFO); }
+if (path && !fs.existsSync(PATH.TXS_REFS)) { fs.mkdirSync(PATH.TXS_REFS); }
 //if (path && !fs.existsSync(PATH.SNAPSHOTS)) { fs.mkdirSync(PATH.SNAPSHOTS); }
 //if (path && !fs.existsSync(PATH.TRASH)) { fs.mkdirSync(PATH.TRASH); }
 if (path && !fs.existsSync(PATH.TEST_STORAGE)) { fs.mkdirSync(PATH.TEST_STORAGE); }
@@ -120,8 +121,82 @@ export class Storage {
     }
 }
 
+/** Transactions references are stored in binary format, folder architecture is optimized for fast access */
+export class AddressesTxsRefsStorage {
+    configPath = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
+    snapHeight = -1;
+    /** @type {Object<string, Object<string, Object<string, boolean>>} */
+    architecture = {}; // lvl0: { lvl1: { address: true } }
+    constructor() { this.load(); }
+
+    load() {
+        if (!fs.existsSync(this.configPath)) {
+            storageMiniLogger.log('no config file found', (m) => { console.error(m); });
+            return;
+        }
+
+        try {
+            /** @type {number} */
+            const config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+            this.snapHeight = config.snapHeight;
+            this.architecture = config.architecture;
+
+            storageMiniLogger.log('[AddressesTxsRefsStorage] => config loaded', (m) => { console.log(m); });
+        } catch (error) { storageMiniLogger.log(error, (m) => { console.error(m); }); }
+    }
+    save(indexEnd) {
+        this.snapHeight = indexEnd;
+        const config = { snapHeight: indexEnd, architecture: this.architecture };
+        fs.writeFileSync(this.configPath, JSON.stringify(config), 'utf8');
+    }
+    #dirPathOfAddress(address = '') {
+        const lvl0 = address.slice(0, 2);
+        if (this.architecture[lvl0] === undefined) {
+            this.architecture[lvl0] = {};
+            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0))) { fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0)); }
+        }
+
+        const lvl1 = address.slice(2, 3);
+        if (this.architecture[lvl0][lvl1] === undefined) {
+            this.architecture[lvl0][lvl1] = {};
+            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0, lvl1))) { fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0, lvl1)); }
+        }
+
+        return { lvl0, lvl1 };
+    }
+    getTxsReferencesOfAddress(address = '') {
+        if (typeof address !== 'string' || address.length !== 20) { return []; }
+
+        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
+        if (!this.architecture[lvl0][lvl1][address]) { return []; }
+
+        const filePath = path.join(PATH.TXS_REFS, lvl0, lvl1, `${address}.bin`);
+
+        const serialized = fs.readFileSync(filePath);
+        /** @type {Array<string>} */
+        const txsRefs = serializerFast.deserialize.txsReferencesArray(serialized);
+        return txsRefs;
+    }
+    setTxsReferencesOfAddress(address = '', txsRefs = []) {
+        const serialized = serializerFast.serialize.txsReferencesArray(txsRefs);
+        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
+        this.architecture[lvl0][lvl1][address] = true;
+
+        const filePath = path.join(PATH.TXS_REFS, lvl0, lvl1, `${address}.bin`);
+        fs.writeFileSync(filePath, serialized, 'utf8');
+    }
+    reset() {
+        if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true }); }
+        if (fs.existsSync(this.configPath)) { fs.rmSync(this.configPath); }
+        
+        fs.mkdirSync(PATH.TXS_REFS);
+        this.architecture = {};
+        this.snapHeight = -1;
+    }
+}
+
 export class BlockchainStorage {
-    batchFolders = getListOfFoldersInBlocksDirectory();
+    batchFolders = this.#getListOfFoldersInBlocksDirectory();
     /** @type {Object<number, string>} */
     hashByIndex = {};
     /** @type {Object<string, number>} */
@@ -129,6 +204,13 @@ export class BlockchainStorage {
     lastBlockIndex = -1;
 
     constructor() { this.#init(); }
+    #getListOfFoldersInBlocksDirectory() {
+        const blocksFolders = fs.readdirSync(PATH.BLOCKS).filter(fileName => fs.lstatSync(path.join(PATH.BLOCKS, fileName)).isDirectory());
+    
+        // named as 0-999, 1000-1999, 2000-2999, etc... => sorting by the first number
+        const blocksFoldersSorted = blocksFolders.sort((a, b) => parseInt(a.split('-')[0], 10) - parseInt(b.split('-')[0], 10));
+        return blocksFoldersSorted;
+    }
     #init() {
         for (let i = 0; i < this.batchFolders.length; i++) {
             const batchFolderPath = this.batchFolders[i];
@@ -240,7 +322,7 @@ export class BlockchainStorage {
         }
     }
     reset() {
-        fs.rmSync(PATH.BLOCKS, { recursive: true });
+        if (fs.existsSync(PATH.BLOCKS)) { fs.rmSync(PATH.BLOCKS, { recursive: true }); }
         fs.mkdirSync(PATH.BLOCKS);
         this.batchFolders = [];
         this.hashByIndex = {};

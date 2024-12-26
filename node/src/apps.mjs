@@ -31,7 +31,7 @@ const APPS_VARS = {
 
 class AppStaticFncs {
     /** @param {Node} node */
-    static async extractPrivateNodeInfo(node) {
+    static extractPrivateNodeInfo(node) {
         if (!node) { return { error: 'No active node' }; }
 
         const result = {
@@ -39,7 +39,7 @@ class AppStaticFncs {
         };
 
         if (node.roles.includes('validator')) {
-            const { balance, UTXOs, spendableBalance } = await node.getAddressUtxos(node.account.address);
+            const { balance, UTXOs, spendableBalance } = node.getAddressUtxos(node.account.address);
             node.account.setBalanceAndUTXOs(balance, UTXOs, spendableBalance);
             result.nodeId = node.id;
             result.validatorAddress = node.account.address;
@@ -54,7 +54,7 @@ class AppStaticFncs {
 
         if (node.roles.includes('miner')) {
             if (!node.miner) { return { error: 'No miner found' }; }
-            const { balance, UTXOs, spendableBalance } = await node.getAddressUtxos(node.miner.address);
+            const { balance, UTXOs, spendableBalance } = node.getAddressUtxos(node.miner.address);
             result.nodeId = node.id;
             result.minerAddress = node.miner.address;
             result.minerBalance = balance;
@@ -359,7 +359,7 @@ export class DashboardWsApp {
                 ws.send(JSON.stringify({ type: 'node_restarted', data }));*/
                 break;
             case 'get_node_info':
-                const nodeInfo = await AppStaticFncs.extractPrivateNodeInfo(this.node);
+                const nodeInfo = AppStaticFncs.extractPrivateNodeInfo(this.node);
                 ws.send(JSON.stringify({ type: 'node_info', data: nodeInfo }));
                 break;
             case 'set_miner_threads':
@@ -607,7 +607,7 @@ export class ObserverWsApp {
                     ws.send(JSON.stringify({ type: 'blocks_data_requested', data: exhaustiveBlockData }));
                     break;
                 case 'get_address_utxos':
-                    const UTXOs = await this.node.getAddressUtxos(data);
+                    const UTXOs = this.node.getAddressUtxos(data);
                     ws.send(JSON.stringify({ type: 'address_utxos_requested', data: { address: data, UTXOs } }));
                     break;
                 case 'get_address_transactions_references':
@@ -618,7 +618,7 @@ export class ObserverWsApp {
                         to: typeof data === 'string' ? this.node.blockchain.currentHeight : data.to,
                     }
 
-                    const addTxsRefs = await this.node.blockchain.getTxsReferencesOfAddress(this.node.memPool, gatrParams.address, gatrParams.from, gatrParams.to);
+                    const addTxsRefs = this.node.blockchain.getTxsReferencesOfAddress(this.node.memPool, gatrParams.address, gatrParams.from, gatrParams.to);
                     ws.send(JSON.stringify({ type: 'address_transactionsRefs_requested', data: addTxsRefs }));
                     break;
                 case 'get_address_exhaustive_data':
@@ -631,17 +631,17 @@ export class ObserverWsApp {
                     }
                     //if (!gaedParams.from || gaedParams.from > gaedParams.to) { gaedParams.from = Math.max(gaedParams.to - 90, 0); }
 
-                    const { addressUTXOs, addressTxsReferences } = await this.node.getAddressExhaustiveData(gaedParams.address, gaedParams.from, gaedParams.to);
+                    const { addressUTXOs, addressTxsReferences } = this.node.getAddressExhaustiveData(gaedParams.address, gaedParams.from, gaedParams.to);
                     ws.send(JSON.stringify({ type: 'address_exhaustive_data_requested', data: { address: gaedParams.address, addressUTXOs, addressTxsReferences } }));
                     break;
                 case 'address_utxos':
-                    ws.send(JSON.stringify({ type: 'address_utxos_requested', data: { address: data, UTXOs: await this.node.getAddressUtxos(data) } }));
-                case 'get_transaction_by_reference': // DEPRECATED
-                    console.log('get_transaction_by_reference: DISABLED');
-                    break;
-                    const resTx = await this.node.getTransactionByReference(data);
-                    if (!res) { console.error(`[OBSERVER] Transaction not found: ${data}`); return; }
-                    ws.send(JSON.stringify({ type: 'transaction_requested', data: res.transaction }));
+                    ws.send(JSON.stringify({ type: 'address_utxos_requested', data: { address: data, UTXOs: this.node.getAddressUtxos(data) } }));
+                case 'get_transaction_by_reference':
+                    //console.log('get_transaction_by_reference: DISABLED');
+                    //break;
+                    const resTx = this.node.getTransactionByReference(data);
+                    if (!resTx) { console.error(`[OBSERVER] Transaction not found: ${data}`); return; }
+                    ws.send(JSON.stringify({ type: 'transaction_requested', data: resTx.transaction }));
                     break;
                 case 'get_transaction_with_balanceChange_by_reference':
                     //const result = { transaction, balanceChange, inAmount, outAmount, fee };

@@ -97,7 +97,7 @@ export class MemPool {
     }
     /** @param {UtxoCache} utxoCache @param {Transaction} transaction */
     async pushTransaction(utxoCache, transaction) { 
-        const involvedUTXOs = await utxoCache.extractInvolvedUTXOsOfTx(transaction);
+        const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(transaction);
         if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
 
         const timings = { start: Date.now(), first: 0, second: 0 };
@@ -108,7 +108,7 @@ export class MemPool {
         catch (error) { throw new Error(`Transaction hash not valid - ${error.message}`); }
         
         try { 
-            await TxValidation.isConformTransaction(involvedUTXOs, transaction, false, true, utxoCache.nodeVersion); 
+            TxValidation.isConformTransaction(involvedUTXOs, transaction, false, true, utxoCache.nodeVersion); 
         } 
         catch (error) { 
             throw new Error(`Transaction not conform - ${error.message}`); 
@@ -125,14 +125,14 @@ export class MemPool {
             throw new Error(`Conflicting UTXOs with: ${collidingTx.id} | anchor: ${colliding.anchor}`);
         }
 
-        const fee = await TxValidation.calculateRemainingAmount(involvedUTXOs, transaction);
+        const fee = TxValidation.calculateRemainingAmount(involvedUTXOs, transaction);
 
         transaction.byteWeight = byteLength;
         transaction.feePerByte = (fee / transaction.byteWeight).toFixed(6);
 
         timings.first = Date.now() - timings.start;
 
-        await TxValidation.controlTransactionOutputsRulesConditions(transaction);
+        TxValidation.controlTransactionOutputsRulesConditions(transaction);
 
         const impliedKnownPubkeysAddresses = await TxValidation.controlAllWitnessesSignatures(this, transaction);
 
@@ -142,7 +142,7 @@ export class MemPool {
         this.#addMempoolTransaction(transaction, collidingTx);
     }
     /** @param {UtxoCache} utxoCache */
-    async getMostLucrativeTransactionsBatch(utxoCache) {
+    getMostLucrativeTransactionsBatch(utxoCache) {
         const totalBytesTrigger = BLOCKCHAIN_SETTINGS.maxBlockSize * 0.98;
         const transactions = [];
         let totalBytes = 0;
@@ -152,7 +152,7 @@ export class MemPool {
         for (let tx of candidateTransactions) {
             let txCanBeAdded = true;
             for (const anchor of tx.inputs) {
-                const utxo = await utxoCache.getUTXO(anchor);
+                const utxo = utxoCache.getUTXO(anchor);
                 if (!utxo || utxo.spent) {
                     txCanBeAdded = false; 
                     this.transactionQueue.remove(tx.id);
