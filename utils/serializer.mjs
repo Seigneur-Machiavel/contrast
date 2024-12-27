@@ -343,6 +343,7 @@ export const serializer = {
             return serializedBlockView;
         },
         block_candidate(blockData) {
+            const pointerByte = 8; // ID:Offset => 4 bytes + 4 bytes
             const elementsLenght = {
                 nbOfTxs: 2, // 2bytes to store: blockData.Txs.length
                 indexBytes: 4,
