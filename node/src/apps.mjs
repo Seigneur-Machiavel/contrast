@@ -209,8 +209,6 @@ export class DashboardWsApp {
     }
     async initMultiNode(nodePrivateKey = 'ff', local = false, useDevArgon2 = false) {
         const wallet = new Wallet(nodePrivateKey, useDevArgon2);
-        //const restored = await wallet.restore();
-        //if (!restored) { console.error('Failed to restore wallet.'); return; }
         wallet.loadAccounts();
 
         const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(2, "C");

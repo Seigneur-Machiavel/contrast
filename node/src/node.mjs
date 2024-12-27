@@ -273,7 +273,7 @@ export class Node {
     
         try {
             timer.startPhase('height-timestamp-hash');
-            [BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight), 
+            [BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight),
              BlockValidation.validateBlockHash(finalizedBlock, this.blockchain.lastBlock),
              BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime())];
             timer.endPhase('height-timestamp-hash');

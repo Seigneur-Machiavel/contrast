@@ -81,10 +81,11 @@ class generatedAccount {
     seedModifierHex = '';
 }
 export class Wallet {
+    #masterHex = '';
     constructor(masterHex, useDevArgon2 = false) {
         this.miniLogger = new MiniLogger('wallet');
         /** @type {string} */
-        this.masterHex = masterHex; // 30 bytes - 60 chars
+        this.#masterHex = masterHex; // 30 bytes - 60 chars
         /** @type {Object<string, Account[]>} */
         this.accounts = { // max accounts per type = 65 536
             W: [],
@@ -106,17 +107,13 @@ export class Wallet {
         this.workers = [];
         this.nbOfWorkers = 4;
     }
-    async restore(mnemonicHex = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") {
-        const argon2HashResult = await HashFunctions.Argon2(mnemonicHex, "Contrast's Salt Isnt Pepper But It Is Tasty", 27, 1024, 1, 2, 26);
-        return argon2HashResult;
-    }
     saveAccounts() {
-        const id = this.masterHex.slice(0, 6);
+        const id = this.#masterHex.slice(0, 6);
         const folder = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
         Storage.saveJSON(folder, this.accountsGenerated);
     }
     loadAccounts() {
-        const id = this.masterHex.slice(0, 6);
+        const id = this.#masterHex.slice(0, 6);
         const folder = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
         const accountsGenerated = Storage.loadJSON(folder);
         if (!accountsGenerated) { return false; }
@@ -206,7 +203,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
             promises[i] = worker.derivationUntilValidAccount(
                 workerSeedModifierStart,
                 workerMaxIterations,
-                this.masterHex,
+                this.#masterHex,
                 desiredPrefix
             );
         }
@@ -270,7 +267,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
         return false;
     }
     async #deriveKeyPair(seedModifierHex) {
-        const seedHex = await HashFunctions.SHA256(this.masterHex + seedModifierHex);
+        const seedHex = await HashFunctions.SHA256(this.#masterHex + seedModifierHex);
 
         const keyPair = await AsymetricFunctions.generateKeyPairFromHash(seedHex);
         if (!keyPair) { throw new Error('Failed to generate key pair'); }
