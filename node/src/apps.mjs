@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { Storage } from '../../utils/storage-manager.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
-import { serializer } from '../../utils/serializer.mjs';
+//import { serializer } from '../../utils/serializer.mjs';
 import { Wallet } from './wallet.mjs';
 import { Node } from './node.mjs';
 import { exec } from 'child_process';

@@ -246,18 +246,18 @@ export class BlockchainStorage {
     #getBlock(blockIndex = 0, blockHash = '', deserialize = true) {
         const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
 
-        const readBlockStart = performance.now();
+        //const readBlockStart = performance.now();
         /** @type {Uint8Array} */
         const serialized = fs.readFileSync(blockFilePath);
-        const readBlockTime = performance.now() - readBlockStart;
+        //const readBlockTime = performance.now() - readBlockStart;
         if (!deserialize) { return serialized; }
 
-        const deserialStart = performance.now();
+        //const deserialStart = performance.now();
         /** @type {BlockData} */
         const blockData = serializer.deserialize.block_finalized(serialized);
-        const deserialTime = performance.now() - deserialStart
+        //const deserialTime = performance.now() - deserialStart
 
-        console.warn(`Read block: ${readBlockTime.toFixed(5)}ms, Deserialize block: ${deserialTime.toFixed(5)}ms`);
+        //console.warn(`Read block: ${readBlockTime.toFixed(5)}ms, Deserialize block: ${deserialTime.toFixed(5)}ms`);
         return blockData;
     }
 

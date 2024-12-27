@@ -1,6 +1,6 @@
 import { parentPort } from 'worker_threads';
 import { HashFunctions, AsymetricFunctions } from '../src/conCrypto.mjs';
-import { addressUtils } from '../src/utils.mjs';
+import { addressUtils } from '../../utils/addressUtils.mjs';
 
 // WORKER SIDE
 let workerId = undefined;
