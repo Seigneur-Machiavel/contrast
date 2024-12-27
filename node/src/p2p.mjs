@@ -225,7 +225,7 @@ class P2PNetwork extends EventEmitter {
                 case 'new_block_finalized':
                     this.miniLogger.log(`Received new block finalized from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block finalized size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
-                    parsedMessage = serializer.serialize.block_finalized(data);
+                    parsedMessage = serializer.deserialize.block_finalized(data);
                     break;
                 default:
                     parsedMessage = serializer.deserialize.rawData(data);
