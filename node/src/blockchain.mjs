@@ -300,6 +300,7 @@ export class Blockchain {
     }
     /** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
     getBlock(heightOrHash, deserialize = true) {
+        const startTimestamp = performance.now();
         if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') { return null; }
         
         /** @type {BlockData} */
@@ -312,11 +313,14 @@ export class Blockchain {
         if (deserialize && typeof heightOrHash === 'string' && this.cache.blocksByHash.has(heightOrHash)) {
             block = this.cache.blocksByHash.get(heightOrHash);
         }
+        const readCacheTime = (performance.now() - startTimestamp).toFixed(5);
 
         if (block) { return block; }
 
         // try to get the block from the storage
         block = this.blockStorage.retreiveBlock(heightOrHash, deserialize);
+        const readStorageTime = (performance.now() - startTimestamp).toFixed(5);
+        console.warn(`[DB] Read cache: ${readCacheTime}ms - [DB] getBlock: ${readStorageTime}ms`);
         if (block) { return block; }
 
         this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m) => { console.error(m); });
@@ -326,19 +330,20 @@ export class Blockchain {
     /** @param {string} txReference - The transaction reference in the format "height:txId" */
     getTransactionByReference(txReference) {
         const [height, txId] = txReference.split(':');
-        try {
-            /** @type {BlockData} */
-            const block = this.getBlock(parseInt(height, 10));
-            if (!block) { throw new Error('Block not found'); }
-
+        const index = parseInt(height, 10);
+        
+        if (this.cache.blocksHashByHeight.has(index)) { // Try from cache first
+            const block = this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(index));
             const tx = block.Txs.find(tx => tx.id === txId);
-            if (!tx) { throw new Error('Transaction not found'); }
-
-            return tx;
-        } catch (error) {
-            this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); });
-            return null;
+            return tx ? tx : null;
         }
+
+        try { // Try from storage
+            const tx = this.blockStorage.retreiveTx(txReference);
+            return tx;
+        } catch (error) { this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); }); }
+
+        return null;
     }
     
     /** @returns {string} The hash of the latest block */

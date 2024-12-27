@@ -1,4 +1,5 @@
 import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
+import { FastConverter } from "./converters.mjs";
 import { serializer, serializerFast } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
@@ -6,6 +7,7 @@ import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 * @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
 * @typedef {import("../node/src/block-classes.mjs").BlockInfo} BlockInfo
 * @typedef {import("../node/src/node.mjs").Node} Node
+* @typedef {import("../node/src/transaction.mjs").Transaction} Transaction
 */
 
 /** @type {MiniLogger} */
@@ -27,6 +29,7 @@ const BLOCK_PER_DIRECTORY = 1000;
 const PATH = {
     STORAGE: path.join(__dirname, 'storage'),
     BLOCKS: path.join(__dirname, 'storage', 'blocks'),
+    JSON_BLOCKS: path.join(__dirname, 'storage', 'json-blocks'),
     BLOCKS_INFO: path.join(__dirname, 'storage', 'blocks-info'),
     TXS_REFS: path.join(__dirname, 'storage', 'addresses-txs-refs'),
     TEST_STORAGE: path.join(__dirname, 'test-storage'),
@@ -186,6 +189,7 @@ export class BlockchainStorage {
     /** @type {Object<string, number>} */
     indexByHash = {};
     lastBlockIndex = -1;
+    fastConverter = new FastConverter();
 
     constructor() { this.#init(); }
     #getListOfFoldersInBlocksDirectory() {
@@ -212,20 +216,25 @@ export class BlockchainStorage {
         storageMiniLogger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m) => { console.log(m); });
     }
     #batchFolderFromBlockIndex(blockIndex = 0) {
-        return `${Math.floor(blockIndex / BLOCK_PER_DIRECTORY) * BLOCK_PER_DIRECTORY}-${Math.floor(blockIndex / BLOCK_PER_DIRECTORY) * BLOCK_PER_DIRECTORY + BLOCK_PER_DIRECTORY - 1}`;
+        const index = Math.floor(blockIndex / BLOCK_PER_DIRECTORY);
+        const name = `${Math.floor(blockIndex / BLOCK_PER_DIRECTORY) * BLOCK_PER_DIRECTORY}-${Math.floor(blockIndex / BLOCK_PER_DIRECTORY) * BLOCK_PER_DIRECTORY + BLOCK_PER_DIRECTORY - 1}`;
+        return { index, name };
     }
-
+    #blockFilePathFromIndexAndHash(blockIndex = 0, blockHash = '') {
+        const batchFolderPath = path.join(PATH.BLOCKS, this.#batchFolderFromBlockIndex(blockIndex).name);
+        const blockFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
+        return blockFilePath;
+    }
     /** @param {BlockData} blockData */
     #saveBlockBinary(blockData) {
         try {
-            //const binary = serializer.rawData.toBinary_v1(blockData);
-            const binary = serializer.block_finalized.toBinary_v4(blockData);
-
-            const batchFolderName = this.#batchFolderFromBlockIndex(blockData.index);
-            const batchFolderPath = path.join(PATH.BLOCKS, batchFolderName);
-            if (!this.batchFolders.includes(batchFolderName)) {
+            /** @type {Uint8Array} */
+            const binary = serializerFast.serialize.block_finalized(blockData);
+            const batchFolder = this.#batchFolderFromBlockIndex(blockData.index);
+            const batchFolderPath = path.join(PATH.BLOCKS, batchFolder.name);
+            if (this.batchFolders[batchFolder.index] !== batchFolder.name) {
                 fs.mkdirSync(batchFolderPath);
-                this.batchFolders.push(batchFolderName);
+                this.batchFolders.push(batchFolder.name);
             }
 
             const filePath = path.join(batchFolderPath, `${blockData.index.toString()}-${blockData.hash}.bin`);
@@ -235,16 +244,20 @@ export class BlockchainStorage {
         }
     }
     #getBlock(blockIndex = 0, blockHash = '', deserialize = true) {
-        const batchFolderPath = path.join(PATH.BLOCKS, this.#batchFolderFromBlockIndex(blockIndex));
-        const blockFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
+        const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
 
+        const readBlockStart = performance.now();
         /** @type {Uint8Array} */
         const serialized = fs.readFileSync(blockFilePath);
+        const readBlockTime = performance.now() - readBlockStart;
         if (!deserialize) { return serialized; }
 
+        const deserialStart = performance.now();
         /** @type {BlockData} */
-        //const blockData = serializer.rawData.fromBinary_v1(serialized);
-        const blockData = serializer.block_finalized.fromBinary_v4(serialized);
+        const blockData = serializerFast.deserialize.block_finalized(serialized);
+        const deserialTime = performance.now() - deserialStart
+
+        console.warn(`Read block: ${readBlockTime.toFixed(5)}ms, Deserialize block: ${deserialTime.toFixed(5)}ms`);
         return blockData;
     }
 
@@ -253,11 +266,11 @@ export class BlockchainStorage {
         this.#saveBlockBinary(blockData);
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
-        if (saveJSON) { saveBlockDataJSON(blockData, PATH.BLOCKS); }
+        if (saveJSON || blockData.index < 100) { saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
     }
     /** @param {BlockInfo} blockInfo */
     addBlockInfo(blockInfo) {
-        const batchFolderName = this.#batchFolderFromBlockIndex(blockInfo.header.index);
+        const batchFolderName = this.#batchFolderFromBlockIndex(blockInfo.header.index).name;
         const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
         if (!fs.existsSync(batchFolderPath)) { fs.mkdirSync(batchFolderPath); }
 
@@ -265,18 +278,23 @@ export class BlockchainStorage {
         const filePath = path.join(batchFolderPath, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
         fs.writeFileSync(filePath, binary);
     }
+    #blockHashIndexFormHeightOrHash(heightOrHash) {
+        const blockHash = typeof heightOrHash === 'number' ? this.hashByIndex[heightOrHash] : heightOrHash;
+        const blockIndex = typeof heightOrHash === 'string' ? this.indexByHash[heightOrHash] : heightOrHash;
+        return { blockHash, blockIndex };
+    }
     /** @param {number | string} heightOrHash - The height or the hash of the block to retrieve */
     retreiveBlock(heightOrHash, deserialize = true) {
         if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') { return null; }
 
-        const blockHash = typeof heightOrHash === 'number' ? this.hashByIndex[heightOrHash] : heightOrHash;
-        const blockIndex = typeof heightOrHash === 'string' ? this.indexByHash[heightOrHash] : heightOrHash;
+        const { blockHash, blockIndex } = this.#blockHashIndexFormHeightOrHash(heightOrHash);
         if (blockHash === undefined || blockIndex === undefined) { return null; }
 
-        return this.#getBlock(blockIndex, blockHash, deserialize);
+        const block = this.#getBlock(blockIndex, blockHash, deserialize);
+        return block;
     }
     getBlockInfoByIndex(blockIndex = 0) {
-        const batchFolderName = this.#batchFolderFromBlockIndex(blockIndex);
+        const batchFolderName = this.#batchFolderFromBlockIndex(blockIndex).name;
         const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
 
         try {
@@ -291,10 +309,57 @@ export class BlockchainStorage {
             return null;
         }
     }
+
+    /** @param {Uint8Array} serializedBlock @param {string} txRef - The reference of the transaction to retrieve */
+    #findTxPointerInSerializedBlock(serializedBlock, txRef = '41:5fbcae93') {
+        const targetTxId = txRef.split(':')[1];
+        const targetUint8Array = this.fastConverter.hexToUint8Array(targetTxId);
+        const nbOfTxs = this.fastConverter.uint82BytesToNumber(serializedBlock.slice(0, 2));
+        const pointersStart = 2 + 4 + 8 + 4 + 4 + 2 + 32 + 4 + 4 + 32 + 4;
+        const pointersEnd = (pointersStart + nbOfTxs * 8) - 1;
+        const pointersBuffer = serializedBlock.slice(pointersStart, pointersEnd + 1);
+        
+        for (let i = 0; i < pointersBuffer.length; i += 8) {
+            if (!pointersBuffer.slice(i, i + 4).every((v, i) => v === targetUint8Array[i])) { continue; }
+
+            const index = i / 8;
+            const offsetStart = this.fastConverter.uint84BytesToNumber(pointersBuffer.slice(i + 4, i + 8));
+            i += 8;
+            if (i >= pointersBuffer.length) { return { index, start: offsetStart, end: serializedBlock.length }; }
+            
+            const offsetEnd = this.fastConverter.uint84BytesToNumber(pointersBuffer.slice(i, i + 4));
+            return { index, start: offsetStart, end: offsetEnd };
+        }
+
+        return null;
+    }
+    /** @param {Uint8Array} serializedBlock @param {number} index @param {number} start @param {number} end */
+    #readTxInSerializedBlockUsingPointer(serializedBlock, index = 0, start = 0, end = 1) {
+        const txBuffer = serializedBlock.slice(start, end);
+        /** @type {Transaction} */
+        const tx = index < 2
+            ? serializerFast.deserialize.specialTransation(txBuffer)
+            : serializerFast.deserialize.transaction(txBuffer);
+        
+        return tx;
+    }
+    retreiveTx(txRef = '41:5fbcae93') {
+        const blockIndex = parseInt(txRef.split(':')[0], 10);
+        const serializedBlock = this.retreiveBlock(blockIndex, false);
+        if (!serializedBlock) { return null; }
+
+        const txOffset = this.#findTxPointerInSerializedBlock(serializedBlock, txRef);
+        if (!txOffset) { return null; }
+
+        const { index, start, end } = txOffset;
+        const tx = this.#readTxInSerializedBlockUsingPointer(serializedBlock, index, start, end);
+
+        return tx;
+    }
+
     removeBlock(blockIndex = 0) {
         const blockHash = this.hashByIndex[blockIndex];
-        const batchFolderPath = path.join(PATH.BLOCKS, this.#batchFolderFromBlockIndex(blockIndex));
-        const blockFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
+        const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
         fs.unlinkSync(blockFilePath);
 
         delete this.hashByIndex[blockIndex];

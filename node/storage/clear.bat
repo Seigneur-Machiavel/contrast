@@ -15,6 +15,13 @@ if exist "blocks-info" (
     echo Dossier "blocks-info" introuvable.
 )
 
+if exist "json-blocks" (
+    rmdir /s /q "json-blocks"
+    echo Dossier "json-blocks" supprime.
+) else (
+    echo Dossier "json-blocks" introuvable.
+)
+
 if exist "trash" (
     rmdir /s /q "trash"
     echo Dossier "trash" supprime.

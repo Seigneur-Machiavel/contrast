@@ -398,7 +398,7 @@ export class BlockValidation {
         if (blockData.timestamp > Date.now()) { throw new Error('Invalid timestamp'); }
     }
     /** @param {number} powReward @param {number} posReward @param {BlockData} blockData */
-    static async areExpectedRewards(powReward, posReward, blockData) {
+    static areExpectedRewards(powReward, posReward, blockData) {
         if (blockData.Txs[0].outputs[0].amount !== powReward) { throw new Error(`Invalid PoW reward: ${blockData.Txs[0].outputs[0].amount} - expected: ${powReward}`); }
         if (blockData.Txs[1].outputs[0].amount !== posReward) { throw new Error(`Invalid PoS reward: ${blockData.Txs[0].outputs[0].amount} - expected: ${posReward}`); }
     }

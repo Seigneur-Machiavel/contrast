@@ -443,6 +443,11 @@ export class FastConverter {
         this.view6.setUint16(4, Number(upper), true);
         return new Uint8Array(this.buffer6);
     }
+    numberTo8BytesUint8Array(num) {
+        const bigInt = BigInt(num);
+        this.view8.setBigUint64(0, bigInt, true);
+        return new Uint8Array(this.buffer8);
+    }
     bigIntTo8BytesUint8Array(bigInt) {
         this.view8.setBigUint64(0, bigInt, true);
         return new Uint8Array(this.buffer8);
@@ -549,6 +554,11 @@ export class FastConverter {
     uint86BytesToNumber(uint8Array) {
         for (let i = 0; i < 8; i++) { this.view8.setUint8(i, 0); }
         for (let i = 0; i < 6; i++) { this.view8.setUint8(i, uint8Array[i]); }
+        return Number(this.view8.getBigUint64(0, true));
+    }
+    /** @param {Uint8Array} uint8Array - Uint8Array to convert to number */
+    uint88BytesToNumber(uint8Array) {
+        for (let i = 0; i < 8; i++) { this.view8.setUint8(i, uint8Array[i]); }
         return Number(this.view8.getBigUint64(0, true));
     }
     /** @param {Uint8Array} uint8Array - Uint8Array to convert to bigInt */

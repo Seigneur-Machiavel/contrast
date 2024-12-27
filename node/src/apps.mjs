@@ -645,7 +645,7 @@ export class ObserverWsApp {
                     break;
                 case 'get_transaction_with_balanceChange_by_reference':
                     //const result = { transaction, balanceChange, inAmount, outAmount, fee };
-                    const { transaction, balanceChange, inAmount, outAmount, fee } = await this.node.getTransactionByReference(data.txReference, data.address);
+                    const { transaction, balanceChange, inAmount, outAmount, fee } = this.node.getTransactionByReference(data.txReference, data.address);
                     if (!transaction) { console.error(`[OBSERVER] Transaction not found: ${data.txReference}`); return; }
                     ws.send(JSON.stringify({ type: 'transaction_requested', data: { transaction, balanceChange, inAmount, outAmount, fee, txReference: data.txReference } }));
                     break;

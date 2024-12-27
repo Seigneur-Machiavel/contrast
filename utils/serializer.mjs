@@ -2,6 +2,10 @@ import { convert, FastConverter } from './converters.mjs';
 import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
 import { Transaction } from '../node/src/transaction.mjs';
 
+/**
+* @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
+*/
+
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 async function msgPackLib() {
     if (isNode) {
@@ -539,6 +543,21 @@ export const serializerFast = {
             };
             return bufferView;
         },
+        /** @param {Object <string, string>} pubkeyAddresses */
+        pubkeyAddressesObj(pubkeyAddresses) {
+            // { pubKeyHex(32bytes): addressBase58(16bytes) }
+
+            const pubKeys = Object.keys(pubkeyAddresses);
+            const nbOfBytesToAllocate = pubKeys.length * (32 + 16);
+            const resultBuffer = new ArrayBuffer(nbOfBytesToAllocate);
+            const uint8Result = new Uint8Array(resultBuffer);
+            for (let i = 0; i < pubKeys.length; i++) {
+                uint8Result.set(fastConverter.hexToUint8Array(pubKeys[i]), i * 48);
+                uint8Result.set(fastConverter.addressBase58ToUint8Array(pubkeyAddresses[pubKeys[i]]), i * 48 + 32);
+            }
+            return uint8Result;
+        },
+        /** @param {string[]} witnesses */
         witnessesArray(witnesses) {
             const witnessesBuffer = new ArrayBuffer(96 * witnesses.length); // (sig + pubKey) * nb of witnesses
             const witnessesBufferView = new Uint8Array(witnessesBuffer);
@@ -548,8 +567,70 @@ export const serializerFast = {
             }
             return witnessesBufferView;
         },
-        specialTransation: {
-            
+        /** @param {Transaction} tx */
+        specialTransation(tx) {
+            try {
+                const isCoinbase = tx.witnesses.length === 0;
+                const isValidator = tx.witnesses.length === 1;
+                if (!isCoinbase && !isValidator) { throw new Error('Invalid special transaction'); }
+                
+                if (isCoinbase && (tx.inputs.length !== 1 || tx.inputs[0].length !== 8)) { throw new Error('Invalid coinbase transaction'); }
+                if (isValidator && (tx.inputs.length !== 1 || tx.inputs[0].length !== 85)) { throw new Error('Invalid transaction'); }
+    
+                const elementsLenght = {
+                    witnesses: tx.witnesses.length, // nb of witnesses: 0 = coinbase, 1 = validator
+                    witnessesBytes: tx.witnesses.length * 96, // (sig + pubKey) * nb of witnesses -> 96 bytes * nb of witnesses
+                    inputsBytes: isCoinbase ? 4 : 85, // nonce(4B) or address(16B) + posHashHex(32B)
+                    outputs: tx.outputs.length, // nb of outputs
+                    outputsBytes: 23, // (amount + rule + address) -> 23 bytes
+                    dataBytes: tx.data ? tx.data.byteLength : 0 // data: bytes
+                }
+    
+                const serializedTx = new ArrayBuffer(6 + 4 + elementsLenght.witnessesBytes + 2 + elementsLenght.inputsBytes + elementsLenght.outputsBytes + elementsLenght.dataBytes);
+                const serializedTxView = new Uint8Array(serializedTx);
+
+                serializedTxView.set(fastConverter.numberTo2BytesUint8Array(elementsLenght.witnesses), 0); // 2 bytes
+                serializedTxView.set(fastConverter.numberTo2BytesUint8Array(elementsLenght.outputs), 2); // 2 bytes
+                serializedTxView.set(fastConverter.numberTo2BytesUint8Array(elementsLenght.dataBytes), 6); // 2 bytes
+
+                let cursor = 6;
+                serializedTxView.set(fastConverter.hexToUint8Array(tx.id), cursor);
+                cursor += 4; // id: hex 4 bytes
+
+                if (isValidator) { // WITNESSES
+                    serializedTxView.set(this.witnessesArray(tx.witnesses), cursor);
+                    cursor += elementsLenght.witnessesBytes; // witnesses: 96 bytes
+                }
+
+                serializedTxView.set(fastConverter.numberTo2BytesUint8Array(tx.version), cursor);
+                cursor += 2; // version: number 2 bytes
+
+                if (isCoinbase) { // INPUTS
+                    serializedTxView.set(fastConverter.hexToUint8Array(tx.inputs[0]), cursor);
+                    cursor += 4; // nonce: 4 bytes
+                } else if (isValidator) {
+                    const [address, posHash] = tx.inputs[0].split(':');
+                    serializedTxView.set(fastConverter.addressBase58ToUint8Array(address), cursor);
+                    cursor += 16; // address base58: 16 bytes
+
+                    serializedTxView.set(fastConverter.hexToUint8Array(posHash), cursor);
+                    cursor += 32; // posHash: 32 bytes
+                }
+
+                const serializedOutputs = this.miniUTXOsArray(tx.outputs);
+                serializedTxView.set(serializedOutputs, cursor);
+                cursor += elementsLenght.outputsBytes;
+
+                if (elementsLenght.dataBytes === 0) { return serializedTxView; }
+
+                throw new Error('Data serialization not implemented yet');
+
+                serializedTxView.set(tx.data, cursor); // max 65535 bytes
+                return serializedTxView;
+            } catch (error) {
+                console.error('Error while serializing the special transaction:', error);
+                throw new Error('Failed to serialize the special transaction');
+            }
         },
         /** @param {Transaction} tx */
         transaction(tx) {
@@ -595,31 +676,17 @@ export const serializerFast = {
                 throw new Error('Data serialization not implemented yet');
                 serializedTxView.set(tx.data, cursor); // max 65535 bytes
                 return serializedTxView;
-
             } catch (error) {
                 console.error('Error while serializing the transaction:', error);
                 throw new Error('Failed to serialize the transaction');
             }
         },
-        /** @param {Object <string, string>} pubkeyAddresses */
-        pubkeyAddressesObj(pubkeyAddresses) {
-            // { pubKeyHex(32bytes): addressBase58(16bytes) }
-
-            const pubKeys = Object.keys(pubkeyAddresses);
-            const nbOfBytesToAllocate = pubKeys.length * (32 + 16);
-            const resultBuffer = new ArrayBuffer(nbOfBytesToAllocate);
-            const uint8Result = new Uint8Array(resultBuffer);
-            for (let i = 0; i < pubKeys.length; i++) {
-                uint8Result.set(fastConverter.hexToUint8Array(pubKeys[i]), i * 48);
-                uint8Result.set(fastConverter.addressBase58ToUint8Array(pubkeyAddresses[pubKeys[i]]), i * 48 + 32);
-            }
-            return uint8Result;
-        },
-
         /** @param {BlockData} blockData */
-        blockHeader_finalized(blockData) {
+        block_finalized(blockData) {
             try {
+                const pointerByte = 8; // ID:Offset => 4 bytes + 4 bytes
                 const elementsLenght = {
+                    nbOfTxs: 2, // 2bytes to store: blockData.Txs.length
                     indexBytes: 4,
                     supplyBytes: 8,
                     coinBaseBytes: 4,
@@ -629,25 +696,81 @@ export const serializerFast = {
                     posTimestampBytes: 4,
                     timestampBytes: 4,
                     hashBytes: 32,
-                    nonceBytes: 4
+                    nonceBytes: 4,
+
+                    txsPointersBytes: blockData.Txs.length * pointerByte,
+                    txsBytes: 0
+                }
+
+                /** @type {Uint8Array<ArrayBuffer>[]} */
+                const serializedTxs = [];
+                for (let i = 0; i < blockData.Txs.length; i++) {
+                    const serializedTx = i < 2
+                        ? this.specialTransation(blockData.Txs[i])
+                        : this.transaction(blockData.Txs[i])
+
+                    serializedTxs.push(serializedTx);
+                    elementsLenght.txsBytes += serializedTx.length;
                 }
                 
-                const serializedHeader = new ArrayBuffer();
-                /*const blockHeaderAsArray = [
-                    convert.number.toUint8Array(blockData.index), // safe type: number
-                    convert.number.toUint8Array(blockData.supply), // safe type: number
-                    convert.number.toUint8Array(blockData.coinBase), // safe type: number
-                    convert.number.toUint8Array(blockData.difficulty), // safe type: number
-                    convert.number.toUint8Array(blockData.legitimacy), // safe type: number
-                    convert.hex.toUint8Array(blockData.prevHash), // safe type: hex
-                    convert.number.toUint8Array(blockData.posTimestamp), // safe type: number
-                    convert.number.toUint8Array(blockData.timestamp), // safe type: number
-                    convert.hex.toUint8Array(blockData.hash), // safe type: hex
-                    convert.hex.toUint8Array(blockData.nonce) // safe type: hex
-                ];*/
+                const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 4 + 32 + 4; // usefull for reading
+                const serializedBlock = new ArrayBuffer(2 + totalHeaderBytes + elementsLenght.txsPointersBytes + elementsLenght.txsBytes);
+                const serializedBlockView = new Uint8Array(serializedBlock);
+
+                // HEADER
+                let cursor = 0;
+                serializedBlockView.set(fastConverter.numberTo2BytesUint8Array(blockData.Txs.length), cursor);
+                cursor += 2; // nb of txs: 2 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.index), cursor);
+                cursor += 4; // index: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo8BytesUint8Array(blockData.supply), cursor);
+                cursor += 8; // supply: 8 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.coinBase), cursor);
+                cursor += 4; // coinBase: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.difficulty), cursor);
+                cursor += 4; // difficulty: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo2BytesUint8Array(blockData.legitimacy), cursor);
+                cursor += 2; // legitimacy: 2 bytes
+
+                serializedBlockView.set(fastConverter.hexToUint8Array(blockData.prevHash), cursor);
+                cursor += 32; // prevHash: 32 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.posTimestamp), cursor);
+                cursor += 4; // posTimestamp: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.timestamp), cursor);
+                cursor += 4; // timestamp: 4 bytes
+
+                serializedBlockView.set(fastConverter.hexToUint8Array(blockData.hash), cursor);
+                cursor += 32; // hash: 32 bytes
+
+                serializedBlockView.set(fastConverter.hexToUint8Array(blockData.nonce), cursor);
+                cursor += 4; // nonce: 4 bytes
                 
+                // POINTERS & TXS -> This specific traitment offer a better reading performance:
+                // ----- no need to deserialize the whole block to read the txs -----
+                let offset = 2 + totalHeaderBytes + elementsLenght.txsPointersBytes; // where the txs start
+                for (let i = 0; i < serializedTxs.length; i++) {
+                    serializedBlockView.set(fastConverter.hexToUint8Array(blockData.Txs[i].id), cursor);
+                    cursor += 4; // tx id: 4 bytes
+
+                    serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(offset), cursor);
+                    cursor += 4; // tx offset: 4 bytes
+                    
+                    const serializedTx = serializedTxs[i];
+                    serializedBlockView.set(serializedTx, offset);
+                    offset += serializedTx.length;
+                }
+
+                return serializedBlockView;
             } catch (error) {
-                
+                console.error('Error while serializing the finalized block:', error);
+                throw new Error('Failed to serialize the finalized block');
             }
         }
     },
@@ -730,6 +853,16 @@ export const serializerFast = {
             }
             return txsRef;
         },
+        /** @param {Uint8Array} serializedPubkeyAddresses */
+        pubkeyAddressesObj(serializedPubkeyAddresses) {
+            const pubkeyAddresses = {};
+            for (let i = 0; i < serializedPubkeyAddresses.byteLength; i += 48) {
+                const pubKey = fastConverter.uint8ArrayToHex(serializedPubkeyAddresses.slice(i, i + 32)); // 48 + 32 = 80
+                const address = fastConverter.addressUint8ArrayToBase58(serializedPubkeyAddresses.slice(i + 32, i + 48));
+                pubkeyAddresses[pubKey] = address;
+            }
+            return pubkeyAddresses;
+        },
         /** @param {Uint8Array} serializedWitnesses */
         witnessesArray(serializedWitnesses) {
             const witnesses = [];
@@ -739,6 +872,47 @@ export const serializerFast = {
                 witnesses.push(`${sig}:${pubKey}`);
             }
             return witnesses;
+        },
+        /** @param {Uint8Array} serializedTx */
+        specialTransation(serializedTx) {
+            try {
+                const elementsLenght = {
+                    witnesses: fastConverter.uint82BytesToNumber(serializedTx.slice(0, 2)), // nb of witnesses
+                    outputs: fastConverter.uint82BytesToNumber(serializedTx.slice(2, 4)), // nb of outputs
+                    dataBytes: fastConverter.uint82BytesToNumber(serializedTx.slice(4, 6)) // data: bytes
+                }
+
+                const isCoinbase = elementsLenght.witnesses === 0;
+                const isValidator = elementsLenght.witnesses === 1;
+                if (!isCoinbase && !isValidator) { throw new Error('Invalid special transaction'); }
+
+                let cursor = 6;
+                const id = fastConverter.uint8ArrayToHex(serializedTx.slice(cursor, cursor + 4));
+                cursor += 4; // id: hex 4 bytes
+
+                const witnesses = isCoinbase ? [] : this.witnessesArray(serializedTx.slice(cursor, cursor + elementsLenght.witnesses * 96));
+                cursor += elementsLenght.witnesses * 96;
+
+                const version = fastConverter.uint82BytesToNumber(serializedTx.slice(cursor, cursor + 2));
+                cursor += 2; // version: number 2 bytes
+
+                const inputs = isCoinbase
+                    ? [fastConverter.uint8ArrayToHex(serializedTx.slice(cursor, cursor + 4))]
+                    : [`${fastConverter.addressUint8ArrayToBase58(serializedTx.slice(cursor, cursor + 16))}:${fastConverter.uint8ArrayToHex(serializedTx.slice(cursor + 16, cursor + 48))}`];
+                cursor += isCoinbase ? 4 : 48;
+
+                const outputs = this.miniUTXOsArray(serializedTx.slice(cursor, cursor + elementsLenght.outputs * 23));
+                cursor += elementsLenght.outputs * 23;
+
+                if (elementsLenght.dataBytes === 0) { return Transaction(inputs, outputs, id, witnesses, version); }
+
+                throw new Error('Data field not implemented yet!');
+                const data = serializedTx.slice(cursor, cursor + elementsLenght.dataBytes); // max 65535 bytes
+                return Transaction(inputs, outputs, id, witnesses, version, data);
+            } catch (error) {
+                console.error(error);
+                throw new Error('Failed to deserialize the special transaction');
+            }
         },
         /** @param {Uint8Array} serializedTx */
         transaction(serializedTx) {
@@ -778,15 +952,70 @@ export const serializerFast = {
                 throw new Error('Failed to deserialize the transaction');
             }
         },
-        /** @param {Uint8Array} serializedPubkeyAddresses */
-        pubkeyAddressesObj(serializedPubkeyAddresses) {
-            const pubkeyAddresses = {};
-            for (let i = 0; i < serializedPubkeyAddresses.byteLength; i += 48) {
-                const pubKey = fastConverter.uint8ArrayToHex(serializedPubkeyAddresses.slice(i, i + 32)); // 48 + 32 = 80
-                const address = fastConverter.addressUint8ArrayToBase58(serializedPubkeyAddresses.slice(i + 32, i + 48));
-                pubkeyAddresses[pubKey] = address;
+        /** @param {Uint8Array} serializedBlock */
+        block_finalized(serializedBlock) {
+            try {
+                const elementsLenght = {
+                    nbOfTxs: fastConverter.uint82BytesToNumber(serializedBlock.slice(0, 2)), // 2 bytes
+                    indexBytes: 4,
+                    supplyBytes: 8,
+                    coinBaseBytes: 4,
+                    difficultyBytes: 4,
+                    legitimacyBytes: 2,
+                    prevHashBytes: 32,
+                    posTimestampBytes: 4,
+                    timestampBytes: 4,
+                    hashBytes: 32,
+                    nonceBytes: 4,
+
+                    txsPointersBytes: 0,
+                    txsBytes: 0
+                }
+
+                /** @type {BlockData} */
+                const blockData = {
+                    index: fastConverter.uint84BytesToNumber(serializedBlock.slice(2, 6)),
+                    supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(6, 14)),
+                    coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(14, 18)),
+                    difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)),
+                    legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)),
+                    prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)),
+                    posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)),
+                    timestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(60, 64)),
+                    hash: fastConverter.uint8ArrayToHex(serializedBlock.slice(64, 96)),
+                    nonce: fastConverter.uint8ArrayToHex(serializedBlock.slice(96, 100)),
+                    Txs: []
+                }
+
+                if (blockData.index === 41) {
+                    console.warn(`Block 41 - txs: ${elementsLenght.nbOfTxs}`);
+                }
+
+                const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 4 + 32 + 4; // usefull for reading
+                const cursor = 2 + totalHeaderBytes;
+                const txsPointers = [];
+                for (let i = cursor; i < cursor + elementsLenght.nbOfTxs * 8; i += 8) {
+                    const id = fastConverter.uint8ArrayToHex(serializedBlock.slice(i, i + 4));
+                    const offset = fastConverter.uint84BytesToNumber(serializedBlock.slice(i + 4, i + 8));
+                    txsPointers.push([id, offset]);
+                }
+
+                if (txsPointers.length !== elementsLenght.nbOfTxs) { throw new Error('Invalid txs pointers'); }
+
+                for (let i = 0; i < txsPointers.length; i++) {
+                    const [id, offsetStart] = txsPointers[i];
+                    const offsetEnd = i + 1 < txsPointers.length ? txsPointers[i + 1][1] : serializedBlock.length;
+                    const serializedTx = serializedBlock.slice(offsetStart, offsetEnd);
+                    const tx = i < 2 ? this.specialTransation(serializedTx) : this.transaction(serializedTx);
+                    if (tx.id !== id) { throw new Error('Invalid tx id'); }
+                    blockData.Txs.push(tx);
+                }
+
+                return blockData;
+            } catch (error) {
+                console.error(error);
+                throw new Error('Failed to deserialize the finalized block');
             }
-            return pubkeyAddresses;
         }
     }
 };

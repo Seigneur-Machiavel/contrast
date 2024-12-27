@@ -154,6 +154,7 @@ async function onMessage(event) {
             blockExplorerWidget.navigateUntilTarget(true);
             break;
         case 'transaction_requested':
+            console.log('transaction_requested', data);
             // { transaction, balanceChange, inAmount, outAmount, fee, txReference }
             const transactionWithDetails = data.transaction;
             transactionWithDetails.balanceChange = data.balanceChange;
@@ -412,7 +413,7 @@ export class BlockExplorerWidget {
                     const rowElement = event.target.closest('.cbe-addressTxRow');
                     const txReference = rowElement.querySelector('.cbe-addressTxReference').textContent;
                     const address = document.querySelector('.cbe-addressTitle').textContent;
-                    const transaction = this.#getTransactionFromMemoryOrSendRequest(txReference, address);
+                    const transaction = this.getTransactionFromMemoryOrSendRequest(txReference, address);
                     if (transaction === 'request sent') { return; }
         
                     const txDetails = this.#createTransactionDetailsElement(transaction);
@@ -474,7 +475,7 @@ export class BlockExplorerWidget {
 
                 const address = document.querySelector('.cbe-addressTitle').textContent;
                 const txReference = rowElement.querySelector('.cbe-addressTxReference').textContent;
-                const transaction = this.#getTransactionFromMemoryOrSendRequest(txReference, address);
+                const transaction = this.getTransactionFromMemoryOrSendRequest(txReference, address);
                 if (transaction === 'request sent') { return; }
 
                 txAmountElement.textContent = convert.formatNumberAsCurrencyChange(transaction.balanceChange);
@@ -694,7 +695,7 @@ export class BlockExplorerWidget {
 
         const leftContainer = createHtmlElement('div', undefined, ['cbe-leftContainer'], twoContainerWrap);
         createSpacedTextElement('Supply', [], `${convert.formatNumberAsCurrency(blockData.supply)}`, [], leftContainer);
-        createSpacedTextElement('Size', [], `${(blockData.blockBytes / 1024).toFixed(2)} Ko`, [], leftContainer);
+        createSpacedTextElement('Size', [], `${(blockData.blockBytes / 1024).toFixed(2)} KB`, [], leftContainer);
         createSpacedTextElement('Transactions', [], `${blockData.nbOfTxs}`, [], leftContainer);
         createSpacedTextElement('Total fees', [], `${convert.formatNumberAsCurrency(blockData.totalFees)}`, [], leftContainer);
         const minerAddressElmnt = createSpacedTextElement('Miner', [], blockData.minerAddress, [], leftContainer);
@@ -1028,7 +1029,7 @@ export class BlockExplorerWidget {
         return 'request sent';
     }
     /** @param {string} txReference @param {string} address - optional */
-    #getTransactionFromMemoryOrSendRequest(txReference, address = undefined) {
+    getTransactionFromMemoryOrSendRequest(txReference, address = undefined) {
         let comply = true;
         const fromMemory = this.transactionsByReference[txReference];
         if (fromMemory && address) { comply = fromMemory.balanceChange !== undefined; }
@@ -1165,7 +1166,7 @@ class BlockChainElementsManager {
         blockIndex.textContent = '#...';
 
         const weight = createHtmlElement('div', undefined, ['cbe-weight'], blockSquare);
-        weight.textContent = '... Ko';
+        weight.textContent = '... KB';
 
         const timeAgo = createHtmlElement('div', undefined, ['cbe-timeAgo'], blockSquare);
         timeAgo.textContent = `...`;
@@ -1192,7 +1193,7 @@ class BlockChainElementsManager {
         blockIndex.textContent = `#${blockInfo.header.index}`;
 
         const weight = blockSquare.querySelector('.cbe-weight');
-        weight.textContent = `${(blockInfo.blockBytes / 1024).toFixed(2)} Ko`;
+        weight.textContent = `${(blockInfo.blockBytes / 1024).toFixed(2)} KB`;
 
         const timeAgo = blockSquare.querySelector('.cbe-timeAgo');
         timeAgo.textContent = getTimeSinceBlockConfirmedString(blockInfo.header.timestamp);

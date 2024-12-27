@@ -290,7 +290,7 @@ export class Node {
         const expectedCoinBase = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock || finalizedBlock);
         if (finalizedBlock.coinBase !== expectedCoinBase) throw new Error(`!banBlock! !applyOffense! Invalid #${finalizedBlock.index} coinbase: ${finalizedBlock.coinBase} - expected: ${expectedCoinBase}`);
         const { powReward, posReward, totalFees } = BlockUtils.calculateBlockReward(this.utxoCache, finalizedBlock);
-        try { await BlockValidation.areExpectedRewards(powReward, posReward, finalizedBlock); } 
+        try { BlockValidation.areExpectedRewards(powReward, posReward, finalizedBlock); } 
         catch { throw new Error('!banBlock! !applyOffense! Invalid rewards'); }
         timer.endPhase('rewards-validation');
     
@@ -618,19 +618,21 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         try {
             if (address) { addressUtils.conformityCheck(address); }
             const result = { transaction: undefined, balanceChange: 0, inAmount: 0, outAmount: 0, fee: 0 };
-            const transaction = this.blockchain.getTransactionByReference(txReference);
-            result.transaction = transaction;
+            result.transaction = this.blockchain.getTransactionByReference(txReference);
+            if (!result.transaction) { return result; }
             if (address === undefined) { return result; }
 
-            for (const output of transaction.outputs) {
+            for (const output of result.transaction.outputs) {
                 result.outAmount += output.amount;
                 if (output.address === address) { result.balanceChange += output.amount; }
             }
 
-            for (const anchor of transaction.inputs) {
+            for (const anchor of result.transaction.inputs) {
                 if (!typeValidation.isConformAnchor(anchor)) { continue; }
                 const txRef = `${anchor.split(":")[0]}:${anchor.split(":")[1]}`;
                 const utxoRelatedTx = this.blockchain.getTransactionByReference(txRef);
+                if (!utxoRelatedTx) { continue; }
+                
                 const outputIndex = parseInt(anchor.split(":")[2]);
                 const output = utxoRelatedTx.outputs[outputIndex];
                 result.inAmount += output.amount;
