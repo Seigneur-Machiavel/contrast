@@ -519,7 +519,10 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         const sentSequence = [];
 
         for (const index of sequence) {
-            const block = this.blockchain.getBlock(finalizedBlockHeight + index);
+            const blockIndex = finalizedBlockHeight + index;
+            if (blockIndex < 0) { continue; }
+
+            const block = this.blockchain.getBlock(blockIndex);
             if (!block) { continue; }
 
             await new Promise(resolve => setTimeout(resolve, 200));
