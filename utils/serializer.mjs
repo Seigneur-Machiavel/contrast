@@ -342,6 +342,7 @@ export const serializer = {
 
             return serializedBlockView;
         },
+        /** @param {BlockData} blockData */
         block_candidate(blockData) {
             const pointerByte = 8; // ID:Offset => 4 bytes + 4 bytes
             const elementsLenght = {
@@ -607,16 +608,16 @@ export const serializer = {
 
             /** @type {BlockData} */
             const blockData = {
-                index: fastConverter.uint84BytesToNumber(serializedBlock.slice(2, 6)),
-                supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(6, 14)),
-                coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(14, 18)),
-                difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)),
-                legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)),
-                prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)),
-                posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)),
-                timestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(60, 64)),
-                hash: fastConverter.uint8ArrayToHex(serializedBlock.slice(64, 96)),
-                nonce: fastConverter.uint8ArrayToHex(serializedBlock.slice(96, 100)),
+                index: fastConverter.uint84BytesToNumber(serializedBlock.slice(2, 6)), // 4 bytes
+                supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(6, 14)), // 8 bytes
+                coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(14, 18)), // 4 bytes
+                difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)), // 4 bytes
+                legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)), // 2 bytes
+                prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)), // 32 bytes
+                posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)), // 4 bytes
+                timestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(60, 64)), // 4 bytes
+                hash: fastConverter.uint8ArrayToHex(serializedBlock.slice(64, 96)), // 32 bytes
+                nonce: fastConverter.uint8ArrayToHex(serializedBlock.slice(96, 100)), // 4 bytes
                 Txs: []
             }
 
@@ -648,14 +649,14 @@ export const serializer = {
 
             /** @type {BlockData} */
             const blockData = {
-                index: fastConverter.uint84BytesToNumber(serializedBlock.slice(2, 6)),
-                supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(6, 14)),
-                coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(14, 18)),
-                difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)),
-                legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)),
-                prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)),
-                posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)),
-                powReward: fastConverter.uint88BytesToNumber(serializedBlock.slice(60, 68)),
+                index: fastConverter.uint84BytesToNumber(serializedBlock.slice(2, 6)), // 4 bytes
+                supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(6, 14)), // 8 bytes
+                coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(14, 18)), // 4 bytes
+                difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)), // 4 bytes
+                legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)), // 2 bytes
+                prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)), // 32 bytes
+                posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)), // 4 bytes
+                powReward: fastConverter.uint88BytesToNumber(serializedBlock.slice(60, 68)), // 8 bytes
                 Txs: []
             }
 

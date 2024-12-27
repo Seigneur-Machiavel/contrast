@@ -212,7 +212,6 @@ class P2PNetwork extends EventEmitter {
             let parsedMessage;
             switch (topic) {
                 case 'new_transaction':
-
                     this.miniLogger.log(`Received new transaction from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = serializer.deserialize.transaction(data);
@@ -330,7 +329,7 @@ class P2PNetwork extends EventEmitter {
             const abortController = new AbortController();
             const timeout = setTimeout(() => {
                 abortController.abort();
-            }, 300_000); 
+            }, 300_000);
 
             stream = await this.p2pNode.dialProtocol(peerMultiaddr, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
             clearTimeout(timeout);
