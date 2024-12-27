@@ -272,7 +272,6 @@ export const serializer = {
                     hashBytes: 32,
                     nonceBytes: 4,
 
-                    toto: blockData.powReward,
                     txsPointersBytes: blockData.Txs.length * pointerByte,
                     txsBytes: 0
                 }
@@ -351,6 +350,7 @@ export const serializer = {
         block_candidate(blockData) {
             try {
                 const elementsLenght = {
+                    nbOfTxs: 2, // 2bytes to store: blockData.Txs.length
                     indexBytes: 4,
                     supplyBytes: 8,
                     coinBaseBytes: 4,
@@ -359,13 +359,15 @@ export const serializer = {
                     prevHashBytes: 32,
                     posTimestampBytes: 4,
                     powRewardBytes: 8,
+
+                    txsPointersBytes: blockData.Txs.length * pointerByte,
                     txsBytes: 0
                 }
 
                 /** @type {Uint8Array<ArrayBuffer>[]} */
                 const serializedTxs = [];
                 for (let i = 0; i < blockData.Txs.length; i++) {
-                    const serializedTx = i === 0 // only the first tx is a special transaction in candidate
+                    const serializedTx = i === 0 // only one special transaction in candidate block (validatorTx)
                         ? this.specialTransation(blockData.Txs[i])
                         : this.transaction(blockData.Txs[i])
 
@@ -373,11 +375,15 @@ export const serializer = {
                     elementsLenght.txsBytes += serializedTx.length;
                 }
 
-                const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 8;
-                const serializedBlock = new ArrayBuffer(totalHeaderBytes + elementsLenght.txsBytes);
+                const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 8; // usefull for reading
+                const serializedBlock = new ArrayBuffer(2 + totalHeaderBytes + elementsLenght.txsPointersBytes + elementsLenght.txsBytes);
                 const serializedBlockView = new Uint8Array(serializedBlock);
-
                 let cursor = 0;
+
+                // HEADER
+                serializedBlockView.set(fastConverter.numberTo2BytesUint8Array(blockData.Txs.length), cursor);
+                cursor += 2; // nb of txs: 2 bytes
+
                 serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.index), cursor);
                 cursor += 4; // index: 4 bytes
 
@@ -402,9 +408,15 @@ export const serializer = {
                 serializedBlockView.set(fastConverter.numberTo8BytesUint8Array(blockData.powReward), cursor);
                 cursor += 8; // powReward: 8 bytes
 
-                // TXS
-                let offset = totalHeaderBytes;
+                // POINTERS & TXS
+                let offset = 2 + totalHeaderBytes + elementsLenght.txsPointersBytes; // where the txs start
                 for (let i = 0; i < serializedTxs.length; i++) {
+                    serializedBlockView.set(fastConverter.hexToUint8Array(blockData.Txs[i].id), cursor);
+                    cursor += 4; // tx id: 4 bytes
+
+                    serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(offset), cursor);
+                    cursor += 4; // tx offset: 4 bytes
+                    
                     const serializedTx = serializedTxs[i];
                     serializedBlockView.set(serializedTx, offset);
                     offset += serializedTx.length;
@@ -648,22 +660,39 @@ export const serializer = {
         /** @param {Uint8Array} serializedBlock */
         block_candidate(serializedBlock) {
             try {
-                const cursor = 0;
+                const nbOfTxs = fastConverter.uint82BytesToNumber(serializedBlock.slice(0, 2)); // 2 bytes
+
+                /** @type {BlockData} */
                 const blockData = {
-                    index: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor, cursor + 4)),
-                    supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(cursor + 4, cursor + 12)),
-                    coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor + 12, cursor + 16)),
-                    difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor + 16, cursor + 20)),
-                    legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(cursor + 20, cursor + 22)),
-                    prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(cursor + 22, cursor + 54)),
-                    posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor + 54, cursor + 58)),
-                    powReward: fastConverter.uint88BytesToNumber(serializedBlock.slice(cursor + 58, cursor + 66)),
+                    index: fastConverter.uint84BytesToNumber(serializedBlock.slice(2, 6)),
+                    supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(6, 14)),
+                    coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(14, 18)),
+                    difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)),
+                    legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)),
+                    prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)),
+                    posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)),
+                    powReward: fastConverter.uint88BytesToNumber(serializedBlock.slice(60, 68)),
                     Txs: []
                 }
 
-                const txsStart = 66;
-                for (let i = txsStart; i < serializedBlock.length; i += 1) {
-                    const tx = this.specialTransation(serializedBlock.slice(i, i + 1));
+                const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 8; // usefull for reading
+                const cursor = 2 + totalHeaderBytes;
+                const txsPointers = [];
+                for (let i = cursor; i < cursor + nbOfTxs * 8; i += 8) {
+                    const id = fastConverter.uint8ArrayToHex(serializedBlock.slice(i, i + 4));
+                    const offset = fastConverter.uint84BytesToNumber(serializedBlock.slice(i + 4, i + 8));
+                    txsPointers.push([id, offset]);
+                }
+
+                if (txsPointers.length !== nbOfTxs) { throw new Error('Invalid txs pointers'); }
+
+                for (let i = 0; i < txsPointers.length; i++) {
+                    const [id, offsetStart] = txsPointers[i];
+                    const offsetEnd = i + 1 < txsPointers.length ? txsPointers[i + 1][1] : serializedBlock.length;
+                    const serializedTx = serializedBlock.slice(offsetStart, offsetEnd);
+                    const tx = i === 0 ? this.specialTransation(serializedTx) : this.transaction(serializedTx);
+                    if (tx.id !== id) { throw new Error('Invalid tx id'); }
+
                     blockData.Txs.push(tx);
                 }
 
