@@ -315,7 +315,7 @@ export class BlockchainStorage {
         const targetTxId = txRef.split(':')[1];
         const targetUint8Array = this.fastConverter.hexToUint8Array(targetTxId);
         const nbOfTxs = this.fastConverter.uint82BytesToNumber(serializedBlock.slice(0, 2));
-        const pointersStart = 2 + 4 + 8 + 4 + 4 + 2 + 32 + 4 + 4 + 32 + 4;
+        const pointersStart = 2 + 4 + 8 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4;
         const pointersEnd = (pointersStart + nbOfTxs * 8) - 1;
         const pointersBuffer = serializedBlock.slice(pointersStart, pointersEnd + 1);
         

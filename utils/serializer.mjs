@@ -266,8 +266,8 @@ export const serializer = {
                 difficultyBytes: 4,
                 legitimacyBytes: 2,
                 prevHashBytes: 32,
-                posTimestampBytes: 4,
-                timestampBytes: 4,
+                posTimestampBytes: 6,
+                timestampBytes: 6,
                 hashBytes: 32,
                 nonceBytes: 4,
 
@@ -286,7 +286,7 @@ export const serializer = {
                 elementsLenght.txsBytes += serializedTx.length;
             }
             
-            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 4 + 32 + 4; // usefull for reading
+            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4; // usefull for reading
             const serializedBlock = new ArrayBuffer(2 + totalHeaderBytes + elementsLenght.txsPointersBytes + elementsLenght.txsBytes);
             const serializedBlockView = new Uint8Array(serializedBlock);
 
@@ -313,11 +313,11 @@ export const serializer = {
             serializedBlockView.set(fastConverter.hexToUint8Array(blockData.prevHash), cursor);
             cursor += 32; // prevHash: 32 bytes
 
-            serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.posTimestamp), cursor);
-            cursor += 4; // posTimestamp: 4 bytes
+            serializedBlockView.set(fastConverter.numberTo6BytesUint8Array(blockData.posTimestamp), cursor);
+            cursor += 6; // posTimestamp: 6 bytes
 
-            serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.timestamp), cursor);
-            cursor += 4; // timestamp: 4 bytes
+            serializedBlockView.set(fastConverter.numberTo8BytesUint8Array(blockData.timestamp), cursor);
+            cursor += 6; // timestamp: 6 bytes
 
             serializedBlockView.set(fastConverter.hexToUint8Array(blockData.hash), cursor);
             cursor += 32; // hash: 32 bytes
@@ -353,7 +353,7 @@ export const serializer = {
                 difficultyBytes: 4,
                 legitimacyBytes: 2,
                 prevHashBytes: 32,
-                posTimestampBytes: 4,
+                posTimestampBytes: 6,
                 powRewardBytes: 8,
 
                 txsPointersBytes: blockData.Txs.length * pointerByte,
@@ -371,7 +371,7 @@ export const serializer = {
                 elementsLenght.txsBytes += serializedTx.length;
             }
 
-            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 8; // usefull for reading
+            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 6 + 8; // usefull for reading
             const serializedBlock = new ArrayBuffer(2 + totalHeaderBytes + elementsLenght.txsPointersBytes + elementsLenght.txsBytes);
             const serializedBlockView = new Uint8Array(serializedBlock);
             let cursor = 0;
@@ -398,8 +398,8 @@ export const serializer = {
             serializedBlockView.set(fastConverter.hexToUint8Array(blockData.prevHash), cursor);
             cursor += 32; // prevHash: 32 bytes
 
-            serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.posTimestamp), cursor);
-            cursor += 4; // posTimestamp: 4 bytes
+            serializedBlockView.set(fastConverter.numberTo6BytesUint8Array(blockData.posTimestamp), cursor);
+            cursor += 6; // posTimestamp: 4 bytes
 
             serializedBlockView.set(fastConverter.numberTo8BytesUint8Array(blockData.powReward), cursor);
             cursor += 8; // powReward: 8 bytes
@@ -417,6 +417,8 @@ export const serializer = {
                 serializedBlockView.set(serializedTx, offset);
                 offset += serializedTx.length;
             }
+
+            const deserializedBlock = serializer.deserialize.block_candidate(serializedBlockView);
 
             return serializedBlockView;
         }
@@ -614,14 +616,14 @@ export const serializer = {
                 difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)), // 4 bytes
                 legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)), // 2 bytes
                 prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)), // 32 bytes
-                posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)), // 4 bytes
-                timestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(60, 64)), // 4 bytes
-                hash: fastConverter.uint8ArrayToHex(serializedBlock.slice(64, 96)), // 32 bytes
-                nonce: fastConverter.uint8ArrayToHex(serializedBlock.slice(96, 100)), // 4 bytes
+                posTimestamp: fastConverter.uint86BytesToNumber(serializedBlock.slice(56, 62)), // 6 bytes
+                timestamp: fastConverter.uint86BytesToNumber(serializedBlock.slice(62, 68)), // 6 bytes
+                hash: fastConverter.uint8ArrayToHex(serializedBlock.slice(68, 100)), // 32 bytes
+                nonce: fastConverter.uint8ArrayToHex(serializedBlock.slice(100, 104)), // 4 bytes
                 Txs: []
             }
 
-            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 4 + 32 + 4; // usefull for reading
+            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4; // usefull for reading
             const cursor = 2 + totalHeaderBytes;
             const txsPointers = [];
             for (let i = cursor; i < cursor + nbOfTxs * 8; i += 8) {
@@ -655,12 +657,12 @@ export const serializer = {
                 difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(18, 22)), // 4 bytes
                 legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(22, 24)), // 2 bytes
                 prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(24, 56)), // 32 bytes
-                posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(56, 60)), // 4 bytes
-                powReward: fastConverter.uint88BytesToNumber(serializedBlock.slice(60, 68)), // 8 bytes
+                posTimestamp: fastConverter.uint86BytesToNumber(serializedBlock.slice(56, 62)), // 6 bytes
+                powReward: fastConverter.uint88BytesToNumber(serializedBlock.slice(62, 70)), // 8 bytes
                 Txs: []
             }
 
-            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 8; // usefull for reading
+            const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 6 + 8; // usefull for reading
             const cursor = 2 + totalHeaderBytes;
             const txsPointers = [];
             for (let i = cursor; i < cursor + nbOfTxs * 8; i += 8) {
