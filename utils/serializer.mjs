@@ -418,8 +418,6 @@ export const serializer = {
                 offset += serializedTx.length;
             }
 
-            const deserializedBlock = serializer.deserialize.block_candidate(serializedBlockView);
-
             return serializedBlockView;
         }
     },
