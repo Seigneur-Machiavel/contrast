@@ -2,7 +2,7 @@ import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { Transaction_Builder, Transaction } from './transaction.mjs';
 import { TxValidation } from './validations-classes.mjs';
-import { serializer, serializerFast } from '../../utils/serializer.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 
 /**
 * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
@@ -267,20 +267,6 @@ export class BlockUtils {
         const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = blockData;
         return BlockHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
     }
-    /** @param {Uint8Array} serializedHeader @param {Uint8Array[]} serializedTxs */
-    static blockDataFromSerializedHeaderAndTxs(serializedHeader, serializedTxs) { // Better in utils serializer ?
-        /** @type {BlockData} */
-        const blockData = serializer.blockHeader_finalized.fromBinary_v3(serializedHeader);
-        blockData.Txs = [];
-        for (let i = 0; i < serializedTxs.length; i++) {
-            const serializedTx = serializedTxs[i];
-            const specialTx = i < 2 ? true : false;
-            const tx = specialTx ? serializer.transaction.fromBinary_v2(serializedTx) : serializerFast.deserialize.transaction(serializedTx);
-            blockData.Txs.push(tx);
-        }
-
-        return blockData;
-    }
     /** @param {UtxoCache} utxoCache @param {BlockData} blockData */
     static getFinalizedBlockInfo(utxoCache, blockData, totalFees) {
         /** @type {BlockInfo} */
@@ -289,7 +275,7 @@ export class BlockUtils {
             totalFees: totalFees || this.#calculateTxsTotalFees(utxoCache, blockData.Txs),
             lowerFeePerByte: 0,
             higherFeePerByte: 0,
-            blockBytes: serializer.block_finalized.toBinary_v4(blockData).length,
+            blockBytes: serializer.serialize.block_finalized(blockData).length,
             nbOfTxs: blockData.Txs.length
         };
         

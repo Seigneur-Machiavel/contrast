@@ -325,7 +325,7 @@ export class Node {
         if (this.restartRequested) return;
     
         timer.startPhase('initialization');
-        const blockBytes = byteLength || serializer.block_finalized.toBinary_v4(finalizedBlock).byteLength;
+        const blockBytes = byteLength || serializer.serialize.block_finalized(finalizedBlock).byteLength;
         const { skipValidation = false, broadcastNewCandidate = true, isSync = false, isLoading = false, persistToDisk = true } = options;
         if (!finalizedBlock || !this.roles.includes('validator') || (this.syncHandler.isSyncing && !isSync)) 
             throw new Error(!finalizedBlock ? 'Invalid block candidate' : !this.roles.includes('validator') ? 'Only validator can process PoW block' : "Node is syncing, can't process block");

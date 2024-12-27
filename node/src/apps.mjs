@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { Storage } from '../../utils/storage-manager.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
-import { serializerFast } from '../../utils/serializer.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { Wallet } from './wallet.mjs';
 import { Node } from './node.mjs';
 import { exec } from 'child_process';
@@ -662,7 +662,7 @@ export class ObserverWsApp {
                     ws.send(JSON.stringify({ type: 'subscribed_best_block_candidate_change' }));
                     break;
                 case 'broadcast_transaction':
-                    //const deserializeTx = serializerFast.deserialize.transaction(data);
+                    //const deserializeTx = serializer.deserialize.transaction(data);
                     const { broadcasted, pushedInLocalMempool, error } = await this.node.pushTransaction(data.transaction);
                     if (error) { console.error('Error broadcasting transaction', error); }
 

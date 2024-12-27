@@ -1,4 +1,4 @@
-import { convert, FastConverter } from './converters.mjs';
+import { FastConverter } from './converters.mjs';
 import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
 import { Transaction } from '../node/src/transaction.mjs';
 
@@ -17,444 +17,18 @@ async function msgPackLib() {
 const msgpack = await msgPackLib();
 const fastConverter = new FastConverter();
 
-export const serializer = {
-    rawData: {
-        toBinary_v1(rawData) {
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(rawData);//, { maxStrLength: }
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedData */
-        fromBinary_v1(encodedData) {
-            return msgpack.decode(encodedData);
-        },
-        clone(data) { // not that fast compared to JSON.parse(JSON.stringify(data))
-            const encoded = serializer.rawData.toBinary_v1(data);
-            const decoded = serializer.rawData.fromBinary_v1(encoded);
-            return decoded;
-        }
-    },
-    transaction: {
-        /** @param {Transaction} tx */
-        toBinary_v2(tx, applyMsgPack = true) { // return array of Uint8Array
-            try {
-                const txAsArray = [
-                    null, // id
-                    [], // witnesses
-                    null, // version
-                    [], // inputs,
-                    [] // outputs
-                ]
-
-                txAsArray[0] = convert.hex.toUint8Array(tx.id); // safe type: hex
-                txAsArray[2] = convert.number.toUint8Array(tx.version); // safe type: number
-
-                for (let i = 0; i < tx.witnesses.length; i++) {
-                    const splitted = tx.witnesses[i].split(':');
-                    txAsArray[1].push([
-                        convert.hex.toUint8Array(splitted[0]), // safe type: hex
-                        convert.hex.toUint8Array(splitted[1]) // safe type: hex
-                    ]);
-                }
-
-                for (let j = 0; j < tx.inputs.length; j++) {
-                    const splitted = tx.inputs[j].split(':');
-                    if (splitted.length === 3) { // -> anchor ex: "3:f996a9d1:0"
-                        txAsArray[3].push([
-                            convert.number.toUint8Array(splitted[0]), // safe type: number
-                            convert.hex.toUint8Array(splitted[1]), // safe type: hex
-                            convert.number.toUint8Array(splitted[2]) // safe type: number
-                        ]);
-                    } else if (splitted.length === 2) { // -> pos validator address:hash
-                        // ex: "WKXmNF5xJTd58aWpo7QX:964baf99b331fe400ca2de4da6fb4f52cbff8a7abfcea74e9f28704dc0dd2b5c"
-                        txAsArray[3].push([
-                            convert.base58.toUint8Array(splitted[0]), // safe type: base58
-                            convert.hex.toUint8Array(splitted[1]) // safe type: hex
-                        ]);
-                    } else if (splitted.length === 1) { // -> pow miner nonce ex: "5684e9b4"
-                        txAsArray[3].push([convert.hex.toUint8Array(splitted[0])]); // safe type: hex
-                    }
-                };
-
-                for (let j = 0; j < tx.outputs.length; j++) {
-                    const { address, amount, rule } = tx.outputs[j];
-                    if (address, amount, rule) { //  {"amount": 19545485, "rule": "sig", "address": "WKXmNF5xJTd58aWpo7QX"}
-                        const ruleCode = UTXO_RULES_GLOSSARY[rule].code;
-                        txAsArray[4].push([
-                            convert.number.toUint8Array(amount), // safe type: number
-                            convert.number.toUint8Array(ruleCode), // safe type: numbers
-                            convert.base58.toUint8Array(address) // safe type: base58
-                        ]);
-                    } else { // type: string
-                        txAsArray[4].push([convert.string.toUint8Array(tx.outputs[j])]);
-                    }
-                };
-
-                if (!applyMsgPack) { return txAsArray; }
-
-                /** @type {Uint8Array} */
-                const encoded = msgpack.encode(txAsArray);
-                return encoded;
-            } catch (error) {
-                console.error('Error in prepareTransaction.toBinary_v2:', error);
-                throw new Error('Failed to serialize the transaction');
-            }
-        },
-        /** @param {Uint8Array} encodedTx */
-        fromBinary_v2(encodedTx, applyMsgPack = true) {
-            try {
-                /** @type {Transaction} */
-                const decodedTx = applyMsgPack ? msgpack.decode(encodedTx) : encodedTx;
-                /** @type {Transaction} */
-                const tx = {
-                    id: convert.uint8Array.toHex(decodedTx[0]), // safe type: uint8 -> hex
-                    witnesses: [],
-                    version: convert.uint8Array.toNumber(decodedTx[2]), // safe type: uint8 -> number
-                    inputs: [],
-                    outputs: []
-                };
-
-                for (let i = 0; i < decodedTx[1].length; i++) {
-                    const signature = convert.uint8Array.toHex(decodedTx[1][i][0]); // safe type: uint8 -> hex
-                    const publicKey = convert.uint8Array.toHex(decodedTx[1][i][1]); // safe type: uint8 -> hex
-                    tx.witnesses.push(`${signature}:${publicKey}`);
-                };
-
-                for (let j = 0; j < decodedTx[3].length; j++) {
-                    const input = decodedTx[3][j];
-                    if (input.length === 3) { // -> anchor ex: "3:f996a9d1:0"
-                        tx.inputs.push(`${convert.uint8Array.toNumber(input[0])}:${convert.uint8Array.toHex(input[1])}:${convert.uint8Array.toNumber(input[2])}`);
-                    } else if (input.length === 2) { // -> pos validator address:hash
-                        tx.inputs.push(`${convert.uint8Array.toBase58(input[0])}:${convert.uint8Array.toHex(input[1])}`);
-                    } else if (input.length === 1) { // -> pow miner nonce ex: "5684e9b4"
-                        tx.inputs.push(convert.uint8Array.toHex(input[0]));
-                    }
-                };
-
-                for (let j = 0; j < decodedTx[4].length; j++) {
-                    const output = decodedTx[4][j];
-                    if (output.length === 3) {
-                        const amount = convert.uint8Array.toNumber(output[0]); // safe type: uint8 -> number
-                        const ruleCode = convert.uint8Array.toNumber(output[1]); // safe type: uint8 -> number
-                        const rule = UTXO_RULESNAME_FROM_CODE[ruleCode];
-                        const address = convert.uint8Array.toBase58(output[2]); // safe type: uint8 -> base58
-                        tx.outputs.push({ address, amount, rule });
-                    } else {
-                        tx.outputs.push(convert.uint8Array.toString(output));
-                    }
-                }
-
-                return tx;
-            } catch (error) {
-                console.error('Error in prepareTransaction.fromBinary_v2:', error);
-                throw new Error('Failed to deserialize the transaction');
-            }
-        }
-    },
-    array_of_transactions: {
-        /** @param {Transaction[]} txs */
-        toBinary_v3(txs, applyMsgPack = true) {
-            const serializedTxs = [];
-            for (let i = 0; i < txs.length; i++) {
-                serializedTxs.push(serializer.transaction.toBinary_v2(txs[i], false));
-            }
-
-            if (!applyMsgPack) { return serializedTxs; }
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(serializedTxs);
-            return encoded;
-        },
-        toBinary_v4(txs, applyMsgPack = true) {
-            const serializedTxs = [];
-            for (let i = 0; i < txs.length; i++) {
-                if (i < 2) { serializedTxs.push(serializer.transaction.toBinary_v2(txs[i], false)); continue; }
-                serializedTxs.push(serializerFast.serialize.transaction(txs[i]));
-            }
-
-            if (!applyMsgPack) { return serializedTxs; }
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(serializedTxs);
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedTxs */
-        fromBinary_v3(encodedTxs, applyMsgPack = true) {
-            const decodedTxs = applyMsgPack ? msgpack.decode(encodedTxs) : encodedTxs;
-            const txs = [];
-            for (let i = 0; i < decodedTxs.length; i++) {
-                txs.push(serializer.transaction.fromBinary_v2(decodedTxs[i], false));
-            }
-
-            return txs;
-        },
-        fromBinary_v4(encodedTxs, applyMsgPack = true) {
-            const decodedTxs = applyMsgPack ? msgpack.decode(encodedTxs) : encodedTxs;
-            const txs = [];
-            for (let i = 0; i < decodedTxs.length; i++) {
-                if (i < 2) { txs.push(serializer.transaction.fromBinary_v2(decodedTxs[i], false)); continue; }
-                txs.push(serializerFast.deserialize.transaction(decodedTxs[i]));
-            }
-
-            return txs;
-        }
-    },
-    array_of_tx_ids: {
-        /** @param {string[]} txIds */
-        toBinary_v3(txIds, applyMsgPack = true) {
-            const txIdsAsArray = [];
-            for (let i = 0; i < txIds.length; i++) {
-                txIdsAsArray.push(convert.hex.toUint8Array(txIds[i])); // safe type: hex
-            }
-
-            if (!applyMsgPack) { return txIdsAsArray; }
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(txIdsAsArray);
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedTxIds */
-        fromBinary_v3(encodedTxIds, applyMsgPack = true) {
-            const decodedTxIds = applyMsgPack ? msgpack.decode(encodedTxIds) : encodedTxIds;
-            const txIds = [];
-            for (let i = 0; i < decodedTxIds.length; i++) {
-                txIds.push(convert.uint8Array.toHex(decodedTxIds[i])); // safe type: uint8 -> hex
-            }
-
-            return txIds;
-        }
-    },
-    block_candidate: {
-        /** @param {BlockData} blockData */
-        toBinary_v2(blockData) {
-            // + powReward
-            // - nonce - hash - timestamp
-
-            const blockAsArray = [
-                convert.number.toUint8Array(blockData.index), // safe type: number
-                convert.number.toUint8Array(blockData.supply), // safe type: number
-                convert.number.toUint8Array(blockData.coinBase), // safe type: number
-                convert.number.toUint8Array(blockData.difficulty), // safe type: number
-                convert.number.toUint8Array(blockData.legitimacy), // safe type: number
-                convert.hex.toUint8Array(blockData.prevHash), // safe type: hex
-                convert.number.toUint8Array(blockData.posTimestamp), // safe type: number
-                convert.number.toUint8Array(blockData.powReward), // safe type: number
-                [] // Txs
-            ];
-
-            for (let i = 0; i < blockData.Txs.length; i++) {
-                blockAsArray[8].push(serializer.transaction.toBinary_v2(blockData.Txs[i]));
-            }
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(blockAsArray);
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedBlock */
-        fromBinary_v2(encodedBlock) {
-            const decodedBlock = msgpack.decode(encodedBlock);
-            /** @type {BlockData} */
-            const blockData = {
-                index: convert.uint8Array.toNumber(decodedBlock[0]), // safe type: uint8 -> number
-                supply: convert.uint8Array.toNumber(decodedBlock[1]), // safe type: uint8 -> number
-                coinBase: convert.uint8Array.toNumber(decodedBlock[2]), // safe type: uint8 -> number
-                difficulty: convert.uint8Array.toNumber(decodedBlock[3]), // safe type: uint8 -> number
-                legitimacy: convert.uint8Array.toNumber(decodedBlock[4]), // safe type: uint8 -> number
-                prevHash: convert.uint8Array.toHex(decodedBlock[5]), // safe type: uint8 -> hex
-                posTimestamp: convert.uint8Array.toNumber(decodedBlock[6]), // safe type: uint8 -> number
-                powReward: convert.uint8Array.toNumber(decodedBlock[7]), // safe type: uint8 -> number
-                Txs: []
-            };
-
-            for (let i = 0; i < decodedBlock[8].length; i++) {
-                blockData.Txs.push(serializer.transaction.fromBinary_v2(decodedBlock[8][i]));
-            }
-
-            return blockData;
-        },
-        /** @param {BlockData} blockData */
-        toBinary_v4(blockData) {
-            const blockAsArray = [
-                convert.number.toUint8Array(blockData.index), // safe type: number
-                convert.number.toUint8Array(blockData.supply), // safe type: number
-                convert.number.toUint8Array(blockData.coinBase), // safe type: number
-                convert.number.toUint8Array(blockData.difficulty), // safe type: number
-                convert.number.toUint8Array(blockData.legitimacy), // safe type: number
-                convert.hex.toUint8Array(blockData.prevHash), // safe type: hex
-                convert.number.toUint8Array(blockData.posTimestamp), // safe type: number
-                convert.number.toUint8Array(blockData.powReward), // safe type: number
-                serializer.array_of_transactions.toBinary_v4(blockData.Txs, false)
-            ];
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(blockAsArray);
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedBlock */
-        fromBinary_v4(encodedBlock) {
-            const decodedBlock = msgpack.decode(encodedBlock);
-            /** @type {BlockData} */
-            const blockData = {
-                index: convert.uint8Array.toNumber(decodedBlock[0]), // safe type: uint8 -> number
-                supply: convert.uint8Array.toNumber(decodedBlock[1]), // safe type: uint8 -> number
-                coinBase: convert.uint8Array.toNumber(decodedBlock[2]), // safe type: uint8 -> number
-                difficulty: convert.uint8Array.toNumber(decodedBlock[3]), // safe type: uint8 -> number
-                legitimacy: convert.uint8Array.toNumber(decodedBlock[4]), // safe type: uint8 -> number
-                prevHash: convert.uint8Array.toHex(decodedBlock[5]), // safe type: uint8 -> hex
-                posTimestamp: convert.uint8Array.toNumber(decodedBlock[6]), // safe type: uint8 -> number
-                powReward: convert.uint8Array.toNumber(decodedBlock[7]), // safe type: uint8 -> number
-                Txs: serializer.array_of_transactions.fromBinary_v4(decodedBlock[8], false)
-            };
-
-            return blockData;
-        }
-    },
-    block_finalized: {
-        /** @param {BlockData} blockData */
-        toBinary_v2(blockData) {
-            //const startTimestamp = Date.now();
-            const blockAsArray = [
-                convert.number.toUint8Array(blockData.index), // safe type: number
-                convert.number.toUint8Array(blockData.supply), // safe type: number
-                convert.number.toUint8Array(blockData.coinBase), // safe type: number
-                convert.number.toUint8Array(blockData.difficulty), // safe type: number
-                convert.number.toUint8Array(blockData.legitimacy), // safe type: number
-                convert.hex.toUint8Array(blockData.prevHash), // safe type: hex
-                convert.number.toUint8Array(blockData.posTimestamp), // safe type: number
-                convert.number.toUint8Array(blockData.timestamp), // safe type: number
-                convert.hex.toUint8Array(blockData.hash), // safe type: hex
-                convert.hex.toUint8Array(blockData.nonce), // safe type: hex
-                [] // Txs
-            ];
-
-            for (let i = 0; i < blockData.Txs.length; i++) {
-                blockAsArray[10].push(serializer.transaction.toBinary_v2(blockData.Txs[i]));
-            };
-
-            //console.log('Block finalized serialization time:', Date.now() - startTimestamp, 'ms');
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(blockAsArray);
-            //console.log('Block finalized serialization+msgpack time:', Date.now() - startTimestamp, 'ms');
-            //console.log('Block finalized serialization+msgpack size:', encoded.length, 'bytes');
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedBlock */
-        fromBinary_v2(encodedBlock) {
-            const decodedBlock = msgpack.decode(encodedBlock);
-            /** @type {BlockData} */
-            const blockData = {
-                index: convert.uint8Array.toNumber(decodedBlock[0]), // safe type: uint8 -> number
-                supply: convert.uint8Array.toNumber(decodedBlock[1]), // safe type: uint8 -> number
-                coinBase: convert.uint8Array.toNumber(decodedBlock[2]), // safe type: uint8 -> number
-                difficulty: convert.uint8Array.toNumber(decodedBlock[3]), // safe type: uint8 -> number
-                legitimacy: convert.uint8Array.toNumber(decodedBlock[4]), // safe type: uint8 -> number
-                prevHash: convert.uint8Array.toHex(decodedBlock[5]), // safe type: uint8 -> hex
-                posTimestamp: convert.uint8Array.toNumber(decodedBlock[6]), // safe type: uint8 -> number   
-                timestamp: convert.uint8Array.toNumber(decodedBlock[7]), // safe type: uint8 -> number
-                hash: convert.uint8Array.toHex(decodedBlock[8]), // safe type: uint8 -> hex
-                nonce: convert.uint8Array.toHex(decodedBlock[9]), // safe type: uint8 -> hex
-                Txs: []
-            };
-
-            for (let i = 0; i < decodedBlock[10].length; i++) {
-                blockData.Txs.push(serializer.transaction.fromBinary_v2(decodedBlock[10][i]));
-            }
-
-            return blockData;
-        },
-        /** @param {BlockData} blockData */
-        toBinary_v3(blockData) {
-            const blockAsArray = serializer.blockHeader_finalized.toBinary_v3(blockData, false);
-            const Txs = serializer.array_of_transactions.toBinary_v3(blockData.Txs, false);
-            blockAsArray.push(Txs);
-
-            //console.log('Block finalized serialization time:', Date.now() - startTimestamp, 'ms');
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(blockAsArray);
-            //console.log('Block finalized serialization+msgpack time:', Date.now() - startTimestamp, 'ms');
-            //console.log('Block finalized serialization+msgpack size:', encoded.length, 'bytes');
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedBlock */
-        fromBinary_v3(encodedBlock) {
-            const decodedBlock = msgpack.decode(encodedBlock);
-            /** @type {BlockData} */
-            const blockData = serializer.blockHeader_finalized.fromBinary_v3(decodedBlock, false);
-            blockData.Txs = serializer.array_of_transactions.fromBinary_v3(decodedBlock[10], false);
-
-            return blockData;
-        },
-        /** @param {BlockData} blockData */
-        toBinary_v4(blockData) {
-            const blockAsArray = serializer.blockHeader_finalized.toBinary_v3(blockData, false);
-            const Txs = serializer.array_of_transactions.toBinary_v4(blockData.Txs, false);
-            blockAsArray.push(Txs);
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(blockAsArray);
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedBlock */
-        fromBinary_v4(encodedBlock) {
-            const decodedBlock = msgpack.decode(encodedBlock);
-            /** @type {BlockData} */
-            const blockData = serializer.blockHeader_finalized.fromBinary_v3(decodedBlock, false);
-            blockData.Txs = serializer.array_of_transactions.fromBinary_v4(decodedBlock[10], false);
-
-            return blockData;
-        }
-    },
-    blockHeader_finalized: {
-        /** @param {BlockData} blockData */
-        toBinary_v3(blockData, applyMsgPack = true) {
-            const blockHeaderAsArray = [
-                convert.number.toUint8Array(blockData.index), // safe type: number
-                convert.number.toUint8Array(blockData.supply), // safe type: number
-                convert.number.toUint8Array(blockData.coinBase), // safe type: number
-                convert.number.toUint8Array(blockData.difficulty), // safe type: number
-                convert.number.toUint8Array(blockData.legitimacy), // safe type: number
-                convert.hex.toUint8Array(blockData.prevHash), // safe type: hex
-                convert.number.toUint8Array(blockData.posTimestamp), // safe type: number
-                convert.number.toUint8Array(blockData.timestamp), // safe type: number
-                convert.hex.toUint8Array(blockData.hash), // safe type: hex
-                convert.hex.toUint8Array(blockData.nonce) // safe type: hex
-            ];
-
-            if (!applyMsgPack) { return blockHeaderAsArray; }
-
-            /** @type {Uint8Array} */
-            const encoded = msgpack.encode(blockHeaderAsArray);
-            return encoded;
-        },
-        /** @param {Uint8Array} encodedBlockHeader */
-        fromBinary_v3(encodedBlockHeader, applyMsgPack = true) {
-            const decodedBlockHeader = applyMsgPack ? msgpack.decode(encodedBlockHeader) : encodedBlockHeader;
-            /** @type {BlockData} */
-            const blockData = {
-                index: convert.uint8Array.toNumber(decodedBlockHeader[0]), // safe type: uint8 -> number
-                supply: convert.uint8Array.toNumber(decodedBlockHeader[1]), // safe type: uint8 -> number
-                coinBase: convert.uint8Array.toNumber(decodedBlockHeader[2]), // safe type: uint8 -> number
-                difficulty: convert.uint8Array.toNumber(decodedBlockHeader[3]), // safe type: uint8 -> number
-                legitimacy: convert.uint8Array.toNumber(decodedBlockHeader[4]), // safe type: uint8 -> number
-                prevHash: convert.uint8Array.toHex(decodedBlockHeader[5]), // safe type: uint8 -> hex
-                posTimestamp: convert.uint8Array.toNumber(decodedBlockHeader[6]), // safe type: uint8 -> number
-                timestamp: convert.uint8Array.toNumber(decodedBlockHeader[7]), // safe type: uint8 -> number
-                hash: convert.uint8Array.toHex(decodedBlockHeader[8]), // safe type: uint8 -> hex
-                nonce: convert.uint8Array.toHex(decodedBlockHeader[9]) // safe type: uint8 -> hex
-            };
-
-            return blockData;
-        }
-    },
-};
-/**
- * Theses functions are used to convert data between different formats.
+/** Theses functions are used to serialize and deserialize the data of the blockchain.
  * 
  * - functions do not check the input data.
  * - Make sure to validate the data before using these functions.
  */
-export const serializerFast = {
+export const serializer = {
     serialize: {
+        rawData(rawData) {
+            /** @type {Uint8Array} */
+            const encoded = msgpack.encode(rawData);//, { maxStrLength: }
+            return encoded;
+        },
         /** @param {string} anchor */
         anchor(anchor) {
             const splitted = anchor.split(':');
@@ -698,6 +272,7 @@ export const serializerFast = {
                     hashBytes: 32,
                     nonceBytes: 4,
 
+                    toto: blockData.powReward,
                     txsPointersBytes: blockData.Txs.length * pointerByte,
                     txsBytes: 0
                 }
@@ -772,9 +347,81 @@ export const serializerFast = {
                 console.error('Error while serializing the finalized block:', error);
                 throw new Error('Failed to serialize the finalized block');
             }
+        },
+        block_candidate(blockData) {
+            try {
+                const elementsLenght = {
+                    indexBytes: 4,
+                    supplyBytes: 8,
+                    coinBaseBytes: 4,
+                    difficultyBytes: 4,
+                    legitimacyBytes: 2,
+                    prevHashBytes: 32,
+                    posTimestampBytes: 4,
+                    powRewardBytes: 8,
+                    txsBytes: 0
+                }
+
+                /** @type {Uint8Array<ArrayBuffer>[]} */
+                const serializedTxs = [];
+                for (let i = 0; i < blockData.Txs.length; i++) {
+                    const serializedTx = i === 0 // only the first tx is a special transaction in candidate
+                        ? this.specialTransation(blockData.Txs[i])
+                        : this.transaction(blockData.Txs[i])
+
+                    serializedTxs.push(serializedTx);
+                    elementsLenght.txsBytes += serializedTx.length;
+                }
+
+                const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 8;
+                const serializedBlock = new ArrayBuffer(totalHeaderBytes + elementsLenght.txsBytes);
+                const serializedBlockView = new Uint8Array(serializedBlock);
+
+                let cursor = 0;
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.index), cursor);
+                cursor += 4; // index: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo8BytesUint8Array(blockData.supply), cursor);
+                cursor += 8; // supply: 8 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.coinBase), cursor);
+                cursor += 4; // coinBase: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.difficulty), cursor);
+                cursor += 4; // difficulty: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo2BytesUint8Array(blockData.legitimacy), cursor);
+                cursor += 2; // legitimacy: 2 bytes
+
+                serializedBlockView.set(fastConverter.hexToUint8Array(blockData.prevHash), cursor);
+                cursor += 32; // prevHash: 32 bytes
+
+                serializedBlockView.set(fastConverter.numberTo4BytesUint8Array(blockData.posTimestamp), cursor);
+                cursor += 4; // posTimestamp: 4 bytes
+
+                serializedBlockView.set(fastConverter.numberTo8BytesUint8Array(blockData.powReward), cursor);
+                cursor += 8; // powReward: 8 bytes
+
+                // TXS
+                let offset = totalHeaderBytes;
+                for (let i = 0; i < serializedTxs.length; i++) {
+                    const serializedTx = serializedTxs[i];
+                    serializedBlockView.set(serializedTx, offset);
+                    offset += serializedTx.length;
+                }
+
+                return serializedBlockView;
+            }
+            catch (error) {
+                console.error('Error while serializing the candidate block:', error);
+                throw new Error('Failed to serialize the candidate block');
+            }
         }
     },
     deserialize: {
+        rawData(encodedData) {
+            return msgpack.decode(encodedData);
+        },
         /** @param {Uint8Array} serializedAnchor */
         anchor(serializedAnchor) {
             const blockHeightSerialized = serializedAnchor.slice(0, 4);
@@ -955,22 +602,7 @@ export const serializerFast = {
         /** @param {Uint8Array} serializedBlock */
         block_finalized(serializedBlock) {
             try {
-                const elementsLenght = {
-                    nbOfTxs: fastConverter.uint82BytesToNumber(serializedBlock.slice(0, 2)), // 2 bytes
-                    indexBytes: 4,
-                    supplyBytes: 8,
-                    coinBaseBytes: 4,
-                    difficultyBytes: 4,
-                    legitimacyBytes: 2,
-                    prevHashBytes: 32,
-                    posTimestampBytes: 4,
-                    timestampBytes: 4,
-                    hashBytes: 32,
-                    nonceBytes: 4,
-
-                    txsPointersBytes: 0,
-                    txsBytes: 0
-                }
+                const nbOfTxs = fastConverter.uint82BytesToNumber(serializedBlock.slice(0, 2)); // 2 bytes
 
                 /** @type {BlockData} */
                 const blockData = {
@@ -987,20 +619,16 @@ export const serializerFast = {
                     Txs: []
                 }
 
-                if (blockData.index === 41) {
-                    console.warn(`Block 41 - txs: ${elementsLenght.nbOfTxs}`);
-                }
-
                 const totalHeaderBytes = 4 + 8 + 4 + 4 + 2 + 32 + 4 + 4 + 32 + 4; // usefull for reading
                 const cursor = 2 + totalHeaderBytes;
                 const txsPointers = [];
-                for (let i = cursor; i < cursor + elementsLenght.nbOfTxs * 8; i += 8) {
+                for (let i = cursor; i < cursor + nbOfTxs * 8; i += 8) {
                     const id = fastConverter.uint8ArrayToHex(serializedBlock.slice(i, i + 4));
                     const offset = fastConverter.uint84BytesToNumber(serializedBlock.slice(i + 4, i + 8));
                     txsPointers.push([id, offset]);
                 }
 
-                if (txsPointers.length !== elementsLenght.nbOfTxs) { throw new Error('Invalid txs pointers'); }
+                if (txsPointers.length !== nbOfTxs) { throw new Error('Invalid txs pointers'); }
 
                 for (let i = 0; i < txsPointers.length; i++) {
                     const [id, offsetStart] = txsPointers[i];
@@ -1015,6 +643,34 @@ export const serializerFast = {
             } catch (error) {
                 console.error(error);
                 throw new Error('Failed to deserialize the finalized block');
+            }
+        },
+        /** @param {Uint8Array} serializedBlock */
+        block_candidate(serializedBlock) {
+            try {
+                const cursor = 0;
+                const blockData = {
+                    index: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor, cursor + 4)),
+                    supply: fastConverter.uint88BytesToNumber(serializedBlock.slice(cursor + 4, cursor + 12)),
+                    coinBase: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor + 12, cursor + 16)),
+                    difficulty: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor + 16, cursor + 20)),
+                    legitimacy: fastConverter.uint82BytesToNumber(serializedBlock.slice(cursor + 20, cursor + 22)),
+                    prevHash: fastConverter.uint8ArrayToHex(serializedBlock.slice(cursor + 22, cursor + 54)),
+                    posTimestamp: fastConverter.uint84BytesToNumber(serializedBlock.slice(cursor + 54, cursor + 58)),
+                    powReward: fastConverter.uint88BytesToNumber(serializedBlock.slice(cursor + 58, cursor + 66)),
+                    Txs: []
+                }
+
+                const txsStart = 66;
+                for (let i = txsStart; i < serializedBlock.length; i += 1) {
+                    const tx = this.specialTransation(serializedBlock.slice(i, i + 1));
+                    blockData.Txs.push(tx);
+                }
+
+                return blockData;
+            } catch (error) {
+                console.error(error);
+                throw new Error('Failed to deserialize the candidate block');
             }
         }
     }

@@ -3,8 +3,6 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
 import { convert, FastConverter } from '../../utils/converters.mjs';
-import { serializer, serializerFast } from '../../utils/serializer.mjs';
-import { Transaction_Builder } from './transaction.mjs';
 
 /**
 * @typedef {import("../src/block-tree.mjs").TreeNode} TreeNode

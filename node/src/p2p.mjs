@@ -1,5 +1,5 @@
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import { serializer, serializerFast } from '../../utils/serializer.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
@@ -215,20 +215,20 @@ class P2PNetwork extends EventEmitter {
 
                     this.miniLogger.log(`Received new transaction from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
-                    parsedMessage = serializerFast.deserialize.transaction(data);
+                    parsedMessage = serializer.deserialize.transaction(data);
                     break;
                 case 'new_block_candidate':
                     this.miniLogger.log(`Received new block candidate from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block candidate size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
-                    parsedMessage = serializer.block_candidate.fromBinary_v4(data);
+                    parsedMessage = serializer.deserialize.block_candidate(data);
                     break;
                 case 'new_block_finalized':
                     this.miniLogger.log(`Received new block finalized from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block finalized size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
-                    parsedMessage = serializer.block_finalized.fromBinary_v4(data);
+                    parsedMessage = serializer.serialize.block_finalized(data);
                     break;
                 default:
-                    parsedMessage = serializer.rawData.fromBinary_v1(data);
+                    parsedMessage = serializer.deserialize.rawData(data);
                     break;
             }
 
@@ -257,16 +257,16 @@ class P2PNetwork extends EventEmitter {
             let serialized;
             switch (topic) {
                 case 'new_transaction':
-                    serialized = serializerFast.serialize.transaction(message);
+                    serialized = serializer.serialize.transaction(message);
                     break;
                 case 'new_block_candidate':
-                    serialized = serializer.block_candidate.toBinary_v4(message);
+                    serialized = serializer.serialize.block_candidate(message);
                     break;
                 case 'new_block_finalized':
-                    serialized = serializer.block_finalized.toBinary_v4(message);
+                    serialized = serializer.serialize.block_finalized(message);
                     break;
                 default:
-                    serialized = serializer.rawData.toBinary_v1(message);
+                    serialized = serializer.serialize.rawData(message);
                     break;
             }
 
@@ -360,7 +360,7 @@ class P2PNetwork extends EventEmitter {
 
         try {
             const lp = lpStream(stream);
-            const serialized = serializer.rawData.toBinary_v1(message);
+            const serialized = serializer.serialize.rawData(message);
 
             // Write with timeout
             await Promise.race([ lp.write(serialized), createTimeout(timeoutMs) ]);
@@ -374,7 +374,7 @@ class P2PNetwork extends EventEmitter {
 
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
-            const response = serializer.rawData.fromBinary_v1(res.subarray());
+            const response = serializer.deserialize.rawData(res.subarray());
             if (response.status !== 'error') {
                 return response;
             }

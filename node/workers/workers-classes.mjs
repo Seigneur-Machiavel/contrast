@@ -193,11 +193,11 @@ export class MinerWorker {
                 resolve();
             });
 
-            setTimeout(() => {
+            /*setTimeout(() => {
                 console.error('MinerWorker termination timeout');
                 this.worker.terminate();
                 resolve();
-            }, 20000);
+            }, 20000);*/
         });
     }
 }

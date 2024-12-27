@@ -1,7 +1,7 @@
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { conditionnals } from '../../utils/conditionnals.mjs';
 import { typeValidation } from '../../utils/type-validation.mjs';
-import { serializer, serializerFast } from '../../utils/serializer.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { BlockUtils } from './block-classes.mjs';
 
@@ -363,11 +363,11 @@ export class Transaction_Builder {
     /** @param {Transaction} transaction */
     static getTxWeight(transaction, specialTx) {
         if (specialTx) {
-            const serialized = serializer.transaction.toBinary_v2(transaction);
+            const serialized = serializer.serialize.specialTransation(transaction);
             return serialized.byteLength;
         }
 
-        const serialized = serializerFast.serialize.transaction(transaction);
+        const serialized = serializer.serialize.transaction(transaction);
         return serialized.byteLength;
     }
     /**
@@ -439,25 +439,12 @@ export class Transaction_Builder {
         return typeof transaction.outputs[0] === 'string';
     }
     /** @param {Transaction} transaction */
-    static cloneTx(transaction) {
-        //const inputs = TxIO_Builder.cloneTxIO(transaction.inputs); // heavy JSON parsing
+    static clone(transaction) {
         const inputs = transaction.inputs.slice();
         const outputs = TxIO_Builder.cloneTxIO(transaction.outputs);
         const witnesses = transaction.witnesses.slice();
 
         return Transaction(inputs, outputs, transaction.id, witnesses, transaction.version);
-    }
-    /** @param {Transaction} transaction */
-    static clone(transaction, specialTx = false) {
-        if (specialTx) {
-            const serialized = serializer.transaction.toBinary_v2(transaction);
-            const clone = serializer.transaction.fromBinary_v2(serialized);
-            return clone;
-        }
-        
-        const serialized = serializerFast.serialize.transaction(transaction);
-        const clone = serializerFast.deserialize.transaction(serialized);
-        return clone;
     }
     // Multi-functions methods
     /** @param {Account} senderAccount @param {number} amount @param {string} recipientAddress */

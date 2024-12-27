@@ -4,7 +4,7 @@ const url = await import('url');
 
 import { Storage } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
-import { serializer, serializerFast } from '../../utils/serializer.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 
 /**
 * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
@@ -94,19 +94,19 @@ export class SnapshotSystem {
 		const heightPath = this.#createSnapshotSubDirectories(currentHeight);
 
 		performance.mark('startSaveVssSpectrum'); // SAVE VSS SPECTRUM
-		const serializedSpectum = serializer.rawData.toBinary_v1(vss.spectrum);
+		const serializedSpectum = serializer.serialize.rawData(vss.spectrum);
 		Storage.saveBinary('vss', serializedSpectum, heightPath);
 		performance.mark('endSaveVssSpectrum');
 
 		performance.mark('startSaveMemPool'); // SAVE MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
-		const serializedPKAddresses = serializerFast.serialize.pubkeyAddressesObj(memPool.knownPubKeysAddresses);
+		const serializedPKAddresses = serializer.serialize.pubkeyAddressesObj(memPool.knownPubKeysAddresses);
 		Storage.saveBinary(`memPool`, serializedPKAddresses, heightPath);
 		performance.mark('endSaveMemPool');
 
 		performance.mark('startSaveUtxoCache'); // SAVE UTXO CACHE
 		const totalOfBalancesSerialized = this.fastConverter.numberTo6BytesUint8Array(utxoCache.totalOfBalances);
 		const totalSupplySerialized = this.fastConverter.numberTo6BytesUint8Array(utxoCache.totalSupply);
-		const miniUTXOsSerialized = serializerFast.serialize.miniUTXOsObj(utxoCache.unspentMiniUtxos);
+		const miniUTXOsSerialized = serializer.serialize.miniUTXOsObj(utxoCache.unspentMiniUtxos);
 
 		const utxoCacheDataSerialized = new Uint8Array(6 + 6 + miniUTXOsSerialized.length);
 		utxoCacheDataSerialized.set(totalOfBalancesSerialized);
@@ -134,12 +134,12 @@ export class SnapshotSystem {
 
 		performance.mark('startLoadSpectrum'); // LOAD VSS SPECTRUM
 		const serializedSpectrum = Storage.loadBinary('vss', heightPath);
-		vss.spectrum = serializer.rawData.fromBinary_v1(serializedSpectrum);
+		vss.spectrum = serializer.deserialize.rawData(serializedSpectrum);
 		performance.mark('endLoadSpectrum');
 
 		performance.mark('startLoadMemPool'); // LOAD MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = Storage.loadBinary('memPool', heightPath);
-		memPool.knownPubKeysAddresses = serializerFast.deserialize.pubkeyAddressesObj(serializedPKAddresses);
+		memPool.knownPubKeysAddresses = serializer.deserialize.pubkeyAddressesObj(serializedPKAddresses);
 		performance.mark('endLoadMemPool');
 
 		performance.mark('startLoadUtxoCache'); // LOAD UTXO CACHE
@@ -147,7 +147,7 @@ export class SnapshotSystem {
 		utxoCache.totalOfBalances = this.fastConverter.uint86BytesToNumber(utxoCacheDataSerialized.subarray(0, 6));
 		utxoCache.totalSupply = this.fastConverter.uint86BytesToNumber(utxoCacheDataSerialized.subarray(6, 12));
 		//const deserializationStart = performance.now();
-		utxoCache.unspentMiniUtxos = serializerFast.deserialize.miniUTXOsObj(utxoCacheDataSerialized.subarray(12));
+		utxoCache.unspentMiniUtxos = serializer.deserialize.miniUTXOsObj(utxoCacheDataSerialized.subarray(12));
 		//const deserializationEnd = performance.now();
 		//if (logPerf) { console.log(`Deserialization time: ${deserializationEnd - deserializationStart}ms`); }
 		performance.mark('endLoadUtxoCache');

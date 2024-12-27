@@ -1,7 +1,7 @@
 import { TxValidation } from './validations-classes.mjs';
 import { Transaction_Builder, Transaction } from './transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import { serializerFast } from '../../utils/serializer.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { UtxoCache } from './utxoCache.mjs';
 import { TransactionPriorityQueue } from './memPool-tx-queue.mjs';
 
@@ -101,7 +101,7 @@ export class MemPool {
         if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
 
         const timings = { start: Date.now(), first: 0, second: 0 };
-        const serialized = serializerFast.serialize.transaction(transaction);
+        const serialized = serializer.serialize.transaction(transaction);
         const byteLength = serialized.byteLength;
         
         try { await TxValidation.controlTransactionHash(transaction); } 

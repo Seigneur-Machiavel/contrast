@@ -1,6 +1,6 @@
 import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
 import { FastConverter } from "./converters.mjs";
-import { serializer, serializerFast } from './serializer.mjs';
+import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /**
@@ -161,11 +161,11 @@ export class AddressesTxsRefsStorage {
 
         const serialized = fs.readFileSync(filePath);
         /** @type {Array<string>} */
-        const txsRefs = serializerFast.deserialize.txsReferencesArray(serialized);
+        const txsRefs = serializer.deserialize.txsReferencesArray(serialized);
         return txsRefs;
     }
     setTxsReferencesOfAddress(address = '', txsRefs = []) {
-        const serialized = serializerFast.serialize.txsReferencesArray(txsRefs);
+        const serialized = serializer.serialize.txsReferencesArray(txsRefs);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         this.architecture[lvl0][lvl1][address] = true;
 
@@ -229,7 +229,7 @@ export class BlockchainStorage {
     #saveBlockBinary(blockData) {
         try {
             /** @type {Uint8Array} */
-            const binary = serializerFast.serialize.block_finalized(blockData);
+            const binary = serializer.serialize.block_finalized(blockData);
             const batchFolder = this.#batchFolderFromBlockIndex(blockData.index);
             const batchFolderPath = path.join(PATH.BLOCKS, batchFolder.name);
             if (this.batchFolders[batchFolder.index] !== batchFolder.name) {
@@ -254,7 +254,7 @@ export class BlockchainStorage {
 
         const deserialStart = performance.now();
         /** @type {BlockData} */
-        const blockData = serializerFast.deserialize.block_finalized(serialized);
+        const blockData = serializer.deserialize.block_finalized(serialized);
         const deserialTime = performance.now() - deserialStart
 
         console.warn(`Read block: ${readBlockTime.toFixed(5)}ms, Deserialize block: ${deserialTime.toFixed(5)}ms`);
@@ -274,7 +274,7 @@ export class BlockchainStorage {
         const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
         if (!fs.existsSync(batchFolderPath)) { fs.mkdirSync(batchFolderPath); }
 
-        const binary = serializer.rawData.toBinary_v1(blockInfo);
+        const binary = serializer.serialize.rawData(blockInfo);
         const filePath = path.join(batchFolderPath, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
         fs.writeFileSync(filePath, binary);
     }
@@ -302,7 +302,7 @@ export class BlockchainStorage {
             const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
             const buffer = fs.readFileSync(blockInfoFilePath);
             /** @type {BlockInfo} */
-            const blockInfo = serializer.rawData.fromBinary_v1(buffer);
+            const blockInfo = serializer.deserialize.rawData(buffer);
             return blockInfo;
         } catch (error) {
             storageMiniLogger.log(error.stack, (m) => { console.error(m); });
@@ -338,8 +338,8 @@ export class BlockchainStorage {
         const txBuffer = serializedBlock.slice(start, end);
         /** @type {Transaction} */
         const tx = index < 2
-            ? serializerFast.deserialize.specialTransation(txBuffer)
-            : serializerFast.deserialize.transaction(txBuffer);
+            ? serializer.deserialize.specialTransation(txBuffer)
+            : serializer.deserialize.transaction(txBuffer);
         
         return tx;
     }

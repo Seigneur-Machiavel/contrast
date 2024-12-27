@@ -68,7 +68,7 @@ export class SyncHandler {
 
             for await (const msg of source) {
                 const serializedMsg = msg.subarray();
-                const message = serializer.rawData.fromBinary_v1(serializedMsg);
+                const message = serializer.deserialize.rawData(serializedMsg);
 
                 if (!message || typeof message.type !== 'string') {
                     throw new Error('Invalid message format');
@@ -76,7 +76,7 @@ export class SyncHandler {
 
                 const response = await this.#handleMessage(message);
                 // Encode the response and write it to the stream
-                const encodedResponse = lp.encode.single(serializer.rawData.toBinary_v1(response));
+                const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                 await stream.sink(encodedResponse);
             }
         } catch (err) {
@@ -264,7 +264,7 @@ export class SyncHandler {
             
             for (const serializedBlock of serializedBlocks) {
                 try {
-                    const block = BlockUtils.blockDataFromSerializedHeaderAndTxs( serializedBlock.header, serializedBlock.txs );
+                    const block = serializer.deserialize.block_finalized(serializedBlock);
                     await this.node.digestFinalizedBlock(block, { skipValidation: false, broadcastNewCandidate: false, isSync: true, persistToDisk: true });
                     desiredBlock++;
                 } catch (blockError) {
