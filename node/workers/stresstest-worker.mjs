@@ -56,6 +56,8 @@ const testParams = {
 
 /** Simple user to user transaction @param {Account[]} accounts @param {number} senderAccountIndex @param {number} receiverAccountIndex */
 async function userSendToUser(accounts, senderAccountIndex = 0, receiverAccountIndex = 2) {
+    txsTaskDoneThisBlock['userSendToUser'] = true;
+
     const senderAccount = accounts[senderAccountIndex];
     const receiverAddress = accounts[receiverAccountIndex].address;
 
@@ -66,13 +68,14 @@ async function userSendToUser(accounts, senderAccountIndex = 0, receiverAccountI
         testMiniLogger.log(`[TEST-USTU] SEND: ${senderAccount.address} -> ${amountToSend} -> ${receiverAddress} | txID: ${signedTx.id}`, (m) => console.log(m));
         const result = await node.pushTransaction(signedTx);
         if (result.broadcasted) { broadcasted++; }
-    } else { testMiniLogger.log(error, (m) => console.error(m)); }
-    txsTaskDoneThisBlock['userSendToUser'] = true;
+    } else { testMiniLogger.log(error, (m) => console.error(m)); return; }
 
     testMiniLogger.log(`[TEST-USTU] sent ${amountToSend} to ${receiverAddress} | Broadcasted: ${broadcasted}`, (m) => console.info(m));
 }
 /** All users send to the next user @param {Account[]} accounts */
 async function userSendToNextUser(accounts) {
+    txsTaskDoneThisBlock['userSendToNextUser'] = true;
+
     let startTime = Date.now();
     const pauseEach = 50; // txs
 
@@ -105,12 +108,13 @@ async function userSendToNextUser(accounts) {
     }
     const timeToPushAllTxsToMempool = Date.now() - startTime;
 
-    txsTaskDoneThisBlock['userSendToNextUser'] = true;
     if (errorIsMissingUtxos) { testMiniLogger.log(`[TEST-USTNU] Missing UTXOs`, (m) => console.error(m)); }
     testMiniLogger.log(`[TEST-USTNU] Nb broadcasted Txs: ${broadcasted} | timeToCreate: ${(timeToCreateAndSignAllTxs / 1000).toFixed(2)}s | timeToBroadcast: ${(timeToPushAllTxsToMempool / 1000).toFixed(2)}s`, (m) => console.info(m));
 }
 /** User send to all other accounts @param {Account[]} accounts @param {number} senderAccountIndex */
 async function userSendToAllOthers(accounts, senderAccountIndex = 0) {
+    txsTaskDoneThisBlock['userSendToAllOthers'] = true;
+
     const startTime = Date.now();
     const senderAccount = accounts[senderAccountIndex];
     let totalAmount = 0;
@@ -134,13 +138,17 @@ async function userSendToAllOthers(accounts, senderAccountIndex = 0) {
             const result = await node.pushTransaction(signedTx);
             if (!result.broadcasted) throw new Error(`Transaction not broadcasted`);
         } else { testMiniLogger.log(`[TEST-USTAO] Can't sign transaction`, (m) => console.error(m)); }
-    } catch (error) { testMiniLogger.log(`[TEST-USTAO] Can't send to all others: ${error.message}`, (m) => console.error(m)); }
+    } catch (error) {
+        testMiniLogger.log(`[TEST-USTAO] Can't send to all others: ${error.message}`, (m) => console.error(m));
+        return;
+    }
     
-    txsTaskDoneThisBlock['userSendToAllOthers'] = true;
     testMiniLogger.log(`[TEST-USTAO] sent ${totalAmount} to ${transfers.length} addresses | Time: ${((Date.now() - startTime) / 1000).toFixed(2)}s`, (m) => console.info(m));
 }
 /** User stakes in VSS @param {Account[]} accounts @param {number} senderAccountIndex @param {number} amountToStake */
 async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 120_000) {
+    txsTaskDoneThisBlock['userStakeInVSS'] = true;
+
     const senderAccount = accounts[senderAccountIndex];
     const stakingAddress = senderAccount.address;
 
@@ -154,9 +162,11 @@ async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 
             const result = await node.pushTransaction(signedTx);
             if (result.broadcasted) { broadcasted++; }
         } else { testMiniLogger.log(`[TEST-USIV] Can't sign transaction`, (m) => console.error(m)); }
-    } catch (error) { testMiniLogger.log(`[TEST-USIV] Can't stake in VSS: ${error.message}`, (m) => console.error(m)); }
-    txsTaskDoneThisBlock['userStakeInVSS'] = true;
-
+    } catch (error) {
+        testMiniLogger.log(`[TEST-USIV] Can't stake in VSS: ${error.message}`, (m) => console.error(m));
+        return;
+    }
+    
     if (broadcasted === 0) { return; }
     testMiniLogger.log(`[TEST-USIV] staked ${amountToStake} in VSS | ${stakingAddress} | Broadcasted: ${broadcasted}`, (m) => console.info(m));
 }
