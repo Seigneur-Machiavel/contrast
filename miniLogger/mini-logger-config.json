@@ -1,6 +1,6 @@
 {
     "maxHistory": "100",
-    "allActive": false,
+    "allActive": true,
     "activeCategories": {
         "global": true,
         "main": true,

@@ -118,6 +118,10 @@ export class OpStack {
                     } catch (error) {
                         if (error.message.includes('Transaction already in mempool')) { break; }
                         if (error.message.includes('Conflicting UTXOs')) { break; }
+                        if (error.message.includes('UTXO not found in involvedUTXOs')) {
+                            this.miniLogger.log(`${error.message} -> rejecting transaction`, (m) => console.error(m));
+                            break;
+                        }
 
                         this.miniLogger.log(`[OpStack] Error while pushing transaction:`, (m) => console.error(m));
                         this.miniLogger.log(error, (m) => console.error(m));

@@ -14,6 +14,7 @@ import EventEmitter from 'events';
 import { pipe } from 'it-pipe';
 import { concat as uint8ArrayConcat } from 'uint8arrays/concat';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
+import { convert } from '../../../utils/converters.mjs';
 
 
 const BOOTSTRAP_LIST = [
@@ -44,13 +45,17 @@ export class P2P extends EventEmitter {
         };
         this.files = new Map(); // Map<cid, metadata>
         this.chunkSize = 1024 * 256;
-        this.uniqueHash = options.uniqueHash || this.generateRandomNonce(32);
+        this.uniqueHash = options.uniqueHash || this.#generateRandomNonce(32);
     }
 
-
+    #generateRandomNonce(length) {
+        return Array.from(crypto.getRandomValues(new Uint8Array(length)))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+    }
     async start() {
         console.log(` Address: ${this.listenAddr} started p2p chat`);
-        const hashUint8Array = this.toUint8Array(this.uniqueHash);
+        const hashUint8Array = convert.hex.toUint8Array(this.uniqueHash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
 
         const dht = kadDHT({
@@ -59,7 +64,6 @@ export class P2P extends EventEmitter {
             protocolPrefix: '/dchat',
             timeout: 3000
         });
-    
         this.node = await createLibp2p({
             addresses: { 
                 listen: [
@@ -113,7 +117,6 @@ export class P2P extends EventEmitter {
             },
 
         });
-
         this.node.services.pubsub.addEventListener('message', msg => {
             try {
                 const { topic, data } = msg.detail;
@@ -183,8 +186,6 @@ export class P2P extends EventEmitter {
                 this.dhtStats.errors.push({ type: 'message', error: err.message });
             }
         });
-    
-        
         this.node.addEventListener('peer:connect', async (evt) => {
             const peerId = evt.detail.toString();
             if (!this.peers.has(peerId)) {
@@ -194,15 +195,12 @@ export class P2P extends EventEmitter {
                 this.emit('peer-joined', peerId);
             }
         });
-    
         this.node.addEventListener('peer:disconnect', evt => {
             const peerId = evt.detail.toString();
             this.peers.delete(peerId);
             console.log(`👋 [${this.nickname}] Disconnected: ${peerId}`);
             this.emit('peer-left', peerId);
         });
-    
-        
         this.node.addEventListener('peer:discovery', async (evt) => {
             const peerId = evt.detail.id.toString();
             console.log(`🔍 [${this.nickname}] Discovered:`, peerId);
@@ -271,15 +269,12 @@ export class P2P extends EventEmitter {
             history.shift(); // Keep size bounded
         }
     }
-
     _updateHistory(channel, messages) {
         this.messageHistory.set(channel, messages.slice(-MAX_HISTORY));
     }
-
     _generateRequestId() {
         return `${this.nickname}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     }
-
     async _requestHistory(channel) {
         const requestId = this._generateRequestId();
         this._lastHistoryRequest = requestId; // Store for validation
@@ -294,7 +289,6 @@ export class P2P extends EventEmitter {
             }))
         );
     }
-
     async _sendChannelHistory(channel, requestId, requester) {
         await new Promise(resolve => setTimeout(resolve, Math.random() * 1000));
         
@@ -341,8 +335,6 @@ export class P2P extends EventEmitter {
             }
         }
     }
-
-
     async leaveChannel(channel) {
         const topicName = this.channelPrefix + channel;
         if (this.channels.has(channel)) {
@@ -354,7 +346,6 @@ export class P2P extends EventEmitter {
             console.log(`🚪 [${this.nickname}] Left: ${channel}`);
         }
     }
-
     async sendMessage(channel, content) {
         if (!this.channels.has(channel)) {
             throw new Error(`Not subscribed to: ${channel}`);
@@ -373,7 +364,6 @@ export class P2P extends EventEmitter {
 
         console.log(`📤 [${this.nickname}] Sent to ${channel}:`, content.slice(0, 50) + (content.length > 50 ? '...' : ''));
     }
-
     async connectToPeer(addr) {
         try {
             await this.node.dial(multiaddr(addr));
@@ -431,7 +421,7 @@ export class P2P extends EventEmitter {
             console.log(`✅ [${this.nickname}] File shared successfully:`, {
                 cid: fileData.cid,
                 name: file.name,
-                size: this.formatSize(file.size)
+                size: this.#formatSize(file.size)
             });
 
             return fileData.cid;
@@ -452,7 +442,7 @@ export class P2P extends EventEmitter {
             console.log(`📥 [${this.nickname}] Downloading file:`, {
                 cid,
                 filename: fileData.filename,
-                size: this.formatSize(fileData.size),
+                size: this.#formatSize(fileData.size),
                 channel: fileData.channel
             });
             
@@ -470,33 +460,7 @@ export class P2P extends EventEmitter {
             throw err;
         }
     }
-
-    async _broadcastFileMetadata(fileData) {
-        await this.node.services.pubsub.publish(
-            this.channelPrefix + fileData.channel,
-            uint8ArrayFromString(JSON.stringify({
-                type: 'file:metadata',
-                data: fileData
-            }))
-        );
-    }
-
-    async _requestFileMetadata(channel, cid) {
-        await this.node.services.pubsub.publish(
-            this.channelPrefix + channel,
-            uint8ArrayFromString(JSON.stringify({
-                type: 'file:request',
-                cid,
-                from: this.nickname
-            }))
-        );
-    }
-
-    async _sendFileMetadata(fileData) {
-        await this._broadcastFileMetadata(fileData);
-    }
-
-    formatSize(bytes) {
+    #formatSize(bytes) {
         const units = ['B', 'KB', 'MB', 'GB'];
         let size = parseInt(bytes);
         let unit = 0;
@@ -507,18 +471,38 @@ export class P2P extends EventEmitter {
         return `${size.toFixed(1)} ${units[unit]}`;
     }
 
+    async _broadcastFileMetadata(fileData) {
+        await this.node.services.pubsub.publish(
+            this.channelPrefix + fileData.channel,
+            uint8ArrayFromString(JSON.stringify({
+                type: 'file:metadata',
+                data: fileData
+            }))
+        );
+    }
+    async _requestFileMetadata(channel, cid) {
+        await this.node.services.pubsub.publish(
+            this.channelPrefix + channel,
+            uint8ArrayFromString(JSON.stringify({
+                type: 'file:request',
+                cid,
+                from: this.nickname
+            }))
+        );
+    }
+    async _sendFileMetadata(fileData) {
+        await this._broadcastFileMetadata(fileData);
+    }
+
     isStarted() { 
         return !!this.node?.services?.dht;
     }
-
     getChannels() { 
         return Array.from(this.channels);
     }
-
     getPeers() { 
         return Array.from(this.peers);
     }
-
     getDHTStats() { 
         return { 
             ...this.dhtStats,
@@ -527,7 +511,6 @@ export class P2P extends EventEmitter {
             channels: this.getChannels()
         };
     }
-
     async stop() {
         if (this.node) {
             for (const channel of this.channels) {
@@ -540,24 +523,5 @@ export class P2P extends EventEmitter {
             this.node = null;
             console.log(`🛑 [${this.nickname}] Stopped`);
         }
-    }
-
-    generateRandomNonce(length) {
-        // Create a random hex string of specified length
-        return Array.from(crypto.getRandomValues(new Uint8Array(length)))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-    }
-
-    toUint8Array(hex) {
-        if (hex.length % 2 !== 0) {
-            throw new Error("The length of the input is not a multiple of 2.");
-        }
-        const length = hex.length / 2;
-        const uint8Array = new Uint8Array(length);
-        for (let i = 0, j = 0; i < length; ++i, j += 2) {
-            uint8Array[i] = parseInt(hex.substring(j, j + 2), 16);
-        }
-        return uint8Array;
     }
 }

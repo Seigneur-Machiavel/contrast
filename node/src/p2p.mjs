@@ -212,17 +212,17 @@ class P2PNetwork extends EventEmitter {
             let parsedMessage;
             switch (topic) {
                 case 'new_transaction':
-                    this.miniLogger.log(`Received new transaction from ${from}`, (m) => { console.debug(m); });
+                    //this.miniLogger.log(`Received new transaction from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = serializer.deserialize.transaction(data);
                     break;
                 case 'new_block_candidate':
-                    this.miniLogger.log(`Received new block candidate from ${from}`, (m) => { console.debug(m); });
+                    //this.miniLogger.log(`Received new block candidate from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block candidate size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = serializer.deserialize.block_candidate(data);
                     break;
                 case 'new_block_finalized':
-                    this.miniLogger.log(`Received new block finalized from ${from}`, (m) => { console.debug(m); });
+                    //this.miniLogger.log(`Received new block finalized from ${from}`, (m) => { console.debug(m); });
                     if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.02) { this.miniLogger.log(`Block finalized size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = serializer.deserialize.block_finalized(data);
                     break;
