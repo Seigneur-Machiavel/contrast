@@ -137,14 +137,11 @@ export class OpStack {
                         return;
                     }
                     
-                    // prune the reog cache
                     this.node.reorganizator.pruneCache();
 
-                    // if: isValidatorOfBlock -> return
-                    // don't clear timeout. If many blocks are self validated, we are probably in a fork
+                    // If many blocks are self validated, we are probably in a fork
                     const blockValidatorAddress = content.Txs[1].inputs[0].split(':')[0];
-                    const isValidatorOfBlock = this.node.account.address === blockValidatorAddress;
-                    if (isValidatorOfBlock) { return; }
+                    if (this.node.account.address === blockValidatorAddress) { return; }
                     
                     this.healthInfo.lastDigestTime = Date.now();
                     break;
@@ -158,8 +155,7 @@ export class OpStack {
                         this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers failed, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
 
                         this.terminate();
-                        if (!this.node.restartRequested) { this.node.restartRequested = 'OpStack.syncWithPeers() -> force!'; }
-                        this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] Restart requested by syncWithPeers`, (m) => console.warn(m));
+                        if (!this.node.restartRequested) { this.node.restartRequested = 'OpStack.syncWithPeers() -> unsuccessful sync!'; }
                         break;
                     }
 
@@ -233,13 +229,9 @@ export class OpStack {
             );
             return;
         }
-
-        if (   error.message.includes('!store!')
-            || error.message.includes('!reorg!') 
-            || error.message.includes('!applyOffense!')
-            || error.message.includes('!applyMinorOffense!') 
-            || error.message.includes('!banBlock!')
-            || error.message.includes('!ignore!')) { return; }
+        
+        const ignoreList = ['!store!', '!reorg!', '!applyOffense!', '!applyMinorOffense!', '!banBlock!', '!ignore!'];
+        if (ignoreList.some((v) => error.message.includes(v))) { return; }
         
         this.miniLogger.log(error, (m) => console.error(m));
         if (!error.message.includes('!sync!')) { return; }
