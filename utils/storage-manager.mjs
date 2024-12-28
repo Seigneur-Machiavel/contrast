@@ -114,9 +114,9 @@ export class AddressesTxsRefsStorage {
     snapHeight = -1;
     /** @type {Object<string, Object<string, Object<string, boolean>>} */
     architecture = {}; // lvl0: { lvl1: { address: true } }
-    constructor() { this.load(); }
+    constructor() { this.#load(); }
 
-    load() {
+    #load() {
         if (!fs.existsSync(this.configPath)) {
             storageMiniLogger.log('no config file found', (m) => { console.error(m); });
             return;

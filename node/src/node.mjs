@@ -426,6 +426,23 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
 
         setTimeout(() => this.#reSendBlocks(message.index), 1000);
     }
+    /** @param {number} finalizedBlockHeight @param {number[]} sequence - default: [-10, -8, -6, -4, -2] */
+    async #reSendBlocks(finalizedBlockHeight, sequence = [-10, -8, -6, -4, -2]) {
+        const sentSequence = [];
+        for (const index of sequence) {
+            const blockIndex = finalizedBlockHeight + index;
+            if (blockIndex < 0) { continue; }
+
+            const block = this.blockchain.getBlock(blockIndex);
+            if (!block) { continue; }
+
+            await new Promise(resolve => setTimeout(resolve, 200));
+            await this.p2pNetwork.broadcast('new_block_finalized', block);
+            sentSequence.push(block.index);
+        }
+
+        this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
+    }
     /** @param {string} topic @param {object} message */
     async p2pHandler(topic, message) {
         // test fork
@@ -497,24 +514,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                     this.miniLogger.log(`Unknown topic ${topic}`, (m) => { console.error(m); });
             }
         } catch (error) { this.miniLogger.log(`${topic} -> Failed! ${error}`, (m) => { console.error(m); }); }
-    }
-    async #reSendBlocks(finalizedBlockHeight = 10) {
-        const sequence = [-10, -8, -6, -4, -2];
-        const sentSequence = [];
-
-        for (const index of sequence) {
-            const blockIndex = finalizedBlockHeight + index;
-            if (blockIndex < 0) { continue; }
-
-            const block = this.blockchain.getBlock(blockIndex);
-            if (!block) { continue; }
-
-            await new Promise(resolve => setTimeout(resolve, 200));
-            await this.p2pNetwork.broadcast('new_block_finalized', block);
-            sentSequence.push(block.index);
-        }
-
-        this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
     }
 
     // API -------------------------------------------------------------------------------

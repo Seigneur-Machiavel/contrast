@@ -451,6 +451,8 @@ export class DashboardWsApp {
         while (true) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             if (!this.node || !this.node.restartRequested) { continue; }
+
+            this.miniLogger.log('#stopNodeIfRequestedLoop() -->', (m) => { console.log(m); });
             this.miniLogger.log(`Node ${this.node.id} restart requested by ${this.node.restartRequested}`, (m) => { console.log(m); });
 
             await this.stop();
