@@ -445,11 +445,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     }
     /** @param {string} topic @param {object} message */
     async p2pHandler(topic, message) {
-        // test fork
-
-        // { content: parsedMessage, from, byteLength }
         const data = message.content;
-
         const from = message.from;
         const byteLength = message.byteLength;
         //console.log(`[P2P-HANDLER] ${topic} -> ${from} | ${byteLength} bytes`);
@@ -467,45 +463,46 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                 case 'new_block_candidate':
                     try { BlockValidation.checkBlockIndexIsNumber(data); } catch (error) { throw error; }
 
-                    if (this.ignoreIncomingBlocks) { return; }
+                    if (this.ignoreIncomingBlocks) { break; }
                     if (!this.roles.includes('miner')) { break; }
                     if (!this.roles.includes('validator')) { break; }
 
                     const lastBlockIndex = this.blockchain.lastBlock ? this.blockchain.lastBlock.index : -1;
-                    if (this.miner.highestBlockIndex > data.index) { // avoid processing old blocks
+                    /*if (this.miner.highestBlockIndex > data.index) { // avoid processing old blocks
                         this.miniLogger.log(`highest #${this.miner.highestBlockIndex} > #${data.index} -> skip`, (m) => { console.info(m); });
-                        return;
+                        break;
                     }
                     if (lastBlockIndex +1 > data.index) {
                         this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 > #${data.index} -> skip`, (m) => { console.info(m); });
-                        return;
+                        break;
                     }
                     if (lastBlockIndex +1 < data.index) {
                         this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 < #${data.index} -> skip`, (m) => { console.info(m); });
-                        return;
+                        break;
+                    }*/
+                    if (lastBlockIndex +1 !== data.index) {
+                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 !== #${data.index} -> skip`, (m) => { console.info(m); });
+                        break;
                     }
 
                     await this.vss.calculateRoundLegitimacies(data.hash);
                     const validatorAddress = data.Txs[0].inputs[0].split(':')[0];
                     const validatorLegitimacy = this.vss.getAddressLegitimacy(validatorAddress);
-                    if (validatorLegitimacy !== data.legitimacy) {
-                        this.miniLogger.log(`${topic} -> #${data.index} -> Invalid legitimacy!`, (m) => { console.info(m); });
-                        return;
-                    }
-
-                    this.miner.updateBestCandidate(data);
+                    if (validatorLegitimacy === data.legitimacy) { this.miner.updateBestCandidate(data); break; }
+                    
+                    this.miniLogger.log(`${topic} -> #${data.index} -> Invalid legitimacy!`, (m) => { console.info(m); });
                     break;
                 case 'new_block_finalized':
                     try { BlockValidation.checkBlockIndexIsNumber(data); } catch (error) { throw error; }
-                    if (this.ignoreIncomingBlocks) { return; }
-                    if (this.syncHandler.isSyncing || this.opStack.syncRequested) { return; }
+                    if (this.ignoreIncomingBlocks) { break; }
+                    if (this.syncHandler.isSyncing || this.opStack.syncRequested) { break; }
 
                     if (!this.roles.includes('validator')) { break; }
-                    if (this.reorganizator.isFinalizedBlockInCache(message.content)) {
-                        this.miniLogger.log(`Already processed ${topic} #${message.content.index} -> skip`, (m) => { console.warn(m); });
-                        return;
-                    }
-                    this.opStack.push('digestPowProposal', message);
+
+                    const isInCache = this.reorganizator.isFinalizedBlockInCache(data);
+                    if (!isInCache) { this.opStack.push('digestPowProposal', message); break; }
+                    
+                    this.miniLogger.log(`Already processed ${topic} #${data.index} -> skip`, (m) => { console.warn(m); });
                     break;
                 case 'test':
                     this.miniLogger.log(`[TEST] heavy msg bytes: ${new Uint8Array(Object.values(data)).length}`, (m) => { console.warn(m); });
