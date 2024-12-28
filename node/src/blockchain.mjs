@@ -153,7 +153,7 @@ export class Blockchain {
             if (persistToDisk) this.blockStorage.addBlock(block);
             if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
 
-            this.miniLogger.log(`Block successfully added: blockHeight=${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Block added: blockHeight=${block.index}, hash=${block.hash}`, (m) => { console.info(m); });
             return blockInfo;
         } catch (error) {
             this.miniLogger.log(`Failed to add block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });

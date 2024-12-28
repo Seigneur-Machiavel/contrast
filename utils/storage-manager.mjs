@@ -338,7 +338,7 @@ export class BlockchainStorage {
         const txBuffer = serializedBlock.slice(start, end);
         /** @type {Transaction} */
         const tx = index < 2
-            ? serializer.deserialize.specialTransation(txBuffer)
+            ? serializer.deserialize.specialTransaction(txBuffer)
             : serializer.deserialize.transaction(txBuffer);
         
         return tx;
@@ -452,7 +452,7 @@ async function test() {
     const avgSmallTime = ((performance.now() - timeStart_B) / testStorage.txCount).toFixed(5);
     console.log(`Time to load multiple small files: ${(performance.now() - timeStart_B).toFixed(5)}ms (~${avgSmallTime}ms per tx)`);
 }
-test();
+//test();
 
 /* 1100 files of 200 bytes each or 220KB => 1 block
 Time to load a big file: 0.74550ms

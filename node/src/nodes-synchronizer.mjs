@@ -103,6 +103,8 @@ export class SyncHandler {
         switch (msg.type) {
             case 'getBlocks':
                 this.miniLogger.log(`"getBlocks request" Received: #${msg.startIndex} to #${msg.endIndex}`, (m) => { console.debug(m); });
+                
+                /** @type {Uint8Array<ArrayBufferLike>[]} */
                 const blocks = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false);
 
                 this.miniLogger.log(`Sending ${blocks.length} blocks in response`, (m) => { console.debug(m); });

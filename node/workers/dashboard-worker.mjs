@@ -17,17 +17,6 @@ parentPort.on('message', async (message) => {
     }
 });
 
-/*(async () => { // DEPRECATED
-    while (true) {
-        if (dashApp.node && dashApp.node.restartRequested) {
-            await dashApp.stop();
-            process.exit(0);
-            parentPort.postMessage({ type: 'stopped' });
-            return;
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-})();*/
 process.on('uncaughtException', (error) => {
     console.error('Uncatched exception:', error.stack);
 });

@@ -140,7 +140,7 @@ export class Node {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 10000));
             const nbOfPeers = await this.#waitSomePeers();
-            if (!nbOfPeers || nbOfPeers < 1) { this.node.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
+            if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
         }
     }
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
@@ -483,7 +483,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                         break;
                     }*/
                     if (lastBlockIndex +1 !== data.index) {
-                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 !== #${data.index} -> skip`, (m) => { console.info(m); });
+                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 !== #${data.index} -> skip candidate`, (m) => { console.info(m); });
                         break;
                     }
 

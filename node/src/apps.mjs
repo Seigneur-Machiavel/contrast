@@ -456,7 +456,7 @@ export class DashboardWsApp {
             this.miniLogger.log(`Node ${this.node.id} restart requested by ${this.node.restartRequested}`, (m) => { console.log(m); });
 
             await this.stop();
-            this.miniLogger.log(`||----->>> Node ${this.node.id} exiting app ...`, (m) => { console.log(m); });
+            this.miniLogger.log(`||----->>> Node ${this.node.id} exiting dashboard app ...`, (m) => { console.log(m); });
 
             process.exit(0);
         }

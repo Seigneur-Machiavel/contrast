@@ -363,7 +363,7 @@ export class Transaction_Builder {
     /** @param {Transaction} transaction */
     static getTxWeight(transaction, specialTx) {
         if (specialTx) {
-            const serialized = serializer.serialize.specialTransation(transaction);
+            const serialized = serializer.serialize.specialTransaction(transaction);
             return serialized.byteLength;
         }
 
