@@ -16,8 +16,8 @@ new ObserverWsApp(dashApp.node, observerPort);
 parentPort.on('message', async (message) => {
     if (message.type === 'stop') {
         await dashApp.stop();
-        //parentPort.close();
-        process.exit(0);
+        parentPort.close();
+        //process.exit(0);
     }
 });
 process.on('uncaughtException', (error) => {
@@ -73,8 +73,7 @@ async function userSendToNextUser(accounts) {
     for (let i = 0; i < accounts.length; i++) {
         if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 40)); }
         const senderAccount = accounts[i];
-        const receiverAccount = i === accounts.length - 1 ? accounts[0] : accounts[i + 1];
-
+        const receiverAccount = i + 1 === accounts.length ? accounts[0] : accounts[i + 1];
         const amountToSend = Math.floor(Math.random() * (1_000) + 1000);
         transferPromises.push(Transaction_Builder.createAndSignTransfer(senderAccount, amountToSend, receiverAccount.address));
     }
@@ -92,7 +91,7 @@ async function userSendToNextUser(accounts) {
     startTime = Date.now();
 
     let broadcasted = 0;
-    for (const promise of pushPromises) { 
+    for (const promise of pushPromises) {
         const result = await promise;
         if (result.broadcasted) { broadcasted++; }
     }

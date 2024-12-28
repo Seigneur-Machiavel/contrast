@@ -38,9 +38,7 @@ export class MemPool {
         this.transactionQueue.add(transaction);
 
         // Sorted by anchor
-        for (const input of transaction.inputs) { 
-            this.transactionByAnchor[input] = transaction; 
-        }
+        for (const input of transaction.inputs) { this.transactionByAnchor[input] = transaction; }
 
         // Sorted by transaction ID
         this.transactionsByID[transaction.id] = transaction;

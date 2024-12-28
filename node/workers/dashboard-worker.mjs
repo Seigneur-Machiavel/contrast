@@ -12,8 +12,8 @@ new ObserverWsApp(dashApp.node, observerPort);
 parentPort.on('message', async (message) => {
     if (message.type === 'stop') {
         await dashApp.stop();
-        //parentPort.close();
-        process.exit(0);
+        parentPort.close();
+        //process.exit(0);
     }
 });
 
