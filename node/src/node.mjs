@@ -352,9 +352,10 @@ export class Node {
      * @param {boolean} [options.persistToDisk] - default: true
      */
     async digestFinalizedBlock(finalizedBlock, options = {}, byteLength) {
+        if (this.restartRequested) return;
+        
         const timer = new BlockDigestionTimer();
         this.blockchainStats.state = "digesting finalized block";
-        if (this.restartRequested) return;
     
         timer.startPhase('initialization');
         const blockBytes = byteLength || serializer.serialize.block_finalized(finalizedBlock).byteLength;
@@ -363,7 +364,9 @@ export class Node {
             throw new Error(!finalizedBlock ? 'Invalid block candidate' : !this.roles.includes('validator') ? 'Only validator can process PoW block' : "Node is syncing, can't process block");
         timer.endPhase('initialization');
     
-        let validationResult, hashConfInfo = false, totalFees;
+        let hashConfInfo = false;
+        let validationResult;
+        let totalFees;
         if (!skipValidation) {
             timer.startPhase('block-validation');
             validationResult = await this.#validateBlockProposal(finalizedBlock, blockBytes);
@@ -395,9 +398,9 @@ export class Node {
             if (this.logValidationTime){ timer.displayResults();}
         }
     
-        const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2),
-              minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6),
-              validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
+        const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);
+        const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
+        const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
     
         if (!isLoading && !isSync) {
             this.miniLogger.log(`#${finalizedBlock.index} -> validator: ${validatorId} | miner: ${minerId}
@@ -405,17 +408,16 @@ export class Node {
 z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
         }
     
-        timer.startPhase('snapshot-and-peer-wait');
+        timer.startPhase('saveSnapshot');
         if (!isLoading) this.#saveSnapshot(finalizedBlock);
+        timer.endPhase('saveSnapshot');
         
         //const nbOfPeers = await this.#waitSomePeers();
         //if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
-        timer.endPhase('snapshot-and-peer-wait');
     
         if (!broadcastNewCandidate) return true;
         
         await this.createBlockCandidateAndBroadcast(Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)));
-    
         return true;
     }
 

@@ -182,6 +182,14 @@ export class MinerWorker {
     }
     terminateAsync() {
         this.terminate = true;
+        setTimeout(() => { this.worker.terminate() }, 1000);
+        return new Promise((resolve, reject) => {
+            this.worker.on('exit', (code) => { console.log(`MinerWorker stopped with exit code ${code}`); resolve(); });
+            this.worker.on('close', () => { console.log('MinerWorker closed'); resolve(); });
+        });
+    }
+    terminateAsyncOLD() { // DEPRECATED
+        this.terminate = true;
         setTimeout(() => { this.worker.postMessage({ type: 'terminate' }); }, 1000);
         return new Promise((resolve, reject) => {
             this.worker.on('exit', (code) => {
@@ -193,11 +201,11 @@ export class MinerWorker {
                 resolve();
             });
 
-            /*setTimeout(() => {
+            setTimeout(() => {
                 console.error('MinerWorker termination timeout');
                 this.worker.terminate();
                 resolve();
-            }, 20000);*/
+            }, 20000);
         });
     }
 }
