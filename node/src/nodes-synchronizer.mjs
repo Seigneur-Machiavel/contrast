@@ -205,7 +205,7 @@ export class SyncHandler {
         }
 
         if (this.node.blockchain.currentHeight === -1) {
-            this.node.requestRestart('SyncHandler.handleSyncFailure() - blockchain currentHeight is -1');
+            this.node.restartRequested = 'SyncHandler.handleSyncFailure() - blockchain currentHeight is -1';
             //this.isSyncing = false;
             return;
         }
@@ -214,7 +214,7 @@ export class SyncHandler {
         const snapshotHeights = this.node.snapshotSystem.getSnapshotsHeights();
 
         if (snapshotHeights.length === 0) {
-            this.node.requestRestart('SyncHandler.handleSyncFailure() - no snapshots available');
+            this.node.restartRequested = 'SyncHandler.handleSyncFailure() - no snapshots available';
             //this.isSyncing = false;
             return;
         }
@@ -225,7 +225,7 @@ export class SyncHandler {
             this.node.snapshotSystem.eraseSnapshotsHigherThan(eraseUntilHeight);
         }
 
-        this.node.requestRestart('SyncHandler.handleSyncFailure()');
+        this.node.restartRequested = 'SyncHandler.handleSyncFailure()';
 
         this.miniLogger.log(`Snapshot erased until #${eraseUntilHeight}, waiting for restart...`, (m) => { console.info(m); });
         this.miniLogger.log(`Blockchain restored and reloaded. Current height: ${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
@@ -321,8 +321,18 @@ export class SyncHandler {
         // return as Object
         return Object.fromEntries(this.peerHeights);
     }
+    #getTopicsToSubscribeRelatedToRoles(roles = []) {
+        const rolesTopics = {
+            validator: ['new_transaction', 'new_block_finalized'],
+            miner: ['new_block_candidate'],
+            observer: ['new_transaction', 'new_block_finalized', 'new_block_candidate']
+        }
+        const topicsToSubscribe = [];
+        for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
+        return [...new Set(topicsToSubscribe)];
+    }
     async syncWithPeers(peerIds = []) {
-        const uniqueTopics = this.node.getTopicsToSubscribeRelatedToRoles();
+        const uniqueTopics = this.#getTopicsToSubscribeRelatedToRoles(this.node.roles);
         // should be done only one time
         await this.node.p2pNetwork.subscribeMultipleTopics(uniqueTopics, this.node.p2pHandler.bind(this.node));
         if (this.syncDisabled) { return true; }
@@ -426,94 +436,6 @@ export class SyncHandler {
     
         if (consensus.height > this.node.blockchain.currentHeight) {
             this.miniLogger.log(`Need to sync ${consensus.height - this.node.blockchain.currentHeight} more blocks, restarting sync process`, (m) => { console.debug(m); });
-            return false;
-        }
-    
-        this.miniLogger.log(`Sync process finished, current height: ${this.node.blockchain.currentHeight}`, (m) => { console.debug(m); });
-        this.isSyncing = false;
-        return true;
-    }
-    async syncWithPeers_old(peerIds = []) { // DEPRECATED
-        const uniqueTopics = this.node.getTopicsToSubscribeRelatedToRoles();
-        // should be done only one time
-        await this.node.p2pNetwork.subscribeMultipleTopics(uniqueTopics, this.node.p2pHandler.bind(this.node));
-        if (this.syncDisabled) { return true; }
-
-        this.miniLogger.log(`Starting syncWithPeers at #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
-        this.node.blockchainStats.state = "syncing";
-        this.isSyncing = true;
-    
-        let peerStatuses = [];
-    
-        if (peerIds.length > 0) {
-            // Sync with specific peers
-            for (const peerId of peerIds) {
-                const peerData = this.node.p2pNetwork.peers.get(peerId);
-                if (!peerData) { continue; }
-
-                const { address } = peerData;
-                const ma = multiaddr(address);
-                const peerStatus = await this.#getPeerStatus(this.node.p2pNetwork, ma, peerId);
-                if (!peerStatus || !peerStatus.currentHeight) { continue; }
-
-                peerStatuses.push({
-                    peerId,
-                    address,
-                    currentHeight: peerStatus.currentHeight,
-                });
-            }
-    
-            if (peerStatuses.length === 0) {
-                this.miniLogger.log(`No valid peers to sync with`, (m) => { console.error(m); });
-                await this.handleSyncFailure();
-                return false;
-            }
-        } else {
-            // Sync with all known peers
-            peerStatuses = await this.#getAllPeersStatus(this.node.p2pNetwork);
-            if (!peerStatuses || peerStatuses.length === 0) {
-                this.miniLogger.log(`Unable to get peer statuses`, (m) => { console.error(m); });
-                await this.handleSyncFailure();
-                return false;
-            }
-        }
-    
-        // Sort peers by currentHeight in descending order
-        peerStatuses.sort((a, b) => b.currentHeight - a.currentHeight);
-        const highestPeerHeight = peerStatuses[0].currentHeight;
-    
-        if (highestPeerHeight <= this.node.blockchain.currentHeight) {
-            this.miniLogger.log(`Already at the highest height, no need to sync`, (m) => { console.debug(m); });
-            this.isSyncing = false;
-            return true;
-        }
-    
-        this.miniLogger.log(`Highest peer height: ${highestPeerHeight}, current height: ${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
-
-        // Attempt to sync with peers in order
-        for (const peerInfo of peerStatuses) {
-            const { peerId, address, currentHeight } = peerInfo;
-            const ma = multiaddr(address);
-            this.miniLogger.log(`Attempting to sync with peer ${peerId}`, (m) => { console.info(m); });
-            try {
-                const synchronized = await this.#getMissingBlocks(this.node.p2pNetwork, ma, currentHeight, peerId);
-                this.miniLogger.log(`Successfully synced with peer ${peerId}`, (m) => { console.info(m); });
-                if (!synchronized) { continue; }
-
-                break; // Sync successful, break out of loop
-            } catch (error) {
-                await new Promise((resolve) => setTimeout(resolve, DELAY_BETWEEN_PEERS));
-                if (error instanceof SyncRestartError) {
-                    this.miniLogger.log(`Sync restart error occurred`, (m) => { console.error(m); });
-                    await this.handleSyncFailure();
-                    return false;
-                }
-                break;
-            }
-        }
-    
-        if (highestPeerHeight > this.node.blockchain.currentHeight) {
-            this.miniLogger.log(`Need to sync more blocks, restarting sync process`, (m) => { console.debug(m); });
             return false;
         }
     

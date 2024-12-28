@@ -3,6 +3,7 @@ ipfs
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
+node/storage/bootstrapNodes.json
 node/storage/nodeSettings.json
 node/storage/blocks
 node/storage/json-blocks
@@ -15,7 +16,6 @@ node/storage/AddressesTxsRefsStorage_config.json
 
 node/nodes-data
 node/application.log
-node/config.json
 node/test-storage
 
 npm_install_log.txt

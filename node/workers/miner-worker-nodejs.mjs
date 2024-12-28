@@ -130,7 +130,7 @@ parentPort.on('message', async (task) => {
 			minerVars.paused = false;
 			return;
 		case 'terminate':
-			console.log('terminating miner-worker-nodejs');
+			//console.info('[miner-worker-nodejs] Terminating...');
 			parentPort.close(); // close the worker
 			break;
         default:

@@ -53,7 +53,7 @@ export class OpStack {
 
             if (timeSinceLastDigestOrSync > this.healthInfo.delayBeforeRestart) {
                 this.miniLogger.log(`[OpStack] Restart requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                this.node.requestRestart('OpStack.healthCheckLoop() -> delayBeforeRestart reached!');
+                this.node.restartRequested = 'OpStack.healthCheckLoop() -> delayBeforeRestart reached!';
                 this.terminate();
                 continue;
             }
@@ -154,7 +154,7 @@ export class OpStack {
                         this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers failed, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
 
                         this.terminate();
-                        if (!this.node.restartRequested) { this.node.requestRestart('OpStack.syncWithPeers() -> force!'); }
+                        if (!this.node.restartRequested) { this.node.restartRequested = 'OpStack.syncWithPeers() -> force!'; }
                         this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] Restart requested by syncWithPeers`, (m) => console.warn(m));
                         break;
                     }

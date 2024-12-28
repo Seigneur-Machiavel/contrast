@@ -18,7 +18,6 @@ import { SyncHandler } from './nodes-synchronizer.mjs';
 import { SnapshotSystem } from './snapshot-system.mjs';
 import { performance, PerformanceObserver } from 'perf_hooks';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
-import { ConfigManager } from './config-manager.mjs';
 import { TimeSynchronizer } from '../../utils/time.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { Reorganizator } from './blockchain-reorganizator.mjs';
@@ -87,7 +86,11 @@ export class Node {
         /** @type {ValidationWorker[]} */
         this.workers = [];
         this.nbOfWorkers = 4;
-        this.configManager = new ConfigManager("node/config.json");
+        this.bootstrapNodes = [
+            '/dns4/pinkparrot.science/tcp/27260',
+            '/dns4/pinkparrot.observer/tcp/27261',
+            '/dns4/pariah.monster/tcp/27260'
+        ];
 
         this.blockchainStats = {};
         this.delayBeforeSendingCandidate = 10000;
@@ -95,11 +98,15 @@ export class Node {
         this.logValidationTime = false;
     }
 
+    // STARTUP -----------------------------------------------------------------------
     async start(startFromScratch = false) {
         this.blockchainStats.state = "starting";
-        this.configManager.init();
-        await this.timeSynchronizer.syncTimeWithRetry(5, 500);
 
+        this.bootstrapNodes = Storage.loadJSON('bootstrapNodes') || this.bootstrapNodes;
+        this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
+        Storage.saveJSON('bootstrapNodes', this.bootstrapNodes);
+
+        await this.timeSynchronizer.syncTimeWithRetry(5, 500);
         this.miniLogger.log(`Node ${this.id} (${this.roles.join('_')}) => started at time: ${this.timeSynchronizer.getCurrentTime()}`, (m) => { console.info(m); });
 
         for (let i = 0; i < this.nbOfWorkers; i++) { this.workers.push(new ValidationWorker(i)); }
@@ -112,9 +119,6 @@ export class Node {
             const startHeight = await this.blockchain.load(this.snapshotSystem);
             this.loadSnapshot(startHeight);
         }
-
-        const bootstrapNodes = this.configManager.getBootstrapNodes();
-        this.p2pNetwork.options.bootstrapNodes = bootstrapNodes;
 
         const uniqueHash = await this.account.getUniqueHash(64);
         await this.p2pNetwork.start(uniqueHash);
@@ -130,34 +134,15 @@ export class Node {
         this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
         this.opStack.pushFirst('syncWithPeers', null);
 
-        this.connexionsMaintenerLoop();
+        this.#connexionsMaintenerLoop();
     }
-    async connexionsMaintenerLoop() {
+    async #connexionsMaintenerLoop() {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 10000));
             const nbOfPeers = await this.#waitSomePeers();
-            if (!nbOfPeers || nbOfPeers < 1) { this.requestRestart('connexionsMaintenerLoop'); return; }
+            if (!nbOfPeers || nbOfPeers < 1) { this.node.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
         }
     }
-    async stop() {
-        this.miniLogger.log(`Node ${this.id} (${this.roles.join('_')}) => stopped`, (m) => { console.info(m); });
-    }
-    requestRestart(from = 'unknown') {
-        this.restartRequested = from;
-    }
-
-    //#region - CONNEXION INITIALIZATION ----------------------------------------------------------
-    getTopicsToSubscribeRelatedToRoles() {
-        const rolesTopics = {
-            validator: ['new_transaction', 'new_block_finalized'],
-            miner: ['new_block_candidate'],
-            observer: ['new_transaction', 'new_block_finalized', 'new_block_candidate']
-        }
-        const topicsToSubscribe = [];
-        for (const role of this.roles) { topicsToSubscribe.push(...rolesTopics[role]); }
-        return [...new Set(topicsToSubscribe)];
-    }
-
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
         const checkPeerCount = () => {
             const peersIds = this.p2pNetwork.getConnectedPeers();
@@ -199,22 +184,70 @@ export class Node {
         if (result < nbOfPeers) { this.miniLogger.log(`Failed to connect to ${nbOfPeers} peers within ${timeOut / 1000} seconds`, (m) => { console.error(m); }); }
         return result;
     }
-    async createBlockCandidateAndBroadcast() {
-        this.blockchainStats.state = "creating block candidate";
-        try {
-            if (!this.roles.includes('validator')) { throw new Error('Only validator can create a block candidate'); }
 
-            this.blockCandidate = await this.#createBlockCandidate();
-            if (this.blockCandidate === null) { return true; }
-            if (this.roles.includes('miner')) { this.miner.updateBestCandidate(this.blockCandidate); }
+    // BLOCK CANDIDATE CREATION ---------------------------------------------------------
+    /** Aggregates transactions from mempool, creates a new block candidate, signs it and returns it */
+    async #createBlockCandidate() {
+        const startTime = Date.now();
 
-            await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
-            return true;
-        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return false; }
+        const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
+        const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
+
+        // Create the block candidate, genesis block if no lastBlockData
+        let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', Txs, posTimestamp);
+        if (this.blockchain.lastBlock) {
+            await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
+            const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
+            if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
+            if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
+
+            const olderBlock = this.blockchain.getBlock(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
+            const averageBlockTimeMS = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
+            this.blockchainStats.averageBlockTime = averageBlockTimeMS;
+            const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
+            const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
+            blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, this.blockchain.lastBlock.hash, Txs, posTimestamp);
+        }
+
+        // Sign the block candidate
+        const { powReward, posReward } = BlockUtils.calculateBlockReward(this.utxoCache, blockCandidate);
+        const posFeeTx = await Transaction_Builder.createPosReward(posReward, blockCandidate, this.validatorRewardAddress, this.account.address);
+        const signedPosFeeTx = await this.account.signTransaction(posFeeTx);
+        blockCandidate.Txs.unshift(signedPosFeeTx);
+        blockCandidate.powReward = powReward; // for the miner
+
+        if (blockCandidate.Txs.length > 3) { this.miniLogger.log(`(Height:${blockCandidate.index}) => ${blockCandidate.Txs.length} txs, block candidate created in ${(Date.now() - startTime)}ms`, (m) => { console.info(m); }); }
+        this.blockchainStats.lastLegitimacy = blockCandidate.legitimacy;
+        return blockCandidate;
     }
-    //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
+    /** Creates a new block candidate, signs it and broadcasts it */
+    async createBlockCandidateAndBroadcast(delay = 0) {
+        this.blockchainStats.state = "creating block candidate";
+        if (!this.roles.includes('validator')) { return false; }
 
-    //#region - SNAPSHOT: LOAD/SAVE ---------------------------------------------------------------
+        this.blockCandidate = await this.#createBlockCandidate();
+        if (this.blockCandidate === null) return true;
+
+        if (this.roles.includes('miner')) this.miner.updateBestCandidate(this.blockCandidate);
+
+        let broadcasted = null;
+        setTimeout(async () => {
+            try {
+                await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
+                broadcasted = true;
+
+                const callback = this.wsCallbacks.onBroadcastNewCandidate;
+                if (callback) callback.execute(BlockUtils.getBlockHeader(this.blockCandidate));
+            } catch (error) {
+                this.miniLogger.log(`Failed to broadcast new block candidate: ${error.message}`, (m) => { console.error(m); });
+            }
+        }, delay ? delay : 0);
+
+        while (broadcasted === null) { await new Promise(resolve => setTimeout(resolve, 100)); }
+        return broadcasted;
+    }
+
+    // SNAPSHOT: LOAD/SAVE ---------------------------------------------------------------
     loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
         if (snapshotIndex < 0) { return; }
 
@@ -254,9 +287,8 @@ export class Node {
         }
         this.snapshotSystem.restoreLoadedSnapshot();
     }
-    //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
 
-    //#region - BLOCK HANDLING --------------------------------------------------------------------
+    // FINALIZED BLOCK HANDLING ----------------------------------------------------------
     /** @param {BlockData} finalizedBlock */
     async #validateBlockProposal(finalizedBlock, blockBytes) {
         const timer = new BlockValidationTimer(), validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6), minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
@@ -351,6 +383,8 @@ export class Node {
         timer.startPhase('mempool-cleanup'),
         this.memPool.removeFinalizedBlocksTransactions(finalizedBlock),
         timer.endPhase('mempool-cleanup');
+
+        const waitStart = Date.now();
     
         timer.startPhase('block-storage'); // callback ?
         if (!skipValidation && this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
@@ -373,68 +407,25 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     
         timer.startPhase('snapshot-and-peer-wait');
         if (!isLoading) this.#saveSnapshot(finalizedBlock);
-        const waitStart = Date.now();
+        
         //const nbOfPeers = await this.#waitSomePeers();
         //if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
         timer.endPhase('snapshot-and-peer-wait');
     
         if (!broadcastNewCandidate) return true;
-    
-        timer.startPhase('candidate-creation');
-        this.blockCandidate = await this.#createBlockCandidate();
-        if (this.blockCandidate === null) return true;
-        if (this.roles.includes('miner')) this.miner.updateBestCandidate(this.blockCandidate);
-        timer.endPhase('candidate-creation');
-    
-        setTimeout(async () => {
-            try {
-                if (!this.blockCandidate) throw new Error('No block candidate to broadcast');
-                await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
-                if (this.wsCallbacks.onBroadcastNewCandidate) 
-                    this.wsCallbacks.onBroadcastNewCandidate.execute(BlockUtils.getBlockHeader(this.blockCandidate));
-            } catch (error) {
-                this.miniLogger.log(`Failed to broadcast new block candidate: ${error.message}`, (m) => { console.error(m); });
-            }
-        }, Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)));
+        
+        await this.createBlockCandidateAndBroadcast(Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)));
     
         return true;
     }
-    /** Aggregates transactions from mempool, creates a new block candidate, signs it and returns it */
-    async #createBlockCandidate() {
-        const startTime = Date.now();
 
-        const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
-        const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
+    /** @param {string} topic @param {any} message */
+    async p2pBroadcast(topic, message) {
+        await this.p2pNetwork.broadcast(topic, message);
+        if (topic !== 'new_block_finalized') { return; }
 
-        // Create the block candidate, genesis block if no lastBlockData
-        let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', Txs, posTimestamp);
-        if (this.blockchain.lastBlock) {
-            await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
-            const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
-            if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
-            if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
-
-            const olderBlock = this.blockchain.getBlock(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
-            const averageBlockTimeMS = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
-            this.blockchainStats.averageBlockTime = averageBlockTimeMS;
-            const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
-            const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
-            blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, this.blockchain.lastBlock.hash, Txs, posTimestamp);
-        }
-
-        // Sign the block candidate
-        const { powReward, posReward } = BlockUtils.calculateBlockReward(this.utxoCache, blockCandidate);
-        const posFeeTx = await Transaction_Builder.createPosReward(posReward, blockCandidate, this.validatorRewardAddress, this.account.address);
-        const signedPosFeeTx = await this.account.signTransaction(posFeeTx);
-        blockCandidate.Txs.unshift(signedPosFeeTx);
-        blockCandidate.powReward = powReward; // for the miner
-
-        if (blockCandidate.Txs.length > 3) { this.miniLogger.log(`(Height:${blockCandidate.index}) => ${blockCandidate.Txs.length} txs, block candidate created in ${(Date.now() - startTime)}ms`, (m) => { console.info(m); }); }
-        this.blockchainStats.lastLegitimacy = blockCandidate.legitimacy;
-        return blockCandidate;
+        setTimeout(() => this.#reSendBlocks(message.index), 1000);
     }
-    //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
-
     /** @param {string} topic @param {object} message */
     async p2pHandler(topic, message) {
         // test fork
@@ -507,13 +498,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
             }
         } catch (error) { this.miniLogger.log(`${topic} -> Failed! ${error}`, (m) => { console.error(m); }); }
     }
-    /** @param {string} topic @param {any} message */
-    async p2pBroadcast(topic, message) {
-        await this.p2pNetwork.broadcast(topic, message);
-        if (topic !== 'new_block_finalized') { return; }
-
-        setTimeout(() => this.#reSendBlocks(message.index), 1000);
-    }
     async #reSendBlocks(finalizedBlockHeight = 10) {
         const sequence = [-10, -8, -6, -4, -2];
         const sentSequence = [];
@@ -532,7 +516,8 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
 
         this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
     }
-    //#region - API -------------------------------------------------------------------------------
+
+    // API -------------------------------------------------------------------------------
     getStatus() {
         return {
             id: this.id,
@@ -691,8 +676,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         }
         return UTXOs;
     }
-
-    //#endregion °°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°°
 }
 
 class BaseBlockTimer {

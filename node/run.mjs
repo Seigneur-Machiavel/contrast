@@ -1,3 +1,5 @@
+// THIS FILE IS USED TO START NODE STANDALONE (WITHOUT ELECTRON APP WRAPPER)
+
 import { NodeAppWorker } from './workers/workers-classes.mjs';
 
 let dashboardPort = 27271; // network port 27271

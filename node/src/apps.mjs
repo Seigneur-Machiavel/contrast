@@ -106,7 +106,7 @@ class AppStaticFncs {
 
 export class DashboardWsApp {
     #nodesSettings = {};
-    stopped = false;
+    stopping = false;
     /** @param {Node} node */
     constructor(node, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
@@ -453,11 +453,14 @@ export class DashboardWsApp {
             if (!this.node || !this.node.restartRequested) { continue; }
             this.miniLogger.log(`Node ${this.node.id} restart requested by ${this.node.restartRequested}`, (m) => { console.log(m); });
 
-            if (!this.stopped) { await this.stop(); }
+            await this.stop();
             return;
         }
     }
     async stop() {
+        if (this.stopping) { return; }
+        this.stopping = true;
+
         this.#closeAllConnections();
         this.wss.close();
 
@@ -477,10 +480,9 @@ export class DashboardWsApp {
         await this.node.p2pNetwork.stop();
         this.miniLogger.log(`----- P2P stopped -----`, (m) => { console.log(m); });
 
-        await new Promise(resolve => setTimeout(resolve, 7000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         this.miniLogger.log(`----- Dashboard stopped -----`, (m) => { console.log(m); });
-        this.stopped = true;
     }
 }
 
