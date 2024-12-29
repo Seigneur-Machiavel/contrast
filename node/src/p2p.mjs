@@ -213,7 +213,7 @@ class P2PNetwork extends EventEmitter {
             switch (topic) {
                 case 'new_transaction':
                     //this.miniLogger.log(`Received new transaction from ${from}`, (m) => { console.debug(m); });
-                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.05) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
+                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
                     parsedMessage = serializer.deserialize.transaction(data);
                     break;
                 case 'new_block_candidate':
