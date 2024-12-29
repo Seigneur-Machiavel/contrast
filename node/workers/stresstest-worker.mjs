@@ -40,10 +40,10 @@ const testParams = {
     addressType: 'W',
 
     txsSeqs: {
-        simpleUserToUser: { active: false, start: 2, end: 100000, interval: 2 },
         userSendToAllOthers: { active: true, start: 10, end: 100000, interval: 3 },
         userSendToNextUser: { active: true, start: 20, end: 100000, interval: 2 },
-        stakeVss: { active: true, start: 100, end: 120, interval: 1 }
+        stakeVss: { active: true, start: 100, end: 120, interval: 1 },
+        simpleUserToUser: { active: false, start: 2, end: 100000, interval: 2 },
     },
 }
 
@@ -225,6 +225,12 @@ async function test() {
             try { await userSendToAllOthers(accounts); } catch (error) { console.error(error); }
         }
 
+        // users Send To Next Users
+        if (testParams.txsSeqs.userSendToNextUser.active && currentHeight >= testParams.txsSeqs.userSendToNextUser.start && (currentHeight - 1) % testParams.txsSeqs.userSendToNextUser.interval === 0 && txsTaskDoneThisBlock['userSendToNextUser'] === undefined) {
+            txsTaskDoneThisBlock['userSendToNextUser'] = false;
+            try { await userSendToNextUser(accounts); } catch (error) { console.error(error); }
+        }
+        
         // user stakes in VSS
         if (testParams.txsSeqs.stakeVss.active && currentHeight >= testParams.txsSeqs.stakeVss.start && currentHeight < testParams.txsSeqs.stakeVss.end && txsTaskDoneThisBlock['userStakeInVSS'] === undefined) {
             txsTaskDoneThisBlock['userStakeInVSS'] = false;
@@ -236,12 +242,6 @@ async function test() {
         if (testParams.txsSeqs.simpleUserToUser.active && currentHeight >= testParams.txsSeqs.simpleUserToUser.start && (currentHeight - 1) % testParams.txsSeqs.simpleUserToUser.interval === 0 && txsTaskDoneThisBlock['userSendToUser'] === undefined) {
             txsTaskDoneThisBlock['userSendToUser'] = false;
             try { await userSendToUser(accounts); } catch (error) { console.error(error); }
-        }
-
-        // users Send To Next Users
-        if (testParams.txsSeqs.userSendToNextUser.active && currentHeight >= testParams.txsSeqs.userSendToNextUser.start && (currentHeight - 1) % testParams.txsSeqs.userSendToNextUser.interval === 0 && txsTaskDoneThisBlock['userSendToNextUser'] === undefined) {
-            txsTaskDoneThisBlock['userSendToNextUser'] = false;
-            try { await userSendToNextUser(accounts); } catch (error) { console.error(error); }
         }
     }
 }

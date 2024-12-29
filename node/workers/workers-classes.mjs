@@ -60,14 +60,11 @@ export class ValidationWorker {
             this.worker.on('close', () => { console.log('ValidationWorker closed'); resolve(); });
 
             setTimeout(() => {
-                console.error('ValidationWorker termination timeout');
+                console.error('ValidationWorker termination timeout -> terminate from parent');
                 this.worker.terminate();
                 resolve();
             }, 10000);
         });
-    }
-    terminate() {
-        this.worker.terminate();
     }
 }
 
@@ -183,7 +180,7 @@ export class MinerWorker {
             this.worker.on('exit', (code) => { console.log(`MinerWorker stopped with exit code ${code}`); resolve(); });
             this.worker.on('close', () => { console.log('MinerWorker closed'); resolve(); });
             setTimeout(() => {
-                console.error('MinerWorker termination timeout');
+                console.error('MinerWorker termination timeout -> terminate from parent');
                 this.worker.terminate();
                 resolve();
             }, 10000);

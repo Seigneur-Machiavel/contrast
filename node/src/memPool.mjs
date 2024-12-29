@@ -102,26 +102,18 @@ export class MemPool {
         const serialized = serializer.serialize.transaction(transaction);
         const byteLength = serialized.byteLength;
         
-        try { await TxValidation.controlTransactionHash(transaction); } 
+        try { await TxValidation.controlTransactionHash(transaction); }
         catch (error) { throw new Error(`Transaction hash not valid - ${error.message}`); }
         
-        try { 
-            TxValidation.isConformTransaction(involvedUTXOs, transaction, false, true, utxoCache.nodeVersion); 
-        } 
-        catch (error) { 
-            throw new Error(`Transaction not conform - ${error.message}`); 
-        }
+        try { TxValidation.isConformTransaction(involvedUTXOs, transaction, false, true, utxoCache.nodeVersion); } 
+        catch (error) { throw new Error(`Transaction not conform - ${error.message}`); }
 
         const identicalIDTransaction = this.transactionsByID[transaction.id];
-        if (identicalIDTransaction) { 
-            throw new Error(`Transaction already in mempool: ${transaction.id}`); 
-        }
+        if (identicalIDTransaction) {  throw new Error(`Transaction already in mempool: ${transaction.id}`); }
 
         const colliding = this.#caughtTransactionsAnchorsCollision(transaction);
         const collidingTx = colliding ? colliding.tx : false;
-        if (collidingTx) { 
-            throw new Error(`Conflicting UTXOs with: ${collidingTx.id} | anchor: ${colliding.anchor}`);
-        }
+        if (collidingTx) { throw new Error(`Conflicting UTXOs with: ${collidingTx.id} | anchor: ${colliding.anchor}`); }
 
         const fee = TxValidation.calculateRemainingAmount(involvedUTXOs, transaction);
 
