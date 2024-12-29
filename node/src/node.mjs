@@ -126,9 +126,13 @@ export class Node {
         if (this.roles.includes('miner')) { this.miner.startWithWorker(); }
 
         const nbOfPeers = await this.#waitSomePeers();
-        if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
-        this.miniLogger.log('P2P network is ready - we are connected baby', (m) => { console.info(m); });
+        if (!nbOfPeers || nbOfPeers < 1) {
+            this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); });
+            this.restartRequested = 'Failed to connect to peers';
+            return;
+        }
 
+        this.miniLogger.log('P2P network is ready - we are connected baby', (m) => { console.info(m); });
         if (!this.roles.includes('validator')) { return; }
 
         this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);

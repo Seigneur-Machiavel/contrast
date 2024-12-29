@@ -79,7 +79,7 @@ async function userSendToNextUser(accounts) {
         if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 40)); }
         const senderAccount = accounts[i];
         const receiverAccount = i + 1 === accounts.length ? accounts[0] : accounts[i + 1];
-        const amountToSend = Math.floor(Math.random() * (1_000) + 1000);
+        const amountToSend = 1_000; //Math.floor(Math.random() * (1_000) + 1000);
         transferPromises.push(Transaction_Builder.createAndSignTransfer(senderAccount, amountToSend, receiverAccount.address));
     }
     
@@ -116,7 +116,7 @@ async function userSendToAllOthers(accounts, senderAccountIndex = 0) {
     for (let i = 0; i < accounts.length; i++) {
         if (i === senderAccountIndex) { continue; }
         // from 5_000 to 10_000
-        const amount = Math.floor(Math.random() * 5_000 + 5_000);
+        const amount = 10_000; Math.floor(Math.random() * 5_000 + 5_000);
         totalAmount += amount;
         const transfer = { recipientAddress: accounts[i].address, amount };
         transfers.push(transfer);
@@ -140,7 +140,7 @@ async function userSendToAllOthers(accounts, senderAccountIndex = 0) {
     testMiniLogger.log(`[TEST-USTAO] sent ${totalAmount} to ${transfers.length} addresses | Time: ${((Date.now() - startTime) / 1000).toFixed(2)}s`, (m) => console.info(m));
 }
 /** User stakes in VSS @param {Account[]} accounts @param {number} senderAccountIndex @param {number} amountToStake */
-async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 120_000) {
+async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 2_000) {
     txsTaskDoneThisBlock['userStakeInVSS'] = true;
 
     const senderAccount = accounts[senderAccountIndex];
