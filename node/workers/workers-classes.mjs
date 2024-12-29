@@ -23,7 +23,7 @@ export class ValidationWorker {
         /** @type {Worker} worker */
         this.worker = newWorker('./validation-worker-nodejs.mjs');
         this.worker.on('exit', (code) => { console.log(`ValidationWorker ${this.id} stopped with exit code ${code}`); });
-        this.worker.on('close', () => { console.log('ValidationWorker ${this.id} closed'); });
+        this.worker.on('close', () => { console.log(`ValidationWorker ${this.id} closed`); });
     }
     addressOwnershipConfirmation(involvedUTXOs, transactions, impliedKnownPubkeysAddresses, useDevArgon2) {
         /** @type {Promise<{ discoveredPubKeysAddresses: {}, isValid: boolean }>} */
@@ -54,13 +54,8 @@ export class ValidationWorker {
     terminateAsync() {
         //console.info(`ValidationWorker ${this.id} terminating...`);
         setTimeout(() => { this.worker.postMessage({ type: 'terminate', id: this.id }); }, 1000);
+        this.worker.removeAllListeners();
         return new Promise((resolve, reject) => {
-            /*this.worker.on('message', (message) => {
-                if (message.id !== this.id) { return; }
-                if (!message.error) { return }
-                console.error(message.error);
-                reject(message.error);
-            });*/
             this.worker.on('exit', (code) => { console.log(`ValidationWorker stopped with exit code ${code}`); resolve(); });
             this.worker.on('close', () => { console.log('ValidationWorker closed'); resolve(); });
 
@@ -183,6 +178,7 @@ export class MinerWorker {
         this.terminate = true;
         //setTimeout(() => { this.worker.terminate() }, 1000);
         setTimeout(() => { this.worker.postMessage({ type: 'terminate' }); }, 1000);
+        this.worker.removeAllListeners();
         return new Promise((resolve, reject) => {
             this.worker.on('exit', (code) => { console.log(`MinerWorker stopped with exit code ${code}`); resolve(); });
             this.worker.on('close', () => { console.log('MinerWorker closed'); resolve(); });
