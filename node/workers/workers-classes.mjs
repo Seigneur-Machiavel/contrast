@@ -55,21 +55,20 @@ export class ValidationWorker {
         //console.info(`ValidationWorker ${this.id} terminating...`);
         setTimeout(() => { this.worker.postMessage({ type: 'terminate', id: this.id }); }, 1000);
         return new Promise((resolve, reject) => {
-            this.worker.on('message', (message) => {
+            /*this.worker.on('message', (message) => {
                 if (message.id !== this.id) { return; }
-                if (!message.error) { return } 
+                if (!message.error) { return }
                 console.error(message.error);
                 reject(message.error);
-            });
-            this.worker.on('exit', (code) => {
-                resolve();
-            });
+            });*/
+            this.worker.on('exit', (code) => { console.log(`ValidationWorker stopped with exit code ${code}`); resolve(); });
+            this.worker.on('close', () => { console.log('ValidationWorker closed'); resolve(); });
 
             setTimeout(() => {
                 console.error('ValidationWorker termination timeout');
                 this.worker.terminate();
                 resolve();
-            }, 20000);
+            }, 10000);
         });
     }
     terminate() {
@@ -182,10 +181,16 @@ export class MinerWorker {
     }
     terminateAsync() {
         this.terminate = true;
-        setTimeout(() => { this.worker.terminate() }, 1000);
+        //setTimeout(() => { this.worker.terminate() }, 1000);
+        setTimeout(() => { this.worker.postMessage({ type: 'terminate' }); }, 1000);
         return new Promise((resolve, reject) => {
             this.worker.on('exit', (code) => { console.log(`MinerWorker stopped with exit code ${code}`); resolve(); });
             this.worker.on('close', () => { console.log('MinerWorker closed'); resolve(); });
+            setTimeout(() => {
+                console.error('MinerWorker termination timeout');
+                this.worker.terminate();
+                resolve();
+            }, 10000);
         });
     }
 }

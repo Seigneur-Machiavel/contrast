@@ -144,6 +144,8 @@ export class Node {
         }
     }
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
+        if (this.restartRequested) { return 0; }
+
         const checkPeerCount = () => {
             const peersIds = this.p2pNetwork.getConnectedPeers();
             const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
@@ -152,6 +154,8 @@ export class Node {
 
         const attemptConnection = async () => {
             for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                if (this.restartRequested) { return 0; }
+
                 let peerCount = checkPeerCount();
                 if (peerCount >= nbOfPeers) { return peerCount; }
                 /*if (peerCount >= nbOfPeers) {

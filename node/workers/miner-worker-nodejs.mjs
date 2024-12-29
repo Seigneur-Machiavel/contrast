@@ -24,6 +24,7 @@ async function mineBlock(blockCandidate, signatureHex, nonce, useDevArgon2) {
 }
 async function mineBlockUntilValid() {
 	while (true) {
+		if (minerVars.exiting) { return { error: 'Exiting' }; }
 		if (minerVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
 		if (minerVars.paused) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
 		if (minerVars.timeOffset === 0) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
@@ -85,6 +86,7 @@ async function prepareBlockCandidateBeforeMining() {
 }
 
 const minerVars = {
+	exiting: false,
 	working: false,
 
 	rewardAddress: '',
@@ -131,6 +133,7 @@ parentPort.on('message', async (task) => {
 			return;
 		case 'terminate':
 			//console.info('[miner-worker-nodejs] Terminating...');
+			minerVars.exiting = true;
 			parentPort.close(); // close the worker
 			break;
         default:
@@ -138,6 +141,7 @@ parentPort.on('message', async (task) => {
             break;
     }
 
+	if (minerVars.exiting) { return; }
 	minerVars.working = false;
 	parentPort.postMessage(response);
 });

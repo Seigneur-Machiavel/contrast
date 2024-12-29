@@ -3,6 +3,7 @@ import { TxValidation } from '../src/validations-classes.mjs';
 
 // WORKER SIDE
 let workerId = undefined;
+let exiting = false;
 parentPort.on('message', async (task) => {
     const id = task.id;
     workerId = workerId || id;
@@ -13,6 +14,7 @@ parentPort.on('message', async (task) => {
                 const allDiscoveredPubKeysAddresses = {};
                 const transactions = task.transactions
                 for (const tx of transactions) {
+                    if (exiting) { break; }
                     const discoveredPubKeysAddresses = await TxValidation.addressOwnershipConfirmation(
                         task.involvedUTXOs,
                         tx,
@@ -37,6 +39,7 @@ parentPort.on('message', async (task) => {
             break
 		case 'terminate':
             //console.log(`[VALIDATION_WORKER ${workerId}] Terminating...`);
+            exiting = true;
 			parentPort.close(); // close the worker
 			break;
         default:
@@ -44,5 +47,6 @@ parentPort.on('message', async (task) => {
             break;
     }
 
+    if (exiting) { return; }
 	parentPort.postMessage(response);
 });

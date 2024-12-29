@@ -249,11 +249,9 @@ to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
 
         console.info(`[MINER-${this.address.slice(0, 6)}] Stopped`);
     }
-    async terminate() {
+    async terminateAsync() {
         const promises = [];
-        for (const worker of this.workers) {
-            promises.push(worker.terminateAsync());
-        }
+        for (const worker of this.workers) { promises.push(worker.terminateAsync()); }
         await Promise.all(promises);
         this.terminated = true;
     }

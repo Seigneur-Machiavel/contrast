@@ -458,7 +458,8 @@ export class DashboardWsApp {
             await this.stop();
             this.miniLogger.log(`||----->>> Node ${this.node.id} exiting dashboard app ...`, (m) => { console.log(m); });
 
-            process.exit(0);
+            parentPort.close();
+            //process.exit(0);
         }
     }
     async stop() {
@@ -474,8 +475,9 @@ export class DashboardWsApp {
         this.node.timeSynchronizer.stop = true;
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        await this.node.miner.terminate();
+        //await this.node.miner.terminateAsync();
         const promises = [];
+        for (const worker of this.node.miner.workers) { promises.push(worker.terminateAsync()); }
         for (const worker of this.node.workers) { promises.push(worker.terminateAsync()); }
         await Promise.all(promises);
 
@@ -484,8 +486,8 @@ export class DashboardWsApp {
         await this.node.p2pNetwork.stop();
         this.miniLogger.log(`----- P2P stopped -----`, (m) => { console.log(m); });
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        this.miniLogger.log(`----- Dashboard stopped -----`, (m) => { console.log(m); });
+        //await new Promise(resolve => setTimeout(resolve, 2000));
+        //this.miniLogger.log(`----- Dashboard stopped -----`, (m) => { console.log(m); });
     }
 }
 
