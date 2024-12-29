@@ -107,6 +107,7 @@ class AppStaticFncs {
 export class DashboardWsApp {
     #nodesSettings = {};
     stopping = false;
+    stopped = false;
     /** @param {Node} node */
     constructor(node, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
@@ -457,9 +458,6 @@ export class DashboardWsApp {
 
             await this.stop();
             this.miniLogger.log(`||----->>> Node ${this.node.id} exiting dashboard app ...`, (m) => { console.log(m); });
-
-            parentPort.close();
-            //process.exit(0);
         }
     }
     async stop() {
@@ -487,11 +485,13 @@ export class DashboardWsApp {
         this.miniLogger.log(`----- P2P stopped -----`, (m) => { console.log(m); });
 
         //await new Promise(resolve => setTimeout(resolve, 2000));
-        //this.miniLogger.log(`----- Dashboard stopped -----`, (m) => { console.log(m); });
+        this.miniLogger.log(`----- Dashboard stopped -----`, (m) => { console.log(m); });
+        this.stopped = true;
     }
 }
 
 export class ObserverWsApp {
+    stopped = false;
     /** @param {Node} node */
     constructor(node, port = 27270) {
         /** @type {Node} */
@@ -694,5 +694,12 @@ export class ObserverWsApp {
         } catch (error) {
             console.error(`[OBSERVER] Error on message: ${error.message}`);
         }
+    }
+    stop() {
+        if (!this.wss || this.stopped) { return; }
+        
+        this.#closeAllConnections();
+        this.wss.close();
+        this.stopped = true;
     }
 }
