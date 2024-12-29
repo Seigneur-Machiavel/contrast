@@ -19,7 +19,9 @@ async function stop() {
     try {
         await dashApp.stop();
         observApp.stop();
+        parentPort.postMessage({ type: 'stopped' });
         parentPort.close();
+        console.log('Dashboard worker stopped.');
     } catch (error) { console.error('Dashboard worker stop error:', error); }
 }
 async function stopIfDashAppStoppedLoop() {
@@ -230,7 +232,7 @@ async function test() {
             txsTaskDoneThisBlock['userSendToNextUser'] = false;
             try { await userSendToNextUser(accounts); } catch (error) { console.error(error); }
         }
-        
+
         // user stakes in VSS
         if (testParams.txsSeqs.stakeVss.active && currentHeight >= testParams.txsSeqs.stakeVss.start && currentHeight < testParams.txsSeqs.stakeVss.end && txsTaskDoneThisBlock['userStakeInVSS'] === undefined) {
             txsTaskDoneThisBlock['userStakeInVSS'] = false;

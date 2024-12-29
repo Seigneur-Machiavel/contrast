@@ -16,7 +16,9 @@ async function stop() {
     try {
         await dashApp.stop();
         observApp.stop();
+        parentPort.postMessage({ type: 'stopped' });
         parentPort.close();
+        console.log('Dashboard worker stopped.');
     } catch (error) { console.error('Dashboard worker stop error:', error); }
 }
 async function stopIfDashAppStoppedLoop() {

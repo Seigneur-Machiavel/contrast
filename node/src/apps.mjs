@@ -459,7 +459,7 @@ export class DashboardWsApp {
             this.miniLogger.log(`||----->>> Node ${this.node.id} exiting dashboard app ...`, (m) => { console.log(m); });
             await this.stop();
             this.miniLogger.log(`||----->>> Node ${this.node.id} dashboard app stopped ...`, (m) => { console.log(m); });
-            
+
             return;
         }
     }
@@ -488,7 +488,7 @@ export class DashboardWsApp {
         this.miniLogger.log(`----- P2P stopped -----`, (m) => { console.log(m); });
 
         //await new Promise(resolve => setTimeout(resolve, 2000));
-        this.miniLogger.log(`----- Dashboard stopped -----`, (m) => { console.log(m); });
+        this.miniLogger.log(`----- Dashboard stopped App -----`, (m) => { console.log(m); });
         this.stopped = true;
     }
 }

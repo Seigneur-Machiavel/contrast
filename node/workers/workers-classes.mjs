@@ -328,7 +328,8 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         this.worker.on('exit', (code) => { console.log(`NodeAppWorker stopped with exit code ${code} -> should restart`); });
-        this.worker.on('close', () => {  console.log('NodeAppWorker closed'); });
+        this.worker.on('close', () => { console.log('NodeAppWorker closed'); });
+        this.worker.on('message', (message) => { if (message.type === 'stopped') { this.worker.terminate(); } });
 
         console.log('NodeAppWorker started');
     }
