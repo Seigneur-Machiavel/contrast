@@ -1,76 +1,45 @@
+/**
+* @typedef {import('./transaction.mjs').Transaction} Transaction
+*/
+
 export class TransactionPriorityQueue {
     constructor() {
         this.heap = [];
         this.transactionMap = new Map();
     }
 
-    size() {
-        return this.heap.length;
-    }
-
-    isEmpty() {
-        return this.size() === 0;
-    }
-
+    size() { return this.heap.length; }
+    isEmpty() { return this.size() === 0; }
     add(transaction) {
-        if (isNaN(parseFloat(transaction.feePerByte)) || !isFinite(transaction.feePerByte)) {
-            throw new Error('Transaction fee must be a valid number');
-        }
+        const isInvalidFee = isNaN(parseFloat(transaction.feePerByte)) || !isFinite(transaction.feePerByte)
+        if (isInvalidFee) { throw new Error('Transaction fee must be a valid number'); }
         
-        if (this.transactionMap.has(transaction.id)) {
-            return false; // Transaction already exists
-        }
+        if (this.transactionMap.has(transaction.id)) { return false; } // Transaction already exists
         this.heap.push(transaction);
         this.transactionMap.set(transaction.id, this.size() - 1);
-        this.bubbleUp(this.size() - 1);
+        this.#bubbleUp(this.size() - 1);
         return true;
     }
-
-    update(transactionId, newFeePerByte) {
+    update(transactionId, newFeePerByte) { // UNUSED
         if (typeof newFeePerByte !== 'number' || isNaN(newFeePerByte)) {
             throw new Error('New fee must be a number');
         }
         const index = this.transactionMap.get(transactionId);
-        if (index === undefined) {
-            return false;
-        }
+        if (index === undefined) { return false; }
+
         const oldFeePerByte = this.heap[index].feePerByte;
         this.heap[index].feePerByte = newFeePerByte;
         if (newFeePerByte > oldFeePerByte) {
-            this.bubbleUp(index);
+            this.#bubbleUp(index);
         } else if (newFeePerByte < oldFeePerByte) {
-            this.bubbleDown(index);
+            this.#bubbleDown(index);
         }
         return true;
     }
-
-    peek() {
-        if (this.isEmpty()) {
-            return null;
-        }
-        return this.heap[0];
-    }
-
-    poll() {
-        if (this.isEmpty()) {
-            return null;
-        }
-        const result = this.heap[0];
-        const last = this.heap.pop();
-        this.transactionMap.delete(result.id);
-        if (this.size() > 0) {
-            this.heap[0] = last;
-            this.transactionMap.set(last.id, 0);
-            this.bubbleDown(0);
-        }
-        return result;
-    }
-
     remove(transactionId) {
         const index = this.transactionMap.get(transactionId);
-        if (index === undefined) {
-            return false;
-        }
+        if (index === undefined) { return false; }
+
         if (index === this.size() - 1) {
             this.heap.pop();
             this.transactionMap.delete(transactionId);
@@ -79,29 +48,25 @@ export class TransactionPriorityQueue {
             this.heap[index] = last;
             this.transactionMap.set(last.id, index);
             this.transactionMap.delete(transactionId);
-            this.bubbleDown(index);
-            this.bubbleUp(index);
+            this.#bubbleDown(index);
+            this.#bubbleUp(index);
         }
         return true;
     }
-
-    bubbleUp(index) {
+    #bubbleUp(index) {
         while (index > 0) {
             const parentIndex = Math.floor((index - 1) / 2);
-            if (this.heap[index].feePerByte <= this.heap[parentIndex].feePerByte) {
-                break;
-            }
-            this.swap(index, parentIndex);
+            if (this.heap[index].feePerByte <= this.heap[parentIndex].feePerByte) { break; }
+
+            this.#swap(index, parentIndex);
             index = parentIndex;
         }
     }
-
-    bubbleDown(index) {
+    #bubbleDown(index) {
         while (true) {
             let largestIndex = index;
             const leftChildIndex = 2 * index + 1;
             const rightChildIndex = 2 * index + 2;
-
             if (leftChildIndex < this.size() &&
                 this.heap[leftChildIndex].feePerByte > this.heap[largestIndex].feePerByte) {
                 largestIndex = leftChildIndex;
@@ -112,16 +77,13 @@ export class TransactionPriorityQueue {
                 largestIndex = rightChildIndex;
             }
 
-            if (largestIndex === index) {
-                break;
-            }
+            if (largestIndex === index) { break; }
 
-            this.swap(index, largestIndex);
+            this.#swap(index, largestIndex);
             index = largestIndex;
         }
     }
-
-    swap(i, j) {
+    #swap(i, j) {
         const temp = this.heap[i];
         this.heap[i] = this.heap[j];
         this.heap[j] = temp;
@@ -131,45 +93,39 @@ export class TransactionPriorityQueue {
 
     getTransactions() {
         const result = [];
+        /** @type {Transaction[]} */
         const tempHeap = [...this.heap];
     
         while (tempHeap.length > 0) {
             const tx = tempHeap[0];
             result.push(tx);
-            this.removeFromTempHeap(tempHeap, 0);
+            this.#removeFromTempHeap(tempHeap, 0);
         }
     
         return result;
     }
-    
-    removeFromTempHeap(heap, index) {
+    #removeFromTempHeap(heap, index) {
         const last = heap.pop();
-        if (heap.length > 0) {
-            heap[index] = last;
-            this.bubbleDownTempHeap(heap, index);
-        }
-    }
+        if (heap.length <= 0) { return; }
 
-    bubbleDownTempHeap(heap, index) {
+        heap[index] = last;
         while (true) {
             let largestIndex = index;
             const leftChildIndex = 2 * index + 1;
             const rightChildIndex = 2 * index + 2;
-
+    
             if (leftChildIndex < heap.length &&
                 heap[leftChildIndex].feePerByte > heap[largestIndex].feePerByte) {
                 largestIndex = leftChildIndex;
             }
-
+    
             if (rightChildIndex < heap.length &&
                 heap[rightChildIndex].feePerByte > heap[largestIndex].feePerByte) {
                 largestIndex = rightChildIndex;
             }
-
-            if (largestIndex === index) {
-                break;
-            }
-
+    
+            if (largestIndex === index) { break; }
+    
             const temp = heap[index];
             heap[index] = heap[largestIndex];
             heap[largestIndex] = temp;

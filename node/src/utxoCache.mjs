@@ -69,10 +69,11 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const anchors = serializer.deserialize.anchorsArray(serializedAnchors);
         return anchors;
     }
+    /** @param {string[]} anchors */
     getUTXOs(anchors) {
         if (anchors.length === 0) { return {}; }
 
-        /** @type {UTXO[]} */
+        /** @type {Object<string, UTXO>} */
         const utxosObj = {};
         const missingAnchors = [];
         for (const anchor of anchors) {
@@ -93,13 +94,12 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             const output = relatedTx.outputs[outputIndex];
             if (!output) { utxosObj[anchor] = undefined; continue; } // doesn't exist
 
-            /** @type {UTXO} */
             utxosObj[anchor] = UTXO(anchor, output.amount, output.rule, output.address, true); // spent
         }
 
         return utxosObj;
     }
-    /** @param {string} anchor @returns {Promise<UTXO | undefined>} */
+    /** @param {string} anchor */
     getUTXO(anchor) {
         const miniUtxoSerialized = this.unspentMiniUtxos[anchor];
         if (miniUtxoSerialized) {

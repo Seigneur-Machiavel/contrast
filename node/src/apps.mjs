@@ -75,7 +75,7 @@ class AppStaticFncs {
         const lastBlockInfo = `Block ${lastBlockIndex} - ${lastBlockTxInfo} txs - Validator ${lastBlockValidator} - Miner ${lastBlockMiner}`;
         
         result.lastBlockInfo = lastBlockInfo;
-        result.txInMempool = node.memPool.getTxNumberInMempool().toString();
+        result.txInMempool = node.memPool.transactionQueue.size().toString();
         result.averageBlockTime = node.blockchainStats?.averageBlockTime ? (node.blockchainStats.averageBlockTime / 1000).toFixed(2) : 'No Data';
         result.peerId = node.p2pNetwork?.p2pNode?.peerId ?? 'No Peer ID';
         result.peerIds = node.p2pNetwork?.getConnectedPeers() ?? 'No Peer IDs';

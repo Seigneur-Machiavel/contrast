@@ -12,21 +12,18 @@ import { TransactionPriorityQueue } from './memPool-tx-queue.mjs';
  */
 
 export class MemPool { 
+    /** @type {TransactionPriorityQueue} */
+    transactionQueue = new TransactionPriorityQueue();
+    /** @type {Object<string, Transaction>} */
+    transactionsByID = {};
+    /** @type {Object<string, Transaction>} */
+    transactionByAnchor = {};
+    /** @type {Object<string, WebSocketCallBack>} */
+    wsCallbacks = {};
     constructor() {
-        /** @type {Object<string, Transaction>} */
-        this.transactionsByID = {};
-        /** @type {Object<string, Transaction>} */
-        this.transactionByAnchor = {};
-
         this.maxPubKeysToRemember = 1_000_000; // ~45MB
         this.knownPubKeysAddresses = {}; // used to avoid excessive address ownership confirmation
         this.useDevArgon2 = false;
-
-        /** @type {Object<string, WebSocketCallBack>} */
-        this.wsCallbacks = {};
-
-        // Replace transactionsByFeePerByte with a priority queue
-        this.transactionQueue = new TransactionPriorityQueue();
     }
 
     /** @param {Transaction} transaction @param {Transaction} collidingTx */
@@ -143,11 +140,11 @@ export class MemPool {
             let txCanBeAdded = true;
             for (const anchor of tx.inputs) {
                 const utxo = utxoCache.getUTXO(anchor);
-                if (!utxo || utxo.spent) {
-                    txCanBeAdded = false; 
-                    this.transactionQueue.remove(tx.id);
-                    break; 
-                }
+                if (utxo && !utxo.spent) { continue; }
+            
+                txCanBeAdded = false;
+                this.transactionQueue.remove(tx.id);
+                break; 
             }
             if (!txCanBeAdded) { continue; }
 
@@ -166,8 +163,5 @@ export class MemPool {
         }
 
         return transactions;
-    }
-    getTxNumberInMempool() {
-        return this.transactionQueue.size();
     }
 }

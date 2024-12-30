@@ -116,7 +116,9 @@ export class SyncHandler {
                 return {
                     status: 'success',
                     currentHeight: this.node.blockchain.currentHeight,
-                    latestBlockHash: this.node.blockchain.getLastBlockHash(),
+                    latestBlockHash: this.node.blockchain.lastBlock
+                        ? this.node.blockchain.lastBlock.hash
+                        : "0000000000000000000000000000000000000000000000000000000000000000"
                 };
             default:
                 this.miniLogger.log('Invalid request type', (m) => { console.warn(m); });
@@ -199,7 +201,7 @@ export class SyncHandler {
     }
 
     /** Handles synchronization failure by rolling back to snapshot and requesting a restart handled by the factory. */
-    async handleSyncFailure() {
+    async #handleSyncFailure() {
         this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
         if (this.node.restartRequested) {
             //this.isSyncing = false;
@@ -220,6 +222,7 @@ export class SyncHandler {
             //this.isSyncing = false;
             return;
         }
+
         const lastSnapshotHeight = snapshotHeights[snapshotHeights.length - 1];
         let eraseUntilHeight = currentHeight - 10;
         if (typeof lastSnapshotHeight === 'number') {
@@ -365,7 +368,7 @@ export class SyncHandler {
     
             if (peerStatuses.length === 0) {
                 this.miniLogger.log(`No valid peers to sync with`, (m) => { console.error(m); });
-                await this.handleSyncFailure();
+                await this.#handleSyncFailure();
                 return false;
             }
         } else {
@@ -373,7 +376,7 @@ export class SyncHandler {
             peerStatuses = await this.#getAllPeersStatus(this.node.p2pNetwork);
             if (!peerStatuses || peerStatuses.length === 0) {
                 this.miniLogger.log(`Unable to get peer statuses`, (m) => { console.error(m); });
-                await this.handleSyncFailure();
+                await this.#handleSyncFailure();
                 return false;
             }
         }
@@ -421,15 +424,15 @@ export class SyncHandler {
             this.miniLogger.log(`Attempting to sync with peer ${peerId}`, (m) => { console.info(m); });
             try {
                 const synchronized = await this.#getMissingBlocks(this.node.p2pNetwork, ma, currentHeight, peerId);
-                this.miniLogger.log(`Successfully synced with peer ${peerId}`, (m) => { console.info(m); });
                 if (!synchronized) { continue; }
-
+                
+                this.miniLogger.log(`Successfully synced with peer ${peerId}`, (m) => { console.info(m); });
                 break; // Sync successful, break out of loop
             } catch (error) {
                 await new Promise((resolve) => setTimeout(resolve, DELAY_BETWEEN_PEERS));
                 if (error instanceof SyncRestartError) {
                     this.miniLogger.log(`Sync restart error occurred`, (m) => { console.error(m); });
-                    await this.handleSyncFailure();
+                    await this.#handleSyncFailure();
                     return false;
                 }
                 break;

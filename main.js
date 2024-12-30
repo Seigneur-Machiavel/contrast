@@ -12,7 +12,7 @@ let dashboardWorker;
 (async () => {
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
-    dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
+    dashboardWorker = new NodeAppWorker('dashboard', 27260, 27271, 27270);
 
     // -- test restart after 60s --
     //await new Promise(resolve => setTimeout(resolve, 60000));

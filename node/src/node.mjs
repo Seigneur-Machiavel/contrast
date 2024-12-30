@@ -313,9 +313,12 @@ export class Node {
     
         try {
             timer.startPhase('height-timestamp-hash');
-            [BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight),
-             BlockValidation.validateBlockHash(finalizedBlock, this.blockchain.lastBlock),
-             BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime())];
+            if (finalizedBlock.index === 498) {
+                console.log('toto');}
+            BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight);
+            BlockValidation.validateBlockPrevHash(finalizedBlock, this.blockchain.lastBlock);
+            BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime());
+           
             timer.endPhase('height-timestamp-hash');
             
             timer.startPhase('legitimacy'); await BlockValidation.validateLegitimacy(finalizedBlock, this.vss); timer.endPhase('legitimacy');
@@ -366,7 +369,18 @@ export class Node {
         this.blockchainStats.state = "digesting finalized block";
     
         timer.startPhase('initialization');
-        const blockBytes = byteLength || serializer.serialize.block_finalized(finalizedBlock).byteLength;
+        // SUPPLEMENTARY TEST (INITIAL === DESERIALIZE)
+        const serializedBlock = serializer.serialize.block_finalized(finalizedBlock);
+        const blockBytes = byteLength || serializedBlock.byteLength;
+        const deserializedBlock = serializer.deserialize.block_finalized(serializedBlock);
+        const blockSignature = await BlockUtils.getBlockSignature(finalizedBlock);
+        const deserializedSignature = await BlockUtils.getBlockSignature(deserializedBlock);
+        if (blockSignature !== deserializedSignature) {
+            console.error('blockSignature !== deserializedSignature');
+            console.error(finalizedBlock);
+            console.error(deserializedBlock);
+            throw new Error('Invalid block signature'); }
+
         const { skipValidation = false, broadcastNewCandidate = true, isSync = false, isLoading = false, persistToDisk = true } = options;
         if (!finalizedBlock || !this.roles.includes('validator') || (this.syncHandler.isSyncing && !isSync)) 
             throw new Error(!finalizedBlock ? 'Invalid block candidate' : !this.roles.includes('validator') ? 'Only validator can process PoW block' : "Node is syncing, can't process block");

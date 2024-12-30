@@ -423,10 +423,9 @@ export class BlockValidation {
         }
     }
     /** @param {BlockData} block @param {BlockData} lastBlock */
-    static validateBlockHash(block, lastBlock) {
+    static validateBlockPrevHash(block, lastBlock) {
         const lastBlockHash = lastBlock ? lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
-        const prevHashEquals = lastBlockHash === block.prevHash;
-        if (prevHashEquals) { return; }
+        if (lastBlockHash === block.prevHash) { return; }
         
         throw new Error(`!store! !reorg! Rejected: #${block.index} -> invalid prevHash: ${block.prevHash} - expected: ${lastBlockHash}`);
     }

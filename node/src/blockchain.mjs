@@ -344,10 +344,6 @@ export class Blockchain {
         return null;
     }
     
-    /** @returns {string} The hash of the latest block */
-    getLastBlockHash() {
-        return this.lastBlock ? this.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000";
-    }
     reset() {
         this.blockStorage.reset();
         this.addressesTxsRefsStorage.reset();
