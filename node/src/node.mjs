@@ -205,7 +205,8 @@ export class Node {
             if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
-            const olderBlock = this.blockchain.getBlock(this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
+            const lowerBoundBlockIndex = this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment;
+            const olderBlock = lowerBoundBlockIndex < 0 ? null : this.blockchain.getBlock(lowerBoundBlockIndex);
             const averageBlockTimeMS = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
             this.blockchainStats.averageBlockTime = averageBlockTimeMS;
             const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);

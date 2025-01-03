@@ -113,7 +113,7 @@ export class Blockchain {
         const cacheStart = olderSnapshotHeight > snapModulo ? olderSnapshotHeight - (snapModulo-1) : 0;
         this.#loadBlocksFromStorageToCache(cacheStart, startHeight);
         this.currentHeight = startHeight;
-        this.lastBlock = this.getBlock(startHeight);
+        this.lastBlock = startHeight < 0 ? null : this.getBlock(startHeight);
 
         // Cache + db cleanup
         this.blockStorage.removeBlocksHigherThan(startHeight);
@@ -148,7 +148,7 @@ export class Blockchain {
             
             if (persistToDisk) this.blockStorage.addBlock(block);
             if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
-            
+
             this.cache.addBlock(block);
             this.lastBlock = block;
             this.currentHeight = block.index;

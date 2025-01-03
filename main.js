@@ -14,9 +14,11 @@ let dashboardWorker;
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
 
-    // -- test restart after 60s --
-    //await new Promise(resolve => setTimeout(resolve, 60000));
-    //dashboardWorker.stop(); // but auto restarts
+    // -- test restart after 120s to 300s --
+    const restartTime = Math.floor(Math.random() * 180000) + 120000;
+    mainLogger.log(`--- Restarting node worker in ${(restartTime / 1000).toFixed(2)}s ---`, (m) => { console.log(m); });
+    await new Promise(resolve => setTimeout(resolve, restartTime));
+    dashboardWorker.stop(); // but auto restarts
 })();
 
 function checkArrayOfArraysDuplicate(handlersKeys = []) {
