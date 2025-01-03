@@ -74,7 +74,7 @@ export class Node {
         /** @type {Blockchain} */
         this.blockchain = new Blockchain(this.id);
         /** @type {SyncHandler} */
-        this.syncHandler = new SyncHandler(() => this);
+        this.syncHandler = new SyncHandler(this);
         /** @type {Reorganizator} */
         this.reorganizator = new Reorganizator(this);
 
@@ -162,10 +162,6 @@ export class Node {
 
                 let peerCount = checkPeerCount();
                 if (peerCount >= nbOfPeers) { return peerCount; }
-                /*if (peerCount >= nbOfPeers) {
-                    this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
-                    return peerCount;
-                }*/
 
                 await this.p2pNetwork.connectToBootstrapNodes();
                 peerCount = checkPeerCount();
@@ -313,15 +309,16 @@ export class Node {
     
         try {
             timer.startPhase('height-timestamp-hash');
-            if (finalizedBlock.index === 498) {
-                console.log('toto');}
+
             BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight);
             BlockValidation.validateBlockPrevHash(finalizedBlock, this.blockchain.lastBlock);
             BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime());
            
             timer.endPhase('height-timestamp-hash');
             
-            timer.startPhase('legitimacy'); await BlockValidation.validateLegitimacy(finalizedBlock, this.vss); timer.endPhase('legitimacy');
+            timer.startPhase('legitimacy');
+            await BlockValidation.validateLegitimacy(finalizedBlock, this.vss);
+            timer.endPhase('legitimacy');
         } catch (error) { this.miniLogger.log(`#${finalizedBlock.index} -> ${error.message} ~ Miner: ${minerId} | Validator: ${validatorId}`, (m) => { console.error(m); }); throw error; }
 
         timer.startPhase('difficulty-check');
@@ -433,9 +430,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         timer.startPhase('saveSnapshot');
         if (!isLoading) this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
-        
-        //const nbOfPeers = await this.#waitSomePeers();
-        //if (!nbOfPeers || nbOfPeers < 1) { this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); }); return; }
     
         if (!broadcastNewCandidate) return true;
         

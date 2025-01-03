@@ -235,11 +235,6 @@ export class OpStack {
         if (ignoreList.some((v) => error.message.includes(v))) { return; }
         
         this.miniLogger.log(error, (m) => console.error(m));
-        if (!error.message.includes('!sync!')) { return; }
-
-        // sync management
-        this.pushFirst('syncWithPeers', null);
-        this.miniLogger.log(`restartRequested: ${this.node.restartRequested}`, (m) => console.error(m));
     }
 
     /** @param {string} type @param {object} data */

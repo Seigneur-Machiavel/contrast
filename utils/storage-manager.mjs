@@ -185,9 +185,9 @@ export class AddressesTxsRefsStorage {
 export class BlockchainStorage {
     batchFolders = this.#getListOfFoldersInBlocksDirectory();
     /** @type {Object<number, string>} */
-    hashByIndex = {};
+    hashByIndex = {"-1": "0000000000000000000000000000000000000000000000000000000000000000"};
     /** @type {Object<string, number>} */
-    indexByHash = {};
+    indexByHash = {"0000000000000000000000000000000000000000000000000000000000000000": 0};
     lastBlockIndex = -1;
     fastConverter = new FastConverter();
 
@@ -200,6 +200,7 @@ export class BlockchainStorage {
         return blocksFoldersSorted;
     }
     #init() {
+        let currentIndex = -1;
         for (let i = 0; i < this.batchFolders.length; i++) {
             const batchFolderPath = this.batchFolders[i];
             const files = fs.readdirSync(path.join(PATH.BLOCKS, batchFolderPath));
@@ -207,6 +208,11 @@ export class BlockchainStorage {
                 const fileName = files[j].split('.')[0];
                 const blockIndex = parseInt(fileName.split('-')[0], 10);
                 const blockHash = fileName.split('-')[1];
+                if (currentIndex >= blockIndex) {
+                    storageMiniLogger.log(`---! Duplicate block index !--- #${blockIndex}`, (m) => { console.error(m); });
+                    throw new Error(`Duplicate block index #${blockIndex}`);
+                }
+
                 this.hashByIndex[blockIndex] = blockHash;
                 this.indexByHash[blockHash] = blockIndex;
                 this.lastBlockIndex = Math.max(this.lastBlockIndex, blockIndex);
@@ -246,23 +252,24 @@ export class BlockchainStorage {
     #getBlock(blockIndex = 0, blockHash = '', deserialize = true) {
         const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
 
-        //const readBlockStart = performance.now();
         /** @type {Uint8Array} */
         const serialized = fs.readFileSync(blockFilePath);
-        //const readBlockTime = performance.now() - readBlockStart;
         if (!deserialize) { return serialized; }
 
-        //const deserialStart = performance.now();
         /** @type {BlockData} */
         const blockData = serializer.deserialize.block_finalized(serialized);
-        //const deserialTime = performance.now() - deserialStart
-
-        //console.warn(`Read block: ${readBlockTime.toFixed(5)}ms, Deserialize block: ${deserialTime.toFixed(5)}ms`);
         return blockData;
     }
 
     /** @param {BlockData} blockData @param {boolean} saveJSON */
     addBlock(blockData, saveJSON = false) {
+        const prevHash = this.hashByIndex[blockData.index - 1];
+        if (blockData.prevHash !== prevHash) { throw new Error(`Block #${blockData.index} rejected: prevHash mismatch`); }
+
+        const existingBlockHash = this.hashByIndex[blockData.index];
+        //if (existingBlockHash) { throw new Error(`Block #${blockData.index} already exists with hash ${existingBlockHash}`); }
+        if (existingBlockHash) { this.removeBlock(blockData.index); }
+
         this.#saveBlockBinary(blockData);
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
@@ -288,6 +295,7 @@ export class BlockchainStorage {
         if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') { return null; }
 
         const { blockHash, blockIndex } = this.#blockHashIndexFormHeightOrHash(heightOrHash);
+        if (blockIndex === -1) { return null; }
         if (blockHash === undefined || blockIndex === undefined) { return null; }
 
         const block = this.#getBlock(blockIndex, blockHash, deserialize);

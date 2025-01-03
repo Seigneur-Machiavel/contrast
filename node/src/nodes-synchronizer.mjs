@@ -23,8 +23,10 @@ class SyncRestartError extends Error {
 }
 
 export class SyncHandler {
-    constructor(getNodeReference) {
-        this.getNodeReference = getNodeReference;
+    /** @param {Node} node */
+    constructor(node) {
+        /** @type {Node} */
+        this.node = node;
         this.p2pNetworkMaxMessageSize = 0;
         this.syncFailureCount = 0;
         this.maxBlocksToRemove = 100; // Set a maximum limit to prevent removing too many blocks
@@ -34,71 +36,43 @@ export class SyncHandler {
         this.peerHeights = new Map();
         this.syncDisabled = false;
     }
-    /** @type {Node} */
-    get node() {
-        return this.getNodeReference();
-    }
-    get myPeerId() {
-        return this.node.p2pNetwork.p2pNode.peerId.toString();
-    }
-    /** Starts the sync handler.
-     * @param {P2PNetwork} p2pNetwork - The P2P network instance */
+    /** @param {P2PNetwork} p2pNetwork - The P2P network instance */
     async start(p2pNetwork) {
-        try {
-            p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.handleIncomingStream.bind(this));
-            //this.logger.info('luid-feea692e Sync node started', { protocol: P2PNetwork.SYNC_PROTOCOL });
-            this.miniLogger.log('Sync node started', (m) => { console.info(m); });
-        } catch (error) {
-            //this.logger.error('luid-91503910 Failed to start sync node', { error: error.message });
-            this.miniLogger.log('Failed to start sync node', (m) => { console.error(m); });
-            throw error;
-        }
+        p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
+        this.miniLogger.log('Sync node started', (m) => { console.info(m); });
     }
-
-    /** Handles incoming streams from peers.
-     * @param {Object} param0 - The stream object.
-     * @param {import('libp2p').Stream} param0.stream - The libp2p stream. */
-    async handleIncomingStream(lstream) {
+    async #handleIncomingStream(lstream) {
         const stream = lstream.stream;
         const peerId = lstream.connection.remotePeer.toString();
         this.node.p2pNetwork.reputationManager.recordAction({ peerId }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         try {
-            // Decode the stream using lp.decode()
             const source = lp.decode(stream.source);
-
             for await (const msg of source) {
                 const serializedMsg = msg.subarray();
                 const message = serializer.deserialize.rawData(serializedMsg);
 
-                if (!message || typeof message.type !== 'string') {
-                    throw new Error('Invalid message format');
-                }
+                if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
 
                 const response = await this.#handleMessage(message);
-                // Encode the response and write it to the stream
                 const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                 await stream.sink(encodedResponse);
             }
         } catch (err) {
             this.miniLogger.log('Stream error occurred', (m) => { console.error(m); });
             this.miniLogger.log(err, (m) => { console.error(m); });
-        } finally {
-            if (stream) {
-                try {
-                    stream.close();
-                } catch (closeErr) {
-                    this.miniLogger.log('Failed to close stream', (m) => { console.error(m); });
-                    this.miniLogger.log(closeErr, (m) => { console.error(m); });
-                }
-            } else {
-                this.miniLogger.log('Stream is undefined; cannot close stream', (m) => { console.warn(m); });
+        }
+
+        if (stream) {
+            try {
+                stream.close();
+            } catch (closeErr) {
+                this.miniLogger.log('Failed to close stream', (m) => { console.error(m); });
+                this.miniLogger.log(closeErr, (m) => { console.error(m); });
             }
+        } else {
+            this.miniLogger.log('Stream is undefined; cannot close stream', (m) => { console.warn(m); });
         }
     }
-
-    /** Handles incoming messages based on their type.
-     * @param {Object} message - The incoming message.
-     * @returns {Promise<Object>} The response to the message. */
     async #handleMessage(msg) {
         switch (msg.type) {
             case 'getBlocks':
@@ -110,9 +84,8 @@ export class SyncHandler {
                 this.miniLogger.log(`Sending ${blocks.length} blocks in response`, (m) => { console.debug(m); });
                 return { status: 'success', blocks };
             case 'getStatus':
-                if (!this.node.blockchain.currentHeight) {
-                    this.miniLogger.log(`"getStatus request" response: #${this.node.blockchain.currentHeight}`, (m) => { console.error(m); });
-                }
+                this.miniLogger.log(`"getStatus request" response: #${this.node.blockchain.currentHeight}`, (m) => { console.error(m); });
+
                 return {
                     status: 'success',
                     currentHeight: this.node.blockchain.currentHeight,
@@ -134,7 +107,6 @@ export class SyncHandler {
         const peerStatusMessage = { type: 'getStatus' };
         try {
             const response = await p2pNetwork.sendMessage(peerMultiaddr, peerStatusMessage);
-
             if (response === undefined) { return false; }
             if (response.status !== 'success') { return false; }
             if (typeof response.currentHeight !== 'number') { return false; }
@@ -143,11 +115,12 @@ export class SyncHandler {
             this.miniLogger.log(`Got peer status => height: #${response.currentHeight}`, (m) => { console.debug(m); });
 
             return response;
-        }
-        catch (error) {
+        } catch (error) {
             this.miniLogger.log('Failed to get peer status', (m) => { console.error(m); });
-            return false;
+            this.miniLogger.log(error, (m) => { console.error(m); });    
         }
+
+        return false;
     }
     /** Retrieves the statuses of all peers in parallel with proper timeout handling.
      * @param {P2PNetwork} p2pNetwork - The P2P network instance.
@@ -318,14 +291,6 @@ export class SyncHandler {
             throw new Error('Failed to get blocks from peer');
         }
     }
-
-    getPeerHeight(peerId) {
-        return this.peerHeights.get(peerId) ?? 0;
-    }
-    getAllPeerHeights() {
-        // return as Object
-        return Object.fromEntries(this.peerHeights);
-    }
     #getTopicsToSubscribeRelatedToRoles(roles = []) {
         const rolesTopics = {
             validator: ['new_transaction', 'new_block_finalized'],
@@ -336,7 +301,7 @@ export class SyncHandler {
         for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
         return [...new Set(topicsToSubscribe)];
     }
-    async syncWithPeers(peerIds = []) {
+    async syncWithPeers(peerIds = []) { // DEPRECATED
         const uniqueTopics = this.#getTopicsToSubscribeRelatedToRoles(this.node.roles);
         // should be done only one time
         await this.node.p2pNetwork.subscribeMultipleTopics(uniqueTopics, this.node.p2pHandler.bind(this.node));

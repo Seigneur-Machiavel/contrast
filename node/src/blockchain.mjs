@@ -146,12 +146,12 @@ export class Blockchain {
         try {
             const blockInfo = saveBlockInfo ? BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
             
+            if (persistToDisk) this.blockStorage.addBlock(block);
+            if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
+            
             this.cache.addBlock(block);
             this.lastBlock = block;
             this.currentHeight = block.index;
-
-            if (persistToDisk) this.blockStorage.addBlock(block);
-            if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
 
             this.miniLogger.log(`Block added: blockHeight=${block.index}, hash=${block.hash}`, (m) => { console.info(m); });
             return blockInfo;

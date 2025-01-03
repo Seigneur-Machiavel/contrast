@@ -81,7 +81,7 @@ class AppStaticFncs {
         result.peerIds = node.p2pNetwork?.getConnectedPeers() ?? 'No Peer IDs';
         result.repScores = node.p2pNetwork?.reputationManager?.getScores() ?? 'No Rep Scores';
         result.nodeState = node.blockchainStats.state ?? 'No State';
-        result.peerHeights = node.syncHandler.getAllPeerHeights() ?? 'No Peer Height';
+        result.peerHeights = Object.fromEntries(node.syncHandler.peerHeights) ?? 'No Peer Height';
         result.listenAddress = node.p2pNetwork?.p2pNode?.getMultiaddrs() ?? 'No Listen Address';
         result.lastLegitimacy = node.blockchainStats?.lastLegitimacy ?? 'No Legitimacy';
         result.peers = node.p2pNetwork?.getPeers() ?? 'No Peers';
@@ -688,7 +688,7 @@ export class ObserverWsApp {
                     }
 
                     await this.node.p2pBroadcast('new_block_finalized', data);
-                    this.node.opStack.push('digestPowProposal', data);
+                    this.node.opStack.pushFirst('digestPowProposal', data);
                     break;
                 default:
                     ws.send(JSON.stringify({ type: 'error', data: `unknown message type: ${parsedMessage.type}` }));

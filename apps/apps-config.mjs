@@ -24,7 +24,7 @@ export const AppConfig = (appName, appConfig) => {
 	}
 }
 export const appsConfig = {
-	chat: {
+	/*chat: {
 		preload: false,
 		minWidth: 300,
 		minHeight: 300,
@@ -37,17 +37,19 @@ export const appsConfig = {
 		preload: false,
 		title: 'WALLET',
 		content: 'This is a notes app.'
-	},
+	},*/
 	vault: {
-		preload: false,
+		preload: true,
+		minWidth: 600,
+		minHeight: 600,
 		iconWidth: '68%',
 		title: 'VAULT',
 		content: '../apps/vault/vault-content.html',
 	},
-	node: {
+	/*node: {
 		preload: false,
 		iconWidth: '56%',
 		title: 'NODE',
 		content: 'This is a node app.'
-	}
+	}*/
 };

@@ -12,7 +12,7 @@ let dashboardWorker;
 (async () => {
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
-    dashboardWorker = new NodeAppWorker('dashboard', 27260, 27271, 27270);
+    dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
 
     // -- test restart after 60s --
     //await new Promise(resolve => setTimeout(resolve, 60000));
@@ -39,6 +39,18 @@ function createLoggerSettingWindow() {
     loggerWindow.loadFile('./miniLogger/miniLoggerSetting.html');
     return loggerWindow;
 }
+function createNodeDashboardWindow() {
+    const nodeDashboardWindow = new BrowserWindow({
+        width: 1366,
+        height: 768,
+        icon: 'img/icon_128.png',
+        webPreferences: { nodeIntegration: false, contextIsolation: true }
+    });
+
+    nodeDashboardWindow.on('close', (e) => { e.preventDefault(); nodeDashboardWindow.hide(); });
+    nodeDashboardWindow.loadURL('http://localhost:27271');
+    return nodeDashboardWindow;
+}
 async function createMainWindow() {
     /** @type {BrowserWindow} */
     const mainWindow = new BrowserWindow({
@@ -46,10 +58,9 @@ async function createMainWindow() {
         height: 768,
         icon: 'img/icon_128.png',
         webPreferences: {
-            //nodeIntegration: false, // default disabled if contextIsolation is set to true
-            contextIsolation: true,
-            //webviewTag: true, // unused actually
-            preload: path.join(__dirname, 'preload.js')
+            nodeIntegration: true,
+            contextIsolation: false,
+            // preload: path.join(__dirname, 'preload.js') not with nodeIntegration: true
         }
     });
 
@@ -68,8 +79,13 @@ async function createMainWindow() {
 }
 
 app.on('ready', async () => {
-    const loggerWindow = createLoggerSettingWindow();
-    loggerWindow.hide();
+    const windows = {};
+
+    windows.logger = createLoggerSettingWindow();
+    windows.logger.hide();
+
+    windows.nodeDashboard = createNodeDashboardWindow();
+    windows.nodeDashboard.hide();
 
     const mainWindow = await createMainWindow();
     const handlersKeys = [];
@@ -79,7 +95,7 @@ app.on('ready', async () => {
     const duplicates = checkArrayOfArraysDuplicate(handlersKeys);
     if (duplicates) { mainLogger.log(`Duplicate IPC handlers detected: ${duplicates}`, (m) => { console.warn(m); }); }
 
-    setShortcuts(loggerWindow, handlersKeys, isDev);
+    setShortcuts(windows, handlersKeys, isDev);
     if (isDev) mainWindow.webContents.toggleDevTools(); // dev tools on start
     //BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
 

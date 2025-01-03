@@ -10,8 +10,6 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-//const cryptoLightClass = require("../../../libs/
-const cryptoLight = new cryptoLightClass();
 cryptoLight.useArgon2Worker = true;
 console.log('Argon2 worker enabled!');
 //#region - VARIABLES

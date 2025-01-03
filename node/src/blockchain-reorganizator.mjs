@@ -84,13 +84,6 @@ export class Reorganizator {
     }
     /** @param {BlockData} highestBlock @param {Object} usableSnapshots */
     #buildChainReorgTasksFromHighestToLowest(highestBlock, usableSnapshots) {
-        /*usableSnapshots = {
-            lastBlock: null,
-            lastHeight: snapshotsHeights[snapshotsHeights.length - 1],
-            preLastBlock: null,
-            preLastHeight: snapshotsHeights[snapshotsHeights.length - 2]
-        }*/
-
         const blocks = [];
         let block = highestBlock;
         while (block.index > usableSnapshots.preLastHeight) {
@@ -98,19 +91,12 @@ export class Reorganizator {
             if (this.#isFinalizedBlockBanned(block)) { return false; }
 
             blocks.push(block);
-            if (this.node.blockchain.lastBlock.hash === block.prevHash) {
-                break; // can build the chain with the last block
-            }
-            if (usableSnapshots.lastBlock.hash === block.prevHash) {
-                break; // can build the chain with the last snapshot
-            }
-            if (usableSnapshots.preLastBlock.hash === block.prevHash) {
-                break; // can build the chain with the pre-last snapshot
-            }
+            if (this.node.blockchain.lastBlock.hash === block.prevHash) { break; } // can build the chain with the last block
+            if (usableSnapshots.lastBlock.hash === block.prevHash) { break; } // can build the chain with the last snapshot
+            if (usableSnapshots.preLastBlock.hash === block.prevHash) { break; } // can build the chain with the pre-last snapshot
 
             const prevBlocks = this.finalizedBlocksCache[block.index - 1];
-            if (!prevBlocks || !prevBlocks[block.prevHash]) {
-                return false; } // missing block
+            if (!prevBlocks || !prevBlocks[block.prevHash]) { return false; } // missing block
 
             block = prevBlocks[block.prevHash];
         }

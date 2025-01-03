@@ -55,12 +55,11 @@ class P2PNetwork extends EventEmitter {
 
     /** @type {string} */
     static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
-
     static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
 
-    async start(_uniqueHash) {
-        let uniqueHash = _uniqueHash ? _uniqueHash : mining.generateRandomNonce(32).Hex;
-        const hashUint8Array = this.toUint8Array(uniqueHash);
+    async start(uniqueHash) {
+        let hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
+        const hashUint8Array = this.toUint8Array(hash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
         try {
             this.p2pNode = await this.#createLibp2pNode(privateKeyObject);
@@ -80,8 +79,7 @@ class P2PNetwork extends EventEmitter {
         }
         await this.reputationManager.shutdown();
     }
-    /** @returns {Promise<Libp2p>} */
-    async #createLibp2pNode(privateKeyObject) {    
+    async #createLibp2pNode(privateKeyObject) {
         const peerDiscovery = [mdns()];
         if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
 

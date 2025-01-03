@@ -230,7 +230,7 @@ body {
     cursor: pointer;
 }
 .window .content {
-    position: relative;
+    position: absolute;
     width: 100%;
     height: calc(100% - 32px);
     /*padding: 10px;
