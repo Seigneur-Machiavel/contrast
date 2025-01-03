@@ -384,8 +384,8 @@ export class BlockchainStorage {
         if (fs.existsSync(PATH.BLOCKS)) { fs.rmSync(PATH.BLOCKS, { recursive: true }); }
         fs.mkdirSync(PATH.BLOCKS);
         this.batchFolders = [];
-        this.hashByIndex = {};
-        this.indexByHash = {};
+        this.hashByIndex = { "-1": "0000000000000000000000000000000000000000000000000000000000000000" };
+        this.indexByHash = { "0000000000000000000000000000000000000000000000000000000000000000": -1 };
         this.lastBlockIndex = -1;
     }
 }
