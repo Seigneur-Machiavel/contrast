@@ -15,8 +15,8 @@ let dashboardWorker;
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
 
     while(isDev) {
-        // -- test restart after 120s to 300s --
-        const restartTime = Math.floor(Math.random() * 180000) + 120000;
+        // -- test restart after 120s to 600s --
+        const restartTime = Math.floor(Math.random() * 480000) + 120000;
         mainLogger.log(`--- Restarting node worker in ${(restartTime / 1000).toFixed(2)}s ---`, (m) => { console.log(m); });
         await new Promise(resolve => setTimeout(resolve, restartTime));
         dashboardWorker.stop(); // but auto restarts
