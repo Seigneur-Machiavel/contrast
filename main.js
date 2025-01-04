@@ -1,4 +1,3 @@
-const path = require('path');
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
 const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./shortcuts.js');
@@ -14,6 +13,7 @@ let dashboardWorker;
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
 
+    return;
     while(isDev) {
         // -- test restart after 120s to 600s --
         const restartTime = Math.floor(Math.random() * 480000) + 120000;
