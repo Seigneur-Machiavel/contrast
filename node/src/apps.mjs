@@ -8,12 +8,10 @@ import { addressUtils } from '../../utils/addressUtils.mjs';
 //import { serializer } from '../../utils/serializer.mjs';
 import { Wallet } from './wallet.mjs';
 import { Node } from './node.mjs';
-import { exec } from 'child_process';
 import { CallBackManager } from './websocketCallback.mjs';
 
 /**
 * @typedef {import("./wallet.mjs").Account} Account
-* @typedef {import("./node.mjs").Node} Node
 * @typedef {import("./block-classes.mjs").BlockData} BlockData
 * @typedef {import("./block-classes.mjs").BlockUtils} BlockUtils
 */
@@ -141,45 +139,6 @@ export class DashboardWsApp {
             this.app.get('/log-config', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/log-config.html'); });
             this.app.get('/log-viewer', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/log-viewer.html'); });
 
-            // Add the API endpoints
-            this.app.get('/api/log-config', (req, res) => {
-                try {
-                    const logConfig = Storage.loadJSON('logConfig') || {};
-                    res.json(logConfig);
-                } catch (error) {
-                    console.error('Error loading log config:', error);
-                    res.status(500).json({ error: 'Failed to load log configuration' });
-                }
-            });
-
-            this.app.post('/api/log-config', (req, res) => {
-                try {
-                    console.log('Received POST request to /api/log-config');
-                    const newConfig = req.body;
-                    console.log('Received config:', newConfig);
-                    
-                    if (!newConfig || typeof newConfig !== 'object') {
-                        console.log('Invalid config format received:', newConfig);
-                        return res.status(400).json({ error: 'Invalid configuration format' });
-                    }
-            
-                    console.log('About to save config to localStorage');
-                    const saved = Storage.saveJSON('logConfig', newConfig); // Note: case sensitive!
-                    console.log('Save result:', saved);
-                    
-                    // Verify the save worked by trying to read it back
-                    const verification = Storage.loadJSON('logConfig');
-                    console.log('Verification read:', verification);
-            
-                    res.json({ success: true, message: 'Configuration saved successfully' });
-                } catch (error) {
-                    console.error('Detailed error saving log config:', error);
-                    res.status(500).json({ 
-                        error: 'Failed to save log configuration',
-                        details: error.message 
-                    });
-                }
-            });
             const server = this.app.listen(this.dashboardPort, () => { console.log(`Server running on http://${'???'}:${this.dashboardPort}`); });
             this.wss = new WebSocketServer({ server });
         }
@@ -193,7 +152,6 @@ export class DashboardWsApp {
         const defaultPrivKey = defaultSettings ? defaultSettings.privateKey : null;
         const usablePrivKey = privateKey || defaultPrivKey;
         if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey); }
-
         if (!this.node) { console.info("Not active Node and No private keys provided, can't auto init node..."); return; }
         
         const activeNodeAssociatedSettings = this.#nodesSettings[this.node.id];
@@ -303,10 +261,10 @@ export class DashboardWsApp {
                 this.#saveNodeSettings();
                 break;
             case 'update_git':
-                this.#updateAndClose();
+                this.miniLogger.log(`update_git disabled`, (m) => { console.log(m); });
                 break;
             case 'hard_reset':
-                this.#hardResetAndClose();
+                this.miniLogger.log(`hard_reset disabled`, (m) => { console.log(m); });
                 break;
             case 'set_validator_address':
                 if (!this.node) { console.error('No active node'); break; }
@@ -337,25 +295,9 @@ export class DashboardWsApp {
                 ws.send(JSON.stringify({ type: 'node_restarting', data }));
                 this.node.restartRequested = `Dashboard app ${data}`;
                 this.miniLogger.log(`Node ${data} restart requested by dashboard`, (m) => { console.log(m); });
-
-                //console.info(`Forcing restart of node ${data} - not implemented`);
-
-                /*ws.send(JSON.stringify({ type: 'node_restarting', data }));
-                console.info(`Forcing restart of node ${data}`);
-                await this.factory.forceRestartNode(data);
-                
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                ws.send(JSON.stringify({ type: 'node_restarted', data }));*/
                 break;
             case 'force_restart_revalidate_blocks':
-                console.info(`Forcing restart of node ${data} and revalidating blocks - not implemented`);
-
-                /*ws.send(JSON.stringify({ type: 'node_restarting', data }));
-                console.info(`Forcing restart of node ${data} with revalidation of blocks`);
-                await this.factory.forceRestartNode(data, true);
-                
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                ws.send(JSON.stringify({ type: 'node_restarted', data }));*/
+                this.miniLogger.log(`force_restart_revalidate_blocks disabled`, (m) => { console.log(m); });
                 break;
             case 'get_node_info':
                 const nodeInfo = AppStaticFncs.extractPrivateNodeInfo(this.node);
@@ -419,35 +361,6 @@ export class DashboardWsApp {
         this.#nodesSettings = nodeSettings;
         console.log(`nodeSettings loaded: ${Object.keys(this.#nodesSettings).length}`);
     }
-    #hardResetAndClose() {
-        exec('git reset --hard HEAD', (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Git reset error: ${error.message}`);
-                console.error(`stderr: ${stderr}`);
-                res.status(500).send('Git reset failed');
-                return;
-            }
-            console.log(`Git reset output: ${stdout}`);
-
-            console.log('Exiting process to allow PM2 to restart the application');
-            process.exit(0);
-        });
-    }
-    #updateAndClose() {
-        exec('git pull', (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Git pull error: ${error.message}`);
-                console.error(`stderr: ${stderr}`);
-                res.status(500).send('Git pull failed');
-                return;
-            }
-            console.log(`Git pull output: ${stdout}`);
-
-            console.log('Exiting process to allow PM2 to restart the application');
-            process.exit(0);
-        });
-    }
-
     async #stopNodeIfRequestedLoop() {
         while (true) {
             await new Promise(resolve => setTimeout(resolve, 1000));

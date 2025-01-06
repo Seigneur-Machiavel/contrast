@@ -4,7 +4,6 @@ import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /**
-* @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
 * @typedef {import("../node/src/block-classes.mjs").BlockInfo} BlockInfo
 * @typedef {import("../node/src/node.mjs").Node} Node
 * @typedef {import("../node/src/transaction.mjs").Transaction} Transaction

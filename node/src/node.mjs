@@ -142,7 +142,7 @@ export class Node {
     }
     async #connexionsMaintenerLoop() {
         while(true) {
-            await new Promise(resolve => setTimeout(resolve, 10000));
+            await new Promise(resolve => setTimeout(resolve, 60000));
             const nbOfPeers = await this.#waitSomePeers();
             if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
         }
@@ -467,12 +467,14 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         const data = message.content;
         const from = message.from;
         const byteLength = message.byteLength;
+        const lastBlockIndex = this.blockchain.lastBlock ? this.blockchain.lastBlock.index : -1;
         //console.log(`[P2P-HANDLER] ${topic} -> ${from} | ${byteLength} bytes`);
         try {
             switch (topic) {
                 case 'new_transaction':
                     if (this.syncHandler.isSyncing || this.opStack.syncRequested) { return; }
                     if (!this.roles.includes('validator')) { break; }
+
                     this.opStack.push('pushTransaction', {
                         byteLength,
                         utxoCache: this.utxoCache,
@@ -486,7 +488,6 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
                     if (!this.roles.includes('miner')) { break; }
                     if (!this.roles.includes('validator')) { break; }
 
-                    const lastBlockIndex = this.blockchain.lastBlock ? this.blockchain.lastBlock.index : -1;
                     /*if (this.miner.highestBlockIndex > data.index) { // avoid processing old blocks
                         this.miniLogger.log(`highest #${this.miner.highestBlockIndex} > #${data.index} -> skip`, (m) => { console.info(m); });
                         break;
