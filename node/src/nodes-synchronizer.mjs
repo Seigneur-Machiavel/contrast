@@ -293,8 +293,7 @@ export class SyncHandler {
     }
     async syncWithPeers() {
         const uniqueTopics = this.#getTopicsToSubscribeRelatedToRoles(this.node.roles);
-        // should be done only one time
-        await this.node.p2pNetwork.subscribeMultipleTopics(uniqueTopics, this.node.p2pHandler.bind(this.node));
+        for (const topic of uniqueTopics) { this.node.p2pNetwork.subscribe(topic, this.node.p2pHandler.bind(this.node)); }
         if (this.syncDisabled) { return true; }
 
         this.miniLogger.log(`Starting syncWithPeers at #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
