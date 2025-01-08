@@ -288,10 +288,7 @@ class P2PNetwork extends EventEmitter {
     }
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {
-        if (this.subscriptions.has(topic)) {
-            this.miniLogger.log(`Attempting to subscribe to already subscribed topic ${topic}`, (m) => { console.warn(m); });
-            return;
-        }
+        if (this.subscriptions.has(topic)) { return; }
 
         this.miniLogger.log(`Subscribing to topic ${topic}`, (m) => { console.debug(m); });
         this.p2pNode.services.pubsub.subscribe(topic);

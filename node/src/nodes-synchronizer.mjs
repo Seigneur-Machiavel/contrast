@@ -4,7 +4,7 @@ import P2PNetwork from './p2p.mjs';
 import * as lp from 'it-length-prefixed';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
-import { BlockUtils } from './block-classes.mjs';
+
 /**
  * @typedef {import("./node.mjs").Node} Node
  * @typedef {import("./p2p.mjs").P2PNetwork} P2PNetwork
@@ -14,6 +14,8 @@ import { BlockUtils } from './block-classes.mjs';
 const MAX_BLOCKS_PER_REQUEST = 4;
 
 export class SyncHandler {
+    /** @type {MiniLogger} */
+    miniLogger = new MiniLogger('sync');
     /** @param {Node} node */
     constructor(node) {
         /** @type {Node} */
@@ -21,8 +23,6 @@ export class SyncHandler {
         this.p2pNetworkMaxMessageSize = 0;
         this.syncFailureCount = 0;
         this.maxBlocksToRemove = 100; // Set a maximum limit to prevent removing too many blocks
-        /** @type {MiniLogger} */
-        this.miniLogger = new MiniLogger('sync');
         this.isSyncing = false;
         this.peerHeights = new Map();
         this.syncDisabled = false;
@@ -34,8 +34,8 @@ export class SyncHandler {
     }
     async #handleIncomingStream(lstream) {
         const stream = lstream.stream;
-        const peerId = lstream.connection.remotePeer.toString();
-        this.node.p2pNetwork.reputationManager.recordAction({ peerId }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
+        const peerIdStr = lstream.connection.remotePeer.toString();
+        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         try {
             const source = lp.decode(stream.source);
             for await (const msg of source) {
@@ -48,20 +48,15 @@ export class SyncHandler {
                 const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                 await stream.sink(encodedResponse);
             }
-        } catch (err) {
-            this.miniLogger.log('Stream error occurred', (m) => { console.error(m); });
-            this.miniLogger.log(err, (m) => { console.error(m); });
-        }
+        } catch (err) { this.miniLogger.log(err, (m) => { console.error(m); }); }
 
-        if (stream) {
-            try {
-                stream.close();
-            } catch (closeErr) {
-                this.miniLogger.log('Failed to close stream', (m) => { console.error(m); });
-                this.miniLogger.log(closeErr, (m) => { console.error(m); });
-            }
-        } else {
-            this.miniLogger.log('Stream is undefined; cannot close stream', (m) => { console.warn(m); });
+        if (!stream) { return; }
+
+        try {
+            stream.close();
+        } catch (closeErr) {
+            this.miniLogger.log('Failed to close stream', (m) => { console.error(m); });
+            this.miniLogger.log(closeErr, (m) => { console.error(m); });
         }
     }
     async #handleMessage(msg) {
@@ -71,8 +66,6 @@ export class SyncHandler {
                 
                 /** @type {Uint8Array<ArrayBufferLike>[]} */
                 const blocks = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false);
-
-                this.miniLogger.log(`Sending ${blocks.length} blocks in response`, (m) => { console.debug(m); });
                 return { status: 'success', blocks };
             case 'getStatus':
                 this.miniLogger.log(`"getStatus request" response: #${this.node.blockchain.currentHeight}`, (m) => { console.error(m); });
@@ -89,11 +82,8 @@ export class SyncHandler {
                 throw new Error('Invalid request type');
         }
     }
-    /** Gets the status of a peer.
-     * @param {P2PNetwork} p2pNetwork - The P2P network instance.
-     * @param {string} peerMultiaddr - The multiaddress of the peer.
-     * @returns {Promise<Object>} The peer's status. */
-    async #getPeerStatus(p2pNetwork, peerMultiaddr, peerId) {
+    /** @param {P2PNetwork} p2pNetwork @param {string} peerMultiaddr @param {string} peerIdStr */
+    async #getPeerStatus(p2pNetwork, peerMultiaddr, peerIdStr) {
         this.miniLogger.log('Getting peer status', (m) => { console.debug(m); });
         const peerStatusMessage = { type: 'getStatus' };
         try {
@@ -102,14 +92,11 @@ export class SyncHandler {
             if (response.status !== 'success') { return false; }
             if (typeof response.currentHeight !== 'number') { return false; }
 
-            this.peerHeights.set(peerId, response.currentHeight);
+            this.peerHeights.set(peerIdStr, response.currentHeight);
             this.miniLogger.log(`Got peer status => height: #${response.currentHeight}`, (m) => { console.debug(m); });
 
             return response;
-        } catch (error) {
-            this.miniLogger.log('Failed to get peer status', (m) => { console.error(m); });
-            this.miniLogger.log(error, (m) => { console.error(m); });
-        }
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); }
 
         return false;
     }
@@ -163,8 +150,6 @@ export class SyncHandler {
         // Filter out failed requests and add successful ones to allStatus
         return results.filter(Boolean);
     }
-
-    /** Handles synchronization failure by rolling back to snapshot and requesting a restart. */
     async #handleSyncFailure() {
         this.isSyncing = false;
         this.syncFailureCount++;
@@ -172,38 +157,7 @@ export class SyncHandler {
 
         return false;
     }
-    async #handleSyncFailureOLD() { // DEPRECATED
-        this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
-        if (this.node.restartRequested) { return; }
-
-        if (this.node.blockchain.currentHeight === -1) {
-            this.node.restartRequested = 'SyncHandler.handleSyncFailure() -> blockchain currentHeight === -1';
-            return;
-        }
-     
-        const currentHeight = this.node.blockchain.currentHeight;
-        const snapshotHeights = this.node.snapshotSystem.getSnapshotsHeights();
-
-        if (snapshotHeights.length === 0) {
-            this.node.restartRequested = 'SyncHandler.handleSyncFailure() -> 0 snapshots available';
-            return;
-        }
-
-        const lastSnapshotHeight = snapshotHeights[snapshotHeights.length - 1];
-        let eraseUntilHeight = currentHeight - 5;
-        if (typeof lastSnapshotHeight === 'number') {
-            eraseUntilHeight = Math.min(currentHeight - 5, lastSnapshotHeight - 5);
-            this.node.snapshotSystem.eraseSnapshotsHigherThan(eraseUntilHeight);
-        }
-
-        this.node.restartRequested = 'SyncHandler.handleSyncFailure() -> Snapshot erased until #${eraseUntilHeight}';
-
-        this.miniLogger.log(`Snapshot erased until #${eraseUntilHeight}, waiting for restart...`, (m) => { console.info(m); });
-        this.miniLogger.log(`Blockchain restored and reloaded. Current height: ${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
-    }
-    /** Get the current height of a peer.
-     * @param {P2PNetwork} p2pNetwork - The P2P network instance.
-     * @param {string} peerMultiaddr - The multiaddress of the peer to sync with. */
+    /** @param {P2PNetwork} p2pNetwork @param {string} peerMultiaddr */
     async #updatedPeerHeight(p2pNetwork, peerMultiaddr, peerId) {
         try {
             const peerStatus = await this.#getPeerStatus(p2pNetwork, peerMultiaddr, peerId);
@@ -214,9 +168,7 @@ export class SyncHandler {
             return false;
         }
     }
-    /** Synchronizes missing blocks from a peer efficiently.
-     * @param {P2PNetwork} p2pNetwork - The P2P network instance.
-     * @param {string} peerMultiaddr - The multiaddress of the peer to sync with. */
+    /** @param {P2PNetwork} p2pNetwork @param {string} peerMultiaddr */
     async #getMissingBlocks(p2pNetwork, peerMultiaddr, peerCurrentHeight, peerId) {
         this.node.blockchainStats.state = `syncing with peer ${peerMultiaddr}`;
         this.miniLogger.log(`Synchronizing with peer ${peerMultiaddr}`, (m) => { console.info(m); });
@@ -267,18 +219,12 @@ export class SyncHandler {
     async #requestBlocksFromPeer(p2pNetwork, peerMultiaddr, startIndex, endIndex) {
         this.miniLogger.log(`Requesting blocks from peer ${peerMultiaddr}, #${startIndex} to #${endIndex}`, (m) => { console.info(m); });
         
-        const message = { type: 'getBlocks', startIndex, endIndex };
-        let response;
         try {
-            response = await p2pNetwork.sendMessage(peerMultiaddr, message);
-        } catch (error) {
-            this.miniLogger.log(`Failed to get blocks from peer ${peerMultiaddr}`, (m) => { console.error(m); });
-            return false;
-        }
-
-        if (response && response.status === 'success' && Array.isArray(response.blocks)) { return response.blocks; }
-
-        this.miniLogger.log('Failed to get blocks from peer', (m) => { console.warn(m); });
+            const response = await p2pNetwork.sendMessage(peerMultiaddr, { type: 'getBlocks', startIndex, endIndex });
+            if (response && response.status === 'success' && Array.isArray(response.blocks)) { return response.blocks; }
+        } catch (error) {}
+        
+        this.miniLogger.log(`Failed to get blocks from peer ${peerMultiaddr}`, (m) => { console.error(m); });
         return false;
     }
     #getTopicsToSubscribeRelatedToRoles(roles = []) {
@@ -315,12 +261,11 @@ export class SyncHandler {
             if (!consensuses[height]) { consensuses[height] = {}; }
 
             consensuses[height][hash] = consensuses[height][hash] ? consensuses[height][hash] + 1 : 1;
+            if (consensuses[height][hash] <= consensus.peers) { continue; }
 
-            if (consensuses[height][hash] > consensus.peers) {
-                consensus.height = height;
-                consensus.peers = consensuses[height][hash];
-                consensus.hash = hash;
-            }
+            consensus.height = height;
+            consensus.peers = consensuses[height][hash];
+            consensus.hash = hash;
         }
     
         if (consensus.height <= this.node.blockchain.currentHeight) {
