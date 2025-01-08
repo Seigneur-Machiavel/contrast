@@ -22,7 +22,8 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
-    topicTreatment = {
+    miniLogger = new MiniLogger('P2PNetwork');
+    topicsTreatment = {
         'new_transaction': {
             serialize: (data) => serializer.serialize.transaction(data),
             deserialize: (data) => serializer.deserialize.transaction(data),
@@ -55,18 +56,14 @@ class P2PNetwork extends EventEmitter {
             reputationOptions: {}, // Options for ReputationManager
         };
         this.options = { ...defaultOptions, ...options };
-
         this.p2pNode = null;
         this.peers = new Map();
         this.subscriptions = new Set();
-        this.miniLogger = new MiniLogger('P2PNetwork');
         this.reputationManager = new ReputationManager(this.options.reputationOptions);
-
         this.reputationManager.on('identifierBanned', ({ identifier }) => {
             //this.disconnectPeer(identifier);
             this.miniLogger.log(`Peer ${identifier} has been banned`, (m) => { console.info(m); });
         });
-
         this.reputationManager.on('identifierUnbanned', ({ identifier }) => {
             this.miniLogger.log(`Peer ${identifier} has been unbanned`, (m) => { console.info(m); });
         });
@@ -76,8 +73,9 @@ class P2PNetwork extends EventEmitter {
     static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
     static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
 
+    /** @param {string} uniqueHash - A unique hash of 32 bytes to generate the private key from. */
     async start(uniqueHash) {
-        let hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
+        const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
         const hashUint8Array = convert.hex.toUint8Array(hash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
         const peerDiscovery = [mdns()];
@@ -108,10 +106,8 @@ class P2PNetwork extends EventEmitter {
         }
     }
     async stop() {
-        if (this.p2pNode) {
-            await this.p2pNode.stop();
-            this.miniLogger.log(`P2P network stopped with peerId ${this.p2pNode.peerId.toString()}`, (m) => { console.info(m); });
-        }
+        if (this.p2pNode) { await this.p2pNode.stop(); }
+        this.miniLogger.log(`P2P network ${this.p2pNode.peerId.toString()} stopped`, (m) => { console.info(m); });
         await this.reputationManager.shutdown();
     }
     async connectToBootstrapNodes() {
@@ -131,24 +127,22 @@ class P2PNetwork extends EventEmitter {
         }));
     }
     #handlePeerDiscovery = async (event) => {
-        const peerId = event.detail.id.toString();
+        const peerIdStr = event.detail.id.toString();
         const peerMultiaddrs = event.detail.multiaddrs;
-        const isBanned = this.reputationManager.isPeerBanned({ peerId });
-        this.miniLogger.log(`Peer ${peerId} discovered`, (m) => { console.info(m); });
-
         if (!peerMultiaddrs || peerMultiaddrs.length === 0) {
-            this.miniLogger.log(`Failed to find multiaddrs for peer ${peerId}`, (m) => { console.error(m); });
+            this.miniLogger.log(`Failed to find multiaddrs for peer ${peerIdStr}`, (m) => { console.error(m); });
             return;
         }
+        
+        const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr, ip: peerMultiaddrs.toString() });
+        this.miniLogger.log(`Peer ${peerIdStr} discovered, Dialing...`, (m) => { console.info(m); });
+
         try {
-            const isBanned = this.reputationManager.isPeerBanned({ ip: peerMultiaddrs.toString() });
-            this.miniLogger.log(`Dialing after discovery ${peerMultiaddrs}`, (m) => { console.info(m); });
             await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            this.updatePeer(peerId, { dialable: true });
-        }
-        catch (error) {
-            this.miniLogger.log(`Failed to dial peer ${peerId}`, (m) => { console.error(m); });
-            this.updatePeer(peerId, { dialable: false });
+            this.updatePeer(peerIdStr, { dialable: true });
+        } catch (error) {
+            this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
+            this.updatePeer(peerIdStr, { dialable: false });
         }
     };
     /** @param {CustomEvent} event */
@@ -186,7 +180,7 @@ class P2PNetwork extends EventEmitter {
         if (!this.#validateTopic(topic)) { return; }
         if (!this.#validateTopicData(topic, data)) { return; }
 
-        const deserializationFnc = this.topicTreatment[topic].deserialize || serializer.deserialize.rawData;
+        const deserializationFnc = this.topicsTreatment[topic].deserialize || serializer.deserialize.rawData;
 
         try {
             const content = deserializationFnc(data);
@@ -202,12 +196,10 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Invalid topic type ${topic}, reason: Topic must be a string`, (m) => { console.warn(m); });
             return false;
         }
-        if (!P2PNetwork.ALLOWED_TOPICS.has(topic)) {
-            this.miniLogger.log(`Topic not allowed ${topic}`, (m) => { console.warn(m); });
-            return false;
-        }
+        if (P2PNetwork.ALLOWED_TOPICS.has(topic)) { return true; }
 
-        return true;
+        this.miniLogger.log(`Topic not allowed ${topic}`, (m) => { console.warn(m); });
+        return false;
     }
     /** Validates the data of a pubsub message. @param {string} topic @param {Uint8Array} data */
     #validateTopicData(topic, data, verifySize = true) {
@@ -215,19 +207,18 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Received non-binary data dataset: ${data} topic: ${topic}`, (m) => { console.error(m); });
             return false;
         }
-        if (verifySize && data.byteLength > this.topicTreatment[topic].maxSize) {
-            this.miniLogger.log(`Message size exceeds maximum allowed size from ${from}`, (m) => { console.error(m); });
-            return false;
-        }
 
-        return true;
+        if (!verifySize || data.byteLength <= this.topicsTreatment[topic].maxSize) { return true; }
+        
+        this.miniLogger.log(`Message size exceeds maximum allowed size from ${from}`, (m) => { console.error(m); });
+        return false;
     }
     /** @param {string} topic */
     async broadcast(topic, message) {
         //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
         if (this.peers.size === 0) { return new Error("No peers to broadcast to"); }
         
-        const serializationFnc = this.topicTreatment[topic].serialize || serializer.serialize.rawData;
+        const serializationFnc = this.topicsTreatment[topic].serialize || serializer.serialize.rawData;
         
         try {
             const serialized = serializationFnc(message);
