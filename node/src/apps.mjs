@@ -85,6 +85,7 @@ class AppStaticFncs {
         result.peers = node.p2pNetwork?.getPeers() ?? 'No Peers';
         result.ignoreIncomingBlocks = node.ignoreIncomingBlocks;
         result.disabledSync = node.syncHandler.syncDisabled;
+
         return result;
     }
     /** @param {Node} node */
@@ -327,8 +328,9 @@ export class DashboardWsApp {
                 this.node.p2pNetwork.closeConnection(data);
                 break;
             case 'ask_sync_peer':
-                console.log(`Asking peer ${data} to sync`);
-                this.node.syncHandler.syncWithPeers(data);
+                console.log(`ask_sync_peer disabled`, (m) => { console.log(m); });
+                //console.log(`Asking peer ${data} to sync`);
+                //this.node.syncHandler.syncWithPeers(data);
                 break;
             case 'ban_peer':
                 console.log(`Banning peer ${data}`);

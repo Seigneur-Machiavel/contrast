@@ -494,9 +494,6 @@ export class P2P extends EventEmitter {
         await this._broadcastFileMetadata(fileData);
     }
 
-    isStarted() { 
-        return !!this.node?.services?.dht;
-    }
     getChannels() { 
         return Array.from(this.channels);
     }

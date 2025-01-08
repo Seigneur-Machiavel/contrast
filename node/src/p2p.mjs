@@ -61,11 +61,27 @@ class P2PNetwork extends EventEmitter {
         let hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
         const hashUint8Array = this.toUint8Array(hash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
+        const peerDiscovery = [mdns()];
+        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
         try {
-            this.p2pNode = await this.#createLibp2pNode(privateKeyObject);
+            this.p2pNode = await createLibp2p({
+                privateKey: privateKeyObject,
+                addresses: { listen: [this.options.listenAddress] },
+                transports: [tcp()],
+                streamMuxers: [yamux()],
+                connectionEncrypters: [noise()],
+                services: { identify: identify(), pubsub: gossipsub() },
+                peerDiscovery,
+            });
+
             await this.p2pNode.start();
             this.miniLogger.log(`P2P network started with peerId ${this.p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
-            this.#setupEventListeners();
+            
+            this.p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
+            this.p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
+            this.p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+            this.p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+
             await this.connectToBootstrapNodes();
         } catch (error) {
             this.miniLogger.log('Failed to start P2P network', { error: error.message });
@@ -79,23 +95,6 @@ class P2PNetwork extends EventEmitter {
         }
         await this.reputationManager.shutdown();
     }
-    async #createLibp2pNode(privateKeyObject) {
-        const peerDiscovery = [mdns()];
-        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
-
-        return createLibp2p({
-            privateKey: privateKeyObject,
-            addresses: { listen: [this.options.listenAddress] },
-            transports: [tcp()],
-            streamMuxers: [yamux()],
-            connectionEncrypters: [noise()],
-            services: {
-                identify: identify(),
-                pubsub: gossipsub()
-            },
-            peerDiscovery,
-        });
-    }
     async connectToBootstrapNodes() {
         await Promise.all(this.options.bootstrapNodes.map(async (addr) => {
             const ma = multiaddr(addr);
@@ -105,21 +104,12 @@ class P2PNetwork extends EventEmitter {
                 
                 await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 this.miniLogger.log(`Connected to bootstrap node ${addr}`, (m) => { console.info(m); });
-
-                const peerId = ma.getPeerId();
-                if (peerId) { this.updatePeer(peerId.toString(), { dialable: true });}
             } catch (err) {
                 this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                 const peerId = ma.getPeerId();
                 if (peerId) { this.updatePeer(peerId.toString(), { dialable: false }); }
             }
         }));
-    }
-    #setupEventListeners() {
-        this.p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
-        this.p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
-        this.p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
-        this.p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
     }
     #handlePeerDiscovery = async (event) => {
         const peerId = event.detail.id.toString();
@@ -143,28 +133,26 @@ class P2PNetwork extends EventEmitter {
         }
     };
     /** @param {CustomEvent} event */
-    #handlePeerConnect = (event) => {
-        const peerId = event.detail.toString();
-        this.miniLogger.log(`Peer ${peerId} connected`, (m) => { console.debug(m); });
+    #handlePeerConnect = async (event) => {
+        const peerId = event.detail;
+        const peerIdStr = peerId.toString();
+        this.miniLogger.log(`Peer ${peerIdStr} connected`, (m) => { console.debug(m); });
 
-        const isBanned = this.reputationManager.isPeerBanned({ peerId });
-        this.reputationManager.recordAction({ peerId }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
+        const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
+        this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
+        //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
-        if (isBanned) {
-            this.miniLogger.log(`Peer ${peerId} is banned, closing connection`, (m) => { console.warn(m); });
-            //this.closeConnection(peerId);
-            //return;
+        const connections = this.p2pNode.getConnections(peerIdStr);
+        const address = connections.length > 0 ? connections[0].remoteAddr.toString() : null;
+
+        try {
+            const con = await this.p2pNode.dial(peerId);
+            this.miniLogger.log(`Dialed peer ${peerId} at address ${con.remoteAddr.toString()}`, (m) => { console.debug(m); });
+            this.updatePeer(peerId.toString(), { status: 'dialed', address: con.remoteAddr.toString(), dialable: true });
+        } catch (error) {
+            this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
+            this.updatePeer(peerId.toString(), { status: 'connected', address, dialable: false });
         }
-
-        // Retrieve multiaddrs of the connected peer
-        const connections = this.p2pNode.getConnections(peerId);
-        let peerInfo = { peerId, address: null };
-        if (connections.length > 0) {
-            const multiaddr = connections[0].remoteAddr;
-            peerInfo.address = multiaddr.toString();
-        }
-        this.updatePeer(peerId, { status: 'connected', address: peerInfo.address });
-        this.dial(event.detail);
     };
     /** @param {CustomEvent} event */
     #handlePeerDisconnect = (event) => {
@@ -172,28 +160,6 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`Peer ${peerId} disconnected`, (m) => { console.debug(m); });
         this.peers.delete(peerId);
     };
-    async dial(peerId) {
-        try {
-            const con = await this.p2pNode.dial(peerId);
-            this.miniLogger.log(`Dialed peer ${peerId} at address ${con.remoteAddr.toString()}`, (m) => { console.debug(m); });
-            this.updatePeer(peerId.toString(), { status: 'dialed', address: con.remoteAddr.toString(), dialable: true });
-        } catch (error) {
-            this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
-            this.updatePeer(peerId.toString(), { dialable: false });
-            throw error;
-        }
-    }
-    async createStream(peerId, protocol) {
-        try {
-            const stream = await this.p2pNode.dialProtocol(peerId, protocol);
-            this.miniLogger.log(`Stream created with peer ${peerId} on protocol ${protocol}`, (m) => { console.debug(m); });
-            this.updatePeer(peerId.toString(), { stream });
-            return stream;
-        } catch (error) {
-            this.miniLogger.log(`Failed to create stream with peer ${peerId} on protocol ${protocol}, error: ${error.message}`, (m) => { console.error(m); });
-            throw error;
-        }
-    }
     /** @param {CustomEvent} event */
     #handlePubsubMessage = async (event) => {
         const { topic, data, from } = event.detail;
@@ -210,18 +176,15 @@ class P2PNetwork extends EventEmitter {
             let parsedMessage;
             switch (topic) {
                 case 'new_transaction':
-                    //this.miniLogger.log(`Received new transaction from ${from}`, (m) => { console.debug(m); });
-                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02) { this.miniLogger.log(`Transaction size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
+                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02) { throw new Error(`Transaction size exceeds the maximum allowed size from ${from}`); }
                     parsedMessage = serializer.deserialize.transaction(data);
                     break;
                 case 'new_block_candidate':
-                    //this.miniLogger.log(`Received new block candidate from ${from}`, (m) => { console.debug(m); });
-                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05) { this.miniLogger.log(`Block candidate size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
+                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.04) { throw new Error(`Block candidate size exceeds the maximum allowed size from ${from}`); }
                     parsedMessage = serializer.deserialize.block_candidate(data);
                     break;
                 case 'new_block_finalized':
-                    //this.miniLogger.log(`Received new block finalized from ${from}`, (m) => { console.debug(m); });
-                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05) { this.miniLogger.log(`Block finalized size exceeds the maximum allowed size from ${from}`, (m) => { console.error(m); }); return; }
+                    if (data.byteLength > BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05) { throw new Error(`Block finalized size exceeds the maximum allowed size from ${from}`); }
                     parsedMessage = serializer.deserialize.block_finalized(data);
                     break;
                 default:
@@ -246,7 +209,7 @@ class P2PNetwork extends EventEmitter {
         }
         return true;
     }
-    /** @param {string} topic @param {any} message - Can be any JavaScript object */
+    /** @param {string} topic */
     async broadcast(topic, message) {
         //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
         if (this.peers.size === 0) { return new Error("No peers to broadcast to"); }
@@ -277,76 +240,44 @@ class P2PNetwork extends EventEmitter {
             return error;
         }
     }
-    /**
-      * @param {string} peerMultiaddr - The multiaddress of the peer.
-      * @param {Object} message - The message to send.
-      * @returns {Promise<Object>} The response from the peer.
-      */
+    /** @param {string} peerMultiaddr - The multiaddress of the peer. @param {Object} message - The message to send. */
     async sendMessage(peerMultiaddr, message) {
         // Extract peerId using libp2p's multiaddr parsing for reliability
-        let peerId;
-        try {
-            const ma = multiaddr(peerMultiaddr);
-            const peerIdComponent = ma.getPeerId();
-            if (!peerIdComponent) { throw new Error('Invalid multiaddr: Peer ID not found'); }
-            peerId = peerIdComponent.toString();
-        } catch (err) {
-            this.miniLogger.log(`Failed to parse multiaddr ${peerMultiaddr}, error: ${err.message}`, (m) => { console.error(m); });
-            throw err;
-        }
+        const ma = multiaddr(peerMultiaddr);
+        const peerIdComponent = ma.getPeerId();
+        if (!peerIdComponent) { throw new Error('Invalid multiaddr: Peer ID not found'); }
+        const peerId = peerIdComponent.toString();
 
         try {
-            const stream = await this.acquireStream(peerId, peerMultiaddr);
-            const response = await this.sendOverStream(stream, message);
+            //const stream = await this.#acquireStream(peerId, peerMultiaddr);
+            const abortController = new AbortController();
+            const timeout = setTimeout(() => { abortController.abort(); }, 300_000);
+            const stream = await this.p2pNode.dialProtocol(peerMultiaddr, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
+            clearTimeout(timeout);
+            
+            this.updatePeer(peerId, { stream });
+            const response = await this.#sendOverStream(stream, message);
             return response;
         } catch (error) {
             this.miniLogger.log(`Failed to send message to ${peerMultiaddr}, error: ${error.message}`, (m) => { console.error(m); });
-            const peer = this.peers.get(peerId);
-            if (peer && peer.stream && !peer.stream.closed) {
-                try {
-                    await peer.stream.close();
-                    await peer.stream.reset();
-                    this.updatePeer(peerId, { stream: null });
-                    this.miniLogger.log(`Closed faulty stream after error with peer ${peerId}`, (m) => { console.debug(m); });
-                } catch (closeErr) {
-                    this.miniLogger.log(`Failed to close stream after error with peer ${peerId}, error: ${closeErr.message}`, (m) => { console.error(m); });
-                }
-            }
         }
-    }
-    /**
-     * Acquires a valid stream for the given peer. Reuses existing streams if available and open,
-     * otherwise creates a new stream.
-     * @param {string} peerId - The ID of the peer.
-     * @param {string} peerMultiaddr - The multiaddress of the peer.
-     * @returns {Promise<Stream>} - The libp2p stream to use for communication.
-     */
-    async acquireStream(peerId, peerMultiaddr) {
-        let stream;
+
+        const peer = this.peers.get(peerId);
+        if (!peer || !peer.stream || peer.stream.closed) { return; }
+
         try {
-            const abortController = new AbortController();
-            const timeout = setTimeout(() => {
-                abortController.abort();
-            }, 300_000);
-
-            stream = await this.p2pNode.dialProtocol(peerMultiaddr, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
-            clearTimeout(timeout);
-
-            this.updatePeer(peerId, { stream });
-            this.miniLogger.log(`Created new stream with peer ${peerId}`, (m) => { console.debug(m); });
-            return stream;
-        } catch (error) {
-            this.miniLogger.log(`Failed to acquire stream with peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
-            throw error;
+            await peer.stream.close();
+            await peer.stream.reset();
+            this.updatePeer(peerId, { stream: null });
+            this.miniLogger.log(`Closed faulty stream after error with peer ${peerId}`, (m) => { console.debug(m); });
+        } catch (closeErr) {
+            this.miniLogger.log(`Failed to close stream after error with peer ${peerId}, error: ${closeErr.message}`, (m) => { console.error(m); });
         }
     }
-    /**
-     * Sends a serialized message over the provided stream and handles the response.
+    /** Sends a serialized message over the provided stream and handles the response.
      * @param {Stream} stream - The libp2p stream to use for communication.
-     * @param {Object} message - The message object to send.
-     * @returns {Promise<Object>} - The response from the peer.
-     */
-    async sendOverStream(stream, message, timeoutMs = 1000) {
+     * @param {Object} message - The message object to send. */
+    async #sendOverStream(stream, message, timeoutMs = 1000) {
         const createTimeout = (ms) => {
             return new Promise((_, reject) => {
                 setTimeout(() => {
@@ -366,15 +297,12 @@ class P2PNetwork extends EventEmitter {
 
             // Read with timeout
             const res = await Promise.race([ lp.read(), createTimeout(timeoutMs) ]);
-
             if (!res) { throw new Error('No response received (unexpected end of input)'); }
 
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
             const response = serializer.deserialize.rawData(res.subarray());
-            if (response.status !== 'error') {
-                return response;
-            }
+            if (response.status !== 'error') { return response; }
 
             throw new Error(response.message);
         } catch (error) {
@@ -403,17 +331,10 @@ class P2PNetwork extends EventEmitter {
 
         this.miniLogger.log(`Subscribing to topic ${topic}`, (m) => { console.debug(m); });
 
-        try {
-            await this.p2pNode.services.pubsub.subscribe(topic);
-            this.subscriptions.add(topic);
-            
-            if (callback) {
-                this.on(topic, message => callback(topic, message));
-            }
-        } catch (error) {
-            this.miniLogger.log(`Failed to subscribe to topic ${topic}, error: ${error.message}`, (m) => { console.error(m); });
-            throw error;
-        }
+        await this.p2pNode.services.pubsub.subscribe(topic);
+        this.subscriptions.add(topic);
+        
+        if (callback) { this.on(topic, message => callback(topic, message)); }
     }
     /** @param {string[]} topics @param {Function} [callback] */
     async subscribeMultipleTopics(topics, callback) {
@@ -429,30 +350,39 @@ duplicates: ${topics.filter((topic, index) => topics.indexOf(topic) !== index)}`
     }
     /**  Unsubscribes from a topic and removes any associated callback @param {string} topic */
     async unsubscribe(topic) {
-        if (!this.subscriptions.has(topic)) {
-            this.miniLogger.log(`Attempting to unsubscribe from a topic that was not subscribed to ${topic}`, (m) => { console.error(m); });
-            return;
-        }
-        try {
-            await this.p2pNode.services.pubsub.unsubscribe(topic);
-            this.p2pNode.services.pubsub.topics.delete(topic);
-            this.subscriptions.delete(topic);
-            this.miniLogger.log(`Unsubscribed from topic ${topic}`, (m) => { console.debug(m); });
-        } catch (error) {
-            this.miniLogger.log(`Error unsubscribing from topic ${topic}, error: ${error.message}`, (m) => { console.error(m); });
-            throw error;
-        }
-    }
-    /** @param {string} topic */
-    getTopicBindingInfo(topic) {
-        return {
-            isSubscribed: this.subscriptions.has(topic),
-            hasCallback: this.topicBindings.has(topic),
-            callbackSource: this.topicBindings.get(topic)?.name || 'anonymous'
-        };
+        if (!this.subscriptions.has(topic)) { return; }
+
+        await this.p2pNode.services.pubsub.unsubscribe(topic);
+        this.p2pNode.services.pubsub.topics.delete(topic);
+        this.subscriptions.delete(topic);
+        this.miniLogger.log(`Unsubscribed from topic ${topic}`, (m) => { console.debug(m); });
     }
     /** @param {string} peerId @param {Object} data */
     updatePeer(peerId, data) {
+        const existingPeer = this.peers.get(peerId) || {};
+        const updatedPeer = {
+            ...existingPeer,    // Preserve existing data
+            ...data,            // Overwrite with new data
+            lastSeen: this.timeSynchronizer.getCurrentTime(),
+        };
+
+        // Optionally, ensure that `address`, `stream`, and `dialable` are preserved if not provided in `data`
+        if (data.address === undefined) {
+            updatedPeer.address = existingPeer.address || null;
+        }
+        if (data.stream === undefined) {
+            updatedPeer.stream = existingPeer.stream || null;
+        }
+        if (data.dialable === undefined) {
+            updatedPeer.dialable = existingPeer.dialable !== undefined ? existingPeer.dialable : null;
+        }
+
+        this.peers.set(peerId, updatedPeer);
+        this.miniLogger.log(`Peer ${peerId} updated`, (m) => { console.debug(m); });
+        this.emit('peer:updated', peerId, data);
+    }
+    /** @param {string} peerId @param {Object} data */
+    updatePeerOLD(peerId, data) { // DEPRECATED
         const existingPeer = this.peers.get(peerId) || {};
         const updatedPeer = {
             ...existingPeer,    // Preserve existing data
@@ -489,8 +419,12 @@ duplicates: ${topics.filter((topic, index) => topics.indexOf(topic) !== index)}`
             }
         }
     }
-    closeConnection(peerId) {
-        this.miniLogger.log(`Closing connections to ${peerId}`, (m) => { console.debug(m); });
+    closeConnection(peerId, reason) {
+        if (!reason) {
+            this.miniLogger.log(`Closing connection to ${peerId}`, (m) => { console.debug(m); });
+        } else {
+            this.miniLogger.log(`Closing connection to ${peerId} for reason: ${reason}`, (m) => { console.debug(m); });
+        }
         this.p2pNode.components.connectionManager.closeConnections(peerId);
     }
     /** @returns {string[]} */
@@ -499,36 +433,6 @@ duplicates: ${topics.filter((topic, index) => topics.indexOf(topic) !== index)}`
     }
     getPeers() {
         return Object.fromEntries(this.peers);
-    }
-    /** @returns {string[]} */
-    getSubscribedTopics() {
-        return Array.from(this.subscriptions);
-    }
-    /** @returns {boolean} */
-    isStarted() {
-        return this.p2pNode && this.p2pNode.status === 'started';
-    }
-    // Connection Gating Methods
-    async isDeniedPeer(peerId) {
-        return this.reputationManager.isPeerBanned({ peerId: peerId.toString() });
-    }
-    async isDeniedMultiaddr(multiaddr) {
-        const ip = multiaddr.nodeAddress().address.toString();
-        const isBanned = this.reputationManager.isPeerBanned({ ip });
-        return isBanned;
-    }
-    async isDeniedConnection(connection) {
-        const peerId = connection.remotePeer.toString();
-        const ip = connection.remoteAddr.nodeAddress().address;
-
-        return this.reputationManager.isPeerBanned({ peerId }) ||
-            this.reputationManager.isPeerBanned({ ip });
-    }
-    async isDeniedEncrypted(connection) {
-        return this.isDeniedConnection(connection);
-    }
-    async isDeniedUpgraded(connection) {
-        return this.isDeniedConnection(connection);
     }
     toUint8Array(hex) {
         if (hex.length % 2 !== 0) { throw new Error("The length of the input is not a multiple of 2."); }

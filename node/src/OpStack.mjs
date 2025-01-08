@@ -153,16 +153,19 @@ export class OpStack {
                     const syncSuccessful = await this.node.syncHandler.syncWithPeers();
                     if (syncSuccessful) {
                         this.healthInfo.lastSyncTime = Date.now();
-                        this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                         this.syncRequested = false;
+                        this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                         break;
                     }
-                    
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    //await new Promise(resolve => setTimeout(resolve, 1000));
                     this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers failed, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
 
-                    this.terminate();
-                    if (!this.node.restartRequested) { this.node.restartRequested = 'OpStack.syncWithPeers() -> unsuccessful sync!'; }
+                    //this.terminate();
+                    //if (!this.node.restartRequested) { this.node.restartRequested = 'OpStack.syncWithPeers() -> unsuccessful sync!'; }
+                    
+                    this.syncRequested = false;
+                    this.pushFirst('syncWithPeers', null);
 
                     break;
                 case 'createBlockCandidateAndBroadcast':
