@@ -76,22 +76,22 @@ export class SyncHandler {
         try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
     }
     async #getAllPeersInfo() {
-        const peersToSync = Object.entries(this.node.p2pNetwork.peers);
+        const peersToSync = Object.keys(this.node.p2pNetwork.peers);
         const responsePromises = [];
-        for (const [peerIdStr, peerData] of peersToSync) {
-            if (!peerData.addressStr) {
+
+        for (const peerIdStr of peersToSync) {
+            if (!this.node.p2pNetwork.peers[peerIdStr].addressStr) {
                 this.miniLogger.log('Peer address is missing', (m) => { console.error(m); });
                 continue;
             }
-
-            //responsePromises.push(this.#getPeerStatus(multiaddr(peerData.addressStr), peerId));
+            
             responsePromises.push(this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getStatus' }));
         }
 
         /** @type {PeerInfo[]} */
         const peersInfo = [];
-        for (const [peerIdStr, peerData] of peersToSync) {
-            if (!peerData.addressStr) { continue; }
+        for (const peerIdStr of peersToSync) {
+            if (!this.node.p2pNetwork.peers[peerIdStr].addressStr) { continue; }
 
             const response = await responsePromises.shift();
             if (!response) { continue; }
