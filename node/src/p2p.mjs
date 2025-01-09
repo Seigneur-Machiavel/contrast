@@ -263,10 +263,11 @@ class P2PNetwork extends EventEmitter {
 
         let stream;
         try {
-            const abortController = new AbortController();
-            const timeout = setTimeout(() => { abortController.abort(); }, 300_000);
-            stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
-            clearTimeout(timeout);
+            //const abortController = new AbortController();
+            //const timeout = setTimeout(() => { abortController.abort(); }, 300_000);
+            //stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
+            //clearTimeout(timeout);
+            stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
         } catch (error) {
             this.miniLogger.log(`Error during sendMessage, error: ${error.message}, timeout: ${timeoutMs}`, (m) => { console.error(m); });
             this.miniLogger.log(error, (m) => { console.error(m); });

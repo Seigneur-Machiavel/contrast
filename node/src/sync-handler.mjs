@@ -80,19 +80,12 @@ export class SyncHandler {
         const responsePromises = [];
 
         for (const peerIdStr of peersToSync) {
-            if (!this.node.p2pNetwork.peers[peerIdStr].addressStr) {
-                this.miniLogger.log('Peer address is missing', (m) => { console.error(m); });
-                continue;
-            }
-            
             responsePromises.push(this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getStatus' }));
         }
 
         /** @type {PeerInfo[]} */
         const peersInfo = [];
         for (const peerIdStr of peersToSync) {
-            if (!this.node.p2pNetwork.peers[peerIdStr].addressStr) { continue; }
-
             const response = await responsePromises.shift();
             if (!response) { continue; }
             if (!typeof response.currentHeight === 'number') { continue; }
@@ -103,8 +96,14 @@ export class SyncHandler {
 
         return peersInfo;
     }
-    async #handleSyncFailure() {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+    /** Load the last snapshot if available, and count a sync failure */
+    #handleSyncFailure() {
+        const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
+        if (snapshotsHeights.length > 0) {
+            const lastSnapshotHeight = snapshotsHeights[snapshotsHeights.length - 1];
+            this.node.loadSnapshot(lastSnapshotHeight);
+        }
+
         this.isSyncing = false;
         this.syncFailureCount++;
         this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
@@ -169,9 +168,9 @@ export class SyncHandler {
         const peersInfo = await this.#getAllPeersInfo();
         const consensus = this.#findConsensus(peersInfo);
         if (!consensus) {
-            this.miniLogger.log(`Unable to get peers info -> sync failure`, (m) => { console.error(m); });
-            await this.#handleSyncFailure();
-            return false;
+            this.miniLogger.log(`Unable to get consensus -> sync failure`, (m) => { console.error(m); });
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            return this.#handleSyncFailure();
         }
 
         if (consensus.height <= this.node.blockchain.currentHeight) {
@@ -193,15 +192,11 @@ export class SyncHandler {
             this.miniLogger.log(`Successfully synced with peer ${peerIdStr}`, (m) => { console.info(m); });
             break; // Sync successful, break out of loop
         }
-    
-        this.isSyncing = false;
-
-        if (consensus.height > this.node.blockchain.currentHeight) {
-            this.miniLogger.log(`Need to sync ${consensus.height - this.node.blockchain.currentHeight} more blocks, restarting sync process`, (m) => { console.debug(m); });
-            return false;
-        }
-    
+        
+        if (consensus.height > this.node.blockchain.currentHeight) { return this.#handleSyncFailure(); }
+        
         this.miniLogger.log(`Sync process finished, current height: ${this.node.blockchain.currentHeight}`, (m) => { console.debug(m); });
+        this.isSyncing = false;
         return true;
     }
     /** @param {PeerInfo[]} peersInfo */
