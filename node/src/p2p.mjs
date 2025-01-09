@@ -239,10 +239,11 @@ class P2PNetwork extends EventEmitter {
     async broadcast(topic, message) {
         //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
 
-        if (Object.keys(this.peers).length === 0) {
+        /*if (Object.keys(this.peers).length === 0) {
             this.miniLogger.log(`No peers to broadcast to on topic **${topic}**`, (m) => { console.warn(m); });
             return;
-        }
+        }*/
+        if (Object.keys(this.peers).length === 0) { return; }
         
         const serializationFnc = this.topicsTreatment[topic].serialize || serializer.serialize.rawData;
         try {
