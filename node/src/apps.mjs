@@ -79,10 +79,10 @@ class AppStaticFncs {
         result.peerIds = node.p2pNetwork?.getConnectedPeers() ?? 'No Peer IDs';
         result.repScores = node.p2pNetwork?.reputationManager?.getScores() ?? 'No Rep Scores';
         result.nodeState = node.blockchainStats.state ?? 'No State';
-        result.peerHeights = Object.fromEntries(node.syncHandler.peerHeights) ?? 'No Peer Height';
+        result.peerHeights = node.syncHandler.peersHeights ?? 'No Peer Height';
         result.listenAddress = node.p2pNetwork?.p2pNode?.getMultiaddrs() ?? 'No Listen Address';
         result.lastLegitimacy = node.blockchainStats?.lastLegitimacy ?? 'No Legitimacy';
-        result.peers = node.p2pNetwork?.getPeers() ?? 'No Peers';
+        result.peers = node.p2pNetwork?.peers ?? 'No Peers';
         result.ignoreIncomingBlocks = node.ignoreIncomingBlocks;
         result.disabledSync = node.syncHandler.syncDisabled;
 

@@ -14,7 +14,7 @@ import { addressUtils } from '../../utils/addressUtils.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { Blockchain } from './blockchain.mjs';
-import { SyncHandler } from './nodes-synchronizer.mjs';
+import { SyncHandler } from './sync-handler.mjs';
 import { SnapshotSystem } from './snapshot-system.mjs';
 import { performance, PerformanceObserver } from 'perf_hooks';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
@@ -122,7 +122,7 @@ export class Node {
 
         const uniqueHash = await this.account.getUniqueHash(64);
         await this.p2pNetwork.start(uniqueHash);
-        await this.syncHandler.start(this.p2pNetwork);
+        await this.syncHandler.start();
         if (this.roles.includes('miner')) { this.miner.startWithWorker(); }
 
         const nbOfPeers = await this.#waitSomePeers();
