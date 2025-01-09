@@ -120,7 +120,6 @@ export class SyncHandler {
         let desiredBlock = this.node.blockchain.currentHeight + 1;
         while (desiredBlock <= peerHeight) {
             const endIndex = Math.min(desiredBlock + MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
-            //const response = await this.node.p2pNetwork.sendMessage(peerMultiaddr, { type: 'getBlocks', startIndex, endIndex });
             const response = await this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getBlocks', startIndex: desiredBlock, endIndex });
             if (!response || typeof response.currentHeight !== 'number' || !Array.isArray(response.blocks)) {
                 this.miniLogger.log(`Failed to get currentHeight or serialized blocks by 'getBlocks' request`, (m) => { console.error(m); });

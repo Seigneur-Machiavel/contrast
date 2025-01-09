@@ -441,9 +441,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
     /** @param {string} topic @param {any} message */
     async p2pBroadcast(topic, message) {
         await this.p2pNetwork.broadcast(topic, message);
-        if (topic !== 'new_block_finalized') { return; }
-
-        setTimeout(() => this.#reSendBlocks(message.index), 1000);
+        if (topic === 'new_block_finalized') { setTimeout(() => this.#reSendBlocks(message.index), 1000); }
     }
     /** @param {number} finalizedBlockHeight @param {number[]} sequence - default: [-10, -8, -6, -4, -2] */
     async #reSendBlocks(finalizedBlockHeight, sequence = [-10, -8, -6, -4, -2]) {
