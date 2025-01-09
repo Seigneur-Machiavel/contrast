@@ -96,12 +96,14 @@ export class SyncHandler {
 
         return peersInfo;
     }
-    /** Load the last snapshot if available, and count a sync failure */
     #handleSyncFailure() {
         const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
-        if (snapshotsHeights.length > 0) {
-            const lastSnapshotHeight = snapshotsHeights[snapshotsHeights.length - 1];
-            this.node.loadSnapshot(lastSnapshotHeight);
+        // if syncFailureCount is a multiple of 10, try to sync from snapshots
+        if (this.syncFailureCount > 0 && this.syncFailureCount % 100 === 0 && snapshotsHeights.length > 0) {
+            // retry sync from snapshots, ex: 15, 10, 5.. 15, 10, 5.. Etc...
+            const modulo = (this.syncFailureCount / 100) % snapshotsHeights.length;
+            const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
+            this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
         }
 
         this.isSyncing = false;
@@ -169,7 +171,7 @@ export class SyncHandler {
         const consensus = this.#findConsensus(peersInfo);
         if (!consensus) {
             this.miniLogger.log(`Unable to get consensus -> sync failure`, (m) => { console.error(m); });
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 2000));
             return this.#handleSyncFailure();
         }
 
@@ -179,7 +181,7 @@ export class SyncHandler {
             return true;
         }
         
-        this.miniLogger.log(`consensusHeight peer height: ${consensus.height}, current height: ${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
+        this.miniLogger.log(`consensusHeight #${consensus.height}, current #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
 
         for (const peerInfo of peersInfo) {
             const { peerIdStr, currentHeight, latestBlockHash } = peerInfo;
@@ -195,7 +197,7 @@ export class SyncHandler {
         
         if (consensus.height > this.node.blockchain.currentHeight) { return this.#handleSyncFailure(); }
         
-        this.miniLogger.log(`Sync process finished, current height: ${this.node.blockchain.currentHeight}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`Sync process finished at #${this.node.blockchain.currentHeight}`, (m) => { console.debug(m); });
         this.isSyncing = false;
         return true;
     }

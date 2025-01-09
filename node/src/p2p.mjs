@@ -255,54 +255,36 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(error, (m) => { console.error(m); });
         }
     }
-    /** @param {string} peerIdStr @param {SyncMessage} message @param {number} [timeoutMs] */
-    async sendMessage(peerIdStr, message, timeoutMs = 3000) {
+    /** @param {string} peerIdStr @param {SyncMessage} message */
+    async sendMessage(peerIdStr, message) {
         /** @type {Peer} */
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
 
-        let stream;
-        try {
-            //const abortController = new AbortController();
-            //const timeout = setTimeout(() => { abortController.abort(); }, 300_000);
-            //stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
-            //clearTimeout(timeout);
-            stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-        } catch (error) {
-            this.miniLogger.log(`Error during sendMessage, error: ${error.message}, timeout: ${timeoutMs}`, (m) => { console.error(m); });
-            this.miniLogger.log(error, (m) => { console.error(m); });
-            return false;
-        }
-
-        return await this.#sendOverStream(stream, message, timeoutMs);
-    }
-    async #sendOverStream(stream, message, timeoutMs = 3000) {
         const createTimeout = (ms) => {
             return new Promise((_, reject) => {
                 setTimeout(() => { reject(new Error(`Operation timed out after ${ms}ms`)); }, ms);
             });
         };
 
-        /** @type {SyncMessage} */
-        let response;
         try {
-            const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
-            await Promise.race([ lp.write(serialized), createTimeout(timeoutMs) ]);
+            const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            const lp = lpStream(stream);
+
+            await Promise.race([ lp.write(serialized), createTimeout(2000) ]);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
-            const res = await Promise.race([ lp.read(), createTimeout(timeoutMs) ]);
+            const res = await Promise.race([ lp.read(), createTimeout(2000) ]);
             if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
 
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
-            response = serializer.deserialize.rawData(res.subarray());
+            const response = serializer.deserialize.rawData(res.subarray());
+            return response;
         } catch (error) {
-            this.miniLogger.log(`Error during sendOverStream, error: ${error.message}, timeout: ${timeoutMs}`, (m) => { console.error(m); });
+            this.miniLogger.log(error, (m) => { console.error(m); });
             return false;
         }
-
-        try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
-        return response;
     }
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {
