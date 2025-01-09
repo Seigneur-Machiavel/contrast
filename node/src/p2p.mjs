@@ -274,8 +274,8 @@ class P2PNetwork extends EventEmitter {
             const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
             clearTimeout(timeout);
             
-            const lp = lpStream(stream);
             
+            const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
             await Promise.race([ lp.write(serialized), createTimeout(2000) ]);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
@@ -284,8 +284,9 @@ class P2PNetwork extends EventEmitter {
             if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
+
             stream.close();
-            stream.reset();
+            //stream.reset();
             
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
