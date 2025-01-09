@@ -284,8 +284,8 @@ class P2PNetwork extends EventEmitter {
             if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
-            stream.close();
-            stream.reset();
+            //stream.close();
+            //stream.reset();
             
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
