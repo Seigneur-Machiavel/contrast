@@ -268,17 +268,25 @@ class P2PNetwork extends EventEmitter {
         };
 
         try {
-            const serialized = serializer.serialize.rawData(message);
-            const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            //const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            const abortController = new AbortController();
+            const timeout = setTimeout(() => { abortController.abort(); }, 300_000);
+            const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
+            clearTimeout(timeout);
+            
             const lp = lpStream(stream);
-
+            
+            const serialized = serializer.serialize.rawData(message);
             await Promise.race([ lp.write(serialized), createTimeout(2000) ]);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
             const res = await Promise.race([ lp.read(), createTimeout(2000) ]);
             if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
-
+            
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
+            stream.close();
+            stream.reset();
+            
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
         } catch (error) {
