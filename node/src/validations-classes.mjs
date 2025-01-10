@@ -1,3 +1,6 @@
+// Lot of performance optimization has been done in this file,
+// The code is not the most readable but it's the fastest possible
+
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { Transaction, TxOutput, UTXO, Transaction_Builder } from './transaction.mjs';
@@ -613,4 +616,3 @@ export class BlockValidation {
         return allDiscoveredPubKeysAddresses;
     }
 }
-

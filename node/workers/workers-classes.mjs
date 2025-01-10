@@ -52,7 +52,6 @@ export class ValidationWorker {
         return promise;
     }
     terminateAsync() {
-        //console.info(`ValidationWorker ${this.id} terminating...`);
         setTimeout(() => { this.worker.postMessage({ type: 'terminate', id: this.id }); }, 1000);
         this.worker.removeAllListeners();
         return new Promise((resolve, reject) => {
@@ -92,23 +91,16 @@ export class MinerWorker {
                 const upTime = Date.now() - this.startTime;
                 const hashRate = message.hashCount / upTime * 1000;
                 this.hashRate = hashRate;
-
                 this.startTime = Date.now();
-                //this.totalHashCount += message.hashCount;
-                //console.log(`MinerWorker totalHashCount: ${this.totalHashCount}`);
                 return;
             }
 
-            if (message.result.error) {
-                console.error(message.result.error);
-            } else {
-                this.result = message.result;
-            }
-
+            if (message.result.error) { console.error(message.result.error); }
+            if (!message.result.error) { this.result = message.result; }
             this.isWorking = false;
         });
     }
-
+    /** @param {string} rewardAddress @param {number} bet @param {number} timeOffset */
     async updateInfo(rewardAddress, bet, timeOffset) {
         if (this.terminate) { return; }
         const isSame = this.rewardAddress === rewardAddress && this.bet === bet && this.timeOffset === timeOffset;
@@ -117,7 +109,6 @@ export class MinerWorker {
         this.rewardAddress = rewardAddress;
         this.bet = bet;
         this.timeOffset = timeOffset;
-
         this.worker.postMessage({ type: 'updateInfo', rewardAddress, bet, timeOffset });
 
         // await 200 ms to allow the worker to process the new info

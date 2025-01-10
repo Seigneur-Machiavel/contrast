@@ -114,16 +114,11 @@ from #${this.bestCandidate ? this.bestCandidate.index : null} | leg: ${this.best
 to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
 
         this.bestCandidate = blockCandidate;
-
         return true;
     }
     #getAverageHashrate() {
         let totalHashRate = 0;
-        for (const worker of this.workers) {
-            //totalHashRate += worker.getHashRate();
-            totalHashRate += worker.hashRate;
-        }
-
+        for (const worker of this.workers) { totalHashRate += worker.hashRate; }
         return totalHashRate;
     }
     /** @param {BlockData} finalizedBlock */
@@ -169,24 +164,16 @@ to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
         for (let i = 0; i < missingWorkers; i++) {
             const workerIndex = readyWorkers + i;
             const blockBet = this.bets && this.bets[this.highestBlockIndex] ? this.bets[this.highestBlockIndex][workerIndex] : 0;
-            this.workers.push(new MinerWorker(
-                this.address,
-                blockBet,
-                this.timeSynchronizer.offset
-            ));
-
+            this.workers.push(new MinerWorker(this.address, blockBet, this.timeSynchronizer.offset));
             readyWorkers++;
         }
 
-        // let time to start workers
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000)); // let time to start workers
         return readyWorkers;
     }
     async terminateUnusedWorkers() {
         const promises = [];
-        for (let i = this.nbOfWorkers; i < this.workers.length; i++) {
-            promises.push(this.workers[i].terminateAsync());
-        }
+        for (let i = this.nbOfWorkers; i < this.workers.length; i++) { promises.push(this.workers[i].terminateAsync()); }
         await Promise.all(promises);
         this.workers = this.workers.slice(0, this.nbOfWorkers);
     }
@@ -206,22 +193,13 @@ to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
                 continue;
             }
             
-            const timings = {
-                start: Date.now(),
-                workersUpdate: 0,
-                updateInfo: 0
-            }
-
-            for (let i = 0; i < readyWorkers; i++) {
-                const worker = this.workers[i];
-                await worker.updateCandidate(blockCandidate);
-            }
+            const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
+            for (let i = 0; i < readyWorkers; i++) { await this.workers[i].updateCandidate(blockCandidate); }
             timings.workersUpdate = Date.now();
             
             for (let i = 0; i < readyWorkers; i++) {
-                const worker = this.workers[i];
                 const blockBet = this.bets && this.bets[this.highestBlockIndex] ? this.bets[this.highestBlockIndex][i] : 0;
-                await worker.updateInfo(this.address, blockBet, this.timeSynchronizer.offset);
+                await this.workers[i].updateInfo(this.address, blockBet, this.timeSynchronizer.offset);
             }
             timings.updateInfo = Date.now();
 
