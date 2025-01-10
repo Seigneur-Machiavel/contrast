@@ -163,12 +163,6 @@ class P2PNetwork extends EventEmitter {
     /** @param {CustomEvent} event */
     #handlePeerConnect = async (event) => {
         const peerId = event.detail;
-        /*
-        multihash = Digest {code: 0, size: 36, digest: Uint8Array(36), bytes: Uint8Array(38)}
-        publicKey = Ed25519PublicKey {type: 'Ed25519', raw: Uint8Array(32)}
-        type = 'Ed25519'
-        string = '12D3KooWGNer5YAjKb9vHXuT9CLda3kc7GXG4DMF4Ew7WRRiKSAP'
-        */
         const peerIdStr = peerId.toString();
         this.miniLogger.log(`Peer ${peerIdStr} connected`, (m) => { console.debug(m); });
 
@@ -238,11 +232,6 @@ class P2PNetwork extends EventEmitter {
     /** @param {string} topic */
     async broadcast(topic, message) {
         //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
-
-        /*if (Object.keys(this.peers).length === 0) {
-            this.miniLogger.log(`No peers to broadcast to on topic **${topic}**`, (m) => { console.warn(m); });
-            return;
-        }*/
         if (Object.keys(this.peers).length === 0) { return; }
         
         const serializationFnc = this.topicsTreatment[topic].serialize || serializer.serialize.rawData;
@@ -286,7 +275,7 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
             stream.close();
-            //stream.reset();
+            //stream.reset(); -> //?create an error
             
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
