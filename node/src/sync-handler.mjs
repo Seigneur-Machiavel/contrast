@@ -33,10 +33,7 @@ export class SyncHandler {
         this.isSyncing = false;
         this.syncDisabled = false;
     }
-    async start() {
-        this.node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
-        this.miniLogger.log('Sync node started', (m) => { console.info(m); });
-    }
+
     async #handleIncomingStream(lstream) {
         const stream = lstream.stream;
         if (!stream) { return; }
@@ -154,6 +151,32 @@ export class SyncHandler {
         for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
         return [...new Set(topicsToSubscribe)];
     }
+    /** @param {PeerInfo[]} peersInfo */
+    #findConsensus(peersInfo) {
+        if (!peersInfo || peersInfo.length === 0) { return false }
+
+        const consensus = { height: 0, peers: 0, hash: '' };
+        const consensuses = {};
+        for (const peerInfo of peersInfo) {
+            const height = peerInfo.currentHeight;
+            const hash = peerInfo.latestBlockHash;
+            if (!consensuses[height]) { consensuses[height] = {}; }
+
+            consensuses[height][hash] = consensuses[height][hash] ? consensuses[height][hash] + 1 : 1;
+            if (consensuses[height][hash] <= consensus.peers) { continue; }
+
+            consensus.height = height;
+            consensus.peers = consensuses[height][hash];
+            consensus.hash = hash;
+        }
+
+        return consensus;
+    }
+
+    async start() {
+        this.node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
+        this.miniLogger.log('Sync node started', (m) => { console.info(m); });
+    }
     async syncWithPeers() {
         const uniqueTopics = this.#getTopicsToSubscribeRelatedToRoles(this.node.roles);
         for (const topic of uniqueTopics) { this.node.p2pNetwork.subscribe(topic, this.node.p2pHandler.bind(this.node)); }
@@ -196,26 +219,5 @@ export class SyncHandler {
         this.miniLogger.log(`Sync process finished at #${this.node.blockchain.currentHeight}`, (m) => { console.debug(m); });
         this.isSyncing = false;
         return true;
-    }
-    /** @param {PeerInfo[]} peersInfo */
-    #findConsensus(peersInfo) {
-        if (!peersInfo || peersInfo.length === 0) { return false }
-
-        const consensus = { height: 0, peers: 0, hash: '' };
-        const consensuses = {};
-        for (const peerInfo of peersInfo) {
-            const height = peerInfo.currentHeight;
-            const hash = peerInfo.latestBlockHash;
-            if (!consensuses[height]) { consensuses[height] = {}; }
-
-            consensuses[height][hash] = consensuses[height][hash] ? consensuses[height][hash] + 1 : 1;
-            if (consensuses[height][hash] <= consensus.peers) { continue; }
-
-            consensus.height = height;
-            consensus.peers = consensuses[height][hash];
-            consensus.hash = hash;
-        }
-
-        return consensus;
     }
 }

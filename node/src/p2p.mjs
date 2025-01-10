@@ -34,6 +34,10 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
+    /** @type {string} */
+    static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
+    static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
+    
     /** @type {Object<string, Peer>} */
     peers = {};
     subscriptions = new Set();
@@ -55,7 +59,7 @@ class P2PNetwork extends EventEmitter {
             maxSize: BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05,
         },
     }
-
+    
     /** @param {Object} [options={}] @param {TimeSynchronizer} timeSynchronizer */
     constructor(options = {}, timeSynchronizer) {
         super();
@@ -82,63 +86,6 @@ class P2PNetwork extends EventEmitter {
         });
     }
 
-    /** @type {string} */
-    static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
-    static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
-
-    /** @param {string} uniqueHash - A unique hash of 32 bytes to generate the private key from. */
-    async start(uniqueHash) {
-        const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
-        const hashUint8Array = convert.hex.toUint8Array(hash);
-        const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
-        const peerDiscovery = [mdns()];
-        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
-        try {
-            this.p2pNode = await createLibp2p({
-                privateKey: privateKeyObject,
-                addresses: { listen: [this.options.listenAddress] },
-                transports: [tcp()],
-                streamMuxers: [yamux()],
-                connectionEncrypters: [noise()],
-                services: { identify: identify(), pubsub: gossipsub() },
-                peerDiscovery,
-            });
-
-            await this.p2pNode.start();
-            this.miniLogger.log(`P2P network started with peerId ${this.p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
-            
-            this.p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
-            this.p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
-            this.p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
-            this.p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
-
-            await this.connectToBootstrapNodes();
-        } catch (error) {
-            this.miniLogger.log('Failed to start P2P network', { error: error.message });
-            throw error;
-        }
-    }
-    async stop() {
-        if (this.p2pNode) { await this.p2pNode.stop(); }
-        this.miniLogger.log(`P2P network ${this.p2pNode.peerId.toString()} stopped`, (m) => { console.info(m); });
-        await this.reputationManager.shutdown();
-    }
-    async connectToBootstrapNodes() {
-        await Promise.all(this.options.bootstrapNodes.map(async (addr) => {
-            const ma = multiaddr(addr);
-            try {
-                const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
-                this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
-                
-                await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                this.miniLogger.log(`Connected to bootstrap node ${addr}`, (m) => { console.info(m); });
-            } catch (err) {
-                this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
-                const peerId = ma.getPeerId();
-                if (peerId) { this.updatePeer(peerId.toString(), { remoteAddresses: [ma], dialable: false }); }
-            }
-        }));
-    }
     #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
         /** @type {Multiaddr[]} */
@@ -227,6 +174,60 @@ class P2PNetwork extends EventEmitter {
         
         this.miniLogger.log(`Message size exceeds maximum allowed size from ${from}`, (m) => { console.error(m); });
         return false;
+    }
+
+    /** @param {string} uniqueHash - A unique hash of 32 bytes to generate the private key from. */
+    async start(uniqueHash) {
+        const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
+        const hashUint8Array = convert.hex.toUint8Array(hash);
+        const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
+        const peerDiscovery = [mdns()];
+        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
+        try {
+            this.p2pNode = await createLibp2p({
+                privateKey: privateKeyObject,
+                addresses: { listen: [this.options.listenAddress] },
+                transports: [tcp()],
+                streamMuxers: [yamux()],
+                connectionEncrypters: [noise()],
+                services: { identify: identify(), pubsub: gossipsub() },
+                peerDiscovery,
+            });
+
+            await this.p2pNode.start();
+            this.miniLogger.log(`P2P network started with peerId ${this.p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
+            
+            this.p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
+            this.p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
+            this.p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+            this.p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+
+            await this.connectToBootstrapNodes();
+        } catch (error) {
+            this.miniLogger.log('Failed to start P2P network', { error: error.message });
+            throw error;
+        }
+    }
+    async stop() {
+        if (this.p2pNode) { await this.p2pNode.stop(); }
+        this.miniLogger.log(`P2P network ${this.p2pNode.peerId.toString()} stopped`, (m) => { console.info(m); });
+        await this.reputationManager.shutdown();
+    }
+    async connectToBootstrapNodes() {
+        await Promise.all(this.options.bootstrapNodes.map(async (addr) => {
+            const ma = multiaddr(addr);
+            try {
+                const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
+                this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
+                
+                await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                this.miniLogger.log(`Connected to bootstrap node ${addr}`, (m) => { console.info(m); });
+            } catch (err) {
+                this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
+                const peerId = ma.getPeerId();
+                if (peerId) { this.updatePeer(peerId.toString(), { remoteAddresses: [ma], dialable: false }); }
+            }
+        }));
     }
     /** @param {string} topic */
     async broadcast(topic, message) {
