@@ -2,7 +2,7 @@ import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage-
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
-import { convert, FastConverter } from '../../utils/converters.mjs';
+import { FastConverter } from '../../utils/converters.mjs';
 
 /**
 * @typedef {import("../src/block-tree.mjs").TreeNode} TreeNode
@@ -119,7 +119,6 @@ export class Blockchain {
         this.blockStorage.removeBlocksHigherThan(startHeight);
 
         if (startHeight === -1) { this.reset(); } // no snapshot to load => reset the db
-
         return startHeight;
     }
     #loadBlocksFromStorageToCache(indexStart = 0, indexEnd = 9) {
@@ -160,7 +159,6 @@ export class Blockchain {
             throw error;
         }
     }
-
     /** Applies the changes from added blocks to the UTXO cache and VSS.
     * @param {UtxoCache} utxoCache - The UTXO cache to update.
     * @param {Vss} vss - The VSS to update.
@@ -324,7 +322,6 @@ export class Blockchain {
         this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m) => { console.error(m); });
         return null;
     }
-
     /** @param {string} txReference - The transaction reference in the format "height:txId" */
     getTransactionByReference(txReference) {
         const [height, txId] = txReference.split(':');
@@ -336,10 +333,8 @@ export class Blockchain {
             return tx ? tx : null;
         }
 
-        try { // Try from storage
-            const tx = this.blockStorage.retreiveTx(txReference);
-            return tx;
-        } catch (error) { this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); }); }
+        try { return this.blockStorage.retreiveTx(txReference); }
+        catch (error) { this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); }); }
 
         return null;
     }

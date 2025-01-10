@@ -1,3 +1,6 @@
+// A primitive way to store the blockchain data and wallet data etc...
+// As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
+
 import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
 import { FastConverter } from "./converters.mjs";
 import { serializer } from './serializer.mjs';
@@ -9,6 +12,7 @@ import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 * @typedef {import("../node/src/transaction.mjs").Transaction} Transaction
 */
 
+// GLOBALS VARS
 /** @type {MiniLogger} */
 const storageMiniLogger = new MiniLogger('storage');
 const fs = await import('fs');
@@ -17,14 +21,7 @@ const url = await import('url');
 const __filename = url.fileURLToPath(import.meta.url);
 const parentFolder = path.dirname(__filename);
 const __dirname = path.join(path.dirname(parentFolder), 'node');
-
-// A primitive way to store the blockchain data and wallet data etc...
-// As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
-
-// GLOBALS
 const BLOCK_PER_DIRECTORY = 1000;
-
-// PATHS
 const PATH = {
     STORAGE: path.join(__dirname, 'storage'),
     BLOCKS: path.join(__dirname, 'storage', 'blocks'),
@@ -34,27 +31,6 @@ const PATH = {
     TEST_STORAGE: path.join(__dirname, 'test-storage'),
 }
 for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
-
-// DEV FONCTIONS (USING JSON FORMAT - slow but useful for debugging)
-/** @param {number} blockIndex @param {string} dirPath */
-function loadBlockDataJSON(blockIndex, dirPath) {
-    const blockFileName = `${blockIndex.toString()}.json`;
-    const filePath = path.join(dirPath, blockFileName);
-    const blockContent = fs.readFileSync(filePath, 'utf8');
-    const blockData = BlockUtils.blockDataFromJSON(blockContent);
-    
-    return blockData;
-}
-/** @param {BlockData} blockData @param {string} dirPath */
-function saveBlockDataJSON(blockData, dirPath) {
-    const blockFilePath = path.join(dirPath, `${blockData.index}.json`);
-    fs.writeFileSync(blockFilePath, JSON.stringify(blockData, (key, value) => {
-        if (value === undefined) {
-          return undefined; // Exclude from the result
-        }
-        return value; // Include in the result
-      }), 'utf8');
-}
 
 export class Storage {
     /** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
@@ -182,13 +158,13 @@ export class AddressesTxsRefsStorage {
 }
 
 export class BlockchainStorage {
+    lastBlockIndex = -1;
+    fastConverter = new FastConverter();
     batchFolders = this.#getListOfFoldersInBlocksDirectory();
     /** @type {Object<number, string>} */
     hashByIndex = {"-1": "0000000000000000000000000000000000000000000000000000000000000000"};
     /** @type {Object<string, number>} */
     indexByHash = {"0000000000000000000000000000000000000000000000000000000000000000": 0};
-    lastBlockIndex = -1;
-    fastConverter = new FastConverter();
 
     constructor() { this.#init(); }
     #getListOfFoldersInBlocksDirectory() {
@@ -248,6 +224,11 @@ export class BlockchainStorage {
             storageMiniLogger.log(error.stack, (m) => { console.error(m); });
         }
     }
+    /** @param {BlockData} blockData @param {string} dirPath */
+    #saveBlockDataJSON(blockData, dirPath) {
+        const blockFilePath = path.join(dirPath, `${blockData.index}.json`);
+        fs.writeFileSync(blockFilePath, JSON.stringify(blockData, (key, value) => { return value; }), 'utf8');
+    }
     #getBlock(blockIndex = 0, blockHash = '', deserialize = true) {
         const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
 
@@ -257,6 +238,13 @@ export class BlockchainStorage {
 
         /** @type {BlockData} */
         const blockData = serializer.deserialize.block_finalized(serialized);
+        return blockData;
+    }
+    #loadBlockDataJSON(blockIndex = 0, dirPath = '') {
+        const blockFileName = `${blockIndex.toString()}.json`;
+        const filePath = path.join(dirPath, blockFileName);
+        const blockContent = fs.readFileSync(filePath, 'utf8');
+        const blockData = BlockUtils.blockDataFromJSON(blockContent);
         return blockData;
     }
 
@@ -272,7 +260,7 @@ export class BlockchainStorage {
         this.#saveBlockBinary(blockData);
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
-        if (saveJSON || blockData.index < 10000) { saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
+        if (saveJSON || blockData.index < 10000) { this.#saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
     }
     /** @param {BlockInfo} blockInfo */
     addBlockInfo(blockInfo) {

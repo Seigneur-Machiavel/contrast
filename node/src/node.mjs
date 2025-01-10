@@ -573,14 +573,12 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         try {
             toHeight = toHeight || fromHeight;
             if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
-            //if (toHeight - fromHeight > 10) { throw new Error('Cannot retrieve more than 10 blocks at once'); }
 
             /** @type {BlockData[]} */
             const blocksData = [];
             for (let i = fromHeight; i <= toHeight; i++) {
                 const blockData = this.blockchain.getBlock(i);
                 const blockInfo = this.blockchain.blockStorage.getBlockInfoByIndex(i);
-
                 blocksData.push(this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo));
             }
 

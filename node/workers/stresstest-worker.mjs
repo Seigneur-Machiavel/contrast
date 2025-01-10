@@ -206,17 +206,12 @@ async function test() {
         const currentHeight = node.blockchain.currentHeight;
         if (node.syncHandler.isSyncing) { continue; }
 
-        if (currentHeight > lastBlockIndexAndTime.index) { // new block only
+        if (currentHeight > lastBlockIndexAndTime.index) { // on new block only
             lastBlockIndexAndTime.index = currentHeight;
-            // delete txsTaskDoneThisBlock if the operation is done(value=true)
-            for (let key in txsTaskDoneThisBlock) {
+            for (let key in txsTaskDoneThisBlock) { // delete txsTaskDoneThisBlock if the operation is done(value=true)
                 if (txsTaskDoneThisBlock.hasOwnProperty(key) && testParams.unsafeSpamMode) { delete txsTaskDoneThisBlock[key]; break; } // Will spam event if intensive computation
                 if (txsTaskDoneThisBlock.hasOwnProperty(key) && txsTaskDoneThisBlock[key] === true) { delete txsTaskDoneThisBlock[key]; }
             }
-
-            /*const timeDiff = Date.now() - lastBlockIndexAndTime.time;
-            testMiniLogger.log(`[TEST] New block: ${node.blockCandidate.index} | Time: ${timeDiff}ms`, (m) => console.info(m));
-            lastBlockIndexAndTime.time = Date.now();*/
         }
 
         refreshAllBalances(accounts);

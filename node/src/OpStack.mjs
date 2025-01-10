@@ -20,8 +20,6 @@ export class OpStack {
     terminated = false;
     paused = false;
     executingTask = null;
-
-    // will replace the timeout with a simple loop
     healthInfo = {
         lastDigestTime: null,
         lastSyncTime: null,
@@ -104,8 +102,6 @@ export class OpStack {
         this.miniLogger.log('--------- OpStack terminated ---------', (m) => console.info(m));
     }
     async #executeTask(task) {
-        if (!task) { return; }
-
         try {
             const options = task.options ? task.options : {};
             const content = task.data ? task.data.content ? task.data.content : task.data : undefined;
