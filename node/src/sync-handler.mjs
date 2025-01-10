@@ -8,11 +8,7 @@ import ReputationManager from './peers-reputation.mjs';
  * @typedef {import("./node.mjs").Node} Node
  * @typedef {import("./p2p.mjs").P2PNetwork} P2PNetwork
  * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
- */
-
-const MAX_BLOCKS_PER_REQUEST = 4;
-
-/**
+ *
  * @typedef {Object} PeerInfo
  * @property {string} peerId
  * @property {string} address
@@ -21,6 +17,7 @@ const MAX_BLOCKS_PER_REQUEST = 4;
  */
 
 export class SyncHandler {
+    MAX_BLOCKS_PER_REQUEST = 4;
     /** @type {MiniLogger} */
     miniLogger = new MiniLogger('sync');
     /** @type {Map<string, number>} */
@@ -119,7 +116,7 @@ export class SyncHandler {
         let peerHeight = peerCurrentHeight;
         let desiredBlock = this.node.blockchain.currentHeight + 1;
         while (desiredBlock <= peerHeight) {
-            const endIndex = Math.min(desiredBlock + MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
+            const endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
             const response = await this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getBlocks', startIndex: desiredBlock, endIndex });
             if (!response || typeof response.currentHeight !== 'number' || !Array.isArray(response.blocks)) {
                 this.miniLogger.log(`Failed to get currentHeight or serialized blocks by 'getBlocks' request`, (m) => { console.error(m); });
