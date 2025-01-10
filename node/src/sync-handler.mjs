@@ -2,7 +2,6 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import P2PNetwork from './p2p.mjs';
 import * as lp from 'it-length-prefixed';
-import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
 
 /**
