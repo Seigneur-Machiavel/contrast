@@ -34,6 +34,9 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 */
 
 class P2PNetwork extends EventEmitter {
+    /** @type {Object<string, Peer>} */
+    peers = {};
+    subscriptions = new Set();
     miniLogger = new MiniLogger('P2PNetwork');
     topicsTreatment = {
         'new_transaction': {
@@ -52,10 +55,6 @@ class P2PNetwork extends EventEmitter {
             maxSize: BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05,
         },
     }
-    //@type {Object<string, { address: string, stream: any, dialable: boolean, lastSeen: number }>}
-    /** @type {Object<string, Peer>} */
-    peers = {};
-    subscriptions = new Set();
 
     /** @param {Object} [options={}] @param {TimeSynchronizer} timeSynchronizer */
     constructor(options = {}, timeSynchronizer) {
