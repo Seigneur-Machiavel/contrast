@@ -31,7 +31,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {number} currentHeight
  * @property {string} latestBlockHash
  * @property {Uint8Array[]} blocks
-*/
+ */
 
 class P2PNetwork extends EventEmitter {
     /** @type {Object<string, Peer>} */
@@ -139,7 +139,7 @@ class P2PNetwork extends EventEmitter {
             }
         }));
     }
-    #handlePeerDiscovery = async (event) => { // RESEARCH HERE : ma: peerMultiaddrs,  ?
+    #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
         /** @type {Multiaddr[]} */
         const peerMultiaddrs = event.detail.multiaddrs;
