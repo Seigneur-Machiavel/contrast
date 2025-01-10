@@ -5,15 +5,15 @@ import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
-import { noise } from '@chainsafe/libp2p-noise';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { noise } from '@chainsafe/libp2p-noise';
+import { yamux } from '@chainsafe/libp2p-yamux';
+import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
-import { bootstrap } from '@libp2p/bootstrap';
 import { lpStream } from 'it-length-prefixed-stream';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
-import { yamux } from '@chainsafe/libp2p-yamux';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 

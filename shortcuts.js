@@ -9,8 +9,8 @@ const shortcutsKeys = {
     toggleLoggerSettingsMenu: { key: "F9", enabled: true, devOnly: false },
     toggleDevTools: { key: "F10", enabled: true, devOnly: true },
 };
-/** @param {Object<string, BrowserWindow>} windows @param {BrowserWindow} nodeDashboardWindow */
-function setShortcuts(windows, handlersToRemove = [], dev = true) {
+/** @param {Object<string, BrowserWindow>} windows */
+function setShortcuts(windows, dev = true) {
     if (!dev) { for (let key in shortcutsKeys) shortcutsKeys[key].enabled = !shortcutsKeys[key].devOnly; }
 
     // TOGGLE DEVTOOLS
@@ -29,11 +29,6 @@ function setShortcuts(windows, handlersToRemove = [], dev = true) {
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {
         shortcutsLogger.log(`Reload shortcut pressed (${shortcutsKeys.reload.key})`, (m) => { console.log(m); });
         if (!BrowserWindow.getFocusedWindow()) return;
-
-        // Should be better if the handlers are removed by the initiator app
-        for (let handlerKeys of handlersToRemove) {
-            for (const key of handlerKeys) ipcMain.removeHandler(key);
-        }
         BrowserWindow.getFocusedWindow().reload();
     });
     // TOGGLE LOGGER SETTINGS MENU

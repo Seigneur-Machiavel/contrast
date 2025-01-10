@@ -1,9 +1,8 @@
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
-const { P2PChatHandler } = require('./apps/chat/back-scripts/chat-handler.js');
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 
-Menu.setApplicationMenu(null);
+Menu.setApplicationMenu(null); // remove the window top menu
 const mainLogger = new MiniLogger('main');
 
 const isDev = true;
@@ -21,15 +20,6 @@ let dashboardWorker;
         dashboardWorker.stop(); // but auto restarts
     }
 })();
-
-function checkArrayOfArraysDuplicate(handlersKeys = []) {
-    const handlers = handlersKeys.flat();
-    const duplicates = handlers.filter((v, i) => handlers.indexOf(v) !== i);
-    if (duplicates.length > 0) {
-        return duplicates;
-    }
-    return false;
-}
 function createLoggerSettingWindow() {
     const loggerWindow = new BrowserWindow({
         width: 300,
@@ -83,7 +73,6 @@ async function createMainWindow() {
 
 app.on('ready', async () => {
     const windows = {};
-
     windows.logger = createLoggerSettingWindow();
     windows.logger.hide();
 
@@ -91,14 +80,7 @@ app.on('ready', async () => {
     windows.nodeDashboard.hide();
 
     const mainWindow = await createMainWindow();
-    const handlersKeys = [];
-    const chatHandler = new P2PChatHandler(mainWindow);
-    handlersKeys.push(Object.keys(chatHandler.setupHandlers()));
-
-    const duplicates = checkArrayOfArraysDuplicate(handlersKeys);
-    if (duplicates) { mainLogger.log(`Duplicate IPC handlers detected: ${duplicates}`, (m) => { console.warn(m); }); }
-
-    setShortcuts(windows, handlersKeys, isDev);
+    setShortcuts(windows, isDev);
     if (isDev) mainWindow.webContents.toggleDevTools(); // dev tools on start
     //BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
 
