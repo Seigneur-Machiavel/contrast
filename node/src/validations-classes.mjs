@@ -429,8 +429,7 @@ export class BlockValidation {
     static validateBlockPrevHash(block, lastBlock) {
         const lastBlockHash = lastBlock ? lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
         if (lastBlockHash === block.prevHash) { return; }
-        
-        throw new Error(`!store! !reorg! Rejected: #${block.index} -> invalid prevHash: ${block.prevHash} - expected: ${lastBlockHash}`);
+        throw new Error(`!store! !reorg! #${block.index} Rejected -> invalid prevHash: ${block.prevHash.slice(0, 10)} - expected: ${lastBlockHash.slice(0, 10)}`);
     }
     /** @param {BlockData} block @param {BlockData} lastBlock @param {number} currentTime */
     static validateTimestamps(block, lastBlock, currentTime) {

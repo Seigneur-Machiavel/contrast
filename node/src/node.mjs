@@ -313,7 +313,7 @@ export class Node {
         if (finalizedBlock.hash !== hex) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (not corresponding): ${finalizedBlock.hash} - expected: ${hex}`);
         timer.endPhase('miner-hash');
     
-        try {
+        //try {
             timer.startPhase('height-timestamp-hash');
 
             BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight);
@@ -325,7 +325,10 @@ export class Node {
             timer.startPhase('legitimacy');
             await BlockValidation.validateLegitimacy(finalizedBlock, this.vss);
             timer.endPhase('legitimacy');
-        } catch (error) { this.miniLogger.log(`#${finalizedBlock.index} -> ${error.message} ~ Miner: ${minerId} | Validator: ${validatorId}`, (m) => { console.error(m); }); throw error; }
+        /*} catch (error) {
+            this.miniLogger.log(`#${finalizedBlock.index} -> ${error.message} ~ Miner: ${minerId} | Validator: ${validatorId}`, (m) => { console.error(m); });
+            throw error;
+        }*/
 
         timer.startPhase('difficulty-check');
         const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
@@ -393,14 +396,14 @@ export class Node {
         let totalFees;
         if (!skipValidation) {
             timer.startPhase('block-validation');
-            this.#updateState("Validating Block Proposal");
+            this.#updateState(`block-validation #${finalizedBlock.index}`);
             validationResult = await this.#validateBlockProposal(finalizedBlock, blockBytes);
             hashConfInfo = validationResult.hashConfInfo;
             if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
             timer.endPhase('block-validation');
         }
         
-        this.#updateState("applying finalized block");
+        this.#updateState(`applying finalized block #${finalizedBlock.index}`);
         timer.startPhase('add-confirmed-block');
         if (!skipValidation && !hashConfInfo?.conform) throw new Error('Failed to validate block');
         const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);

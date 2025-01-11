@@ -202,10 +202,10 @@ export class OpStack {
         if (error.message.includes('!reorg!')) {
             this.healthInfo.lastReorgCheckTime = Date.now();
             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('digestPowProposal: !reorg!');
-            if (reorgTasks) {
-                this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
-                this.securelyPushFirst(reorgTasks);
-            }
+            if (reorgTasks) { this.securelyPushFirst(reorgTasks); }
+                //this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
+                //this.securelyPushFirst(reorgTasks);
+            //}
         }
 
         // ban/offenses management
