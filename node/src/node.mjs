@@ -197,7 +197,6 @@ export class Node {
     /** Aggregates transactions from mempool, creates a new block candidate, signs it and returns it */
     async #createBlockCandidate() {
         const startTime = Date.now();
-
         const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
         const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
 
@@ -207,7 +206,6 @@ export class Node {
             await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
             const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
             this.blockchainStats.lastLegitimacy = myLegitimacy;
-            if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
             const lowerBoundBlockIndex = this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment;
@@ -235,7 +233,7 @@ export class Node {
         if (!this.roles.includes('validator')) { return false; }
 
         this.blockCandidate = await this.#createBlockCandidate();
-        if (this.blockCandidate === null) return true;
+        if (this.blockCandidate === null) { this.#updateState("idle", "creating block candidate"); return false; }
 
         if (this.roles.includes('miner')) this.miner.updateBestCandidate(this.blockCandidate);
 
