@@ -102,16 +102,18 @@ export class Miner {
             if (!bestCandidateIndexChanged && !bestCandidateValidatorAddressChanged) { return false; }
         }
 
+        let reasonChange = '';
         if (this.bestCandidate && blockCandidate.index === this.bestCandidate.index) {
             const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate);
             const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate);
             if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return; }
-            console.info(`[MINER] easier block, final diffs: before = ${bestCandidateFinalDiff.finalDifficulty} | after = ${newCandidateFinalDiff.finalDifficulty}`);
+            //console.info(`[MINER] easier block, final diffs: before = ${bestCandidateFinalDiff.finalDifficulty} | after = ${newCandidateFinalDiff.finalDifficulty}`);
+            reasonChange = '(easier block)';
         }
 
-        console.info(`[MINER] Best block candidate changed:
-from #${this.bestCandidate ? this.bestCandidate.index : null} | leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null}
-to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
+        console.info(`[MINER] Best block candidate changed${reasonChange}:
+from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
+to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
 
         this.bestCandidate = blockCandidate;
         return true;

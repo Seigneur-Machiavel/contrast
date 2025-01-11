@@ -302,7 +302,6 @@ export class Node {
     /** @param {BlockData} finalizedBlock */
     async #validateBlockProposal(finalizedBlock, blockBytes) {
         const timer = new BlockValidationTimer(), validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6), minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
-        this.#updateState("validating block");
         timer.startPhase('total-validation');
         
         try { timer.startPhase('block-index-check'); BlockValidation.checkBlockIndexIsNumber(finalizedBlock); timer.endPhase('block-index-check'); }
@@ -351,7 +350,6 @@ export class Node {
         timer.endPhase('full-txs-validation');
     
         timer.endPhase('total-validation');
-        this.#updateState("idle", "validating block");
         if (this.logValidationTime){ timer.displayResults(); }
     
         return { hashConfInfo, powReward, posReward, totalFees, allDiscoveredPubKeysAddresses };
@@ -394,6 +392,7 @@ export class Node {
         let totalFees;
         if (!skipValidation) {
             timer.startPhase('block-validation');
+            this.#updateState("Validating Block Proposal");
             validationResult = await this.#validateBlockProposal(finalizedBlock, blockBytes);
             hashConfInfo = validationResult.hashConfInfo;
             if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
