@@ -119,11 +119,12 @@ export class Node {
         this.miner.useDevArgon2 = this.useDevArgon2;
 
         if (!startFromScratch) {
-            this.#updateState("loading");
+            this.#updateState("Loading blockchain");
             const startHeight = await this.blockchain.load(this.snapshotSystem);
             this.loadSnapshot(startHeight);
         }
 
+        this.#updateState("Initializing P2P network");
         const uniqueHash = await this.account.getUniqueHash(64);
         await this.p2pNetwork.start(uniqueHash);
         await this.syncHandler.start();
