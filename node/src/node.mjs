@@ -437,6 +437,7 @@ export class Node {
         timer.endPhase('saveSnapshot');
         
         this.#updateState("idle", "applying finalized block");
+        if (!broadcastNewCandidate) { return; }
         return Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)); // delay before sending a new candidate
     }
 

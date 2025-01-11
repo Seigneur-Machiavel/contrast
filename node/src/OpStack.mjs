@@ -137,7 +137,7 @@ export class OpStack {
                     
                     this.node.reorganizator.pruneCache();
 
-                    if (options.broadcastNewCandidate) { this.pushFirst('createBlockCandidateAndBroadcast', result); }
+                    if (typeof result === 'number') { this.pushFirst('createBlockCandidateAndBroadcast', result); }
 
                     // If many blocks are self validated, we are probably in a fork
                     const blockValidatorAddress = content.Txs[1].inputs[0].split(':')[0];
