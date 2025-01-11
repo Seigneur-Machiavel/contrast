@@ -108,7 +108,7 @@ export class Vss {
         this.currentRoundHash = '';
         /** @type {number} */
         this.maxSupply = maxSupply; // Store the maxSupply passed in the constructor
-        this.maxLegitimacyToBroadcast = 10; // node should not broadcast block if not in the top 10
+        this.maxLegitimacyToBroadcast = 27; // node should not broadcast block if not in the top 27
     }
 
     /** @param {UTXO} utxo @param {number | undefined} upperBound */

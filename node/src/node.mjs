@@ -197,11 +197,10 @@ export class Node {
     /** Aggregates transactions from mempool, creates a new block candidate, signs it and returns it */
     async #createBlockCandidate() {
         const startTime = Date.now();
-        const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
-        const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
-
         // Create the block candidate, genesis block if no lastBlockData
+        const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
         let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', Txs, posTimestamp);
+        // If not genesis block: fill the block candidate with transactions etc...
         if (this.blockchain.lastBlock) {
             await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
             const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
@@ -214,6 +213,7 @@ export class Node {
             this.blockchainStats.averageBlockTime = averageBlockTimeMS;
             const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
             const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
+            const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
             blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, this.blockchain.lastBlock.hash, Txs, posTimestamp);
         }
 
