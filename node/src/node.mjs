@@ -199,7 +199,7 @@ export class Node {
         const startTime = Date.now();
         // Create the block candidate, genesis block if no lastBlockData
         const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
-        let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', Txs, posTimestamp);
+        let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
         // If not genesis block: fill the block candidate with transactions etc...
         if (this.blockchain.lastBlock) {
             await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
