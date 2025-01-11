@@ -146,9 +146,10 @@ to #${blockCandidate.index} | leg: ${blockCandidate.legitimacy}`);
 
         const validatorId = validatorAddress.slice(0, 6);
         const minerId = this.address.slice(0, 6);
-        console.info(`[MINER-${this.address.slice(0, 6)}] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
-(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${convert.formatNumberAsCurrency(finalizedBlock.coinBase)}`);
-        
+        //console.info(`[MINER-${this.address.slice(0, 6)}] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
+//(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${convert.formatNumberAsCurrency(finalizedBlock.coinBase)}`);
+        console.info(`[MINER-${this.address.slice(0, 6)}] -POW- #${finalizedBlock.index} | ${validatorId} | ${minerId} | ${finalizedBlock.difficulty} | ${convert.formatNumberAsCurrency(finalizedBlock.coinBase)}`);        
+
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
 
         await this.node.p2pBroadcast('new_block_finalized', finalizedBlock);

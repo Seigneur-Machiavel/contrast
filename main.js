@@ -1,13 +1,16 @@
 const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
-
 Menu.setApplicationMenu(null); // remove the window top menu
-const mainLogger = new MiniLogger('main');
 
+// GLOBAL VARIABLES
+const mainLogger = new MiniLogger('main');
 const isDev = true;
+const startNode = false;
 let dashboardWorker;
-(async () => {
+
+(async () => { // -- start node worker --
+    if (!startNode) return;
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);

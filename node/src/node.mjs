@@ -202,6 +202,7 @@ export class Node {
         if (this.blockchain.lastBlock) {
             await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
             const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
+            this.blockchainStats.lastLegitimacy = myLegitimacy;
             if (myLegitimacy === undefined) { throw new Error(`No legitimacy for ${this.account.address}, can't create a candidate`); }
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
@@ -222,7 +223,6 @@ export class Node {
         blockCandidate.powReward = powReward; // for the miner
 
         if (blockCandidate.Txs.length > 3) { this.miniLogger.log(`(Height:${blockCandidate.index}) => ${blockCandidate.Txs.length} txs, block candidate created in ${(Date.now() - startTime)}ms`, (m) => { console.info(m); }); }
-        this.blockchainStats.lastLegitimacy = blockCandidate.legitimacy;
         return blockCandidate;
     }
     /** Creates a new block candidate, signs it and broadcasts it */
@@ -432,10 +432,7 @@ z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetween
         if (!isLoading) this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
     
-        if (!broadcastNewCandidate) return true;
-        
-        await this.createBlockCandidateAndBroadcast(Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)));
-        return true;
+        return Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)); // delay before sending a new candidate
     }
 
     /** @param {string} topic @param {any} message */

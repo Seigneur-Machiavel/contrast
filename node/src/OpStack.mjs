@@ -126,8 +126,9 @@ export class OpStack {
                     break;
                 case 'digestPowProposal':
                     if (content.Txs[1].inputs[0] === undefined) { this.miniLogger.log(`[OpStack] Invalid block validator`, (m) => console.error(m)); return; }
+                    let result;
                     try {
-                        await this.node.digestFinalizedBlock(content, options, byteLength);
+                        result = await this.node.digestFinalizedBlock(content, options, byteLength);
                     } catch (error) {
                         this.isReorging = false;
                         await this.#digestPowProposalErrorHandler(error, content, task);
@@ -135,6 +136,8 @@ export class OpStack {
                     }
                     
                     this.node.reorganizator.pruneCache();
+
+                    if (options.broadcastNewCandidate) { this.pushFirst('createBlockCandidateAndBroadcast', result); }
 
                     // If many blocks are self validated, we are probably in a fork
                     const blockValidatorAddress = content.Txs[1].inputs[0].split(':')[0];
@@ -151,6 +154,7 @@ export class OpStack {
                     if (syncSuccessful) {
                         this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                         this.healthInfo.lastSyncTime = Date.now();
+                        this.pushFirst('createBlockCandidateAndBroadcast', 0);
                         break;
                     }
 
@@ -159,7 +163,7 @@ export class OpStack {
 
                     break;
                 case 'createBlockCandidateAndBroadcast':
-                    await this.node.createBlockCandidateAndBroadcast();
+                    await this.node.createBlockCandidateAndBroadcast(content || 0); // content = delay(ms)
                     break;
                 case 'rollBackTo':
                     this.node.loadSnapshot(content, false);
