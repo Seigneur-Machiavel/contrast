@@ -131,6 +131,7 @@ export class OpStack {
                         result = await this.node.digestFinalizedBlock(content, options, byteLength);
                     } catch (error) {
                         this.isReorging = false;
+                        this.node.blockchainStats.state = 'idle';
                         await this.#digestPowProposalErrorHandler(error, content, task);
                         return;
                     }

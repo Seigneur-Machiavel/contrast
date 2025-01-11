@@ -100,7 +100,8 @@ export class Node {
 
     // STARTUP -----------------------------------------------------------------------
     #updateState(newState, onlyFrom) {
-        if (onlyFrom && !this.blockchainStats.state.includes(onlyFrom)) { return; }
+        const state = this.blockchainStats.state;
+        if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) { return; }
         this.blockchainStats.state = newState;
     }
     async start(startFromScratch = false) {
@@ -239,7 +240,7 @@ export class Node {
         if (this.roles.includes('miner')) this.miner.updateBestCandidate(this.blockCandidate);
 
         let broadcasted = null;
-        this.#updateState(`broadcasting block candidate #${this.blockCandidate.index}`, "creating block candidate");
+        this.#updateState(`broadcasting block candidate #${this.blockCandidate.index} in ${delay}ms`, "creating block candidate");
         setTimeout(async () => {
             try {
                 await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
@@ -313,22 +314,15 @@ export class Node {
         if (finalizedBlock.hash !== hex) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (not corresponding): ${finalizedBlock.hash} - expected: ${hex}`);
         timer.endPhase('miner-hash');
     
-        //try {
-            timer.startPhase('height-timestamp-hash');
-
-            BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight);
-            BlockValidation.validateBlockPrevHash(finalizedBlock, this.blockchain.lastBlock);
-            BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime());
-           
-            timer.endPhase('height-timestamp-hash');
-            
-            timer.startPhase('legitimacy');
-            await BlockValidation.validateLegitimacy(finalizedBlock, this.vss);
-            timer.endPhase('legitimacy');
-        /*} catch (error) {
-            this.miniLogger.log(`#${finalizedBlock.index} -> ${error.message} ~ Miner: ${minerId} | Validator: ${validatorId}`, (m) => { console.error(m); });
-            throw error;
-        }*/
+        timer.startPhase('height-timestamp-hash');
+        BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight);
+        BlockValidation.validateBlockPrevHash(finalizedBlock, this.blockchain.lastBlock);
+        BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime());
+        timer.endPhase('height-timestamp-hash');
+        
+        timer.startPhase('legitimacy');
+        await BlockValidation.validateLegitimacy(finalizedBlock, this.vss);
+        timer.endPhase('legitimacy');
 
         timer.startPhase('difficulty-check');
         const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
@@ -371,7 +365,7 @@ export class Node {
         if (this.restartRequested) return;
         
         const timer = new BlockDigestionTimer();
-        this.#updateState("digesting finalized block");
+        this.#updateState(`digesting finalized block #${finalizedBlock.index}`);
     
         timer.startPhase('initialization');
         // SUPPLEMENTARY TEST (INITIAL === DESERIALIZE)
