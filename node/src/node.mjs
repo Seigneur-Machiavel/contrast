@@ -99,8 +99,12 @@ export class Node {
     }
 
     // STARTUP -----------------------------------------------------------------------
+    #updateState(newState, onlyFrom) {
+        if (onlyFrom && this.blockchainStats.state !== onlyFrom) { return; }
+        this.blockchainStats.state = newState;
+    }
     async start(startFromScratch = false) {
-        this.blockchainStats.state = "starting";
+        this.#updateState("starting");
 
         this.bootstrapNodes = Storage.loadJSON('bootstrapNodes') || this.bootstrapNodes;
         this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
@@ -115,7 +119,7 @@ export class Node {
         this.miner.useDevArgon2 = this.useDevArgon2;
 
         if (!startFromScratch) {
-            this.blockchainStats.state = "loading";
+            this.#updateState("loading");
             const startHeight = await this.blockchain.load(this.snapshotSystem);
             this.loadSnapshot(startHeight);
         }
@@ -226,8 +230,8 @@ export class Node {
         return blockCandidate;
     }
     /** Creates a new block candidate, signs it and broadcasts it */
-    async createBlockCandidateAndBroadcast(delay = 0) {
-        this.blockchainStats.state = "creating block candidate";
+    async createBlockCandidateAndBroadcast(delay = 0, awaitBroadcast = false) {
+        this.#updateState("creating block candidate");
         if (!this.roles.includes('validator')) { return false; }
 
         this.blockCandidate = await this.#createBlockCandidate();
@@ -236,10 +240,12 @@ export class Node {
         if (this.roles.includes('miner')) this.miner.updateBestCandidate(this.blockCandidate);
 
         let broadcasted = null;
+        this.#updateState("broadcasting block candidate", "creating block candidate");
         setTimeout(async () => {
             try {
                 await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
                 broadcasted = true;
+                this.#updateState("idle", "broadcasting block candidate");
 
                 const callback = this.wsCallbacks.onBroadcastNewCandidate;
                 if (callback) callback.execute(BlockUtils.getBlockHeader(this.blockCandidate));
@@ -248,6 +254,7 @@ export class Node {
             }
         }, delay ? delay : 0);
 
+        if (!awaitBroadcast) { return true; }
         while (broadcasted === null) { await new Promise(resolve => setTimeout(resolve, 100)); }
         return broadcasted;
     }
@@ -297,7 +304,7 @@ export class Node {
     /** @param {BlockData} finalizedBlock */
     async #validateBlockProposal(finalizedBlock, blockBytes) {
         const timer = new BlockValidationTimer(), validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6), minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
-        this.blockchainStats.state = "validating block";
+        this.#updateState("validating block");
         timer.startPhase('total-validation');
         
         try { timer.startPhase('block-index-check'); BlockValidation.checkBlockIndexIsNumber(finalizedBlock); timer.endPhase('block-index-check'); }
@@ -346,8 +353,8 @@ export class Node {
         timer.endPhase('full-txs-validation');
     
         timer.endPhase('total-validation');
-        this.blockchainStats.state = "idle";
-        if (this.logValidationTime){ timer.displayResults();}
+        this.#updateState("idle", "validating block");
+        if (this.logValidationTime){ timer.displayResults(); }
     
         return { hashConfInfo, powReward, posReward, totalFees, allDiscoveredPubKeysAddresses };
     }
@@ -364,7 +371,7 @@ export class Node {
         if (this.restartRequested) return;
         
         const timer = new BlockDigestionTimer();
-        this.blockchainStats.state = "digesting finalized block";
+        this.#updateState("digesting finalized block");
     
         timer.startPhase('initialization');
         // SUPPLEMENTARY TEST (INITIAL === DESERIALIZE)
@@ -394,7 +401,8 @@ export class Node {
             if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
             timer.endPhase('block-validation');
         }
-    
+        
+        this.#updateState("applying finalized block");
         timer.startPhase('add-confirmed-block');
         if (!skipValidation && !hashConfInfo?.conform) throw new Error('Failed to validate block');
         const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
@@ -414,7 +422,7 @@ export class Node {
         timer.endPhase('block-storage');
     
         if (blockBytes > 102_400 && !skipValidation) {
-            this.miniLogger.log(`#${finalizedBlock.index} blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
+            this.miniLogger.log(`#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
             if (this.logValidationTime){ timer.displayResults();}
         }
     
@@ -423,15 +431,14 @@ export class Node {
         const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
     
         if (!isLoading && !isSync) {
-            this.miniLogger.log(`#${finalizedBlock.index} -> validator: ${validatorId} | miner: ${minerId}
-( diff: ${hashConfInfo.difficulty} + timeAdj: ${hashConfInfo.timeDiffAdjustment} + leg: ${hashConfInfo.legitimacy} ) = finalDiff: ${hashConfInfo.finalDifficulty} | 
-z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | gap_PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
+            this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
         }
     
         timer.startPhase('saveSnapshot');
         if (!isLoading) this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
-    
+        
+        this.#updateState("idle", "applying finalized block");
         return Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)); // delay before sending a new candidate
     }
 
