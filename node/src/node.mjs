@@ -100,7 +100,7 @@ export class Node {
 
     // STARTUP -----------------------------------------------------------------------
     #updateState(newState, onlyFrom) {
-        if (onlyFrom && this.blockchainStats.state !== onlyFrom) { return; }
+        if (onlyFrom && !this.blockchainStats.state.includes(onlyFrom)) { return; }
         this.blockchainStats.state = newState;
     }
     async start(startFromScratch = false) {
@@ -230,7 +230,7 @@ export class Node {
     }
     /** Creates a new block candidate, signs it and broadcasts it */
     async createBlockCandidateAndBroadcast(delay = 0, awaitBroadcast = false) {
-        this.#updateState("creating block candidate");
+        this.#updateState(`creating block candidate #${this.blockchain.lastBlock ? this.blockchain.lastBlock.index + 1 : 0}`);
         if (!this.roles.includes('validator')) { return false; }
 
         this.blockCandidate = await this.#createBlockCandidate();
@@ -239,7 +239,7 @@ export class Node {
         if (this.roles.includes('miner')) this.miner.updateBestCandidate(this.blockCandidate);
 
         let broadcasted = null;
-        this.#updateState("broadcasting block candidate", "creating block candidate");
+        this.#updateState(`broadcasting block candidate #${this.blockCandidate.index}`, "creating block candidate");
         setTimeout(async () => {
             try {
                 await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
