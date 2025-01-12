@@ -178,6 +178,7 @@ export class OpStack {
                     const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('reorg_end');
                     if (!reorgTasks) {
                         this.miniLogger.log(`[OpStack] Reorg ended, no legitimate branch > ${this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
+                        this.pushFirst('createBlockCandidateAndBroadcast', 0);
                         break;
                     }
 

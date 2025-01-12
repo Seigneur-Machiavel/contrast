@@ -93,22 +93,35 @@ export class Miner {
     }
     /** @param {BlockData} blockCandidate */
     #setBestCandidateIfChanged(blockCandidate) {
-        if (this.bestCandidate !== null) {
+        const prevHash = this.node.blockchain.lastBlock.hash;
+        if (blockCandidate.prevHash !== prevHash) { return false; }
+
+        /*const validPrevHash = this.bestCandidate && this.bestCandidate.prevHash === prevHash;
+        if (this.bestCandidate && validPrevHash) { // check if the new block is from the same validator
             const candidateValidatorAddress = blockCandidate.Txs[0].inputs[0].split(':')[0];
             const bestCandidateValidatorAddress = this.bestCandidate.Txs[0].inputs[0].split(':')[0];
 
             const bestCandidateIndexChanged = this.bestCandidate.index !== blockCandidate.index;
             const bestCandidateValidatorAddressChanged = bestCandidateValidatorAddress !== candidateValidatorAddress;
             if (!bestCandidateIndexChanged && !bestCandidateValidatorAddressChanged) { return false; }
-        }
+        }*/ //? probably uselss
+        
+        let reasonChange = '(unknown)';
+        const missingBestCandidate = !this.bestCandidate;
+        const invalidBestPrevHash = this.bestCandidate && this.bestCandidate.prevHash !== prevHash;
+        const sameIndex = this.bestCandidate && blockCandidate.index === this.bestCandidate.index;
 
-        let reasonChange = '';
-        if (this.bestCandidate && blockCandidate.index === this.bestCandidate.index) {
+        if (missingBestCandidate) {
+            reasonChange = '(no best candidate, set first)';
+        } else if (invalidBestPrevHash) {
+            reasonChange = '(replacing invalid prevHash)';
+        } else if (sameIndex) {
             const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate);
             const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate);
-            if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return; }
-            //console.info(`[MINER] easier block, final diffs: before = ${bestCandidateFinalDiff.finalDifficulty} | after = ${newCandidateFinalDiff.finalDifficulty}`);
-            reasonChange = '(easier block)';
+            if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return false; }
+            reasonChange = '(replacing by easier block)';
+        } else if (blockCandidate.index > this.bestCandidate.index) {
+            reasonChange = '(replacing by higher block)';
         }
 
         console.info(`[MINER] Best block candidate changed${reasonChange}:
