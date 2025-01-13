@@ -22,7 +22,6 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
  * 
  * @typedef {Object} Peer
- * @property {string} addressStr
  * @property {Multiaddr[]} remoteAddresses
  * @property {boolean} dialable
  * @property {number} lastSeen
@@ -88,7 +87,6 @@ class P2PNetwork extends EventEmitter {
 
     #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
-        const peer = this.peers[peerIdStr];
 
         /** @type {Multiaddr[]} */
         let peerMultiaddrs = event.detail.multiaddrs;
@@ -101,35 +99,32 @@ class P2PNetwork extends EventEmitter {
             //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
             this.miniLogger.log(`(Discovery) Dialed peer ${peerIdStr}`, (m) => { console.debug(m); });
-            this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs });
+            this.#updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
-            this.updatePeer(peerIdStr, { dialable: false });
+            this.#updatePeer(peerIdStr, { dialable: false });
         }
     };
     /** @param {CustomEvent} event */
     #handlePeerConnect = async (event) => {
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
-        const peer = this.peers[peerIdStr];
-        this.miniLogger.log(`Peer ${peerIdStr} connected`, (m) => { console.debug(m); });
 
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
         const connections = this.p2pNode.getConnections(peerIdStr);
-        const addressStr = connections.length > 0 ? connections[0].remoteAddr.toString() : null;
         const remoteAddresses = connections.map(c => c.remoteAddr);
 
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
             await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             this.miniLogger.log(`(Connect) Dialed peer ${peerId}`, (m) => { console.debug(m); });
-            this.updatePeer(peerId.toString(), { dialable: true, remoteAddresses, addressStr });
+            this.#updatePeer(peerId.toString(), { dialable: true, remoteAddresses });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
-            this.updatePeer(peerId.toString(), { addressStr, dialable: false });
+            this.#updatePeer(peerId.toString(), { dialable: false });
         }
     };
     /** @param {CustomEvent} event */
@@ -228,7 +223,7 @@ class P2PNetwork extends EventEmitter {
             } catch (err) {
                 this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                 const peerId = ma.getPeerId();
-                if (peerId) { this.updatePeer(peerId.toString(), { remoteAddresses: [ma], dialable: false }); }
+                if (peerId) { this.#updatePeer(peerId.toString(), { remoteAddresses: [ma], dialable: false }); }
             }
         }));
     }
@@ -295,9 +290,8 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`Unsubscribed from topic ${topic}`, (m) => { console.debug(m); });
     }
     /** @param {string} peerIdStr @param {Object} data */
-    updatePeer(peerIdStr, data) {
+    ##updatePeer(peerIdStr, data) {
         const updatedPeer = this.peers[peerIdStr] || {};
-        updatedPeer.addressStr = data.addressStr || updatedPeer.addressStr || null;
         updatedPeer.remoteAddresses = data.remoteAddresses || updatedPeer.remoteAddresses || [];
         if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
         if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
