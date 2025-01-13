@@ -26,6 +26,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {Multiaddr[]} remoteAddresses
  * @property {boolean} dialable
  * @property {number} lastSeen
+ * @property {any} stream
  * 
  * @typedef {Object} SyncMessage
  * @property {number} currentHeight
@@ -99,7 +100,8 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`Peer ${peerIdStr} discovered, Dialing...`, (m) => { console.info(m); });
 
         try {
-            await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const stream = await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
@@ -120,9 +122,16 @@ class P2PNetwork extends EventEmitter {
         const remoteAddresses = connections.map(c => c.remoteAddr);
 
         try {
-            const con = await this.p2pNode.dial(remoteAddresses);
+            //const con = await this.p2pNode.dial(remoteAddresses);
+            const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             this.miniLogger.log(`Dialed peer ${peerId}`, (m) => { console.debug(m); });
-            this.updatePeer(peerId.toString(), { status: 'dialed', remoteAddresses, addressStr: con.remoteAddr.toString(), dialable: true });
+            this.updatePeer(peerId.toString(), {
+                status: 'dialed',
+                remoteAddresses,
+                addressStr: con.remoteAddr.toString(),
+                dialable: true,
+                stream,
+            });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
             const addressStr = connections.length > 0 ? connections[0].remoteAddr.toString() : null;
@@ -261,8 +270,8 @@ class P2PNetwork extends EventEmitter {
             const timeout = setTimeout(() => { abortController.abort('300_000ms timeout reached'); }, 300_000);
             const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
             clearTimeout(timeout);*/
-            
-            const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            const stream = peer.stream;
+            //const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
             //await Promise.race([ lp.write(serialized), createTimeout('write', this.options.dialTimeout) ]);
@@ -311,6 +320,7 @@ class P2PNetwork extends EventEmitter {
         if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
         if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
         updatedPeer.lastSeen = this.timeSynchronizer.getCurrentTime();
+        updatedPeer.stream = data.stream || updatedPeer.stream || null;
 
         this.peers[peerIdStr] = updatedPeer;
         this.miniLogger.log(`Peer ${peerIdStr} updated`, (m) => { console.debug(m); });
