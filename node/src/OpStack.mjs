@@ -42,9 +42,41 @@ export class OpStack {
         const delayBetweenChecks = 10000; // 10 second
         while (!this.terminated) {
             await new Promise(resolve => setTimeout(resolve, delayBetweenChecks));
-            if (this.healthInfo.waitingForCheck) { continue; }
-            this.healthInfo.waitingForCheck = true;
-            this.pushFirst('healthCheck', null);
+            //if (this.healthInfo.waitingForCheck) { continue; }
+            //this.healthInfo.waitingForCheck = true;
+            //this.pushFirst('healthCheck', null);
+
+            const now = Date.now();
+            
+            if (this.healthInfo.lastDigestTime === null && this.healthInfo.lastSyncTime === null) { break; }
+            const lastDigestTime = this.healthInfo.lastDigestTime || 0;
+            const lastSyncTime = this.healthInfo.lastSyncTime || 0;
+            const lastDigestOrSyncTime = Math.max(lastDigestTime, lastSyncTime);
+            const timeSinceLastDigestOrSync = now - lastDigestOrSyncTime;
+
+            if (timeSinceLastDigestOrSync > this.healthInfo.delayBeforeRestart) {
+                this.miniLogger.log(`[OpStack] Restart requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
+                this.node.restartRequested = 'OpStack.healthCheckLoop() -> delayBeforeRestart reached!';
+                this.terminate();
+                break;
+            }
+
+            if (!this.syncRequested && timeSinceLastDigestOrSync > this.healthInfo.delayBeforeSyncCheck) {
+                this.pushFirst('syncWithPeers', null);
+                this.miniLogger.log(`syncWithPeers requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
+                break;
+            }
+            
+            const lastReorgCheckTime = this.healthInfo.lastReorgCheckTime;
+            const timeSinceLastReorgCheck = lastReorgCheckTime ? now - lastReorgCheckTime : now - lastDigestOrSyncTime;
+            if (timeSinceLastDigestOrSync < this.healthInfo.delayBeforeReorgCheck) { break; }
+            if (timeSinceLastReorgCheck > this.healthInfo.delayBeforeReorgCheck) {
+                this.healthInfo.lastReorgCheckTime = Date.now();
+                const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('healthCheck');
+                if (!reorgTasks) { break; }
+
+                this.securelyPushFirst(reorgTasks);
+            }
         }
     }
     terminate() {
