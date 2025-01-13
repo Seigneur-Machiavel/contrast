@@ -98,7 +98,7 @@ class P2PNetwork extends EventEmitter {
         try {
             //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             const stream = await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
-            stream.close();
+            //stream.close();
             this.miniLogger.log(`(Discovery) Dialed peer ${peerIdStr}`, (m) => { console.debug(m); });
             this.#updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs });
         } catch (error) {
@@ -121,7 +121,7 @@ class P2PNetwork extends EventEmitter {
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
             const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-            stream.close();
+            //stream.close();
             this.miniLogger.log(`(Connect) Dialed peer ${peerId}`, (m) => { console.debug(m); });
             this.#updatePeer(peerId.toString(), { dialable: true, remoteAddresses });
         } catch (error) {
@@ -223,7 +223,7 @@ class P2PNetwork extends EventEmitter {
                 
                 //await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 const stream = await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL);
-                stream.close();
+                //stream.close();
                 this.miniLogger.log(`Connected to bootstrap node ${addr}`, (m) => { console.info(m); });
                 if (peerId) { this.#updatePeer(peerId.toString(), { dialable: true }); }
             } catch (err) {
@@ -266,7 +266,7 @@ class P2PNetwork extends EventEmitter {
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
-            stream.close();
+            //stream.close();
             //stream.reset(); -> //?create an error
             
             const response = serializer.deserialize.rawData(res.subarray());
