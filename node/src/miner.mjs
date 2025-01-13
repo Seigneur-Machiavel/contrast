@@ -185,7 +185,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
     }
     /** DON'T AWAIT THIS FUNCTION */
     async startWithWorker() {
-        const delayBetweenUpdate = this.roles.includes('validator') ? 20 : 10;
+        const delayBetweenUpdate = 100;
         while (!this.terminated) {
             await new Promise((resolve) => setTimeout(resolve, delayBetweenUpdate));
             await this.terminateUnusedWorkers();

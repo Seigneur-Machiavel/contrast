@@ -250,9 +250,9 @@ class P2PNetwork extends EventEmitter {
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
 
-        const createTimeout = (ms) => {
+        const createTimeout = (operation, ms) => {
             return new Promise((_, reject) => {
-                setTimeout(() => { reject(new Error(`Operation timed out after ${ms}ms`)); }, ms);
+                setTimeout(() => { reject(new Error(`${operation} operation timed out after ${ms}ms`)); }, ms);
             });
         };
 
@@ -266,10 +266,10 @@ class P2PNetwork extends EventEmitter {
             
             const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
-            await Promise.race([ lp.write(serialized), createTimeout(this.options.dialTimeout) ]);
+            await Promise.race([ lp.write(serialized), createTimeout('write', this.options.dialTimeout) ]);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
-            const res = await Promise.race([ lp.read(), createTimeout(this.options.dialTimeout) ]);
+            const res = await Promise.race([ lp.read(), createTimeout('read', this.options.dialTimeout) ]);
             if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
