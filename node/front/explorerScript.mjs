@@ -1053,7 +1053,7 @@ export class BlockExplorerWidget {
         return 'request sent';
     }
     getLastBlockInfoIndex() {
-        return this.blocksInfo.length === 0 ? 0 : this.blocksInfo[this.blocksInfo.length - 1].header.index;
+        return this.blocksInfo.length === 0 ? -1 : this.blocksInfo[this.blocksInfo.length - 1].header.index;
     }
     getCloneBeforeReset() {
         const cloned = {
