@@ -89,7 +89,7 @@ class P2PNetwork extends EventEmitter {
         const peerIdStr = event.detail.id.toString();
 
         /** @type {Multiaddr[]} */
-        let peerMultiaddrs = event.detail.multiaddrs;
+        const peerMultiaddrs = this.peers[peerIdStr]?.remoteAddresses || event.detail.multiaddrs;
         if (!peerMultiaddrs || peerMultiaddrs.length === 0) {
             this.miniLogger.log(`Failed to find multiaddrs for peer ${peerIdStr}`, (m) => { console.error(m); });
             return;
