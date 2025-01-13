@@ -6,7 +6,7 @@ Menu.setApplicationMenu(null); // remove the window top menu
 // GLOBAL VARIABLES
 const mainLogger = new MiniLogger('main');
 const isDev = true;
-const startNode = false;
+const startNode = true;
 let dashboardWorker;
 
 (async () => { // -- start node worker --

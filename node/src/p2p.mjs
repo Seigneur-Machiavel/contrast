@@ -266,10 +266,10 @@ class P2PNetwork extends EventEmitter {
             
             const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
-            await Promise.race([ lp.write(serialized), createTimeout(2000) ]);
+            await Promise.race([ lp.write(serialized), createTimeout(this.options.dialTimeout) ]);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
-            const res = await Promise.race([ lp.read(), createTimeout(2000) ]);
+            const res = await Promise.race([ lp.read(), createTimeout(this.options.dialTimeout) ]);
             if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
