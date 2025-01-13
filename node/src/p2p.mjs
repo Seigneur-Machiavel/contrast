@@ -271,7 +271,7 @@ class P2PNetwork extends EventEmitter {
 
             //const res = await Promise.race([ lp.read(), createTimeout('read', this.options.dialTimeout) ]);
             const res = await lp.read();
-            if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
+            if (!res) { miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
