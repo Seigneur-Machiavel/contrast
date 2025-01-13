@@ -17,10 +17,12 @@ import ReputationManager from './peers-reputation.mjs';
  */
 
 export class SyncHandler {
+    isSyncing = false;
+    syncDisabled = false;
     MAX_BLOCKS_PER_REQUEST = 4;
     /** @type {MiniLogger} */
     miniLogger = new MiniLogger('sync');
-    /** @type {Map<string, number>} */
+    /** @type {Object<string, number>} */
     peersHeights = {};
 
     /** @param {Node} node */
@@ -29,9 +31,6 @@ export class SyncHandler {
         this.node = node;
         this.p2pNetworkMaxMessageSize = 0;
         this.syncFailureCount = 0;
-        this.maxBlocksToRemove = 100; // Set a maximum limit to prevent removing too many blocks
-        this.isSyncing = false;
-        this.syncDisabled = false;
     }
 
     async #handleIncomingStream(lstream) {
@@ -85,6 +84,7 @@ export class SyncHandler {
 
             const { currentHeight, latestBlockHash } = response;
             peersInfo.push({ peerIdStr, currentHeight, latestBlockHash });
+            this.peersHeights[peerIdStr] = currentHeight;
         }
 
         return peersInfo;
@@ -92,14 +92,13 @@ export class SyncHandler {
     #handleSyncFailure() {
         const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
         // if syncFailureCount is a multiple of 10, try to sync from snapshots
-        if (this.syncFailureCount > 0 && this.syncFailureCount % 100 === 0 && snapshotsHeights.length > 0) {
+        if (this.syncFailureCount > 0 && this.syncFailureCount % 6 === 0 && snapshotsHeights.length > 0) {
             // retry sync from snapshots, ex: 15, 10, 5.. 15, 10, 5.. Etc...
-            const modulo = (this.syncFailureCount / 100) % snapshotsHeights.length;
+            const modulo = (this.syncFailureCount / 6) % snapshotsHeights.length;
             const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
             this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
         }
 
-        this.isSyncing = false;
         this.syncFailureCount++;
         this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
 
@@ -184,7 +183,6 @@ export class SyncHandler {
 
         this.miniLogger.log(`Starting syncWithPeers at #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
         this.node.blockchainStats.state = "syncing";
-        this.isSyncing = true;
     
         const peersInfo = await this.#getAllPeersInfo();
         const consensus = this.#findConsensus(peersInfo);
@@ -196,7 +194,6 @@ export class SyncHandler {
 
         if (consensus.height <= this.node.blockchain.currentHeight) {
             this.miniLogger.log(`Already at the consensus height #${consensus.height}, no need to sync`, (m) => { console.debug(m); });
-            this.isSyncing = false;
             return true;
         }
         
@@ -217,7 +214,6 @@ export class SyncHandler {
         if (consensus.height > this.node.blockchain.currentHeight) { return this.#handleSyncFailure(); }
         
         this.miniLogger.log(`Sync process finished at #${this.node.blockchain.currentHeight}`, (m) => { console.debug(m); });
-        this.isSyncing = false;
         return true;
     }
 }

@@ -259,7 +259,7 @@ class P2PNetwork extends EventEmitter {
         try {
             //const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             const abortController = new AbortController();
-            const timeout = setTimeout(() => { abortController.abort(); }, 300_000);
+            const timeout = setTimeout(() => { abortController.abort('300_000ms timeout reached'); }, 300_000);
             const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
             clearTimeout(timeout);
             

@@ -103,6 +103,8 @@ export class Miner {
 
         if (missingBestCandidate) {
             reasonChange = '(no best candidate, set first)';
+        } else if (blockCandidate.index > this.bestCandidate.index) {
+            reasonChange = '(replacing by higher block)';
         } else if (invalidBestPrevHash) {
             reasonChange = '(replacing invalid prevHash)';
         } else if (sameIndex) {
@@ -110,8 +112,6 @@ export class Miner {
             const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate);
             if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return false; }
             reasonChange = '(replacing by easier block)';
-        } else if (blockCandidate.index > this.bestCandidate.index) {
-            reasonChange = '(replacing by higher block)';
         }
 
         console.info(`[MINER] Best block candidate changed${reasonChange}:
