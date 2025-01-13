@@ -102,7 +102,8 @@ class P2PNetwork extends EventEmitter {
         try {
             //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             const stream = await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
-            this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs, stream });
+            const lp = lpStream(stream);
+            this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs, stream: lp });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
             this.updatePeer(peerIdStr, { dialable: false });
@@ -127,8 +128,9 @@ class P2PNetwork extends EventEmitter {
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
             const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            const lp = lpStream(stream);
             this.miniLogger.log(`Dialed peer ${peerId}`, (m) => { console.debug(m); });
-            this.updatePeer(peerId.toString(), { status: 'dialed', remoteAddresses, addressStr, dialable: true, stream });
+            this.updatePeer(peerId.toString(), { status: 'dialed', remoteAddresses, addressStr, dialable: true, stream: lp });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
             this.updatePeer(peerId.toString(), { status: 'connected', addressStr, dialable: false });
@@ -263,8 +265,8 @@ class P2PNetwork extends EventEmitter {
 
         try {
             //const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-            const stream = peer.stream;
-            const lp = lpStream(stream);
+            const lp = peer.stream;
+            //const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
             //await Promise.race([ lp.write(serialized), createTimeout('write', this.options.dialTimeout) ]);
             lp.write(serialized);
