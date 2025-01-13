@@ -1,8 +1,8 @@
 export const BLOCKCHAIN_SETTINGS = {
     // BLOCK
     targetBlockTime: 120_000, // 120_000, // 2 min
-    maxBlockSize: 200_000, // ~200KB
-    maxTransactionSize: 200_000, // ~200KB
+    maxBlockSize: 100_000, // ~100KB
+    maxTransactionSize: 100_000, // ~100KB
     
     // DISTRIBUTION
     rewardMagicNb1: 102_334_155, // Fibonacci n+2
