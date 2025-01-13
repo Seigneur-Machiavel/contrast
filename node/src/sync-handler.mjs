@@ -61,7 +61,7 @@ export class SyncHandler {
                 const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                 await stream.sink(encodedResponse);
             }
-            stream.close();
+            //stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
