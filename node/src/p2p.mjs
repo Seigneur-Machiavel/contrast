@@ -290,7 +290,7 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`Unsubscribed from topic ${topic}`, (m) => { console.debug(m); });
     }
     /** @param {string} peerIdStr @param {Object} data */
-    ##updatePeer(peerIdStr, data) {
+    #updatePeer(peerIdStr, data) {
         const updatedPeer = this.peers[peerIdStr] || {};
         updatedPeer.remoteAddresses = data.remoteAddresses || updatedPeer.remoteAddresses || [];
         if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
