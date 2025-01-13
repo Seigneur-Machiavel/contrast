@@ -95,16 +95,6 @@ export class Miner {
     #setBestCandidateIfChanged(blockCandidate) {
         const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
         if (blockCandidate.prevHash !== prevHash) { return false; }
-
-        /*const validPrevHash = this.bestCandidate && this.bestCandidate.prevHash === prevHash;
-        if (this.bestCandidate && validPrevHash) { // check if the new block is from the same validator
-            const candidateValidatorAddress = blockCandidate.Txs[0].inputs[0].split(':')[0];
-            const bestCandidateValidatorAddress = this.bestCandidate.Txs[0].inputs[0].split(':')[0];
-
-            const bestCandidateIndexChanged = this.bestCandidate.index !== blockCandidate.index;
-            const bestCandidateValidatorAddressChanged = bestCandidateValidatorAddress !== candidateValidatorAddress;
-            if (!bestCandidateIndexChanged && !bestCandidateValidatorAddressChanged) { return false; }
-        }*/ //? probably uselss
         
         let reasonChange = '(unknown)';
         const missingBestCandidate = !this.bestCandidate;
@@ -195,7 +185,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
     }
     /** DON'T AWAIT THIS FUNCTION */
     async startWithWorker() {
-        const delayBetweenUpdate = this.roles.includes('validator') ? 200 : 100;
+        const delayBetweenUpdate = this.roles.includes('validator') ? 20 : 10;
         while (!this.terminated) {
             await new Promise((resolve) => setTimeout(resolve, delayBetweenUpdate));
             await this.terminateUnusedWorkers();
