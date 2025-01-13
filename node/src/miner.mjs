@@ -93,7 +93,7 @@ export class Miner {
     }
     /** @param {BlockData} blockCandidate */
     #setBestCandidateIfChanged(blockCandidate) {
-        const prevHash = this.node.blockchain.lastBlock.hash;
+        const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
         if (blockCandidate.prevHash !== prevHash) { return false; }
 
         /*const validPrevHash = this.bestCandidate && this.bestCandidate.prevHash === prevHash;
