@@ -90,7 +90,7 @@ class P2PNetwork extends EventEmitter {
     #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
         const existingPeer = this.peers[peerIdStr];
-        if (existingPeer.stream) { return; }
+        if (existingPeer && existingPeer.stream) { return; }
 
         /** @type {Multiaddr[]} */
         let peerMultiaddrs = event.detail.multiaddrs;
@@ -112,6 +112,8 @@ class P2PNetwork extends EventEmitter {
     #handlePeerConnect = async (event) => {
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
+        const existingPeer = this.peers[peerIdStr];
+        if (existingPeer && existingPeer.stream) { return; }
         this.miniLogger.log(`Peer ${peerIdStr} connected`, (m) => { console.debug(m); });
 
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
