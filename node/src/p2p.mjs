@@ -100,6 +100,7 @@ class P2PNetwork extends EventEmitter {
         try {
             //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
+            this.miniLogger.log(`(Discovery) Dialed peer ${peerIdStr}`, (m) => { console.debug(m); });
             this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
@@ -124,8 +125,8 @@ class P2PNetwork extends EventEmitter {
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
             await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            this.miniLogger.log(`(Connect) Dialed peer ${peerId}`, (m) => { console.debug(m); });
             this.updatePeer(peerId.toString(), { dialable: true, remoteAddresses, addressStr });
-            this.miniLogger.log(`Dialed peer ${peerId}`, (m) => { console.debug(m); });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
             this.updatePeer(peerId.toString(), { addressStr, dialable: false });
