@@ -100,7 +100,7 @@ class P2PNetwork extends EventEmitter {
 
         try {
             //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            const stream = await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const stream = await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
             this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs, stream });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
@@ -118,17 +118,16 @@ class P2PNetwork extends EventEmitter {
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
         const connections = this.p2pNode.getConnections(peerIdStr);
+        const addressStr = connections.length > 0 ? connections[0].remoteAddr.toString() : null;
         const remoteAddresses = connections.map(c => c.remoteAddr);
 
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
-            const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            const addressStr = connections.length > 0 ? connections[0].remoteAddr.toString() : null;
+            const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             this.miniLogger.log(`Dialed peer ${peerId}`, (m) => { console.debug(m); });
             this.updatePeer(peerId.toString(), { status: 'dialed', remoteAddresses, addressStr, dialable: true, stream });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
-            const addressStr = connections.length > 0 ? connections[0].remoteAddr.toString() : null;
             this.updatePeer(peerId.toString(), { status: 'connected', addressStr, dialable: false });
         }
     };
