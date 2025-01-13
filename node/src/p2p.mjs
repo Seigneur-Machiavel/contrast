@@ -257,24 +257,25 @@ class P2PNetwork extends EventEmitter {
         };
 
         try {
-            //const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-            const abortController = new AbortController();
+            /*const abortController = new AbortController();
             const timeout = setTimeout(() => { abortController.abort('300_000ms timeout reached'); }, 300_000);
             const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL, { signal: abortController.signal });
-            clearTimeout(timeout);
+            clearTimeout(timeout);*/
             
-            
+            const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
-            await Promise.race([ lp.write(serialized), createTimeout('write', this.options.dialTimeout) ]);
+            //await Promise.race([ lp.write(serialized), createTimeout('write', this.options.dialTimeout) ]);
+            lp.write(serialized);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
-            const res = await Promise.race([ lp.read(), createTimeout('read', this.options.dialTimeout) ]);
+            //const res = await Promise.race([ lp.read(), createTimeout('read', this.options.dialTimeout) ]);
+            const res = await lp.read();
             if (!res) { miniLogger.log(`No response received (unexpected end of input)`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
-            stream.close();
+            //stream.close();
             //stream.reset(); -> //?create an error
             
             const response = serializer.deserialize.rawData(res.subarray());
