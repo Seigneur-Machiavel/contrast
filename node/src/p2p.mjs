@@ -26,7 +26,6 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {Multiaddr[]} remoteAddresses
  * @property {boolean} dialable
  * @property {number} lastSeen
- * @property {any} stream
  * 
  * @typedef {Object} SyncMessage
  * @property {number} currentHeight
@@ -89,8 +88,7 @@ class P2PNetwork extends EventEmitter {
 
     #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
-        const existingPeer = this.peers[peerIdStr];
-        if (existingPeer && existingPeer.stream) { return; }
+        const peer = this.peers[peerIdStr];
 
         /** @type {Multiaddr[]} */
         let peerMultiaddrs = event.detail.multiaddrs;
@@ -101,8 +99,8 @@ class P2PNetwork extends EventEmitter {
 
         try {
             //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            const stream = await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
-            this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs, stream });
+            await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
+            this.updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
             this.updatePeer(peerIdStr, { dialable: false });
@@ -112,8 +110,7 @@ class P2PNetwork extends EventEmitter {
     #handlePeerConnect = async (event) => {
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
-        const existingPeer = this.peers[peerIdStr];
-        if (existingPeer && existingPeer.stream) { return; }
+        const peer = this.peers[peerIdStr];
         this.miniLogger.log(`Peer ${peerIdStr} connected`, (m) => { console.debug(m); });
 
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
@@ -126,12 +123,12 @@ class P2PNetwork extends EventEmitter {
 
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
-            const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            this.updatePeer(peerId.toString(), { dialable: true, remoteAddresses, addressStr });
             this.miniLogger.log(`Dialed peer ${peerId}`, (m) => { console.debug(m); });
-            this.updatePeer(peerId.toString(), { status: 'dialed', remoteAddresses, addressStr, dialable: true, stream });
         } catch (error) {
             this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
-            this.updatePeer(peerId.toString(), { status: 'connected', addressStr, dialable: false });
+            this.updatePeer(peerId.toString(), { addressStr, dialable: false });
         }
     };
     /** @param {CustomEvent} event */
@@ -255,28 +252,20 @@ class P2PNetwork extends EventEmitter {
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
 
-        const createTimeout = (operation, ms) => {
-            return new Promise((_, reject) => {
-                setTimeout(() => { reject(new Error(`${operation} operation timed out after ${ms}ms`)); }, ms);
-            });
-        };
-
         try {
-            //const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-            const stream = peer.stream;
+            //peer.stream = peer.stream || await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
-            //await Promise.race([ lp.write(serialized), createTimeout('write', this.options.dialTimeout) ]);
             lp.write(serialized);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
-            //const res = await Promise.race([ lp.read(), createTimeout('read', this.options.dialTimeout) ]);
             const res = await lp.read();
             if (!res) { miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
 
-            stream.close();
+            //stream.close();
             //stream.reset(); -> //?create an error
             
             const response = serializer.deserialize.rawData(res.subarray());
