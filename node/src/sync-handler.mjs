@@ -61,12 +61,13 @@ export class SyncHandler {
                 const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                 await stream.sink(encodedResponse);
             }
+            stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
         }
 
-        try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
+        //try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);
