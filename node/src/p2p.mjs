@@ -90,10 +90,10 @@ class P2PNetwork extends EventEmitter {
     #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
         const existingPeer = this.peers[peerIdStr];
+        if (existingPeer.stream) { return; }
 
         /** @type {Multiaddr[]} */
-        let peerMultiaddrs = existingPeer.remoteAddresses
-        if (!peerMultiaddrs || peerMultiaddrs.length === 0) { event.detail.multiaddrs };
+        let peerMultiaddrs = event.detail.multiaddrs;
         if (!peerMultiaddrs || peerMultiaddrs.length === 0) {
             this.miniLogger.log(`Failed to find multiaddrs for peer ${peerIdStr}`, (m) => { console.error(m); });
             return;
@@ -122,9 +122,6 @@ class P2PNetwork extends EventEmitter {
         const addressStr = connections.length > 0 ? connections[0].remoteAddr.toString() : null;
         const remoteAddresses = connections.map(c => c.remoteAddr);
 
-        // simpler
-        this.updatePeer(peerId.toString(), { status: 'connected', remoteAddresses, addressStr, dialable: false });
-        return;
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
             const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
