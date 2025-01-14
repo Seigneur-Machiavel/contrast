@@ -1,12 +1,14 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import P2PNetwork from './p2p.mjs';
-import * as lp from 'it-length-prefixed';
+//import * as lp from 'it-length-prefixed';
+import { lpStream } from 'it-length-prefixed-stream';
 import ReputationManager from './peers-reputation.mjs';
 
 /**
  * @typedef {import("./node.mjs").Node} Node
  * @typedef {import("./p2p.mjs").P2PNetwork} P2PNetwork
+ * @typedef {import("@libp2p/interface").Stream} Stream
  * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
  *
  * @typedef {Object} PeerInfo
@@ -33,6 +35,39 @@ export class SyncHandler {
         this.syncFailureCount = 0;
     }
     async #handleIncomingStream(lstream) {
+        /** @type {Stream} */
+        const stream = lstream.stream;
+        if (!stream) { return; }
+        const lp = lpStream(stream);
+
+        const peerIdStr = lstream.connection.remotePeer.toString();
+        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
+
+        const response = {
+            currentHeight: this.node.blockchain.currentHeight,
+            /** @type {string} */
+            latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
+            /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
+            blocks: undefined
+        };
+
+        try {
+            const serialized = await lp.read();
+            const msg = serializer.deserialize.rawData(serialized.subarray());
+            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+
+            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
+            if (validGetBlocksRequest) { response.blocks = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false); }
+        
+            const serializedResponse = serializer.serialize.rawData(response);
+            await lp.write(serializedResponse);
+        } catch (err) {
+            if (err.code === 'ABORT_ERR') { return; }
+            this.miniLogger.log(err, (m) => { console.error(m); });
+        }
+    }
+    async #handleIncomingStreamOLD(lstream) {
+        /** @type {Stream} */
         const stream = lstream.stream;
         if (!stream) { return; }
 
@@ -60,6 +95,7 @@ export class SyncHandler {
                 const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                 await stream.sink(encodedResponse);
             }
+            await stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
@@ -67,7 +103,7 @@ export class SyncHandler {
 
         //const closure = await stream.close();
         //console.log('stream closed', closure);
-        try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
+        //try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);
