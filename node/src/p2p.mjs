@@ -300,16 +300,16 @@ class P2PNetwork extends EventEmitter {
             const serialized = serializer.serialize.rawData(message);
             await pipe(
                 [serialized], // Wrap the serialized message in an array as the source for pipe
-                lp.encode(), // Encode the message lengths
-                stream // Write to the stream
+                lp.encode, // Encode the message lengths
+                stream.sink // Write to the stream
             );
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
+            // Return the first message read from the stream
             const response = await pipe(
-                stream, // Read from the stream
-                lp.decode(), // Decode the message lengths
+                stream.source, // Read from the stream
+                lp.decode, // Decode the message lengths
                 async function (source) {
-                    // Return the first message read from the stream
                     for await (const msg of source) { return msg; }
                 }
             );
@@ -320,7 +320,8 @@ class P2PNetwork extends EventEmitter {
             }
             
             this.miniLogger.log(`Response read from stream (${response.subarray().length} bytes)`, (m) => { console.info(m); });
-            return serializer.deserialize.rawData(response.subarray());
+            const deserialized = serializer.deserialize.rawData(response.subarray());
+            return deserialized;
             //const response = serializer.deserialize.rawData(res);
             //return response;
         } catch (error) {
