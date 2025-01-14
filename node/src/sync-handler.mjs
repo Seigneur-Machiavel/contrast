@@ -52,6 +52,7 @@ export class SyncHandler {
 
         try {
             const serialized = await lp.read();
+            await stream.closeRead();
             const msg = serializer.deserialize.rawData(serialized.subarray());
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
 
@@ -60,6 +61,7 @@ export class SyncHandler {
         
             const serializedResponse = serializer.serialize.rawData(response);
             await lp.write(serializedResponse);
+            await stream.closeWrite();
 
             //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
             //if (stream.status === 'closed') { return; }
