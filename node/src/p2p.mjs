@@ -257,8 +257,8 @@ class P2PNetwork extends EventEmitter {
             const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
             this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
             try {
-                //await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                //await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 /*const stream = await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 const peerId = ma.getPeerId();
                 const peerIdStr1 = stream.remotePeer?.toString();
