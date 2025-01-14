@@ -31,7 +31,6 @@ export class SyncHandler {
     constructor(node) {
         /** @type {Node} */
         this.node = node;
-        this.p2pNetworkMaxMessageSize = 0;
         this.syncFailureCount = 0;
     }
     async #handleIncomingStream(lstream) {
@@ -61,6 +60,8 @@ export class SyncHandler {
         
             const serializedResponse = serializer.serialize.rawData(response);
             await lp.write(serializedResponse);
+
+            await stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
