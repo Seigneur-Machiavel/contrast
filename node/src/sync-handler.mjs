@@ -67,7 +67,7 @@ export class SyncHandler {
             //await stream.close();
 
             //if (stream.status === 'closed') { return; }
-            await stream.close();
+            //await stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
