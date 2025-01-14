@@ -12,6 +12,7 @@ import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
 import * as lp from 'it-length-prefixed';
+import { pipe } from 'it-pipe';
 //import { lpStream } from 'it-length-prefixed-stream';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
@@ -44,7 +45,7 @@ class P2PNetwork extends EventEmitter {
     /** @type {Object<string, Peer>} */
     peers = {};
     /** @type {Object<string, Stream>} */
-    streams = {};
+    openStreams = {};
     subscriptions = new Set();
     miniLogger = new MiniLogger('P2PNetwork');
     topicsTreatment = {
@@ -283,29 +284,50 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(error, (m) => { console.error(m); });
         }
     }
-    /** @param {string} peerIdStr @param {SyncMessage} message */
+    /** @param {string} peerIdStr @param {any} message */
     async sendMessage(peerIdStr, message) {
         // simple way, without "lpStream" -> use lp
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
         const peerId = peer.id;
-        const stream = this.streams[peerIdStr] || await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
-        this.streams[peerIdStr] = stream;
 
+        if (!this.openStreams[peerIdStr]) {
+            this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
+        }
+        
+        const stream = this.openStreams[peerIdStr];
         try {
             const serialized = serializer.serialize.rawData(message);
-            await lp.encode(serialized, stream);
+            await pipe(
+                [serialized], // Wrap the serialized message in an array as the source for pipe
+                lp.encode(), // Encode the message lengths
+                stream // Write to the stream
+            );
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
-            const res = await lp.decode(stream);
-            if (!res) { this.miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
-            this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
-            const response = serializer.deserialize.rawData(res);
-            return response;
+            
+            const response = await pipe(
+                stream, // Read from the stream
+                lp.decode(), // Decode the message lengths
+                async function (source) {
+                    // Return the first message read from the stream
+                    for await (const msg of source) { return msg; }
+                }
+            );
+
+            if (!response) { 
+                this.miniLogger.log(`No response received`, console.error);
+                return false;
+            }
+            
+            this.miniLogger.log(`Response read from stream (${response.subarray().length} bytes)`, (m) => { console.info(m); });
+            return serializer.deserialize.rawData(response.subarray());
+            //const response = serializer.deserialize.rawData(res);
+            //return response;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
+            delete this.openStreams[peerIdStr];
             return false;
         }
-
     }
     /** @param {string} peerIdStr @param {SyncMessage} message */
     async sendMessageOLD(peerIdStr, message) {
@@ -318,7 +340,7 @@ class P2PNetwork extends EventEmitter {
             //peer.stream = peer.stream || await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             //const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
             const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
-            const lp = lpStream(stream);
+            const lpStream = lp()
 
             const serialized = serializer.serialize.rawData(message);
             await lp.write(serialized);
