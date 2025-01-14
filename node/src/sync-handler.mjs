@@ -73,7 +73,7 @@ export class SyncHandler {
                         //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                         //await stream.sink(encodedResponse);
                     }
-                }
+                }.bind(this)
             );
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
