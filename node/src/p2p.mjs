@@ -311,7 +311,7 @@ class P2PNetwork extends EventEmitter {
             //const rstatus = stream.readStatus;
             //const wstatus = stream.writeStatus;
             //const closure = await stream.closeWrite();
-            //await stream.close();
+            await stream.close();
             //stream.reset(); -> //?create an error
 
             //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
