@@ -53,12 +53,12 @@ export class SyncHandler {
                 stream.source, // Flux of incoming messages
                 lp.decode, // Decoder for length-prefixed messages
                 async function (source) {
-                    while (true) {
+                    //while (true) {
                         for await (const msgUint8 of source) {
                             const serialized = msgUint8.subarray();
                             const msg = serializer.deserialize.rawData(serialized.subarray());
                             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-                            this.miniLogger.log(`Received message (type: ${msg.type}) from ${readablePeerId}`, (m) => { console.info(m); });
+                            this.miniLogger.log(`Received message (type: ${msg.type} - ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
                             
                             const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
                             const response = {
@@ -72,20 +72,22 @@ export class SyncHandler {
                             };
                             
                             const serializedResponse = serializer.serialize.rawData(response);
-                            this.miniLogger.log(`Sending response (type: ${msg.type}) to ${readablePeerId}`, (m) => { console.info(m); });
+                            this.miniLogger.log(`Sending response (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
                             await pipe([serializedResponse], lp.encode, stream.sink);
                             //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                             //await stream.sink(encodedResponse);
                         }
-                    }
+                        console.info(`END OF STREAM from ${readablePeerId}`);
+                    //}
                 }.bind(this)
             );
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+            stream.close();
         }
 
-        this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
-        stream.close();
+        //this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
+        //stream.close();
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);

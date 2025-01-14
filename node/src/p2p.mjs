@@ -298,15 +298,23 @@ class P2PNetwork extends EventEmitter {
         const stream = this.openStreams[peerIdStr];
         try {
             const serialized = serializer.serialize.rawData(message);
+            //await pipe([serialized], stream);
             await pipe(
                 [serialized], // Wrap the serialized message in an array as the source for pipe
                 lp.encode, // Encode the message lengths
                 stream.sink // Write to the stream
             );
-            //await pipe([serialized], stream);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             // Return the first message read from the stream
+            /*const response = await pipe(
+                stream,
+                async function (source) {
+                    for await (const msg of source) {
+
+                    }
+                }
+            );*/
             const response = await pipe(
                 stream.source, // Read from the stream
                 lp.decode, // Decode the message lengths
