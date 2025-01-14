@@ -1,8 +1,8 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import P2PNetwork from './p2p.mjs';
-//import * as lp from 'it-length-prefixed';
-import { lpStream } from 'it-length-prefixed-stream';
+import * as lp from 'it-length-prefixed';
+//import { lpStream } from 'it-length-prefixed-stream';
 import ReputationManager from './peers-reputation.mjs';
 
 /**
@@ -34,47 +34,55 @@ export class SyncHandler {
         this.node = node;
         this.syncFailureCount = 0;
     }
+    streamHandleCount = 0;
     async #handleIncomingStream(lstream) {
+        console.info(`INCOMING STREAM #${this.streamHandleCount++}`);
         /** @type {Stream} */
         const stream = lstream.stream;
         if (!stream) { return; }
-        const lp = lpStream(stream);
         
+        //const lp = lpStream(stream);
         const peerIdStr = lstream.connection.remotePeer.toString();
-        //this.node.p2pNetwork.streams[peerIdStr] = this.node.p2pNetwork.streams[peerIdStr] || stream; // update the stream
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
-
-        const response = {
-            currentHeight: this.node.blockchain.currentHeight,
-            /** @type {string} */
-            latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-            /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
-            blocks: undefined
-        };
-
-        try {
-            const serialized = await lp.read();
-            //await stream.closeRead();
-            const msg = serializer.deserialize.rawData(serialized.subarray());
-            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-
-            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
-            if (validGetBlocksRequest) { response.blocks = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false); }
         
-            const serializedResponse = serializer.serialize.rawData(response);
-            await lp.write(serializedResponse);
-            //console.log('incoming stream handler [[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]');
-            //await stream.closeWrite();
+        try {
+            const source = lp.decode(stream.source);
+            for await (const msgUint8 of source) {
+                const serialized = msgUint8.subarray();
+                //const serialized = await lp.read();
+                //await stream.closeRead();
+                const msg = serializer.deserialize.rawData(serialized.subarray());
+                if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+                
+                const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
+                const response = {
+                    currentHeight: this.node.blockchain.currentHeight,
+                    /** @type {string} */
+                    latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
+                    /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
+                    blocks: validGetBlocksRequest
+                    ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
+                    : undefined
+                };
+            
+                //const serializedResponse = serializer.serialize.rawData(response);
+                //await lp.write(serializedResponse);
 
-            //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
-            //this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
-            //await stream.close();
-            //if (stream.status === 'closed') { return; }
-            //await stream.close();
+                //console.log('incoming stream handler [[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]');
+                //await stream.closeWrite();
+
+                //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
+                //this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
+                //await stream.close();
+                //if (stream.status === 'closed') { return; }
+                //await stream.close();
+            }
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
         }
+
+        stream.close();
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);

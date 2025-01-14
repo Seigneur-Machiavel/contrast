@@ -250,6 +250,7 @@ class P2PNetwork extends EventEmitter {
         await this.reputationManager.shutdown();
     }
     async connectToBootstrapNodes() {
+        //return;
         await Promise.all(this.options.bootstrapNodes.map(async (addr) => {
             const ma = multiaddr(addr);
             const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
@@ -282,6 +283,10 @@ class P2PNetwork extends EventEmitter {
         }
     }
     /** @param {string} peerIdStr @param {SyncMessage} message */
+    async sendMessageNEW(peerIdStr, message) {
+        // simple way, without "lpStream"
+    }
+    /** @param {string} peerIdStr @param {SyncMessage} message */
     async sendMessage(peerIdStr, message) {
         /** @type {Peer} */
         const peer = this.peers[peerIdStr];
@@ -297,13 +302,13 @@ class P2PNetwork extends EventEmitter {
             const serialized = serializer.serialize.rawData(message);
             await lp.write(serialized);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
-            await stream.closeWrite();
+            //await stream.closeWrite();
 
             const res = await lp.read();
             if (!res) { miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
             //await stream.closeRead();
-            await stream.close()
+            //await stream.close()
             
             
             //const rstatus = stream.readStatus;
