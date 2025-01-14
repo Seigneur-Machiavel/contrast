@@ -83,11 +83,10 @@ export class SyncHandler {
             );
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
-            stream.close();
         }
 
-        //this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
-        //stream.close();
+        this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
+        //await stream.close();
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);
