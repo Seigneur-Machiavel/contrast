@@ -69,7 +69,6 @@ export class SyncHandler {
             while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
             //this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
             //await stream.close();
-
             //if (stream.status === 'closed') { return; }
             //await stream.close();
         } catch (err) {
