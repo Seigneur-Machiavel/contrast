@@ -269,7 +269,7 @@ class P2PNetwork extends EventEmitter {
             //const rstatus = stream.readStatus;
             //const wstatus = stream.writeStatus;
             //const closure = await stream.closeWrite();
-            await stream.close();
+            //await stream.close();
             //stream.reset(); -> //?create an error
             
             const response = serializer.deserialize.rawData(res.subarray());
