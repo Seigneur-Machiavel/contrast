@@ -160,10 +160,13 @@ export class SyncHandler {
 
         return false;
     }
+    gmbCounter = 0;
     /** @param {string} peerIdStr @param {number} peerCurrentHeight */
     async #getMissingBlocks(peerIdStr, peerCurrentHeight) {
+        this.gmbCounter++;
         this.node.blockchainStats.state = `syncing with peer ${peerIdStr}`;
-        this.miniLogger.log(`Synchronizing with peer ${peerIdStr}`, (m) => { console.info(m); });
+        //this.miniLogger.log(`Synchronizing with peer ${peerIdStr}`, (m) => { console.info(m); });
+        this.miniLogger.log(`Synchronizing with peer ${peerIdStr} (gmb: ${this.gmbCounter})`, (m) => { console.info(m); });
         
         let peerHeight = peerCurrentHeight;
         let desiredBlock = this.node.blockchain.currentHeight + 1;
