@@ -21,7 +21,7 @@ import ReputationManager from './peers-reputation.mjs';
 export class SyncHandler {
     isSyncing = false;
     syncDisabled = false;
-    MAX_BLOCKS_PER_REQUEST = 4000;
+    MAX_BLOCKS_PER_REQUEST = 4;
     /** @type {MiniLogger} */
     miniLogger = new MiniLogger('sync');
     /** @type {Object<string, number>} */
@@ -61,6 +61,8 @@ export class SyncHandler {
         
             const serializedResponse = serializer.serialize.rawData(response);
             await lp.write(serializedResponse);
+
+            this.miniLogger.log(`Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
             await stream.closeWrite();
 
             //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
@@ -220,7 +222,7 @@ export class SyncHandler {
         this.miniLogger.log('SyncHandler started', (m) => { console.info(m); });
     }
     async syncWithPeers() {
-        if (this.syncDisabled) { return true; }
+        if (this.syncDisabled) { return 'Already at the consensus height'; }
 
         this.miniLogger.log(`Starting syncWithPeers at #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
         this.node.blockchainStats.state = "syncing";
@@ -235,7 +237,7 @@ export class SyncHandler {
 
         if (consensus.height <= this.node.blockchain.currentHeight) {
             this.miniLogger.log(`Already at the consensus height #${consensus.height}, no need to sync`, (m) => { console.debug(m); });
-            return true;
+            return 'Already at the consensus height';
         }
         
         this.miniLogger.log(`consensusHeight #${consensus.height}, current #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
