@@ -253,28 +253,6 @@ class P2PNetwork extends EventEmitter {
             }
         }));
     }
-    async connectToBootstrapNodesOLD() {
-        await Promise.all(this.options.bootstrapNodes.map(async (addr) => {
-            const ma = multiaddr(addr);
-            
-            try {
-                const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
-                this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
-                
-                //const response = await this.sendMessage(peerId.toString(), { type: 'getStatus' });
-                //console.log(response);
-                await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                //const stream = await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL);
-                //stream.close();
-                //this.miniLogger.log(`Connected to bootstrap node ${addr}`, (m) => { console.info(m); });
-                const peerId = ma.getPeerId();
-                if (peerId) { this.#updatePeer(peerId.toString(), { dialable: true }, 'connected to bootstrap node'); }
-            } catch (err) {
-                this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
-                //if (peerId) { this.#updatePeer(peerId.toString(), { dialable: false }); }
-            }
-        }));
-    }
     /** @param {string} topic */
     async broadcast(topic, message) {
         //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
@@ -303,11 +281,11 @@ class P2PNetwork extends EventEmitter {
             const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
             await lp.write(serialized);
-            await stream.closeWrite();
+            //await stream.closeWrite();
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
             const res = await lp.read();
-            await stream.closeRead();
+            //await stream.closeRead();
             if (!res) { miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
