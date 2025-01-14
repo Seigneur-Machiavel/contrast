@@ -157,7 +157,7 @@ class P2PNetwork extends EventEmitter {
     /** @param {CustomEvent} event */
     #handlePeerDisconnect = (event) => {
         const peerId = event.detail.toString();
-        this.miniLogger.log(`Peer ${peerId} disconnected`, (m) => { console.debug(m); });
+        this.miniLogger.log(`--------> Peer ${peerId} disconnected`, (m) => { console.debug(m); });
         delete this.peers[peerId];
     };
     /** @param {CustomEvent} event */

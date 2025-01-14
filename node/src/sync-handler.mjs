@@ -171,13 +171,13 @@ export class SyncHandler {
             const endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
             const response = await this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getBlocks', startIndex: desiredBlock, endIndex });
             if (!response || typeof response.currentHeight !== 'number' || !Array.isArray(response.blocks)) {
-                this.miniLogger.log(`'getBlocks' request failed`, (m) => { console.error(m); });
+                this.miniLogger.log(`'getBlocks ${desiredBlock}-${endIndex}' request failed`, (m) => { console.error(m); });
                 break;
             }
 
             const serializedBlocks = response.blocks;
             if (!serializedBlocks) { this.miniLogger.log(`Failed to get serialized blocks`, (m) => { console.error(m); }); break; }
-            if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks found`, (m) => { console.error(m); }); break; }
+            if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks received`, (m) => { console.error(m); }); break; }
             
             for (const serializedBlock of serializedBlocks) {
                 try {
