@@ -66,8 +66,8 @@ export class SyncHandler {
             console.log('incoming stream handler [[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]');
             //await stream.closeWrite();
 
-            while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
-            this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
+            //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
+            //this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
             //await stream.close();
 
             //if (stream.status === 'closed') { return; }
