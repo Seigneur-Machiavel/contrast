@@ -312,7 +312,6 @@ class P2PNetwork extends EventEmitter {
             //stream.reset(); -> //?create an error
 
             //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
-            this.streams[peerIdStr] = stream;
             
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
