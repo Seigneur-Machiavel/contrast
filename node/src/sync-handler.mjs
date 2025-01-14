@@ -61,6 +61,8 @@ export class SyncHandler {
             const serializedResponse = serializer.serialize.rawData(response);
             await lp.write(serializedResponse);
 
+            while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
+
             await stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
