@@ -32,7 +32,6 @@ export class SyncHandler {
         this.p2pNetworkMaxMessageSize = 0;
         this.syncFailureCount = 0;
     }
-
     async #handleIncomingStream(lstream) {
         const stream = lstream.stream;
         if (!stream) { return; }
@@ -66,7 +65,9 @@ export class SyncHandler {
             this.miniLogger.log(err, (m) => { console.error(m); });
         }
 
-        try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
+        const closure = await stream.closeRead();
+        console.log('stream closed', closure);
+        //try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);

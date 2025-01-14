@@ -265,7 +265,10 @@ class P2PNetwork extends EventEmitter {
             if (!res) { miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
-
+            
+            const rstatus = stream.readStatus;
+            const wstatus = stream.writeStatus;
+            const closure = await stream.closeWrite();
             //stream.close();
             //stream.reset(); -> //?create an error
             

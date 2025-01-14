@@ -3,6 +3,7 @@ not published
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
+node/storage - 50
 node/storage/bootstrapNodes.json
 node/storage/nodeSettings.json
 node/storage/blocks
