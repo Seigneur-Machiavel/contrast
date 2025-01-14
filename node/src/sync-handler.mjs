@@ -142,16 +142,6 @@ export class SyncHandler {
 
         return peerHeight === this.node.blockchain.currentHeight;
     }
-    #getTopicsToSubscribeRelatedToRoles(roles = []) {
-        const rolesTopics = {
-            validator: ['new_transaction', 'new_block_finalized'],
-            miner: ['new_block_candidate'],
-            observer: ['new_transaction', 'new_block_finalized', 'new_block_candidate']
-        }
-        const topicsToSubscribe = [];
-        for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
-        return [...new Set(topicsToSubscribe)];
-    }
     /** @param {PeerInfo[]} peersInfo */
     #findConsensus(peersInfo) {
         if (!peersInfo || peersInfo.length === 0) { return false }
@@ -173,14 +163,12 @@ export class SyncHandler {
 
         return consensus;
     }
-
-    async start() {
-        this.node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
-        this.miniLogger.log('Sync node started', (m) => { console.info(m); });
+    /** @param {P2PNetwork} p2pNetwork */
+    async start(p2pNetwork) {
+        p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
+        this.miniLogger.log('SyncHandler started', (m) => { console.info(m); });
     }
     async syncWithPeers() {
-        const uniqueTopics = this.#getTopicsToSubscribeRelatedToRoles(this.node.roles);
-        for (const topic of uniqueTopics) { this.node.p2pNetwork.subscribe(topic, this.node.p2pHandler.bind(this.node)); }
         if (this.syncDisabled) { return true; }
 
         this.miniLogger.log(`Starting syncWithPeers at #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });

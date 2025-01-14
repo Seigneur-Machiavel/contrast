@@ -104,6 +104,16 @@ export class Node {
         if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) { return; }
         this.blockchainStats.state = newState;
     }
+    #subscribeTopicsRelatedToRoles(roles = []) {
+        const rolesTopics = {
+            validator: ['new_transaction', 'new_block_finalized'],
+            miner: ['new_block_candidate'],
+            observer: ['new_transaction', 'new_block_finalized', 'new_block_candidate']
+        }
+        const topicsToSubscribe = [];
+        for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
+        return [...new Set(topicsToSubscribe)];
+    }
     async start(startFromScratch = false) {
         this.#updateState("starting");
 
@@ -128,7 +138,10 @@ export class Node {
         this.#updateState("Initializing P2P network");
         const uniqueHash = await this.account.getUniqueHash(64);
         await this.p2pNetwork.start(uniqueHash);
-        await this.syncHandler.start();
+        await this.syncHandler.start(this.p2pNetwork);
+        const uniqueTopics = this.#subscribeTopicsRelatedToRoles(this.roles);
+        for (const topic of uniqueTopics) { this.p2pNetwork.subscribe(topic, this.p2pHandler.bind(this)); }
+
         if (this.roles.includes('miner')) { this.miner.startWithWorker(); }
 
         const nbOfPeers = await this.#waitSomePeers();
