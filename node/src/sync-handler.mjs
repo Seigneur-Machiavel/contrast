@@ -65,7 +65,7 @@ export class SyncHandler {
             this.miniLogger.log(err, (m) => { console.error(m); });
         }
 
-        const closure = await stream.closeRead();
+        const closure = await stream.close();
         console.log('stream closed', closure);
         //try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
     }

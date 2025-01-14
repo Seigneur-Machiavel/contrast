@@ -266,10 +266,10 @@ class P2PNetwork extends EventEmitter {
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
             
-            const rstatus = stream.readStatus;
-            const wstatus = stream.writeStatus;
-            const closure = await stream.closeWrite();
-            //stream.close();
+            //const rstatus = stream.readStatus;
+            //const wstatus = stream.writeStatus;
+            //const closure = await stream.closeWrite();
+            await stream.close();
             //stream.reset(); -> //?create an error
             
             const response = serializer.deserialize.rawData(res.subarray());
