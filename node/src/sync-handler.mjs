@@ -67,7 +67,7 @@ export class SyncHandler {
 
         //const closure = await stream.close();
         //console.log('stream closed', closure);
-        //try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
+        try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);
