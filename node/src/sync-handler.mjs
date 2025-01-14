@@ -62,7 +62,7 @@ export class SyncHandler {
             await lp.write(serializedResponse);
 
             while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
-
+            if (stream.status === 'closed') { return; }
             await stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
