@@ -143,7 +143,7 @@ class P2PNetwork extends EventEmitter {
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
         this.miniLogger.log(`(Connect) Dialed peer ${peerIdStr}`, (m) => { console.debug(m); });
-        return;
+        //return;
 
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
