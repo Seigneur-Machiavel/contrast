@@ -307,8 +307,8 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
 
             const res = await lp.read();
-            await stream.closeRead();
             if (!res) { miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
+            await stream.closeRead();
             
             this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
             
