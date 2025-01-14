@@ -92,10 +92,7 @@ class P2PNetwork extends EventEmitter {
 
     #handlePeerDiscovery = async (event) => {
         const peerId = event.detail.id;
-        if (this.streams[peerId]) { return; }
-
-        const peerIdStr = event.detail.id.toString();
-        if (this.streams[peerIdStr]) { return; }
+        const peerIdStr = peerId.toString();
 
         /*if (this.peers[peerIdStr]?.remoteAddresses) {
             this.miniLogger.log(`Peer ${peerIdStr} remoteAddresses known`, (m) => { console.debug(m); });
@@ -111,7 +108,6 @@ class P2PNetwork extends EventEmitter {
         try {
             await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             //const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            //this.streams[peerIdStr] = stream;
         } catch (err) {
             this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
         }
@@ -264,8 +260,7 @@ class P2PNetwork extends EventEmitter {
                 /*const stream = await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 const peerId = ma.getPeerId();
                 const peerIdStr1 = stream.remotePeer?.toString();
-                const peerIdStr2 = stream.id?.toString();
-                this.streams[peerIdStr1] = stream*/
+                const peerIdStr2 = stream.id?.toString();*/
             } catch (err) {
                 this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
             }
@@ -296,11 +291,9 @@ class P2PNetwork extends EventEmitter {
         try {
             //peer.stream = peer.stream || await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             //const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
-            if (!this.streams[peerIdStr]) {
-                this.streams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            }
-            const stream = this.streams[peerIdStr];
+            const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             const lp = lpStream(stream);
+
             const serialized = serializer.serialize.rawData(message);
             await lp.write(serialized);
             await stream.closeWrite();
@@ -319,6 +312,7 @@ class P2PNetwork extends EventEmitter {
             //stream.reset(); -> //?create an error
 
             //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
+            this.streams[peerIdStr] = stream;
             
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
