@@ -67,7 +67,7 @@ export class SyncHandler {
             //await stream.close();
 
             //if (stream.status === 'closed') { return; }
-            //await stream.close();
+            await stream.close();
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
@@ -170,7 +170,7 @@ export class SyncHandler {
             const endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
             const response = await this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getBlocks', startIndex: desiredBlock, endIndex });
             if (!response || typeof response.currentHeight !== 'number' || !Array.isArray(response.blocks)) {
-                this.miniLogger.log(`Failed to get currentHeight or serialized blocks by 'getBlocks' request`, (m) => { console.error(m); });
+                this.miniLogger.log(`'getBlocks' request failed`, (m) => { console.error(m); });
                 break;
             }
 
