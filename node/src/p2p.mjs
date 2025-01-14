@@ -20,8 +20,10 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 /**
  * @typedef {import("@multiformats/multiaddr").Multiaddr} Multiaddr
  * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
+ * @typedef {import("@libp2p/interface").PeerId} PeerId
  * 
  * @typedef {Object} Peer
+ * @property {PeerId} id
  * @property {Multiaddr[]} remoteAddresses
  * @property {boolean} dialable
  * @property {number} lastSeen
@@ -88,10 +90,10 @@ class P2PNetwork extends EventEmitter {
     #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
 
-        if (this.peers[peerIdStr]?.remoteAddresses) {
+        /*if (this.peers[peerIdStr]?.remoteAddresses) {
             this.miniLogger.log(`Peer ${peerIdStr} remoteAddresses known`, (m) => { console.debug(m); });
             return;
-        }
+        }*/
 
         const connections = this.p2pNode.getConnections(peerIdStr);
         if (connections.length > 0) {
@@ -130,6 +132,7 @@ class P2PNetwork extends EventEmitter {
     };
     /** @param {CustomEvent} event */
     #handlePeerConnect = async (event) => {
+        /** @type {PeerId} */
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
 
@@ -140,7 +143,7 @@ class P2PNetwork extends EventEmitter {
         const connections = this.p2pNode.getConnections(peerIdStr);
         const remoteAddresses = connections.map(c => c.remoteAddr);
 
-        this.#updatePeer(peerId.toString(), { dialable: true, remoteAddresses }, 'connected');
+        this.#updatePeer(peerId.toString(), { dialable: true, id: peerId, remoteAddresses }, 'connected');
         return;
         try {
             //const con = await this.p2pNode.dial(remoteAddresses);
@@ -292,10 +295,11 @@ class P2PNetwork extends EventEmitter {
         /** @type {Peer} */
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
+        const peerId = peer.id;
 
         try {
             //peer.stream = peer.stream || await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-            const stream = await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
+            const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
             const lp = lpStream(stream);
             const serialized = serializer.serialize.rawData(message);
             await lp.write(serialized);
@@ -344,6 +348,7 @@ class P2PNetwork extends EventEmitter {
     /** @param {string} peerIdStr @param {Object} data @param {string} [reason] */
     #updatePeer(peerIdStr, data, reason) {
         const updatedPeer = this.peers[peerIdStr] || {};
+        updatedPeer.id = data.id || updatedPeer.id;
         updatedPeer.remoteAddresses = data.remoteAddresses || updatedPeer.remoteAddresses || [];
         if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
         if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }

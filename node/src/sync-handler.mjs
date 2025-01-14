@@ -8,6 +8,7 @@ import ReputationManager from './peers-reputation.mjs';
 /**
  * @typedef {import("./node.mjs").Node} Node
  * @typedef {import("./p2p.mjs").P2PNetwork} P2PNetwork
+ * @typedef {import("@libp2p/interface").PeerId} PeerId
  * @typedef {import("@libp2p/interface").Stream} Stream
  * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
  *
