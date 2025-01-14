@@ -41,7 +41,7 @@ export class SyncHandler {
         const lp = lpStream(stream);
         
         const peerIdStr = lstream.connection.remotePeer.toString();
-        this.node.p2pNetwork.streams[peerIdStr] = this.node.p2pNetwork.streams[peerIdStr] || stream; // update the stream
+        //this.node.p2pNetwork.streams[peerIdStr] = this.node.p2pNetwork.streams[peerIdStr] || stream; // update the stream
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
 
         const response = {
