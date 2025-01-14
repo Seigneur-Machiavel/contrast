@@ -54,7 +54,7 @@ export class SyncHandler {
 
         try {
             const serialized = await lp.read();
-            await stream.closeRead();
+            //await stream.closeRead();
             const msg = serializer.deserialize.rawData(serialized.subarray());
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
 
@@ -63,10 +63,10 @@ export class SyncHandler {
         
             const serializedResponse = serializer.serialize.rawData(response);
             await lp.write(serializedResponse);
-            console.log('incoming stream handler [[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]');
+            //console.log('incoming stream handler [[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]');
             //await stream.closeWrite();
 
-            while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
+            //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
             //this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
             //await stream.close();
             //if (stream.status === 'closed') { return; }

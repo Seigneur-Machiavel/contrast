@@ -291,7 +291,7 @@ class P2PNetwork extends EventEmitter {
         try {
             //peer.stream = peer.stream || await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
             //const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
-            const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
             const lp = lpStream(stream);
 
             const serialized = serializer.serialize.rawData(message);
