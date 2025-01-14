@@ -109,7 +109,7 @@ class P2PNetwork extends EventEmitter {
             await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             //const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
         } catch (err) {
-            this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
+            this.miniLogger.log(`(Discovery) Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
         }
 
         return;
