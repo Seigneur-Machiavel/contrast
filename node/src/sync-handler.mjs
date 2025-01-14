@@ -37,13 +37,14 @@ export class SyncHandler {
     }
     streamHandleCount = 0;
     async #handleIncomingStream(lstream) {
-        console.info(`INCOMING STREAM #${this.streamHandleCount++}`);
         /** @type {Stream} */
         const stream = lstream.stream;
         if (!stream) { return; }
         
         //const lp = lpStream(stream);
         const peerIdStr = lstream.connection.remotePeer.toString();
+        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
+        console.info(`INCOMING STREAM #${this.streamHandleCount++} from ${readablePeerId}`);
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
@@ -56,6 +57,7 @@ export class SyncHandler {
                         const serialized = msgUint8.subarray();
                         const msg = serializer.deserialize.rawData(serialized.subarray());
                         if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+                        this.miniLogger.log(`Received message (type: ${msg.type}) from ${readablePeerId}`, (m) => { console.info(m); });
                         
                         const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
                         const response = {
@@ -69,6 +71,7 @@ export class SyncHandler {
                         };
                         
                         const serializedResponse = serializer.serialize.rawData(response);
+                        this.miniLogger.log(`Sending response (type: ${msg.type}) to ${readablePeerId}`, (m) => { console.info(m); });
                         await pipe([serializedResponse], lp.encode, stream.sink);
                         //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                         //await stream.sink(encodedResponse);
@@ -76,10 +79,10 @@ export class SyncHandler {
                 }.bind(this)
             );
         } catch (err) {
-            if (err.code === 'ABORT_ERR') { return; }
-            this.miniLogger.log(err, (m) => { console.error(m); });
+            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
 
+        this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
         stream.close();
     }
     async #getAllPeersInfo() {

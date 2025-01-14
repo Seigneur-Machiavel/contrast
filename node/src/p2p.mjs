@@ -303,6 +303,7 @@ class P2PNetwork extends EventEmitter {
                 lp.encode, // Encode the message lengths
                 stream.sink // Write to the stream
             );
+            //await pipe([serialized], stream);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             // Return the first message read from the stream
