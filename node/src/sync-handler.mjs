@@ -134,12 +134,22 @@ export class SyncHandler {
     }
     #handleSyncFailure() {
         const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
+        
+        // METHOD 1: try to sync from snapshots
         // if syncFailureCount is a multiple of 10, try to sync from snapshots
-        if (this.syncFailureCount > 0 && this.syncFailureCount % 6 === 0 && snapshotsHeights.length > 0) {
+        /*if (this.syncFailureCount > 0 && this.syncFailureCount % 6 === 0 && snapshotsHeights.length > 0) {
             // retry sync from snapshots, ex: 15, 10, 5.. 15, 10, 5.. Etc...
             const modulo = (this.syncFailureCount / 6) % snapshotsHeights.length;
             const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
             this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
+        }*/
+
+        // METHOD 2: restart the node
+        // if syncFailureCount is a multiple of 10, restart the node
+        if (this.syncFailureCount > 0 && this.syncFailureCount % 10 === 0) {
+            this.miniLogger.log(`Restarting the node after ${this.syncFailureCount} sync failures`, (m) => { console.error(m); });
+            this.node.restartRequested = 'syncFailure (this.syncFailureCount % 10)';
+            return false;
         }
 
         this.syncFailureCount++;
