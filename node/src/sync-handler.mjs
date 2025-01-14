@@ -49,35 +49,37 @@ export class SyncHandler {
         
         try {
             //const source = lp.decode(stream.source);
-            await pipe(
-                stream.source, // Flux of incoming messages
-                lp.decode, // Decoder for length-prefixed messages
-                async function (source) {
-                    for await (const msgUint8 of source) {
-                        const serialized = msgUint8.subarray();
-                        const msg = serializer.deserialize.rawData(serialized.subarray());
-                        if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-                        this.miniLogger.log(`Received message (type: ${msg.type}) from ${readablePeerId}`, (m) => { console.info(m); });
-                        
-                        const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
-                        const response = {
-                            currentHeight: this.node.blockchain.currentHeight,
-                            /** @type {string} */
-                            latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-                            /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
-                            blocks: validGetBlocksRequest
-                            ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
-                            : undefined
-                        };
-                        
-                        const serializedResponse = serializer.serialize.rawData(response);
-                        this.miniLogger.log(`Sending response (type: ${msg.type}) to ${readablePeerId}`, (m) => { console.info(m); });
-                        await pipe([serializedResponse], lp.encode, stream.sink);
-                        //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
-                        //await stream.sink(encodedResponse);
-                    }
-                }.bind(this)
-            );
+            while (true) {
+                await pipe(
+                    stream.source, // Flux of incoming messages
+                    lp.decode, // Decoder for length-prefixed messages
+                    async function (source) {
+                        for await (const msgUint8 of source) {
+                            const serialized = msgUint8.subarray();
+                            const msg = serializer.deserialize.rawData(serialized.subarray());
+                            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+                            this.miniLogger.log(`Received message (type: ${msg.type}) from ${readablePeerId}`, (m) => { console.info(m); });
+                            
+                            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
+                            const response = {
+                                currentHeight: this.node.blockchain.currentHeight,
+                                /** @type {string} */
+                                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
+                                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
+                                blocks: validGetBlocksRequest
+                                ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
+                                : undefined
+                            };
+                            
+                            const serializedResponse = serializer.serialize.rawData(response);
+                            this.miniLogger.log(`Sending response (type: ${msg.type}) to ${readablePeerId}`, (m) => { console.info(m); });
+                            await pipe([serializedResponse], lp.encode, stream.sink);
+                            //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
+                            //await stream.sink(encodedResponse);
+                        }
+                    }.bind(this)
+                );
+            }
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
