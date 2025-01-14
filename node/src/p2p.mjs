@@ -316,6 +316,7 @@ class P2PNetwork extends EventEmitter {
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
         } catch (error) {
+            if (err.code === 'ABORT_ERR') { this.miniLogger.log('ABORT_ERR', (m) => { console.error(m); }); return false; }
             this.miniLogger.log(error, (m) => { console.error(m); });
             return false;
         }

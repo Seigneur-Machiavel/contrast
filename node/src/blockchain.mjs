@@ -141,7 +141,7 @@ export class Blockchain {
      * @param {Object<string, string>} [blockPubKeysAddresses] - The block public keys and addresses.
      * @throws {Error} If the block is invalid or cannot be added. */
     addConfirmedBlock(utxoCache, block, persistToDisk = true, saveBlockInfo = true, totalFees) {
-        this.miniLogger.log(`Adding new block: #${block.index}, blockHash=${block.hash}`, (m) => { console.info(m); });
+        //this.miniLogger.log(`Adding new block: #${block.index}, blockHash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
         try {
             const blockInfo = saveBlockInfo ? BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
             
@@ -152,10 +152,10 @@ export class Blockchain {
             this.lastBlock = block;
             this.currentHeight = block.index;
 
-            this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
             return blockInfo;
         } catch (error) {
-            this.miniLogger.log(`Failed to add block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
+            this.miniLogger.log(`Failed to add block: blockHash=${block.hash.slice(0, 20)}..., error=${error}`, (m) => { console.error(m); });
             throw error;
         }
     }
