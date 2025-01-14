@@ -159,6 +159,7 @@ export class OpStack {
                     this.node.syncHandler.isSyncing = false;
                     this.syncRequested = false;
                     if (syncResult === 'Already at the consensus height') {
+                        this.node.syncAndReady = true;
                         this.node.syncHandler.syncFailureCount = 0;
                         this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished at #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                         this.healthInfo.lastSyncTime = Date.now();

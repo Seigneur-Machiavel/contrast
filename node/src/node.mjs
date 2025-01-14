@@ -32,6 +32,7 @@ import { Reorganizator } from './blockchain-reorganizator.mjs';
 
 
 export class Node {
+    syncAndReady = false;
     /** @param {Account} account */
     constructor(account, roles = ['validator'], p2pOptions = {}, version = 1) {
         /** @type {MiniLogger} */

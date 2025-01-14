@@ -204,6 +204,7 @@ async function test() {
         await new Promise(resolve => setTimeout(resolve, 100));
 
         const currentHeight = node.blockchain.currentHeight;
+        if (!node.syncAndReady) { continue; }
         if (node.syncHandler.isSyncing) { continue; }
 
         if (currentHeight > lastBlockIndexAndTime.index) { // on new block only
