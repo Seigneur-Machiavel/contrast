@@ -292,7 +292,7 @@ class P2PNetwork extends EventEmitter {
         const peerId = peer.id;
 
         if (!this.openStreams[peerIdStr]) {
-            this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
+            this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         }
         
         const stream = this.openStreams[peerIdStr];
