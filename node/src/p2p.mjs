@@ -11,7 +11,8 @@ import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
-import { lpStream } from 'it-length-prefixed-stream';
+import * as lp from 'it-length-prefixed';
+//import { lpStream } from 'it-length-prefixed-stream';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -283,11 +284,31 @@ class P2PNetwork extends EventEmitter {
         }
     }
     /** @param {string} peerIdStr @param {SyncMessage} message */
-    async sendMessageNEW(peerIdStr, message) {
-        // simple way, without "lpStream"
+    async sendMessage(peerIdStr, message) {
+        // simple way, without "lpStream" -> use lp
+        const peer = this.peers[peerIdStr];
+        if (!peer || !peer.dialable) { return false; }
+        const peerId = peer.id;
+        const stream = this.streams[peerIdStr] || await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
+        this.streams[peerIdStr] = stream;
+
+        try {
+            const serialized = serializer.serialize.rawData(message);
+            await lp.encode(serialized, stream);
+            this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
+            const res = await lp.decode(stream);
+            if (!res) { this.miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
+            this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
+            const response = serializer.deserialize.rawData(res);
+            return response;
+        } catch (error) {
+            this.miniLogger.log(error, (m) => { console.error(m); });
+            return false;
+        }
+
     }
     /** @param {string} peerIdStr @param {SyncMessage} message */
-    async sendMessage(peerIdStr, message) {
+    async sendMessageOLD(peerIdStr, message) {
         /** @type {Peer} */
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
