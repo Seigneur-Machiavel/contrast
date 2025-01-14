@@ -202,7 +202,7 @@ class P2PNetwork extends EventEmitter {
             this.p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
             this.p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
 
-            await this.connectToBootstrapNodes();
+            // await this.connectToBootstrapNodes(); -> we call it after setup syncHandler in node.start()
         } catch (error) {
             this.miniLogger.log('Failed to start P2P network', { error: error.message });
             throw error;
