@@ -76,6 +76,9 @@ export class SyncHandler {
                 //await stream.close();
                 //if (stream.status === 'closed') { return; }
                 //await stream.close();
+
+                const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
+                await stream.sink(encodedResponse);
             }
         } catch (err) {
             if (err.code === 'ABORT_ERR') { return; }
