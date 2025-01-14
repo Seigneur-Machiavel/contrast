@@ -49,10 +49,10 @@ export class SyncHandler {
         
         try {
             //const source = lp.decode(stream.source);
-            while (true) {
+            //while (true) {
                 await pipe(
                     stream.source, // Flux of incoming messages
-                    lp.decode, // Decoder for length-prefixed messages
+                    lp.decode(), // Decoder for length-prefixed messages
                     async function (source) {
                         for await (const msgUint8 of source) {
                             const serialized = msgUint8.subarray();
@@ -73,13 +73,13 @@ export class SyncHandler {
                             
                             const serializedResponse = serializer.serialize.rawData(response);
                             this.miniLogger.log(`Sending response (type: ${msg.type}) to ${readablePeerId}`, (m) => { console.info(m); });
-                            await pipe([serializedResponse], lp.encode, stream.sink);
+                            await pipe([serializedResponse], lp.encode(), stream.sink);
                             //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
                             //await stream.sink(encodedResponse);
                         }
                     }.bind(this)
                 );
-            }
+            //}
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }

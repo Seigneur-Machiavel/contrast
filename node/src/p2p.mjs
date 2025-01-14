@@ -300,7 +300,7 @@ class P2PNetwork extends EventEmitter {
             const serialized = serializer.serialize.rawData(message);
             await pipe(
                 [serialized], // Wrap the serialized message in an array as the source for pipe
-                lp.encode, // Encode the message lengths
+                lp.encode(), // Encode the message lengths
                 stream.sink // Write to the stream
             );
             //await pipe([serialized], stream);
@@ -309,7 +309,7 @@ class P2PNetwork extends EventEmitter {
             // Return the first message read from the stream
             const response = await pipe(
                 stream.source, // Read from the stream
-                lp.decode, // Decode the message lengths
+                lp.decode(), // Decode the message lengths
                 async function (source) {
                     for await (const msg of source) { return msg; }
                 }
