@@ -315,7 +315,7 @@ class P2PNetwork extends EventEmitter {
             );
 
             if (!response) { 
-                this.miniLogger.log(`No response received`, console.error);
+                this.miniLogger.log(`No response received`, (m) => { console.error(m); });
                 return false;
             }
             
