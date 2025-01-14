@@ -314,7 +314,7 @@ class P2PNetwork extends EventEmitter {
             //await stream.close();
             //stream.reset(); -> //?create an error
 
-            while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
+            //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
             
             const response = serializer.deserialize.rawData(res.subarray());
             return response;
