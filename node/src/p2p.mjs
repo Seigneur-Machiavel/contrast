@@ -88,6 +88,26 @@ class P2PNetwork extends EventEmitter {
     #handlePeerDiscovery = async (event) => {
         const peerIdStr = event.detail.id.toString();
 
+        if (this.peers[peerIdStr]?.remoteAddresses) {
+            this.miniLogger.log(`Peer ${peerIdStr} remoteAddresses known`, (m) => { console.debug(m); });
+            return;
+        }
+
+        const connections = this.p2pNode.getConnections(peerIdStr);
+        if (connections.length > 0) {
+            this.miniLogger.log(`Peer ${peerIdStr} already connected`, (m) => { console.debug(m); });
+            return;
+        }
+
+        try {
+            await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+        } catch (err) {
+            this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
+        }
+
+        return;
+        // OLD CODE
+
         /** @type {Multiaddr[]} */
         const peerMultiaddrs = this.peers[peerIdStr]?.remoteAddresses || event.detail.multiaddrs;
         if (!peerMultiaddrs || peerMultiaddrs.length === 0) {
