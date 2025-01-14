@@ -39,8 +39,9 @@ export class SyncHandler {
         const stream = lstream.stream;
         if (!stream) { return; }
         const lp = lpStream(stream);
-
+        
         const peerIdStr = lstream.connection.remotePeer.toString();
+        this.node.p2pNetwork.streams[peerIdStr] = this.node.p2pNetwork.streams[peerIdStr] || stream; // update the stream
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
 
         const response = {
@@ -53,7 +54,7 @@ export class SyncHandler {
 
         try {
             const serialized = await lp.read();
-            await stream.closeRead();
+            //await stream.closeRead();
             const msg = serializer.deserialize.rawData(serialized.subarray());
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
 
@@ -62,10 +63,11 @@ export class SyncHandler {
         
             const serializedResponse = serializer.serialize.rawData(response);
             await lp.write(serializedResponse);
-            await stream.closeWrite();
+            console.log('incoming stream handler [[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]');
+            //await stream.closeWrite();
 
-            //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
-            //this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
+            while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
+            this.miniLogger.log(`-----> Closing stream with peer ${peerIdStr}`, (m) => { console.debug(m); });
             //await stream.close();
 
             //if (stream.status === 'closed') { return; }
@@ -74,45 +76,6 @@ export class SyncHandler {
             if (err.code === 'ABORT_ERR') { return; }
             this.miniLogger.log(err, (m) => { console.error(m); });
         }
-    }
-    async #handleIncomingStreamOLD(lstream) {
-        /** @type {Stream} */
-        const stream = lstream.stream;
-        if (!stream) { return; }
-
-        const peerIdStr = lstream.connection.remotePeer.toString();
-        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
-        const source = lp.decode(stream.source);
-        try {
-            for await (const serializedMessage of source) {
-                const serializedMsg = serializedMessage.subarray();
-                const msg = serializer.deserialize.rawData(serializedMsg);
-                if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-                // default type is 'getStatus', returning currentHeight and latest block hash
-
-                const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
-                const response = {
-                    currentHeight: this.node.blockchain.currentHeight,
-                    /** @type {string} */
-                    latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-                    /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
-                    blocks: validGetBlocksRequest
-                    ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
-                    : undefined
-                };
-
-                const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
-                await stream.sink(encodedResponse);
-            }
-            await stream.close();
-        } catch (err) {
-            if (err.code === 'ABORT_ERR') { return; }
-            this.miniLogger.log(err, (m) => { console.error(m); });
-        }
-
-        //const closure = await stream.close();
-        //console.log('stream closed', closure);
-        //try { stream.close(); } catch (closeErr) { this.miniLogger.log(closeErr, (m) => { console.error(m); }); }
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);
