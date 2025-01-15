@@ -54,24 +54,14 @@ export class SyncHandler {
             const msgParts = [];
             let totalSize = 0;
             for await (const chunk of stream.source) {
-                const uint8Array = new Uint8Array(chunk.subarray());
-                msgParts.push(uint8Array);
+                msgParts.push(new Uint8Array(chunk.subarray()));
                 totalSize += uint8Array.length;
-                /*if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
-                const sizeBuffer = chunk.slice(0, 4);
-                const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
-                if (chunk.length - 4 < dataSize) {console.error("Chunk does not contain enough data based on dataSize"); continue; }
-                const data = chunk.slice(4, dataSize + 4);
-                msgParts.push(data);
-                totalSize += dataSize;*/
             }
             
             const data = new Uint8Array(totalSize);
             let offset = 0;
-            for (const part of msgParts) {
-                data.set(part, offset);
-                offset += part.length;
-            }
+            for (const part of msgParts) { data.set(part, offset); offset += part.length; }
+
             const msg = serializer.deserialize.rawData(data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
             this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${data.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
@@ -88,134 +78,13 @@ export class SyncHandler {
             };
 
             const serialized = serializer.serialize.rawData(response);
-            /*const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
-            const dataToSend = new Uint8Array(serialized.length + 4);
-            dataToSend.set(size, 0);
-            dataToSend.set(serialized, 4);*/
             await stream.sink([serialized]);
             
             return;
-            for await (const chunk of lp.decode(stream.source, { maxDataLength: 2**21 })) {
-                const serializedMsg = chunk.subarray();
-                const msg = serializer.deserialize.rawData(serializedMsg);
-                if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-
-                this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${serializedMsg.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
-                const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
-                const response = {
-                    currentHeight: this.node.blockchain.currentHeight,
-                    /** @type {string} */
-                    latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-                    /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
-                    blocks: validGetBlocksRequest
-                    ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
-                    : undefined
-                };
-
-                const serializedResponse = serializer.serialize.rawData(response);
-                //await stream.sink(lp.encode.single(serializedResponse));
-                await pipe([serializedResponse], lp.encode, stream.sink);
-                this.miniLogger.log(`Response sent (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
-            }
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
             //this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
             //await stream.close();
-        }
-    }
-    async #handleIncomingStreamPIPE(lstream) {
-        /** @type {Stream} */
-        const stream = lstream.stream;
-        if (!stream) { return; }
-        
-        //const lp = lpStream(stream);
-        const peerIdStr = lstream.connection.remotePeer.toString();
-        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
-        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
-        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
-        
-        try {
-            //const source = lp.decode(stream.source);
-            await pipe(
-                stream.source, // Flux of incoming messages
-                source => lp.decode(source), // Decoder for length-prefixed messages
-                async function (source) {
-                    //while (true) {
-                        for await (const msgUint8 of source) {
-                            const serialized = msgUint8.subarray();
-                            const msg = serializer.deserialize.rawData(serialized.subarray());
-                            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-                            this.miniLogger.log(`Received message (type: ${msg.type} - ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
-                            
-                            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
-                            const response = {
-                                currentHeight: this.node.blockchain.currentHeight,
-                                /** @type {string} */
-                                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-                                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
-                                blocks: validGetBlocksRequest
-                                ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
-                                : undefined
-                            };
-                            
-                            const serializedResponse = serializer.serialize.rawData(response);
-                            this.miniLogger.log(`Sending response (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
-                            await pipe([serializedResponse], lp.encode, stream.sink);
-                            //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
-                            //await stream.sink(encodedResponse);
-                        }
-                        console.info(`END OF STREAM from ${readablePeerId}`);
-                    //}
-                }.bind(this)
-            );
-        } catch (err) {
-            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
-            this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
-            await stream.close();
-        }
-
-        //await stream.close();
-    }
-    async #handleIncomingStreamNOPIPE(lstream) {
-        /** @type {Stream} */
-        const stream = lstream.stream;
-        if (!stream) { return; }
-        
-        const peerIdStr = lstream.connection.remotePeer.toString();
-        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
-        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
-        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
-
-        try {
-            const lp = lpStream(stream, { maxDataLength: 2**21 });
-            const serialized = await lp.read();
-            const msg = serializer.deserialize.rawData(serialized.subarray());
-            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-
-            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
-            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
-            const response = {
-                currentHeight: this.node.blockchain.currentHeight,
-                /** @type {string} */
-                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
-                blocks: validGetBlocksRequest
-                ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
-                : undefined
-            };
-
-            const serializedResponse = serializer.serialize.rawData(response);
-            this.miniLogger.log(`Sending response (type: ${msg.type} | ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
-
-            if (validGetBlocksRequest) {
-                console.log('toto');
-            }
-            await lp.write(serializedResponse);
-        } catch (err) {
-            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
-            if (!stream || stream.status !== 'open') { return; }
-            this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
-            await stream.close();
         }
     }
     #handleSyncFailure() {

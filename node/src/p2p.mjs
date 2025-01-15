@@ -299,10 +299,6 @@ class P2PNetwork extends EventEmitter {
             //this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
             const serialized = serializer.serialize.rawData(message);
-            /*const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
-            const dataToSend = new Uint8Array(serialized.length + 4);
-            dataToSend.set(size, 0);
-            dataToSend.set(serialized, 4);*/
             await this.openStreams[peerIdStr].sink([serialized]);
             //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized));
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
@@ -311,30 +307,14 @@ class P2PNetwork extends EventEmitter {
             const responseParts = [];
             let totalSize = 0;
             for await (const chunk of this.openStreams[peerIdStr].source) {
-                const uint8Array = new Uint8Array(chunk.subarray());
-                responseParts.push(uint8Array);
+                responseParts.push(new Uint8Array(chunk.subarray()));
                 totalSize += uint8Array.length;
-                /*if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
-                const sizeBuffer = chunk.slice(0, 4);
-                const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
-                //const dataSize = sizeBuffer.readUInt32BE();
-                if (chunk.length - 4 < dataSize) {
-                    console.error("Chunk does not contain enough data based on dataSize");
-                    console.error(`Chunk length: ${chunk.length}, dataSize: ${dataSize}`);
-                    continue;
-                }
-                const data = chunk.slice(4, dataSize + 4);
-                responseParts.push(data);
-                totalSize += dataSize;*/
             }
 
-            const response = new Uint8Array(totalSize);
+            const data = new Uint8Array(totalSize);
             let offset = 0;
-            for (const part of responseParts) {
-                response.set(part, offset);
-                offset += part.length;
-            }
-            return serializer.deserialize.rawData(response);
+            for (const part of responseParts) { data.set(part, offset); offset += part.length; }
+            const response = serializer.deserialize.rawData(data);
 
             /*let response;
             for await (const msg of lp.decode(this.openStreams[peerIdStr].source, { maxDataLength: 2**21 })) {
@@ -347,79 +327,6 @@ class P2PNetwork extends EventEmitter {
             return response;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
-            return false;
-        }
-    }
-    /** @param {string} peerIdStr @param {any} message */
-    async sendMessageNOPIPE(peerIdStr, message) {
-        // simple way, without "lpStream" -> use lp
-        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
-        const peer = this.peers[peerIdStr];
-        if (!peer || !peer.dialable) { return false; }
-        const peerId = peer.id;
-
-        try {
-            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
-                this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
-            }
-
-            const lp = lpStream(this.openStreams[peerIdStr], { maxDataLength: 2**21 });
-            const serialized = serializer.serialize.rawData(message);
-            await lp.write(serialized);
-            this.miniLogger.log(`Message written to stream (${serialized.length}B to ${readablePeerId})`, (m) => { console.info(m); });
-            
-            const response = await lp.read();
-            if (!response) {  this.miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
-            
-            this.miniLogger.log(`Response read from stream (${response.subarray().length}B from ${readablePeerId})`, (m) => { console.info(m); });
-            const deserialized = serializer.deserialize.rawData(response.subarray());
-            return deserialized;
-        } catch (error) {
-            this.miniLogger.log(error, (m) => { console.error(m); });
-            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status === 'open') { return false; }
-            await this.openStreams[peerIdStr].close();
-            delete this.openStreams[peerIdStr];
-            return false;
-        }
-    }
-    /** @param {string} peerIdStr @param {SyncMessage} message */
-    async sendMessageOLD(peerIdStr, message) {
-        /** @type {Peer} */
-        const peer = this.peers[peerIdStr];
-        if (!peer || !peer.dialable) { return false; }
-        const peerId = peer.id;
-
-        try {
-            //peer.stream = peer.stream || await this.p2pNode.dialProtocol(peer.remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-            //const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
-            const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL);
-            const lpStream = lp()
-
-            const serialized = serializer.serialize.rawData(message);
-            await lp.write(serialized);
-            this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
-            //await stream.closeWrite();
-
-            const res = await lp.read();
-            if (!res) { miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
-            this.miniLogger.log(`Response read from stream (${res.length} bytes)`, (m) => { console.info(m); });
-            //await stream.closeRead();
-            //await stream.close()
-            
-            
-            //const rstatus = stream.readStatus;
-            //const wstatus = stream.writeStatus;
-            //const closure = await stream.closeWrite();
-            //await stream.close();
-            //stream.reset(); -> //?create an error
-
-            //while (stream.writeStatus === 'writing') { await new Promise(resolve => setTimeout(resolve, 100)); }
-            
-            const response = serializer.deserialize.rawData(res.subarray());
-            return response;
-        } catch (err) {
-            if (err.code === 'ABORT_ERR') { this.miniLogger.log('ABORT_ERR', (m) => { console.error(m); }); return false; }
-            this.miniLogger.log(err, (m) => { console.error(m); });
             return false;
         }
     }
