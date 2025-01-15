@@ -48,17 +48,19 @@ export class SyncHandler {
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
-            let message;
+            /** @type {Uint8Array[]} */
+            const responseParts = [];
             for await (const chunk of stream.source) {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = sizeBuffer.readUInt32BE();
                 if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
-                message = serializer.deserialize.rawData(data);
-                break;
+                responseParts.push(data);
             }
-
+            
+            const data = new Uint8Array(Buffer.concat(responseParts));
+            const message = serializer.deserialize.rawData(data);
             if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
             this.miniLogger.log(`Received message (type: ${message.type}${message.type === 'getBlocks' ? `: ${message.startIndex}-${message.endIndex}` : ''} | ${message.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
 

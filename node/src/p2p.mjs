@@ -307,15 +307,19 @@ class P2PNetwork extends EventEmitter {
             //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized, { maxDataLength: 2**21 }));
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
+            /** @type {Uint8Array[]} */
+            const responseParts = [];
             for await (const chunk of source) {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = sizeBuffer.readUInt32BE();
                 if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
-                const response = serializer.deserialize.rawData(data);
-                return response;
+                responseParts.push(data);
             }
+
+            const response = new Uint8Array(responseParts.reduce((acc, part) => acc + part.length, 0));
+            return serializer.deserialize.rawData(response);
 
             /*let response;
             for await (const msg of lp.decode(this.openStreams[peerIdStr].source, { maxDataLength: 2**21 })) {
