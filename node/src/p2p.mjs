@@ -299,12 +299,11 @@ class P2PNetwork extends EventEmitter {
             //this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
             const serialized = serializer.serialize.rawData(message);
-            //const size = convert.number.to4BytesUint8Array(serialized.length);
-            const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
+            /*const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
             const dataToSend = new Uint8Array(serialized.length + 4);
             dataToSend.set(size, 0);
-            dataToSend.set(serialized, 4);
-            await this.openStreams[peerIdStr].sink([dataToSend]);
+            dataToSend.set(serialized, 4);*/
+            await this.openStreams[peerIdStr].sink([serialized]);
             //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized));
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
@@ -312,7 +311,9 @@ class P2PNetwork extends EventEmitter {
             const responseParts = [];
             let totalSize = 0;
             for await (const chunk of this.openStreams[peerIdStr].source) {
-                if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
+                responseParts.push(chunk);
+                totalSize += chunk.length;
+                /*if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
                 //const dataSize = sizeBuffer.readUInt32BE();
@@ -323,7 +324,7 @@ class P2PNetwork extends EventEmitter {
                 }
                 const data = chunk.slice(4, dataSize + 4);
                 responseParts.push(data);
-                totalSize += dataSize;
+                totalSize += dataSize;*/
             }
 
             const response = new Uint8Array(totalSize);

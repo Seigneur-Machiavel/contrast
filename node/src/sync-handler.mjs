@@ -54,13 +54,15 @@ export class SyncHandler {
             const msgParts = [];
             let totalSize = 0;
             for await (const chunk of stream.source) {
-                if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
+                responseParts.push(chunk);
+                totalSize += chunk.length;
+                /*if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
                 if (chunk.length - 4 < dataSize) {console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
                 msgParts.push(data);
-                totalSize += dataSize;
+                totalSize += dataSize;*/
             }
             
             const data = new Uint8Array(totalSize);
@@ -85,11 +87,11 @@ export class SyncHandler {
             };
 
             const serialized = serializer.serialize.rawData(response);
-            const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
+            /*const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
             const dataToSend = new Uint8Array(serialized.length + 4);
             dataToSend.set(size, 0);
-            dataToSend.set(serialized, 4);
-            await stream.sink([dataToSend]);
+            dataToSend.set(serialized, 4);*/
+            await stream.sink([serialized]);
             
             return;
             for await (const chunk of lp.decode(stream.source, { maxDataLength: 2**21 })) {
