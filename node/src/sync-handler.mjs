@@ -67,7 +67,7 @@ export class SyncHandler {
 
                 const serializedResponse = serializer.serialize.rawData(response);
                 await stream.sink(lp.encode.single(serializedResponse));
-                this.miniLogger.log(`Response sent (type: ${message.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
+                this.miniLogger.log(`Response sent (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
             }
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
