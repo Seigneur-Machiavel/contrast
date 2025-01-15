@@ -47,7 +47,7 @@ export class SyncHandler {
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
 
         try {
-            const lp = lpStream(stream, { maxLength: 1024 });
+            const lp = lpStream(stream, { maxLength: 2**20 });
             const serialized = await lp.read();
             const msg = serializer.deserialize.rawData(serialized.subarray());
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }

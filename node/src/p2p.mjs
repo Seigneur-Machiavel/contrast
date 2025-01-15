@@ -333,6 +333,7 @@ class P2PNetwork extends EventEmitter {
     /** @param {string} peerIdStr @param {any} message */
     async sendMessage(peerIdStr, message) {
         // simple way, without "lpStream" -> use lp
+        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
         const peerId = peer.id;
@@ -342,15 +343,15 @@ class P2PNetwork extends EventEmitter {
                 this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
             }
 
-            const lp = lpStream(this.openStreams[peerIdStr], { maxLength: 1024 });
+            const lp = lpStream(this.openStreams[peerIdStr], { maxLength: 2**20 });
             const serialized = serializer.serialize.rawData(message);
             await lp.write(serialized);
-            this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
+            this.miniLogger.log(`Message written to stream (${serialized.length}B to ${readablePeerId})`, (m) => { console.info(m); });
             
             const response = await lp.read();
             if (!response) {  this.miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
             
-            this.miniLogger.log(`Response read from stream (${response.subarray().length} bytes)`, (m) => { console.info(m); });
+            this.miniLogger.log(`Response read from stream (${response.subarray().length}B from ${readablePeerId})`, (m) => { console.info(m); });
             const deserialized = serializer.deserialize.rawData(response.subarray());
             return deserialized;
         } catch (error) {
