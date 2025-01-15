@@ -23,7 +23,7 @@ import ReputationManager from './peers-reputation.mjs';
 export class SyncHandler {
     isSyncing = false;
     syncDisabled = false;
-    MAX_BLOCKS_PER_REQUEST = 400;
+    MAX_BLOCKS_PER_REQUEST = 4;
     /** @type {MiniLogger} */
     miniLogger = new MiniLogger('sync');
     /** @type {Object<string, number>} */
