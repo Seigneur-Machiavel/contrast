@@ -49,17 +49,24 @@ export class SyncHandler {
         
         try {
             /** @type {Uint8Array[]} */
-            const responseParts = [];
+            const messageParts = [];
+            let totalSize = 0;
             for await (const chunk of stream.source) {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = sizeBuffer.readUInt32BE();
                 if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
-                responseParts.push(data);
+                messageParts.push(data);
+                totalSize += dataSize;
             }
             
-            const data = new Uint8Array(Buffer.concat(responseParts));
+            const data = new Uint8Array(totalSize);
+            let offset = 0;
+            for (const part of messageParts) {
+                data.set(part, offset);
+                offset += part.length;
+            }
             const message = serializer.deserialize.rawData(data);
             if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
             this.miniLogger.log(`Received message (type: ${message.type}${message.type === 'getBlocks' ? `: ${message.startIndex}-${message.endIndex}` : ''} | ${message.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
@@ -78,10 +85,9 @@ export class SyncHandler {
             const serialized = serializer.serialize.rawData(response);
             const sizeBuffer = Buffer.alloc(4);
             sizeBuffer.writeUInt32BE(serialized.length);
-            const dataToSend = new Uint8Array(sizeBuffer, serialized);
-            //const concated = Buffer.concat([sizeBuffer, serialized]);
-            //const dataToSend = new Uint8Array(concated);
-           //const uint8ArrayList = [sizeBuffer, serialized];
+            const dataToSend = new Uint8Array(serialized.length + 4);
+            dataToSend.set(sizeBuffer, 0);
+            dataToSend.set(serialized, 4);
             await stream.sink([dataToSend]);
             
             return;

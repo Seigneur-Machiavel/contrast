@@ -300,25 +300,32 @@ class P2PNetwork extends EventEmitter {
             const serialized = serializer.serialize.rawData(message);
             const sizeBuffer = Buffer.alloc(4);
             sizeBuffer.writeUInt32BE(serialized.length);
-            const dataToSend = new Uint8Array([sizeBuffer, serialized]);
-            //const concated = Buffer.concat([sizeBuffer, serialized]);
-            //const dataToSend = new Uint8Array(concated);
-            await this.openStreams[peerIdStr].sink(dataToSend);
-            //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized, { maxDataLength: 2**21 }));
+            const dataToSend = new Uint8Array(serialized.length + 4);
+            dataToSend.set(sizeBuffer, 0);
+            dataToSend.set(serialized, 4);
+            await this.openStreams[peerIdStr].sink([dataToSend]);
+            //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized));
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             /** @type {Uint8Array[]} */
             const responseParts = [];
-            for await (const chunk of source) {
+            let totalSize = 0;
+            for await (const chunk of this.openStreams[peerIdStr].source) {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = sizeBuffer.readUInt32BE();
                 if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
                 responseParts.push(data);
+                totalSize += dataSize;
             }
 
-            const response = new Uint8Array(responseParts.reduce((acc, part) => acc + part.length, 0));
+            const response = new Uint8Array(totalSize);
+            let offset = 0;
+            for (const part of responseParts) {
+                response.set(part, offset);
+                offset += part.length;
+            }
             return serializer.deserialize.rawData(response);
 
             /*let response;
