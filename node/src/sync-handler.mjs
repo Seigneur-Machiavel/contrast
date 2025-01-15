@@ -76,7 +76,7 @@ export class SyncHandler {
             const serialized = serializer.serialize.rawData(response);
             const sizeBuffer = Buffer.alloc(4);
             sizeBuffer.writeUInt32BE(serialized.length);
-            const dataToSend = new Uint8Array([sizeBuffer, serialized]);
+            const dataToSend = new Uint8Array(sizeBuffer, serialized);
             //const concated = Buffer.concat([sizeBuffer, serialized]);
             //const dataToSend = new Uint8Array(concated);
            //const uint8ArrayList = [sizeBuffer, serialized];
