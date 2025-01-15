@@ -70,7 +70,7 @@ export class SyncHandler {
             await lp.write(serializedResponse);
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
-            if (!stream && !stream.status === 'open') { return; }
+            if (!stream || stream.status !== 'open') { return; }
             this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
             await stream.close();
         }

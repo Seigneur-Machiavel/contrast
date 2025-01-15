@@ -356,7 +356,7 @@ class P2PNetwork extends EventEmitter {
             return deserialized;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
-            if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status === 'open') { return false; }
+            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status === 'open') { return false; }
             await this.openStreams[peerIdStr].close();
             delete this.openStreams[peerIdStr];
             return false;
