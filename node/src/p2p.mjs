@@ -11,9 +11,9 @@ import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
-//import * as lp from 'it-length-prefixed';
+import * as lp from 'it-length-prefixed';
 import { pipe } from 'it-pipe';
-import { lpStream } from 'it-length-prefixed-stream';
+//import { lpStream } from 'it-length-prefixed-stream';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -285,33 +285,41 @@ class P2PNetwork extends EventEmitter {
         }
     }
     /** @param {string} peerIdStr @param {any} message */
-    async sendMessagePIPE(peerIdStr, message) {
-        // simple way, without "lpStream" -> use lp
+    async sendMessage(peerIdStr, message) {
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
         const peerId = peer.id;
 
         try {
-            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
+            /*if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
                 this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
-            }
+            }*/
+            this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
             const serialized = serializer.serialize.rawData(message);
-            await pipe(
+            //const encoded = lp.encode.single(serialized);
+            await this.openStreams[peerIdStr].sink(serialized);
+            
+            /*await pipe(
                 [serialized], // Wrap the serialized message in an array as the source for pipe
-                lp.encode, // Encode the message lengths
-                this.openStreams[peerIdStr].sink // Write to the stream
-            );
+                (source) => lp.encode(source), // Encode the message lengths
+                async (source) => {
+                    const sink = this.openStreams[peerIdStr].sink;
+                    await pipe(source, sink);
+                }
+            );*/
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             // Return the first message read from the stream
-            const response = await pipe(
+            const response = await this.openStreams[peerIdStr].source.next();
+
+            /*const response = await pipe(
                 this.openStreams[peerIdStr].source, // Read from the stream
                 lp.decode, // Decode the message lengths
                 async function (source) {
                     for await (const msg of source) { return msg; }
                 }
-            );
+            );*/
 
             if (!response) { 
                 this.miniLogger.log(`No response received`, (m) => { console.error(m); });
@@ -331,7 +339,7 @@ class P2PNetwork extends EventEmitter {
         }
     }
     /** @param {string} peerIdStr @param {any} message */
-    async sendMessage(peerIdStr, message) {
+    async sendMessageNOPIPE(peerIdStr, message) {
         // simple way, without "lpStream" -> use lp
         const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
         const peer = this.peers[peerIdStr];

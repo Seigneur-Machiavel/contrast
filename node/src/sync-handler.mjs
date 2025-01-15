@@ -1,9 +1,9 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import P2PNetwork from './p2p.mjs';
-//import * as lp from 'it-length-prefixed';
+import * as lp from 'it-length-prefixed';
 import { pipe } from 'it-pipe';
-import { lpStream } from 'it-length-prefixed-stream';
+//import { lpStream } from 'it-length-prefixed-stream';
 import ReputationManager from './peers-reputation.mjs';
 
 /**
@@ -37,6 +37,102 @@ export class SyncHandler {
     }
     streamHandleCount = 0;
     async #handleIncomingStream(lstream) {
+        /** @type {Stream} */
+        const stream = lstream.stream;
+        if (!stream) { return; }
+        
+        //const lp = lpStream(stream);
+        const peerIdStr = lstream.connection.remotePeer.toString();
+        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
+        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
+        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
+        
+        try {
+            const msg = await stream.source.next();
+            if (!msg || !msg.value) { throw new Error('Invalid message format'); }
+            const serialized = msg.value.subarray();
+            if (!serialized) { throw new Error('Invalid message format'); }
+
+            const msgObj = serializer.deserialize.rawData(serialized.subarray());
+            if (!msgObj || typeof msgObj.type !== 'string') { throw new Error('Invalid message format'); }
+
+            this.miniLogger.log(`Received message (type: ${msgObj.type} - ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+            const validGetBlocksRequest = msgObj.type === 'getBlocks' && typeof msgObj.startIndex === 'number' && typeof msgObj.endIndex === 'number';
+            const response = {
+                currentHeight: this.node.blockchain.currentHeight,
+                /** @type {string} */
+                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
+                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
+                blocks: validGetBlocksRequest
+                ? this.node.blockchain.getRangeOfBlocksByHeight(msgObj.startIndex, msgObj.endIndex, false)
+                : undefined
+            };
+
+            const serializedResponse = serializer.serialize.rawData(response);
+            this.miniLogger.log(`Sending response (type: ${msgObj.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
+            await stream.sink(serializedResponse);
+        } catch (err) {
+            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+            this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
+            await stream.close();
+        }
+
+        //await stream.close();
+    }
+    async #handleIncomingStreamPIPE(lstream) {
+        /** @type {Stream} */
+        const stream = lstream.stream;
+        if (!stream) { return; }
+        
+        //const lp = lpStream(stream);
+        const peerIdStr = lstream.connection.remotePeer.toString();
+        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
+        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
+        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
+        
+        try {
+            //const source = lp.decode(stream.source);
+            await pipe(
+                stream.source, // Flux of incoming messages
+                source => lp.decode(source), // Decoder for length-prefixed messages
+                async function (source) {
+                    //while (true) {
+                        for await (const msgUint8 of source) {
+                            const serialized = msgUint8.subarray();
+                            const msg = serializer.deserialize.rawData(serialized.subarray());
+                            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+                            this.miniLogger.log(`Received message (type: ${msg.type} - ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+                            
+                            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
+                            const response = {
+                                currentHeight: this.node.blockchain.currentHeight,
+                                /** @type {string} */
+                                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
+                                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
+                                blocks: validGetBlocksRequest
+                                ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
+                                : undefined
+                            };
+                            
+                            const serializedResponse = serializer.serialize.rawData(response);
+                            this.miniLogger.log(`Sending response (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
+                            await pipe([serializedResponse], lp.encode, stream.sink);
+                            //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
+                            //await stream.sink(encodedResponse);
+                        }
+                        console.info(`END OF STREAM from ${readablePeerId}`);
+                    //}
+                }.bind(this)
+            );
+        } catch (err) {
+            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+            this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
+            await stream.close();
+        }
+
+        //await stream.close();
+    }
+    async #handleIncomingStreamNOPIPE(lstream) {
         /** @type {Stream} */
         const stream = lstream.stream;
         if (!stream) { return; }
@@ -77,59 +173,6 @@ export class SyncHandler {
             this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
             await stream.close();
         }
-    }
-    async #handleIncomingStreamPIPE(lstream) {
-        /** @type {Stream} */
-        const stream = lstream.stream;
-        if (!stream) { return; }
-        
-        //const lp = lpStream(stream);
-        const peerIdStr = lstream.connection.remotePeer.toString();
-        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
-        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
-        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
-        
-        try {
-            //const source = lp.decode(stream.source);
-            await pipe(
-                stream.source, // Flux of incoming messages
-                lp.decode, // Decoder for length-prefixed messages
-                async function (source) {
-                    //while (true) {
-                        for await (const msgUint8 of source) {
-                            const serialized = msgUint8.subarray();
-                            const msg = serializer.deserialize.rawData(serialized.subarray());
-                            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-                            this.miniLogger.log(`Received message (type: ${msg.type} - ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
-                            
-                            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
-                            const response = {
-                                currentHeight: this.node.blockchain.currentHeight,
-                                /** @type {string} */
-                                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-                                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
-                                blocks: validGetBlocksRequest
-                                ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
-                                : undefined
-                            };
-                            
-                            const serializedResponse = serializer.serialize.rawData(response);
-                            this.miniLogger.log(`Sending response (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
-                            await pipe([serializedResponse], lp.encode, stream.sink);
-                            //const encodedResponse = lp.encode.single(serializer.serialize.rawData(response));
-                            //await stream.sink(encodedResponse);
-                        }
-                        console.info(`END OF STREAM from ${readablePeerId}`);
-                    //}
-                }.bind(this)
-            );
-        } catch (err) {
-            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
-            this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
-            await stream.close();
-        }
-
-        //await stream.close();
     }
     async #getAllPeersInfo() {
         const peersToSync = Object.keys(this.node.p2pNetwork.peers);
