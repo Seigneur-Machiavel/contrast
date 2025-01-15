@@ -50,7 +50,7 @@ export class SyncHandler {
         try {
             //const source = lp.decode(stream.source);
 
-            for await (const msg of lp.decode(stream.source)) {
+            for await (const msg of stream.source) {
                 const serializedMsg = msg.subarray();
                 const message = serializer.deserialize.rawData(serializedMsg);
                 if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
