@@ -48,28 +48,25 @@ export class SyncHandler {
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
-            //const source = lp.decode(stream.source);
-
-            for await (const msg of stream.source) {
+            for await (const msg of lp.decode(stream.source)) {
                 const serializedMsg = msg.subarray();
-                const message = serializer.deserialize.rawData(serializedMsg);
-                if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
+                const msg = serializer.deserialize.rawData(serializedMsg);
+                if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
 
-                this.miniLogger.log(`Received message (type: ${message.type} - ${serializedMsg.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
-                const validGetBlocksRequest = message.type === 'getBlocks' && typeof message.startIndex === 'number' && typeof message.endIndex === 'number';
+                this.miniLogger.log(`Received message (type: ${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${serializedMsg.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+                const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
                 const response = {
                     currentHeight: this.node.blockchain.currentHeight,
                     /** @type {string} */
                     latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
                     /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
                     blocks: validGetBlocksRequest
-                    ? this.node.blockchain.getRangeOfBlocksByHeight(message.startIndex, message.endIndex, false)
+                    ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
                     : undefined
                 };
 
                 const serializedResponse = serializer.serialize.rawData(response);
-                //const encodedResponse = lp.encode.single(serializedResponse);
-                await stream.sink([serializedResponse]);
+                await stream.sink(lp.encode.single(serializedResponse));
                 this.miniLogger.log(`Response sent (type: ${message.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
             }
         } catch (err) {
