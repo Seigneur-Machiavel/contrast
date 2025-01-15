@@ -430,10 +430,10 @@ export class Node {
         if (!skipValidation && this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
         timer.endPhase('block-storage');
     
-        if (blockBytes > 102_400 && !skipValidation) {
-            this.miniLogger.log(`#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
-            if (this.logValidationTime){ timer.displayResults();}
-        }
+        //if (blockBytes > 102_400 && !skipValidation) {
+        this.miniLogger.log(`#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
+        if (this.logValidationTime){ timer.displayResults();}
+        //}
     
         const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);
         const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);

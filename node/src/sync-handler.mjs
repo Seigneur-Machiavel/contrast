@@ -52,7 +52,7 @@ export class SyncHandler {
                 const msg = serializer.deserialize.rawData(serializedMsg);
                 if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
 
-                this.miniLogger.log(`Received message (type: ${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${serializedMsg.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+                this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${serializedMsg.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
                 const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
                 const response = {
                     currentHeight: this.node.blockchain.currentHeight,

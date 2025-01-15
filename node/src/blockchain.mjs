@@ -152,7 +152,7 @@ export class Blockchain {
             this.lastBlock = block;
             this.currentHeight = block.index;
 
-            this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
+            //this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
             return blockInfo;
         } catch (error) {
             this.miniLogger.log(`Failed to add block: blockHash=${block.hash.slice(0, 20)}..., error=${error}`, (m) => { console.error(m); });
