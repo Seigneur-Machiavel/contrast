@@ -170,28 +170,6 @@ export class SyncHandler {
             await stream.close();
         }
     }
-    async #getAllPeersInfo() {
-        const peersToSync = Object.keys(this.node.p2pNetwork.peers);
-        const responsePromises = [];
-
-        for (const peerIdStr of peersToSync) {
-            responsePromises.push(this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getStatus' }));
-        }
-
-        /** @type {PeerInfo[]} */
-        const peersInfo = [];
-        for (const peerIdStr of peersToSync) {
-            const response = await responsePromises.shift();
-            if (!response) { continue; }
-            if (!typeof response.currentHeight === 'number') { continue; }
-
-            const { currentHeight, latestBlockHash } = response;
-            peersInfo.push({ peerIdStr, currentHeight, latestBlockHash });
-            this.peersHeights[peerIdStr] = currentHeight;
-        }
-
-        return peersInfo;
-    }
     #handleSyncFailure() {
         // METHOD 1: try to sync from snapshots
         // if syncFailureCount is a multiple of 10, try to sync from snapshots
@@ -215,6 +193,28 @@ export class SyncHandler {
         this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
 
         return false;
+    }
+    async #getAllPeersInfo() {
+        const peersToSync = Object.keys(this.node.p2pNetwork.peers);
+        const responsePromises = [];
+
+        for (const peerIdStr of peersToSync) {
+            responsePromises.push(this.node.p2pNetwork.sendMessage(peerIdStr, { type: 'getStatus' }));
+        }
+
+        /** @type {PeerInfo[]} */
+        const peersInfo = [];
+        for (const peerIdStr of peersToSync) {
+            const response = await responsePromises.shift();
+            if (!response) { continue; }
+            if (typeof response.currentHeight !== 'number') { continue; }
+
+            const { currentHeight, latestBlockHash } = response;
+            peersInfo.push({ peerIdStr, currentHeight, latestBlockHash });
+            this.peersHeights[peerIdStr] = currentHeight;
+        }
+
+        return peersInfo;
     }
     gmbCounter = 0;
     /** @param {string} peerIdStr @param {number} peerCurrentHeight */

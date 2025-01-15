@@ -16,7 +16,6 @@
     "@libp2p/bootstrap": "^11.0.13",
     "@libp2p/identify": "^3.0.12",
     "@libp2p/mdns": "^11.0.13",
-    "@libp2p/mplex": "^11.0.17",
     "@libp2p/tcp": "^10.0.13",
     "@multiformats/multiaddr": "^12.3.3",
     "argon2": "^0.41.1",

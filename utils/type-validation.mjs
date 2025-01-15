@@ -11,7 +11,7 @@ export const typeValidation = {
     /** @param {string} hex - Hex string to validate @returns {string|false} */
     hex(hex) {
         if (!hex) { return false; }
-        if (!typeof hex === 'string') { return false; }
+        if (typeof hex !== 'string') { return false; }
         if (hex.length === 0) { return false; }
         if (hex.length % 2 !== 0) { return false; }
 

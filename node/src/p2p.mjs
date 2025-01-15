@@ -8,7 +8,6 @@ import { tcp } from '@libp2p/tcp';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
-import { mplex } from '@libp2p/mplex';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
@@ -229,11 +228,10 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 addresses: { listen: [this.options.listenAddress] },
                 transports: [tcp()],
-                streamMuxers: [yamux(), mplex()],
+                streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 services: { identify: identify(), pubsub: gossipsub() },
-                peerDiscovery,
-                
+                peerDiscovery
             });
 
             await this.p2pNode.start();
@@ -295,7 +293,9 @@ class P2PNetwork extends EventEmitter {
         const peerId = peer.id;
 
         try {
-            if (this.openStreams[peerIdStr]?.status !== 'open') { delete this.openStreams[peerIdStr]; }
+            if (this.openStreams[peerIdStr]?.status !== 'open') {
+                this.miniLogger.log(`Stream is ${this.openStreams[peerIdStr]?.status} -> delete him`, (m) => { console.debug(m); });
+                delete this.openStreams[peerIdStr]; }
             this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
             //this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
