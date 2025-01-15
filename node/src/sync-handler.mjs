@@ -1,4 +1,5 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import P2PNetwork from './p2p.mjs';
 import * as lp from 'it-length-prefixed';
@@ -21,6 +22,7 @@ import ReputationManager from './peers-reputation.mjs';
  */
 
 export class SyncHandler {
+    fastConverter = new FastConverter();
     isSyncing = false;
     syncDisabled = false;
     MAX_BLOCKS_PER_REQUEST = 100;
@@ -54,7 +56,7 @@ export class SyncHandler {
             for await (const chunk of stream.source) {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
-                const dataSize = sizeBuffer.readUInt32BE();
+                const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
                 if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
                 messageParts.push(data);
@@ -83,10 +85,9 @@ export class SyncHandler {
             };
 
             const serialized = serializer.serialize.rawData(response);
-            const sizeBuffer = Buffer.alloc(4);
-            sizeBuffer.writeUInt32BE(serialized.length);
+            const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
             const dataToSend = new Uint8Array(serialized.length + 4);
-            dataToSend.set(sizeBuffer, 0);
+            dataToSend.set(size, 0);
             dataToSend.set(serialized, 4);
             await stream.sink([dataToSend]);
             

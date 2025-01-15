@@ -1,5 +1,5 @@
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import { convert } from '../../utils/converters.mjs';
+import { convert, FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
@@ -38,6 +38,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
+    fastConverter = new FastConverter();
     /** @type {string} */
     static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
     static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
@@ -298,10 +299,10 @@ class P2PNetwork extends EventEmitter {
             //this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
             const serialized = serializer.serialize.rawData(message);
-            const sizeBuffer = Buffer.alloc(4);
-            sizeBuffer.writeUInt32BE(serialized.length);
+            //const size = convert.number.to4BytesUint8Array(serialized.length);
+            const size = this.fastConverter.numberTo4BytesUint8Array(serialized.length);
             const dataToSend = new Uint8Array(serialized.length + 4);
-            dataToSend.set(sizeBuffer, 0);
+            dataToSend.set(size, 0);
             dataToSend.set(serialized, 4);
             await this.openStreams[peerIdStr].sink([dataToSend]);
             //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized));
@@ -313,7 +314,8 @@ class P2PNetwork extends EventEmitter {
             for await (const chunk of this.openStreams[peerIdStr].source) {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
-                const dataSize = sizeBuffer.readUInt32BE();
+                const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
+                //const dataSize = sizeBuffer.readUInt32BE();
                 if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
                 responseParts.push(data);
