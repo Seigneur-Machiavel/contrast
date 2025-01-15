@@ -11,9 +11,9 @@ import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
-import * as lp from 'it-length-prefixed';
+//import * as lp from 'it-length-prefixed';
 import { pipe } from 'it-pipe';
-//import { lpStream } from 'it-length-prefixed-stream';
+import { lpStream } from 'it-length-prefixed-stream';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -285,7 +285,7 @@ class P2PNetwork extends EventEmitter {
         }
     }
     /** @param {string} peerIdStr @param {any} message */
-    async sendMessage(peerIdStr, message) {
+    async sendMessagePIPE(peerIdStr, message) {
         // simple way, without "lpStream" -> use lp
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
@@ -295,28 +295,18 @@ class P2PNetwork extends EventEmitter {
             if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
                 this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
             }
-            
-            const stream = this.openStreams[peerIdStr];
+        
             const serialized = serializer.serialize.rawData(message);
-            //await pipe([serialized], stream);
             await pipe(
                 [serialized], // Wrap the serialized message in an array as the source for pipe
                 lp.encode, // Encode the message lengths
-                stream.sink // Write to the stream
+                this.openStreams[peerIdStr].sink // Write to the stream
             );
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             // Return the first message read from the stream
-            /*const response = await pipe(
-                stream,
-                async function (source) {
-                    for await (const msg of source) {
-
-                    }
-                }
-            );*/
             const response = await pipe(
-                stream.source, // Read from the stream
+                this.openStreams[peerIdStr].source, // Read from the stream
                 lp.decode, // Decode the message lengths
                 async function (source) {
                     for await (const msg of source) { return msg; }
@@ -335,7 +325,37 @@ class P2PNetwork extends EventEmitter {
             //return response;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
-            await stream.close();
+            await this.openStreams[peerIdStr].close();
+            delete this.openStreams[peerIdStr];
+            return false;
+        }
+    }
+    /** @param {string} peerIdStr @param {any} message */
+    async sendMessage(peerIdStr, message) {
+        // simple way, without "lpStream" -> use lp
+        const peer = this.peers[peerIdStr];
+        if (!peer || !peer.dialable) { return false; }
+        const peerId = peer.id;
+
+        try {
+            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
+                this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
+            }
+
+            const lp = lpStream(this.openStreams[peerIdStr]);
+            const serialized = serializer.serialize.rawData(message);
+            await lp.write(serialized);
+            this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
+            
+            const response = await lp.read();
+            if (!response) {  this.miniLogger.log(`No response received`, (m) => { console.error(m); }); return false; }
+            
+            this.miniLogger.log(`Response read from stream (${response.subarray().length} bytes)`, (m) => { console.info(m); });
+            const deserialized = serializer.deserialize.rawData(response.subarray());
+            return deserialized;
+        } catch (error) {
+            this.miniLogger.log(error, (m) => { console.error(m); });
+            await this.openStreams[peerIdStr].close();
             delete this.openStreams[peerIdStr];
             return false;
         }

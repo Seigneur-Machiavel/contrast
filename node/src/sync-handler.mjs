@@ -1,9 +1,9 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import P2PNetwork from './p2p.mjs';
-import * as lp from 'it-length-prefixed';
+//import * as lp from 'it-length-prefixed';
 import { pipe } from 'it-pipe';
-//import { lpStream } from 'it-length-prefixed-stream';
+import { lpStream } from 'it-length-prefixed-stream';
 import ReputationManager from './peers-reputation.mjs';
 
 /**
@@ -41,10 +41,48 @@ export class SyncHandler {
         const stream = lstream.stream;
         if (!stream) { return; }
         
+        const peerIdStr = lstream.connection.remotePeer.toString();
+        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
+        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
+        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
+        
+        try {
+            const lp = lpStream(stream);
+            const serialized = await lp.read();
+            const msg = serializer.deserialize.rawData(serialized);
+            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+
+            this.miniLogger.log(`Received message (type: ${msg.type} - ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
+            const response = {
+                currentHeight: this.node.blockchain.currentHeight,
+                /** @type {string} */
+                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
+                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
+                blocks: validGetBlocksRequest
+                ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
+                : undefined
+            };
+
+            const serializedResponse = serializer.serialize.rawData(response);
+            this.miniLogger.log(`Sending response (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
+
+            await lp.write(serializedResponse);
+        } catch (err) {
+            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+            this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
+            await stream.close();
+        }
+    }
+    async #handleIncomingStreamPIPE(lstream) {
+        /** @type {Stream} */
+        const stream = lstream.stream;
+        if (!stream) { return; }
+        
         //const lp = lpStream(stream);
         const peerIdStr = lstream.connection.remotePeer.toString();
         const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
-        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id-stream.id}) from ${readablePeerId}`);
+        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
