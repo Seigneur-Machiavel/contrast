@@ -323,7 +323,7 @@ class P2PNetwork extends EventEmitter {
                 response = serializer.deserialize.rawData(serializedMsg);
                 break;
             }*/
-
+            await this.openStreams[peerIdStr].close();
             return response;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });

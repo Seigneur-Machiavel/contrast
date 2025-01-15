@@ -79,6 +79,7 @@ export class SyncHandler {
 
             const serialized = serializer.serialize.rawData(response);
             await stream.sink([serialized]);
+            await stream.close();
             
             return;
         } catch (err) {
