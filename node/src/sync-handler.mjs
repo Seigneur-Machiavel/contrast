@@ -49,7 +49,7 @@ export class SyncHandler {
         try {
             const lp = lpStream(stream);
             const serialized = await lp.read();
-            const msg = serializer.deserialize.rawData(serialized);
+            const msg = serializer.deserialize.rawData(serialized.subarray());
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
 
             this.miniLogger.log(`Received message (type: ${msg.type} - ${serialized.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
