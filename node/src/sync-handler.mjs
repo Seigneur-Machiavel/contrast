@@ -55,7 +55,7 @@ export class SyncHandler {
             let totalSize = 0;
             for await (const chunk of stream.source) {
                 msgParts.push(new Uint8Array(chunk.subarray()));
-                totalSize += uint8Array.length;
+                totalSize += chunk.length;
             }
             
             const data = new Uint8Array(totalSize);

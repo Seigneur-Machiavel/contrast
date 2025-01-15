@@ -308,7 +308,7 @@ class P2PNetwork extends EventEmitter {
             let totalSize = 0;
             for await (const chunk of this.openStreams[peerIdStr].source) {
                 responseParts.push(new Uint8Array(chunk.subarray()));
-                totalSize += uint8Array.length;
+                totalSize += chunk.length;
             }
 
             const data = new Uint8Array(totalSize);
