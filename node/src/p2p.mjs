@@ -8,6 +8,7 @@ import { tcp } from '@libp2p/tcp';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
+import { mplex } from '@libp2p/mplex';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
@@ -168,9 +169,11 @@ class P2PNetwork extends EventEmitter {
         }
     };
     /** @param {CustomEvent} event */
-    #handlePeerDisconnect = (event) => {
+    #handlePeerDisconnect = async (event) => {
         const peerId = event.detail.toString();
         this.miniLogger.log(`--------> Peer ${peerId} disconnected`, (m) => { console.debug(m); });
+        if (this.openStreams[peerId] && this.openStreams[peerId].status === 'open') { await this.openStreams[peerId].close(); }
+        if (this.openStreams[peerId]) { delete this.openStreams[peerId]; }
         delete this.peers[peerId];
     };
     /** @param {CustomEvent} event */
@@ -226,10 +229,11 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 addresses: { listen: [this.options.listenAddress] },
                 transports: [tcp()],
-                streamMuxers: [yamux()],
+                streamMuxers: [yamux(), mplex()],
                 connectionEncrypters: [noise()],
                 services: { identify: identify(), pubsub: gossipsub() },
                 peerDiscovery,
+                
             });
 
             await this.p2pNode.start();
