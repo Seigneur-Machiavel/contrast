@@ -302,7 +302,7 @@ class P2PNetwork extends EventEmitter {
             sizeBuffer.writeUInt32BE(serialized.length);
             const concated = Buffer.concat([sizeBuffer, serialized]);
             const dataToSend = new Uint8Array(concated);
-            await this.openStreams[peerIdStr].sink(dataToSend);
+            await this.openStreams[peerIdStr].sink([dataToSend]);
             //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized, { maxDataLength: 2**21 }));
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             

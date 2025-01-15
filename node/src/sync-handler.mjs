@@ -78,7 +78,7 @@ export class SyncHandler {
             sizeBuffer.writeUInt32BE(serialized.length);
             const concated = Buffer.concat([sizeBuffer, serialized]);
             const dataToSend = new Uint8Array(concated);
-            await stream.sink(dataToSend);
+            await stream.sink([dataToSend]);
             
             return;
             for await (const chunk of lp.decode(stream.source, { maxDataLength: 2**21 })) {
