@@ -48,6 +48,38 @@ export class SyncHandler {
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
+            let message;
+            for await (const chunk of stream.source) {
+                if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
+                const sizeBuffer = chunk.slice(0, 4);
+                const dataSize = sizeBuffer.readUInt32BE();
+                if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
+                const data = chunk.slice(4, dataSize + 4);
+                message = serializer.deserialize.rawData(data);
+                break;
+            }
+
+            if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
+            this.miniLogger.log(`Received message (type: ${message.type}${message.type === 'getBlocks' ? `: ${message.startIndex}-${message.endIndex}` : ''} | ${message.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+
+            const validGetBlocksRequest = message.type === 'getBlocks' && typeof message.startIndex === 'number' && typeof message.endIndex === 'number';
+            const response = {
+                currentHeight: this.node.blockchain.currentHeight,
+                /** @type {string} */
+                latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
+                /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
+                blocks: validGetBlocksRequest
+                ? this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false)
+                : undefined
+            };
+
+            const serialized = serializer.serialize.rawData(response);
+            const sizeBuffer = Buffer.alloc(4);
+            sizeBuffer.writeUInt32BE(serialized.length);
+            const dataToSend = Buffer.concat([sizeBuffer, serialized]);
+            await stream.sink(dataToSend);
+            
+            return;
             for await (const chunk of lp.decode(stream.source, { maxDataLength: 2**21 })) {
                 const serializedMsg = chunk.subarray();
                 const msg = serializer.deserialize.rawData(serializedMsg);
@@ -66,7 +98,8 @@ export class SyncHandler {
                 };
 
                 const serializedResponse = serializer.serialize.rawData(response);
-                await stream.sink(lp.encode.single(serializedResponse, { maxDataLength: 2**21 }));
+                //await stream.sink(lp.encode.single(serializedResponse));
+                await pipe([serializedResponse], lp.encode, stream.sink);
                 this.miniLogger.log(`Response sent (type: ${msg.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
             }
         } catch (err) {

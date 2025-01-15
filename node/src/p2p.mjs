@@ -293,23 +293,35 @@ class P2PNetwork extends EventEmitter {
         const peerId = peer.id;
 
         try {
-            if (this.openStreams[peerIdStr]?.status !== 'open') {
-                this.miniLogger.log(`Stream is ${this.openStreams[peerIdStr]?.status} -> delete him`, (m) => { console.debug(m); });
-                delete this.openStreams[peerIdStr]; }
+            if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
             this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
             //this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
             const serialized = serializer.serialize.rawData(message);
-            await this.openStreams[peerIdStr].sink(lp.encode.single(serialized, { maxDataLength: 2**21 }));
+            const sizeBuffer = Buffer.alloc(4);
+            sizeBuffer.writeUInt32BE(serialized.length);
+            const dataToSend = Buffer.concat([sizeBuffer, serialized]);
+            await this.openStreams[peerIdStr].sink(dataToSend);
+            //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized, { maxDataLength: 2**21 }));
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
-            let response;
+            for await (const chunk of source) {
+                if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
+                const sizeBuffer = chunk.slice(0, 4);
+                const dataSize = sizeBuffer.readUInt32BE();
+                if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
+                const data = chunk.slice(4, dataSize + 4);
+                const response = serializer.deserialize.rawData(data);
+                return response;
+            }
+
+            /*let response;
             for await (const msg of lp.decode(this.openStreams[peerIdStr].source, { maxDataLength: 2**21 })) {
                 const serializedMsg = msg.subarray();
                 this.miniLogger.log(`Response read from stream (${serializedMsg.length} bytes)`, (m) => { console.info(m); });
                 response = serializer.deserialize.rawData(serializedMsg);
                 break;
-            }
+            }*/
 
             return response;
         } catch (error) {
