@@ -311,8 +311,9 @@ class P2PNetwork extends EventEmitter {
             const responseParts = [];
             let totalSize = 0;
             for await (const chunk of this.openStreams[peerIdStr].source) {
-                responseParts.push(chunk.subarray());
-                totalSize += chunk.length;
+                const uint8Array = new Uint8Array(chunk.subarray());
+                responseParts.push(uint8Array);
+                totalSize += uint8Array.length;
                 /*if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
