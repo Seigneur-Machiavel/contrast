@@ -154,7 +154,7 @@ export class OpStack {
                     if (this.node.miner) { this.node.miner.canProceedMining = false; }
 
                     this.node.syncHandler.isSyncing = true;
-                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers started at #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
+                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncing with Peers at #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                     const syncResult = await this.node.syncHandler.syncWithPeers();
                     this.node.syncHandler.isSyncing = false;
                     this.syncRequested = false;
@@ -193,7 +193,7 @@ export class OpStack {
                     this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
                     this.securelyPushFirst(reorgTasks);
                     break;
-                case 'healthCheck':
+                case 'healthCheck': // DEPRECATED
                     this.healthInfo.waitingForCheck = false;
                     const now = Date.now();
             

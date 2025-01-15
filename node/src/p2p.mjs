@@ -291,12 +291,12 @@ class P2PNetwork extends EventEmitter {
         if (!peer || !peer.dialable) { return false; }
         const peerId = peer.id;
 
-        if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
-            this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
-        }
-        
-        const stream = this.openStreams[peerIdStr];
         try {
+            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
+                this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
+            }
+            
+            const stream = this.openStreams[peerIdStr];
             const serialized = serializer.serialize.rawData(message);
             //await pipe([serialized], stream);
             await pipe(

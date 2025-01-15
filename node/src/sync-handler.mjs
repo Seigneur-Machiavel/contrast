@@ -44,7 +44,7 @@ export class SyncHandler {
         //const lp = lpStream(stream);
         const peerIdStr = lstream.connection.remotePeer.toString();
         const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
-        console.info(`INCOMING STREAM #${this.streamHandleCount++} from ${readablePeerId}`);
+        console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id-stream.id}) from ${readablePeerId}`);
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
@@ -204,7 +204,7 @@ export class SyncHandler {
     async syncWithPeers() {
         if (this.syncDisabled) { return 'Already at the consensus height'; }
 
-        this.miniLogger.log(`Starting syncWithPeers at #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
+        this.miniLogger.log(`syncWithPeers started at #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
         this.node.blockchainStats.state = "syncing";
     
         const peersInfo = await this.#getAllPeersInfo();
