@@ -48,9 +48,9 @@ export class SyncHandler {
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
-            const source = lp.decode(stream.source);
+            //const source = lp.decode(stream.source);
 
-            for await (const msg of source) {
+            for await (const msg of lp.decode(stream.source)) {
                 const serializedMsg = msg.subarray();
                 const message = serializer.deserialize.rawData(serializedMsg);
                 if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
@@ -68,8 +68,8 @@ export class SyncHandler {
                 };
 
                 const serializedResponse = serializer.serialize.rawData(response);
-                const encodedResponse = lp.encode.single(serializedResponse);
-                await stream.sink(encodedResponse);
+                //const encodedResponse = lp.encode.single(serializedResponse);
+                await stream.sink(serializedResponse);
                 this.miniLogger.log(`Response sent (type: ${message.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
             }
         } catch (err) {
