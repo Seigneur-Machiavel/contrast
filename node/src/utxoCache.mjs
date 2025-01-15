@@ -135,15 +135,22 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         if (!Array.isArray(transactions)) { throw new Error('Transactions is not an array'); }
 
         try {
+            let repeatedAnchorsCount = 0;
+            const control = {};
             const involvedAnchors = [];
             for (let i = 0; i < transactions.length; i++) {
                 const transaction = transactions[i];
                 const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(transaction) : false;
                 if (specialTx) { continue; } // no anchor
-    
-                for (const input of transaction.inputs) { involvedAnchors.push(input); }
+                
+                for (const input of transaction.inputs) {
+                    if (control[input]) { repeatedAnchorsCount++; continue; }
+                    control[input] = true;
+                    involvedAnchors.push(input);
+                }
             }
-    
+            
+            if (repeatedAnchorsCount > 0) { console.warn(`Repeated anchors: ${repeatedAnchorsCount}`); }
             const involvedUTXOs = this.getUTXOs(involvedAnchors);
             return involvedUTXOs;  
         } catch (error) { return false; }

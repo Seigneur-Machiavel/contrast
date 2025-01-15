@@ -162,7 +162,7 @@ export class Node {
     }
     async #connexionsMaintenerLoop() {
         while(true) {
-            await new Promise(resolve => setTimeout(resolve, 60000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
             const nbOfPeers = await this.#waitSomePeers();
             if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
         }

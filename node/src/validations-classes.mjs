@@ -560,8 +560,7 @@ export class BlockValidation {
         }
 
         if (remainingTxs === 0) {
-            ValidationMiniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
-            ValidationMiniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
+            ValidationMiniLogger.log(`Multi thread ${blockData.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
             return allDiscoveredPubKeysAddresses;
         }
 
@@ -609,9 +608,7 @@ export class BlockValidation {
             }
         }
 
-        ValidationMiniLogger.log(`Multi thread ${blockData.Txs.length} txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
-        ValidationMiniLogger.log(`Fast treated txs: ${fastTreatedTxs}`, (m) => { console.log(m); });
-
+        ValidationMiniLogger.log(`Multi thread ${blockData.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
         return allDiscoveredPubKeysAddresses;
     }
 }
