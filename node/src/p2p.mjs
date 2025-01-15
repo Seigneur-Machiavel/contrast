@@ -297,8 +297,8 @@ class P2PNetwork extends EventEmitter {
             this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
             const serialized = serializer.serialize.rawData(message);
-            //const encoded = lp.encode.single(serialized);
-            await this.openStreams[peerIdStr].sink(serialized);
+            const encoded = lp.encode.single(serialized);
+            await this.openStreams[peerIdStr].sink(encoded);
             
             /*await pipe(
                 [serialized], // Wrap the serialized message in an array as the source for pipe

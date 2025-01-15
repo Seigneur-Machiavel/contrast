@@ -70,7 +70,8 @@ export class SyncHandler {
 
             const serializedResponse = serializer.serialize.rawData(response);
             this.miniLogger.log(`Sending response (type: ${msgObj.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
-            await stream.sink(serializedResponse);
+            const encoded = lp.encode.single(serialized);
+            await stream.sink(encoded);
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
             this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
