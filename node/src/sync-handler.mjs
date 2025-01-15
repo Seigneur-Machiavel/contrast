@@ -54,7 +54,7 @@ export class SyncHandler {
             const msgParts = [];
             let totalSize = 0;
             for await (const chunk of stream.source) {
-                responseParts.push(chunk);
+                msgParts.push(chunk);
                 totalSize += chunk.length;
                 /*if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
