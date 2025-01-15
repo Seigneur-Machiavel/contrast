@@ -51,7 +51,7 @@ export class SyncHandler {
         
         try {
             /** @type {Uint8Array[]} */
-            const messageParts = [];
+            const msgParts = [];
             let totalSize = 0;
             for await (const chunk of stream.source) {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
@@ -59,21 +59,21 @@ export class SyncHandler {
                 const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
                 if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
-                messageParts.push(data);
+                msgParts.push(data);
                 totalSize += dataSize;
             }
             
             const data = new Uint8Array(totalSize);
             let offset = 0;
-            for (const part of messageParts) {
+            for (const part of msgParts) {
                 data.set(part, offset);
                 offset += part.length;
             }
-            const message = serializer.deserialize.rawData(data);
-            if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
-            this.miniLogger.log(`Received message (type: ${message.type}${message.type === 'getBlocks' ? `: ${message.startIndex}-${message.endIndex}` : ''} | ${message.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+            const msg = serializer.deserialize.rawData(data);
+            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${msg.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
 
-            const validGetBlocksRequest = message.type === 'getBlocks' && typeof message.startIndex === 'number' && typeof message.endIndex === 'number';
+            const validGetBlocksRequest = msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number';
             const response = {
                 currentHeight: this.node.blockchain.currentHeight,
                 /** @type {string} */
