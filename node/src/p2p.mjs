@@ -310,9 +310,16 @@ class P2PNetwork extends EventEmitter {
             );*/
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
-            // Return the first message read from the stream
-            const response = await this.openStreams[peerIdStr].source.next();
+            let response;
+            const source = lp.decode(this.openStreams[peerIdStr].source);
+            for await (const msg of source) {
+                const serializedMsg = msg.subarray();
+                this.miniLogger.log(`Response read from stream (${serializedMsg.length} bytes)`, (m) => { console.info(m); });
+                response = serializer.deserialize.rawData(serializedMsg);
+                break;
+            }
 
+            return response;
             /*const response = await pipe(
                 this.openStreams[peerIdStr].source, // Read from the stream
                 lp.decode, // Decode the message lengths
@@ -320,19 +327,9 @@ class P2PNetwork extends EventEmitter {
                     for await (const msg of source) { return msg; }
                 }
             );*/
-
-            if (!response) { 
-                this.miniLogger.log(`No response received`, (m) => { console.error(m); });
-                return false;
-            }
-            
-            this.miniLogger.log(`Response read from stream (${response.subarray().length} bytes)`, (m) => { console.info(m); });
-            const deserialized = serializer.deserialize.rawData(response.subarray());
-            return deserialized;
-            //const response = serializer.deserialize.rawData(res);
-            //return response;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
+            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status === 'open') { return false; }
             await this.openStreams[peerIdStr].close();
             delete this.openStreams[peerIdStr];
             return false;
