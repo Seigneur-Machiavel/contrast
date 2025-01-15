@@ -291,22 +291,12 @@ class P2PNetwork extends EventEmitter {
         const peerId = peer.id;
 
         try {
-            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
-                this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
-            }
+            if (this.openStreams[peerIdStr]?.status !== 'open') { delete this.openStreams[peerIdStr]; }
+            this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
             //this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
         
             const serialized = serializer.serialize.rawData(message);
             await this.openStreams[peerIdStr].sink(lp.encode.single(serialized));
-            
-            /*await pipe(
-                [serialized], // Wrap the serialized message in an array as the source for pipe
-                (source) => lp.encode(source), // Encode the message lengths
-                async (source) => {
-                    const sink = this.openStreams[peerIdStr].sink;
-                    await pipe(source, sink);
-                }
-            );*/
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             let response;
@@ -318,18 +308,8 @@ class P2PNetwork extends EventEmitter {
             }
 
             return response;
-            /*const response = await pipe(
-                this.openStreams[peerIdStr].source, // Read from the stream
-                lp.decode, // Decode the message lengths
-                async function (source) {
-                    for await (const msg of source) { return msg; }
-                }
-            );*/
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
-            if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status === 'open') { return false; }
-            await this.openStreams[peerIdStr].close();
-            delete this.openStreams[peerIdStr];
             return false;
         }
     }

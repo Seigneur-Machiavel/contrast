@@ -41,7 +41,6 @@ export class SyncHandler {
         const stream = lstream.stream;
         if (!stream) { return; }
         
-        //const lp = lpStream(stream);
         const peerIdStr = lstream.connection.remotePeer.toString();
         const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
         console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
