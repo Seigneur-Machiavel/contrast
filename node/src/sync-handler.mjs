@@ -52,7 +52,7 @@ export class SyncHandler {
 
             for await (const msg of source) {
                 const serializedMsg = msg.subarray();
-                const message = serializer.serialize.rawData(serializedMsg);
+                const message = serializer.deserialize.rawData(serializedMsg);
                 if (!message || typeof message.type !== 'string') { throw new Error('Invalid message format'); }
 
                 this.miniLogger.log(`Received message (type: ${message.type} - ${serializedMsg.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
