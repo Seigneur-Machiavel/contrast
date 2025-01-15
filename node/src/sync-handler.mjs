@@ -63,13 +63,14 @@ export class SyncHandler {
                     latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
                     /** @type {Uint8Array<ArrayBufferLike>[] | undefined} */
                     blocks: validGetBlocksRequest
-                    ? this.node.blockchain.getRangeOfBlocksByHeight(msgObj.startIndex, msgObj.endIndex, false)
+                    ? this.node.blockchain.getRangeOfBlocksByHeight(message.startIndex, message.endIndex, false)
                     : undefined
                 };
 
                 const serializedResponse = serializer.serialize.rawData(response);
                 const encodedResponse = lp.encode.single(serializedResponse);
                 await stream.sink(encodedResponse);
+                this.miniLogger.log(`Response sent (type: ${message.type} - ${serializedResponse.length} bytes) to ${readablePeerId}`, (m) => { console.info(m); });
             }
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
