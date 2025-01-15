@@ -316,7 +316,11 @@ class P2PNetwork extends EventEmitter {
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
                 //const dataSize = sizeBuffer.readUInt32BE();
-                if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
+                if (chunk.length - 4 < dataSize) {
+                    console.error("Chunk does not contain enough data based on dataSize");
+                    console.error(`Chunk length: ${chunk.length}, dataSize: ${dataSize}`);
+                    continue;
+                }
                 const data = chunk.slice(4, dataSize + 4);
                 responseParts.push(data);
                 totalSize += dataSize;

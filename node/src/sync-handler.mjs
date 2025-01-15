@@ -57,7 +57,7 @@ export class SyncHandler {
                 if (chunk.length < 4) { console.error("Chunk too small, cannot read size"); continue; }
                 const sizeBuffer = chunk.slice(0, 4);
                 const dataSize = this.fastConverter.uint84BytesToNumber(sizeBuffer);
-                if (chunk.length - 4 < dataSize) { console.error("Chunk does not contain enough data based on dataSize"); continue; }
+                if (chunk.length - 4 < dataSize) {console.error("Chunk does not contain enough data based on dataSize"); continue; }
                 const data = chunk.slice(4, dataSize + 4);
                 msgParts.push(data);
                 totalSize += dataSize;
