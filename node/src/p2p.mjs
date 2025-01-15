@@ -73,7 +73,7 @@ class P2PNetwork extends EventEmitter {
         this.timeSynchronizer = timeSynchronizer;
         const defaultOptions = {
             bootstrapNodes: [],
-            maxPeers: 12,
+            maxPeers: 120,
             logLevel: 'info',
             logging: true,
             listenAddress: '/ip4/0.0.0.0/tcp/27260',

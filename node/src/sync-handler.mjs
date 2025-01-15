@@ -37,6 +37,7 @@ export class SyncHandler {
     }
     streamHandleCount = 0;
     async #handleIncomingStream(lstream) {
+        if (this.node.restartRequested) { return; }
         /** @type {Stream} */
         const stream = lstream.stream;
         if (!stream) { return; }
