@@ -337,6 +337,13 @@ class P2PNetwork extends EventEmitter {
         if (!peer || !peer.dialable) { return false; }
         const peerId = peer.id;
 
+        async function closeStreamIfNot() {
+            if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status === 'open') {
+                await this.openStreams[peerIdStr].close();
+                delete this.openStreams[peerIdStr];
+            }
+        }
+
         try {
             if (!this.openStreams[peerIdStr] || this.openStreams[peerIdStr].status !== 'open') {
                 this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
@@ -355,8 +362,7 @@ class P2PNetwork extends EventEmitter {
             return deserialized;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
-            await this.openStreams[peerIdStr].close();
-            delete this.openStreams[peerIdStr];
+            await closeStreamIfNot();
             return false;
         }
     }

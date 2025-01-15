@@ -45,7 +45,7 @@ export class SyncHandler {
         const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
         console.info(`INCOMING STREAM #${this.streamHandleCount++} (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`);
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
-        
+
         try {
             const lp = lpStream(stream, { maxLength: 1024 });
             const serialized = await lp.read();
@@ -70,6 +70,7 @@ export class SyncHandler {
             await lp.write(serializedResponse);
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+            if (!stream && !stream.status === 'open') { return; }
             this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
             await stream.close();
         }
