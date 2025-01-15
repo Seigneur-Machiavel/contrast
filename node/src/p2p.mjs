@@ -342,7 +342,7 @@ class P2PNetwork extends EventEmitter {
                 this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
             }
 
-            const lp = lpStream(this.openStreams[peerIdStr]);
+            const lp = lpStream(this.openStreams[peerIdStr], { maxLength: 1024 });
             const serialized = serializer.serialize.rawData(message);
             await lp.write(serialized);
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
