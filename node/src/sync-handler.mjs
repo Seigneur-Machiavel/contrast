@@ -72,7 +72,7 @@ export class SyncHandler {
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
             this.miniLogger.log(`Closing incoming stream from ${readablePeerId}`, (m) => { console.info(m); });
-            await stream.close();
+            //await stream.close();
         }
     }
     async #handleIncomingStreamPIPE(lstream) {
@@ -193,11 +193,10 @@ export class SyncHandler {
         return peersInfo;
     }
     #handleSyncFailure() {
-        const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
-        
         // METHOD 1: try to sync from snapshots
         // if syncFailureCount is a multiple of 10, try to sync from snapshots
-        /*if (this.syncFailureCount > 0 && this.syncFailureCount % 6 === 0 && snapshotsHeights.length > 0) {
+        /*const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
+        if (this.syncFailureCount > 0 && this.syncFailureCount % 6 === 0 && snapshotsHeights.length > 0) {
             // retry sync from snapshots, ex: 15, 10, 5.. 15, 10, 5.. Etc...
             const modulo = (this.syncFailureCount / 6) % snapshotsHeights.length;
             const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
@@ -301,7 +300,7 @@ export class SyncHandler {
             return 'Already at the consensus height';
         }
         
-        this.miniLogger.log(`consensusHeight #${consensus.height}, current #${this.node.blockchain.currentHeight}`, (m) => { console.info(m); });
+        this.miniLogger.log(`consensusHeight #${consensus.height}, current #${this.node.blockchain.currentHeight} -> getblocks from ${peersInfo.length} peersInfo`, (m) => { console.info(m); });
 
         for (const peerInfo of peersInfo) {
             const { peerIdStr, currentHeight, latestBlockHash } = peerInfo;
