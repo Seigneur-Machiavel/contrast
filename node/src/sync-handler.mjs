@@ -150,7 +150,7 @@ export class SyncHandler {
             const serialized = serializer.serialize.rawData(response);
             await stream.sink([serialized]);
             await stream.close();
-            
+
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
             if (msg.type === 'getPubKeysAddresses') logComplement = `: ${msg.pubKeysHash}`;
@@ -228,11 +228,11 @@ export class SyncHandler {
 
         // METHOD 2: restart the node
         // if syncFailureCount is a multiple of 25, restart the node
-        if (this.syncFailureCount % 25 === 0) {
+        /*if (this.syncFailureCount % 25 === 0) {
             this.miniLogger.log(`Restarting the node after ${this.syncFailureCount} sync failures`, (m) => { console.error(m); });
             this.node.restartRequested = 'syncFailure (this.syncFailureCount % 25)';
             return message;
-        }
+        }*/
 
         //this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
         return message;
