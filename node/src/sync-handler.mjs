@@ -102,7 +102,7 @@ export class SyncHandler {
         // sync the blocks
         for (const peerStatus of peersStatus) {
             const { peerIdStr, currentHeight, latestBlockHash } = peerStatus;
-            if (latestBlockHash !== consensus.hash) { continue; } // Skip peers with different hash than consensus
+            if (latestBlockHash !== consensus.blockHash) { continue; } // Skip peers with different hash than consensus
 
             this.miniLogger.log(`Attempting to sync blocks with peer ${peerIdStr}`, (m) => { console.info(m); });
             const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight);
