@@ -140,7 +140,7 @@ export class SnapshotSystem {
 
 		performance.mark('startLoadMemPool'); // LOAD MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = Storage.loadBinary('memPool', heightPath);
-		this.knownPubKeysAddressesSnapInfo = {height: currentHeight, hash: HashFunctions.SHA256(serializedPKAddresses)};
+		this.knownPubKeysAddressesSnapInfo = {height, hash: HashFunctions.SHA256(serializedPKAddresses)};
 		memPool.knownPubKeysAddresses = serializer.deserialize.pubkeyAddressesObj(serializedPKAddresses);
 		performance.mark('endLoadMemPool');
 

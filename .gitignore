@@ -5,6 +5,7 @@ miniLogger/history
 
 node/storage - 50
 node/storage - 100
+node/storage - 850 (withoutjson)
 node/storage/bootstrapNodes.json
 node/storage/nodeSettings.json
 node/storage/blocks
