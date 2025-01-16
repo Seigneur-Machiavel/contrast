@@ -48,17 +48,20 @@ export class Storage {
     }
     /** @param {string} fileName @param {string} directoryPath */
     static loadBinary(fileName, directoryPath) {
+        const directoryPath__ = directoryPath || PATH.STORAGE;
+        const filePath = path.join(directoryPath__, `${fileName}.bin`);
         try {
-            const directoryPath__ = directoryPath || PATH.STORAGE;
-            const filePath = path.join(directoryPath__, `${fileName}.bin`);
             const buffer = fs.readFileSync(filePath);
             // const serializedData = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
             return buffer; // work as Uint8Array
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
+            } else {
+                storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+            }
         }
-        catch (error) {
-            storageMiniLogger.log(error.stack, (m) => { console.error(m); });
-            return false;
-        }
+        return false;
     }
     /** Save data to a JSON file @param {string} fileName - The name of the file */
     static saveJSON(fileName, data) {

@@ -1,3 +1,4 @@
+import path from 'path';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { Storage } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
@@ -144,7 +145,9 @@ export class SyncHandler {
             }
             
             if (msg.type === 'getPubKeysAddresses' && typeof msg.pubKeysHash === 'string' && msg.pubKeysHash === this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.hash) {
-                response.knownPubKeysAddresses = Storage.loadBinary('memPool', this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.height);
+                const snapPath = path.join(this.node.snapshotSystem.__snapshotPath, String(this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.height));
+                const trashPath = path.join(this.node.snapshotSystem.__trashPath, String(this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.height));
+                response.knownPubKeysAddresses = Storage.loadBinary('memPool', snapPath) || Storage.loadBinary('memPool', trashPath);
             }
 
             const serialized = serializer.serialize.rawData(response);
