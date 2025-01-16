@@ -88,10 +88,10 @@ export class SnapshotSystem {
 	 * @param {MemPool} memPool */
 	newSnapshot(utxoCache, vss, memPool) {
 		const logPerf = false;
-		const currentHeight = utxoCache.blockchain.currentHeight
+		const height = utxoCache.blockchain.currentHeight
 
 		this.#createMissingDirectories();
-		const heightPath = this.#createSnapshotSubDirectories(currentHeight);
+		const heightPath = this.#createSnapshotSubDirectories(height);
 
 		performance.mark('startSaveVssSpectrum'); // SAVE VSS SPECTRUM
 		const serializedSpectum = serializer.serialize.rawData(vss.spectrum);
@@ -100,7 +100,7 @@ export class SnapshotSystem {
 
 		performance.mark('startSaveMemPool'); // SAVE MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = serializer.serialize.pubkeyAddressesObj(memPool.knownPubKeysAddresses);
-		this.knownPubKeysAddressesSnapInfo = {height: currentHeight, hash: HashFunctions.SHA256(serializedPKAddresses)};
+		this.knownPubKeysAddressesSnapInfo = { height, hash: HashFunctions.xxHash32(serializedPKAddresses) };
 		Storage.saveBinary('memPool', serializedPKAddresses, heightPath);
 		performance.mark('endSaveMemPool');
 
@@ -140,7 +140,7 @@ export class SnapshotSystem {
 
 		performance.mark('startLoadMemPool'); // LOAD MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = Storage.loadBinary('memPool', heightPath);
-		this.knownPubKeysAddressesSnapInfo = {height, hash: HashFunctions.SHA256(serializedPKAddresses)};
+		this.knownPubKeysAddressesSnapInfo = { height, hash: HashFunctions.xxHash32(serializedPKAddresses) };
 		memPool.knownPubKeysAddresses = serializer.deserialize.pubkeyAddressesObj(serializedPKAddresses);
 		performance.mark('endLoadMemPool');
 
