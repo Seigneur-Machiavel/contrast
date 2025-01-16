@@ -246,7 +246,7 @@ export class SyncHandler {
             if (!response || !response.knownPubKeysInfo) { throw new Error('knownPubKeysInfo is not defined'); }
             if (typeof response.knownPubKeysInfo.height !== 'number') { throw new Error('knownPubKeysInfo.height is not a number'); }
             if (typeof response.knownPubKeysInfo.hash !== 'string') { throw new Error('knownPubKeysInfo.hash is not a string'); }
-            if (!response.knownPubKeysAddresses) { throw new Error('knownPubKeysAddresses is not defined'); }
+            if (!response.knownPubKeysAddresses) { throw new Error('knownPubKeysAddresses is missing'); }
             
             const hash = HashFunctions.xxHash32(response.knownPubKeysAddresses);
             if (pubKeysHash !== hash) { throw new Error('knownPubKeysAddresses hash mismatch'); }
