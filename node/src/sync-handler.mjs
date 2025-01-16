@@ -150,7 +150,11 @@ export class SyncHandler {
             const serialized = serializer.serialize.rawData(response);
             await stream.sink([serialized]);
             await stream.close();
-            this.miniLogger.log(`Sent response to ${readablePeerId} (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${serialized.length} bytes)`, (m) => { console.info(m); });
+            
+            let logComplement = '';
+            if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
+            if (msg.type === 'getPubKeysAddresses') logComplement = `: ${msg.pubKeysHash}`;
+            this.miniLogger.log(`Sent response to ${readablePeerId} (type: ${msg.type}${logComplement}} | ${serialized.length} bytes)`, (m) => { console.info(m); });
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
