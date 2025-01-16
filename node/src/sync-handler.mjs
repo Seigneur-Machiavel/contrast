@@ -58,13 +58,10 @@ export class SyncHandler {
     /** @param {Node} node */
     constructor(node) {
         this.node = node;
+        this.node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
+        this.miniLogger.log('SyncHandler setup', (m) => { console.info(m); });
     }
 
-    /** @param {P2PNetwork} p2pNetwork */
-    async start(p2pNetwork) {
-        p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
-        this.miniLogger.log('SyncHandler started', (m) => { console.info(m); });
-    }
     async syncWithPeers() {
         if (this.syncDisabled) { return 'Already at the consensus height'; }
 
@@ -96,6 +93,7 @@ export class SyncHandler {
                 if (!synchronized) { continue; }
 
                 this.miniLogger.log(`Successfully synced PubKeysAddresses with peer ${peerIdStr}`, (m) => { console.info(m); });
+                break;
             }
         }
 
@@ -216,30 +214,6 @@ export class SyncHandler {
         consensus.knownPubKeysInfo = pubKeysConsensus.knownPubKeysAddressesSnapInfo;
         return consensus;
     }
-    async #handleSyncFailure(message = '') {
-        this.syncFailureCount++;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        // METHOD 1: try to sync from snapshots
-        // if syncFailureCount is a multiple of 10, try to sync from snapshots
-        const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
-        if (this.syncFailureCount % 10 === 0 && snapshotsHeights.length > 0) {
-            const modulo = (this.syncFailureCount / 10) % snapshotsHeights.length;
-            const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
-            this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
-        }
-
-        // METHOD 2: restart the node
-        // if syncFailureCount is a multiple of 25, restart the node
-        /*if (this.syncFailureCount % 25 === 0) {
-            this.miniLogger.log(`Restarting the node after ${this.syncFailureCount} sync failures`, (m) => { console.error(m); });
-            this.node.restartRequested = 'syncFailure (this.syncFailureCount % 25)';
-            return message;
-        }*/
-
-        //this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
-        return message;
-    }
     /** @param {string} peerIdStr @param {string} pubKeysHash */
     async #getPubKeysAddresses(peerIdStr, pubKeysHash) {
         const message = { type: 'getPubKeysAddresses', pubKeysHash };
@@ -301,5 +275,29 @@ export class SyncHandler {
         }
 
         return peerHeight === this.node.blockchain.currentHeight;
+    }
+    async #handleSyncFailure(message = '') {
+        this.syncFailureCount++;
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // METHOD 1: try to sync from snapshots
+        // if syncFailureCount is a multiple of 10, try to sync from snapshots
+        const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
+        if (this.syncFailureCount % 10 === 0 && snapshotsHeights.length > 0) {
+            const modulo = (this.syncFailureCount / 10) % snapshotsHeights.length;
+            const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
+            this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
+        }
+
+        // METHOD 2: restart the node
+        // if syncFailureCount is a multiple of 25, restart the node
+        if (this.syncFailureCount % 25 === 0) {
+            this.miniLogger.log(`Restarting the node after ${this.syncFailureCount} sync failures`, (m) => { console.error(m); });
+            this.node.restartRequested = 'syncFailure (this.syncFailureCount % 25)';
+            return message;
+        }
+
+        //this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
+        return message;
     }
 }

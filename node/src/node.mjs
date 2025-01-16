@@ -30,73 +30,69 @@ import { Reorganizator } from './blockchain-reorganizator.mjs';
 * @typedef {import("./block-classes.mjs").BlockInfo} BlockInfo
 */
 
-
 export class Node {
     syncAndReady = false;
+    restartRequested = false;
+    id;
+    account;
+    roles;
+    version;
+    validatorRewardAddress;
+    useDevArgon2 = false;
+    /** @type {BlockData} */
+    blockCandidate = null;
+    miniLogger = new MiniLogger('node');
+    timeSynchronizer = new TimeSynchronizer();
+    snapshotSystem = new SnapshotSystem();
+    blockchain;
+    reorganizator;
+    utxoCache;
+
+    /** @type {ValidationWorker[]} */
+    workers = [];
+    nbOfWorkers = 4;
+    bootstrapNodes = [
+        '/dns4/pinkparrot.science/tcp/27260',
+        '/dns4/pinkparrot.observer/tcp/27261',
+        '/dns4/pariah.monster/tcp/27260'
+    ];
+    memPool = new MemPool();
+    /** @type {OpStack} */
+    opStack;
+    /** @type {SyncHandler} */
+    syncHandler;
+    /** @type {Object<string, WebSocketCallBack>} */
+    wsCallbacks = {};
+    /** @type {Miner} */
+    miner;
+    /** @type {string} */
+    minerAddress;
+
+    blockchainStats = {};
+    delayBeforeSendingCandidate = 10000;
+    ignoreIncomingBlocks = false;
+    logValidationTime = false;
+
     /** @param {Account} account */
     constructor(account, roles = ['validator'], p2pOptions = {}, version = 1) {
-        /** @type {MiniLogger} */
-        this.miniLogger = new MiniLogger('node');
-        this.timeSynchronizer = new TimeSynchronizer();
-        this.restartRequested = false;
-        /** @type {string} */
         this.id = account.address;
-        /** @type {SnapshotSystem} */
-        this.snapshotSystem = new SnapshotSystem();
-        /** @type {string[]} */
+        this.account = account;
         this.roles = roles; // 'miner', 'validator', ...
-        /** @type {OpStack} */
-        this.opStack = null;
+        this.version = version;
+        this.validatorRewardAddress = account.address;
+
         /** @type {P2PNetwork} */
         this.p2pNetwork = new P2PNetwork({
             role: this.roles.join('_'),
             ...p2pOptions
         }, this.timeSynchronizer);
         this.p2pOptions = p2pOptions;
-        /** @type {SyncHandler} */
-        this.syncHandler = new SyncHandler(this);
-
-        /** @type {Account} */
-        this.account = account;
-        this.validatorRewardAddress = account.address;
-        /** @type {BlockData} */
-        this.blockCandidate = null;
 
         /** @type {Vss} */
         this.vss = new Vss(BLOCKCHAIN_SETTINGS.maxSupply);
-        /** @type {MemPool} */
-        this.memPool = new MemPool();
-        /** @type {number} */
-        this.version = version;
-
-        /** @type {Miner} */
-        this.miner = null;
-        /** @type {string} */
-        this.minerAddress = null;
-        this.useDevArgon2 = false;
-        /** @type {Blockchain} */
         this.blockchain = new Blockchain(this.id);
-        /** @type {Reorganizator} */
         this.reorganizator = new Reorganizator(this);
-
-        /** @type {Object<string, WebSocketCallBack>} */
-        this.wsCallbacks = {};
-        /** @type {UtxoCache} */
         this.utxoCache = new UtxoCache(this.id, this.version, this.blockchain);
-
-        /** @type {ValidationWorker[]} */
-        this.workers = [];
-        this.nbOfWorkers = 4;
-        this.bootstrapNodes = [
-            '/dns4/pinkparrot.science/tcp/27260',
-            '/dns4/pinkparrot.observer/tcp/27261',
-            '/dns4/pariah.monster/tcp/27260'
-        ];
-
-        this.blockchainStats = {};
-        this.delayBeforeSendingCandidate = 10000;
-        this.ignoreIncomingBlocks = false;
-        this.logValidationTime = false;
     }
 
     // STARTUP -----------------------------------------------------------------------
@@ -139,7 +135,7 @@ export class Node {
         this.#updateState("Initializing P2P network");
         const uniqueHash = await this.account.getUniqueHash(64);
         await this.p2pNetwork.start(uniqueHash);
-        await this.syncHandler.start(this.p2pNetwork);
+        this.syncHandler = new SyncHandler(this);
         const uniqueTopics = this.#subscribeTopicsRelatedToRoles(this.roles);
         for (const topic of uniqueTopics) { this.p2pNetwork.subscribe(topic, this.p2pHandler.bind(this)); }
 
