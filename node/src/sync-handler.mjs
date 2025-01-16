@@ -71,6 +71,8 @@ export class SyncHandler {
         this.node.blockchainStats.state = "syncing";
     
         const peersStatus = await this.#getAllPeersStatus();
+        if (!peersStatus || peersStatus.length === 0) { return await this.#handleSyncFailure('No peers available'); }
+
         const consensus = this.#findConsensus(peersStatus);
         if (!consensus) { return await this.#handleSyncFailure(`Unable to get consensus -> sync failure`); }
         if (consensus.height <= this.node.blockchain.currentHeight) { return 'Already at the consensus height'; }
@@ -108,6 +110,8 @@ export class SyncHandler {
             this.miniLogger.log(`Successfully synced blocks with peer ${peerIdStr}`, (m) => { console.info(m); });
             return 'Verifying consensus';
         }
+
+        return await this.#handleSyncFailure('Unable to sync with any peer');
     }
     async #handleIncomingStream(lstream) {
         if (this.node.restartRequested) { return; }
