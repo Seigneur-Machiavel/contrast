@@ -53,6 +53,8 @@ export class Node {
             ...p2pOptions
         }, this.timeSynchronizer);
         this.p2pOptions = p2pOptions;
+        /** @type {SyncHandler} */
+        this.syncHandler = new SyncHandler(this);
 
         /** @type {Account} */
         this.account = account;
@@ -74,8 +76,6 @@ export class Node {
         this.useDevArgon2 = false;
         /** @type {Blockchain} */
         this.blockchain = new Blockchain(this.id);
-        /** @type {SyncHandler} */
-        this.syncHandler = new SyncHandler(this);
         /** @type {Reorganizator} */
         this.reorganizator = new Reorganizator(this);
 
@@ -372,7 +372,6 @@ export class Node {
      * @param {boolean} [options.skipValidation] - default: false
      * @param {boolean} [options.broadcastNewCandidate] - default: true
      * @param {boolean} [options.isSync] - default: false
-     * @param {boolean} [options.isLoading] - default: false
      * @param {boolean} [options.persistToDisk] - default: true
      */
     async digestFinalizedBlock(finalizedBlock, options = {}, byteLength) {
@@ -394,7 +393,7 @@ export class Node {
             console.error(deserializedBlock);
             throw new Error('Invalid block signature'); }
 
-        const { skipValidation = false, broadcastNewCandidate = true, isSync = false, isLoading = false, persistToDisk = true } = options;
+        const { skipValidation = false, broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
         if (!finalizedBlock || !this.roles.includes('validator') || (this.syncHandler.isSyncing && !isSync)) 
             throw new Error(!finalizedBlock ? 'Invalid block candidate' : !this.roles.includes('validator') ? 'Only validator can process PoW block' : "Node is syncing, can't process block");
         timer.endPhase('initialization');
@@ -439,12 +438,10 @@ export class Node {
         const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
         const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
     
-        if (!isLoading && !isSync) {
-            this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
-        }
+        if (!isSync) { this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); }); }
     
         timer.startPhase('saveSnapshot');
-        if (!isLoading) this.#saveSnapshot(finalizedBlock);
+        this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
         
         this.#updateState("idle", "applying finalized block");

@@ -12,6 +12,9 @@ import { TransactionPriorityQueue } from './memPool-tx-queue.mjs';
  */
 
 export class MemPool { 
+    // maxPubKeysToRemember = 1_000_000; // ~45MB -> unused!
+    knownPubKeysAddresses = {}; // used to avoid excessive address ownership confirmation
+    useDevArgon2 = false;
     /** @type {TransactionPriorityQueue} */
     transactionQueue = new TransactionPriorityQueue();
     /** @type {Object<string, Transaction>} */
@@ -20,11 +23,6 @@ export class MemPool {
     transactionByAnchor = {};
     /** @type {Object<string, WebSocketCallBack>} */
     wsCallbacks = {};
-    constructor() {
-        this.maxPubKeysToRemember = 1_000_000; // ~45MB
-        this.knownPubKeysAddresses = {}; // used to avoid excessive address ownership confirmation
-        this.useDevArgon2 = false;
-    }
 
     /** @param {Transaction} transaction @param {Transaction} collidingTx */
     #addMempoolTransaction(transaction, collidingTx = false) {

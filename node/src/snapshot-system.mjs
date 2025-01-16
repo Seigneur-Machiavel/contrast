@@ -5,6 +5,7 @@ const url = await import('url');
 import { Storage } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
+import { HashFunctions } from './conCrypto.mjs';
 
 /**
 * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
@@ -34,11 +35,10 @@ export class SnapshotSystem {
 	__trashPath = path.join(this.__storagePath, 'trash');
 	__snapshotPath = path.join(this.__storagePath, 'snapshots');
 	fastConverter = new FastConverter();
-	constructor() {
-		this.loadedSnapshotHeight = 0;
-		this.snapshotHeightModulo = 5;
-		this.snapshotToConserve = 10;
-	}
+	loadedSnapshotHeight = 0;
+	snapshotHeightModulo = 5;
+	snapshotToConserve = 10;
+	knownPubKeysAddressesSnapInfo = {height: 0, hash: ''};
 
 	#createMissingDirectories() {
 		if (!fs.existsSync(this.__storagePath)) { fs.mkdirSync(this.__storagePath); }
@@ -100,7 +100,8 @@ export class SnapshotSystem {
 
 		performance.mark('startSaveMemPool'); // SAVE MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = serializer.serialize.pubkeyAddressesObj(memPool.knownPubKeysAddresses);
-		Storage.saveBinary(`memPool`, serializedPKAddresses, heightPath);
+		this.knownPubKeysAddressesSnapInfo = {height: currentHeight, hash: HashFunctions.SHA256(serializedPKAddresses)};
+		Storage.saveBinary('memPool', serializedPKAddresses, heightPath);
 		performance.mark('endSaveMemPool');
 
 		performance.mark('startSaveUtxoCache'); // SAVE UTXO CACHE
@@ -139,6 +140,7 @@ export class SnapshotSystem {
 
 		performance.mark('startLoadMemPool'); // LOAD MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = Storage.loadBinary('memPool', heightPath);
+		this.knownPubKeysAddressesSnapInfo = {height: currentHeight, hash: HashFunctions.SHA256(serializedPKAddresses)};
 		memPool.knownPubKeysAddresses = serializer.deserialize.pubkeyAddressesObj(serializedPKAddresses);
 		performance.mark('endLoadMemPool');
 
@@ -208,26 +210,20 @@ export class SnapshotSystem {
 	}
 	eraseAllSnapshots() {
 		const snapshotsHeights = this.getSnapshotsHeights();
-		for (const snapHeight of snapshotsHeights) {
-			this.#eraseSnapshot(snapHeight);
-		}
+		for (const snapHeight of snapshotsHeights) { this.#eraseSnapshot(snapHeight); }
 	}
 	/** Erase all snapshots with a height higher than the given one @param {number} height */
 	eraseSnapshotsHigherThan(height) {
 		const snapshotsHeights = this.getSnapshotsHeights();
 		for (const snapHeight of snapshotsHeights) {
-			if (snapHeight > height) {
-				this.#eraseSnapshot(snapHeight);
-			}
+			if (snapHeight > height) { this.#eraseSnapshot(snapHeight); }
 		}
 	}
 	/** Erase all snapshots with a height lower than the given one @param {number} height */
 	eraseSnapshotsLowerThan(height) {
 		const snapshotsHeights = this.getSnapshotsHeights();
 		for (const snapHeight of snapshotsHeights) {
-			if (snapHeight < height) {
-				this.#eraseSnapshot(snapHeight);
-			}
+			if (snapHeight < height) { this.#eraseSnapshot(snapHeight); }
 		}
 	}
 }

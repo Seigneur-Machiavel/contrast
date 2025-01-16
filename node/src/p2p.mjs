@@ -11,15 +11,13 @@ import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
-import * as lp from 'it-length-prefixed';
-import { pipe } from 'it-pipe';
-//import { lpStream } from 'it-length-prefixed-stream';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 
 /**
+ * @typedef {import("@libp2p/interface").Libp2p} Libp2p
  * @typedef {import("@multiformats/multiaddr").Multiaddr} Multiaddr
  * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
  * @typedef {import("@libp2p/interface").PeerId} PeerId
@@ -27,14 +25,25 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * 
  * @typedef {Object} Peer
  * @property {PeerId} id
- * @property {Multiaddr[]} remoteAddresses
  * @property {boolean} dialable
  * @property {number} lastSeen
  * 
- * @typedef {Object} SyncMessage
+ * @typedef {Object} KnownPubKeysAddressesSnapInfo
+ * @property {number} height
+ * @property {string} hash
+ * 
+ * @typedef {Object} SyncRequest
+ * @property {string} type - 'getStatus' | 'getBlocks' | 'getPubKeysAddresses'
+ * @property {string?} pubKeysHash - Only for 'getPubKeysAddresses' -> 
+ * @property {number?} startIndex
+ * @property {number?} endIndex
+ * 
+ * @typedef {Object} SyncResponse
  * @property {number} currentHeight
  * @property {string} latestBlockHash
- * @property {Uint8Array[]} blocks
+ * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
+ * @property {Uint8Array[]?} blocks
+ * @property {Uint8Array?} knownPubKeysAddresses
  */
 
 class P2PNetwork extends EventEmitter {
@@ -43,6 +52,8 @@ class P2PNetwork extends EventEmitter {
     static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
     static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
     
+    /** @type {Libp2p} */
+    p2pNode;
     /** @type {Object<string, Peer>} */
     peers = {};
     /** @type {Object<string, Stream>} */
@@ -66,11 +77,11 @@ class P2PNetwork extends EventEmitter {
             maxSize: BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05,
         },
     }
+    timeSynchronizer;
     
     /** @param {Object} [options={}] @param {TimeSynchronizer} timeSynchronizer */
     constructor(options = {}, timeSynchronizer) {
         super();
-        /** @type {TimeSynchronizer} */
         this.timeSynchronizer = timeSynchronizer;
         const defaultOptions = {
             bootstrapNodes: [],
@@ -82,7 +93,6 @@ class P2PNetwork extends EventEmitter {
             reputationOptions: {}, // Options for ReputationManager
         };
         this.options = { ...defaultOptions, ...options };
-        this.p2pNode = null;
         this.reputationManager = new ReputationManager(this.options.reputationOptions);
         this.reputationManager.on('identifierBanned', ({ identifier }) => {
             //this.disconnectPeer(identifier);
@@ -94,48 +104,16 @@ class P2PNetwork extends EventEmitter {
     }
 
     #handlePeerDiscovery = async (event) => {
+        /** @type {PeerId} */
         const peerId = event.detail.id;
         const peerIdStr = peerId.toString();
-
-        /*if (this.peers[peerIdStr]?.remoteAddresses) {
-            this.miniLogger.log(`Peer ${peerIdStr} remoteAddresses known`, (m) => { console.debug(m); });
-            return;
-        }*/
-
         const connections = this.p2pNode.getConnections(peerIdStr);
-        if (connections.length > 0) {
-            this.miniLogger.log(`Peer ${peerIdStr} already connected`, (m) => { console.debug(m); });
-            return;
-        }
+        if (connections.length > 0) { return; }
 
         try {
             await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            //const stream = await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
         } catch (err) {
             this.miniLogger.log(`(Discovery) Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
-        }
-
-        return;
-        // OLD CODE
-
-        /** @type {Multiaddr[]} */
-        const peerMultiaddrs = this.peers[peerIdStr]?.remoteAddresses || event.detail.multiaddrs;
-        if (!peerMultiaddrs || peerMultiaddrs.length === 0) {
-            this.miniLogger.log(`Failed to find multiaddrs for peer ${peerIdStr}`, (m) => { console.error(m); });
-            return;
-        }
-
-        this.#updatePeer(peerIdStr, { dialable: true, remoteAddresses: peerMultiaddrs }, 'discovered');
-        try {
-            //await this.p2pNode.dial(peerMultiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            //const stream = await this.p2pNode.dialProtocol(peerMultiaddrs, P2PNetwork.SYNC_PROTOCOL);
-            const response = await this.sendMessage(peerIdStr, { type: 'getStatus' });
-            console.log(response);
-            //stream.close();
-            //this.miniLogger.log(`(Discovery) Dialed peer ${peerIdStr}`, (m) => { console.debug(m); });
-        } catch (error) {
-            this.miniLogger.log(`Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
-            this.#updatePeer(peerIdStr, { dialable: false }, 'discovery failed');
         }
     };
     /** @param {CustomEvent} event */
@@ -144,37 +122,22 @@ class P2PNetwork extends EventEmitter {
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
         this.miniLogger.log(`(Connect) Dialed peer ${peerIdStr}`, (m) => { console.debug(m); });
-        //return;
 
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
-        const connections = this.p2pNode.getConnections(peerIdStr);
-        const remoteAddresses = connections.map(c => c.remoteAddr);
-
-        this.#updatePeer(peerId.toString(), { dialable: true, id: peerId, remoteAddresses }, 'connected');
-        return;
-
-        try {
-            //const con = await this.p2pNode.dial(remoteAddresses);
-            //const stream = await this.p2pNode.dialProtocol(remoteAddresses, P2PNetwork.SYNC_PROTOCOL);
-            const response = await this.sendMessage(peerIdStr, { type: 'getStatus' });
-            console.log(response);
-            //stream.close();
-            //this.miniLogger.log(`(Connect) Dialed peer ${peerId}`, (m) => { console.debug(m); });
-        } catch (error) {
-            this.miniLogger.log(`Failed to dial peer ${peerId}, error: ${error.message}`, (m) => { console.error(m); });
-            this.#updatePeer(peerId.toString(), { dialable: false }, 'connection failed');
-        }
+        this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
     };
     /** @param {CustomEvent} event */
     #handlePeerDisconnect = async (event) => {
-        const peerId = event.detail.toString();
-        this.miniLogger.log(`--------> Peer ${peerId} disconnected`, (m) => { console.debug(m); });
-        if (this.openStreams[peerId] && this.openStreams[peerId].status === 'open') { await this.openStreams[peerId].close(); }
-        if (this.openStreams[peerId]) { delete this.openStreams[peerId]; }
-        delete this.peers[peerId];
+        /** @type {PeerId} */
+        const peerId = event.detail;
+        const peerIdStr = peerId.toString();
+        this.miniLogger.log(`--------> Peer ${peerIdStr} disconnected`, (m) => { console.debug(m); });
+        if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status === 'open') { await this.openStreams[peerIdStr].close(); }
+        if (this.openStreams[peerIdStr]) { delete this.openStreams[peerIdStr]; }
+        delete this.peers[peerIdStr];
     };
     /** @param {CustomEvent} event */
     #handlePubsubMessage = async (event) => {
@@ -183,15 +146,12 @@ class P2PNetwork extends EventEmitter {
         if (!this.#validateTopic(topic)) { return; }
         if (!this.#validateTopicData(topic, data)) { return; }
 
-        const deserializationFnc = this.topicsTreatment[topic].deserialize || serializer.deserialize.rawData;
-
         try {
+            const deserializationFnc = this.topicsTreatment[topic].deserialize || serializer.deserialize.rawData;
             const content = deserializationFnc(data);
             const message = { content, from, byteLength: data.byteLength };
             this.emit(topic, message);
-        } catch (error) {
-            this.miniLogger.log(error, (m) => { console.error(m); });
-        }
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); }
     }
     /** Validates a pubsub topic against the allowed topics. @param {string} topic - The topic to validate. */
     #validateTopic(topic) {
@@ -225,7 +185,7 @@ class P2PNetwork extends EventEmitter {
         const peerDiscovery = [mdns()];
         if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
         try {
-            this.p2pNode = await createLibp2p({
+            const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
                 addresses: { listen: [this.options.listenAddress] },
                 transports: [tcp()],
@@ -235,13 +195,14 @@ class P2PNetwork extends EventEmitter {
                 peerDiscovery
             });
 
-            await this.p2pNode.start();
-            this.miniLogger.log(`P2P network started with peerId ${this.p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
+            await p2pNode.start();
+            this.miniLogger.log(`P2P network started with peerId ${p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
             
-            this.p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
-            this.p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
-            this.p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
-            this.p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+            p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
+            p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
+            p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+            this.p2pNode = p2pNode;
 
             // await this.connectToBootstrapNodes(); -> we call it after setup syncHandler in node.start()
         } catch (error) {
@@ -262,11 +223,6 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
             try {
                 await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                //await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                /*const stream = await this.p2pNode.dialProtocol(ma, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                const peerId = ma.getPeerId();
-                const peerIdStr1 = stream.remotePeer?.toString();
-                const peerIdStr2 = stream.id?.toString();*/
             } catch (err) {
                 this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
             }
@@ -287,48 +243,45 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(error, (m) => { console.error(m); });
         }
     }
-    /** @param {string} peerIdStr @param {any} message */
-    async sendMessage(peerIdStr, message) {
+    /** @param {string} peerIdStr @param {SyncRequest} message */
+    async sendSyncRequest(peerIdStr, message) {
         const peer = this.peers[peerIdStr];
         if (!peer || !peer.dialable) { return false; }
-        const peerId = peer.id;
 
         try {
             if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
-            this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
-            //this.openStreams[peerIdStr] = await this.p2pNode.dialProtocol(peerId, [P2PNetwork.SYNC_PROTOCOL]);
-        
+            this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
+            
             const serialized = serializer.serialize.rawData(message);
             await this.openStreams[peerIdStr].sink([serialized]);
-            //await this.openStreams[peerIdStr].sink(lp.encode.single(serialized));
             this.miniLogger.log(`Message written to stream (${serialized.length} bytes)`, (m) => { console.info(m); });
             
-            /** @type {Uint8Array[]} */
-            const responseParts = [];
-            let totalSize = 0;
-            for await (const chunk of this.openStreams[peerIdStr].source) {
-                responseParts.push(new Uint8Array(chunk.subarray()));
-                totalSize += chunk.length;
-            }
-
-            const data = new Uint8Array(totalSize);
-            let offset = 0;
-            for (const part of responseParts) { data.set(part, offset); offset += part.length; }
-            const response = serializer.deserialize.rawData(data);
-
-            /*let response;
-            for await (const msg of lp.decode(this.openStreams[peerIdStr].source, { maxDataLength: 2**21 })) {
-                const serializedMsg = msg.subarray();
-                this.miniLogger.log(`Response read from stream (${serializedMsg.length} bytes)`, (m) => { console.info(m); });
-                response = serializer.deserialize.rawData(serializedMsg);
-                break;
-            }*/
+            const data = await P2PNetwork.streamRead(this.openStreams[peerIdStr]);
             await this.openStreams[peerIdStr].close();
+
+            /** @type {SyncResponse} */
+            const response = serializer.deserialize.rawData(data);
             return response;
-        } catch (error) {
-            this.miniLogger.log(error, (m) => { console.error(m); });
-            return false;
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); }
+    }
+    /** @param {Stream} stream */
+    static async streamRead(stream) {
+        /** @type {Uint8Array[]} */
+        const msgParts = [];
+        let totalSize = 0;
+        for await (const chunk of stream.source) {
+            msgParts.push(new Uint8Array(chunk.subarray()));
+            totalSize += chunk.length;
         }
+        
+        const data = new Uint8Array(totalSize);
+        let offset = 0;
+        for (const part of msgParts) {
+            data.set(part, offset);
+            offset += part.length;
+        }
+
+        return data;
     }
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {
@@ -352,11 +305,9 @@ class P2PNetwork extends EventEmitter {
     #updatePeer(peerIdStr, data, reason) {
         const updatedPeer = this.peers[peerIdStr] || {};
         updatedPeer.id = data.id || updatedPeer.id;
-        updatedPeer.remoteAddresses = data.remoteAddresses || updatedPeer.remoteAddresses || [];
+        updatedPeer.lastSeen = this.timeSynchronizer.getCurrentTime();
         if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
         if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
-        updatedPeer.lastSeen = this.timeSynchronizer.getCurrentTime();
-        updatedPeer.stream = data.stream || updatedPeer.stream || null;
 
         this.peers[peerIdStr] = updatedPeer;
         this.miniLogger.log(`Peer ${peerIdStr} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
