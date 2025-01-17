@@ -44,7 +44,7 @@ const testParams = {
     txsSeqs: {
         userSendToAllOthers: { active: true, start: 10, end: 100000, interval: 3 },
         userSendToNextUser: { active: true, start: 20, end: 100000, interval: 2 },
-        stakeVss: { active: true, start: 30, end: 50, interval: 1 },
+        stakeVss: { active: true, start: 80, end: 100, interval: 1 },
         simpleUserToUser: { active: true, start: 1, end: 100000, interval: 2 },
     },
 }
