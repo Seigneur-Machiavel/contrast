@@ -104,6 +104,7 @@ async function userSendToNextUser(accounts) {
 /** User send to all other accounts @param {Account[]} accounts @param {number} senderAccountIndex */
 async function userSendToAllOthers(accounts, senderAccountIndex = 0) {
     txsTaskDoneThisBlock['userSendToAllOthers'] = true;
+    if (accounts.length * 10_000 > accounts[senderAccountIndex].balance) { return; } // ensure sender has enough funds
 
     const startTime = Date.now();
     const senderAccount = accounts[senderAccountIndex];
