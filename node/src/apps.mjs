@@ -131,6 +131,8 @@ export class DashboardWsApp {
             this.app.use(express.static(APPS_VARS.__nodeDir));
             this.app.use(express.json({ limit: '1mb' }));
             this.app.use(express.urlencoded({ extended: true }));
+            this.app.use('/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
+            this.app.use('/node/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
             this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
             this.app.use('/fonts', express.static(path.join(APPS_VARS.__contrastDir, 'fonts')));
             this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));

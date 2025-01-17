@@ -1,4 +1,4 @@
-//import { Transaction_Builder, UTXO } from '../src/transaction.mjs';
+import { Transaction_Builder, UTXO } from '../src/transaction.mjs';
 import { convert } from '../../utils/converters.mjs';
 
 /**
@@ -638,8 +638,8 @@ document.addEventListener('focusout', async (event) => {
 
 // Stake Input Confirm Button
 eHTML.stakeInput.confirmBtn.addEventListener('click', async () => {
-    console.warn('Stacking fnc() is disabled');
-    return;
+    //console.warn('Stacking fnc() is disabled');
+    //return;
 
     const amountToStake = parseInt(eHTML.stakeInput.input.value.replace(",","").replace(".",""));
     const validatorAddress = eHTML.validatorAddress.textContent;
