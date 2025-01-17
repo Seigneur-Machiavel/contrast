@@ -263,7 +263,7 @@ export class BlockchainStorage {
         this.#saveBlockBinary(blockData);
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
-        if (saveJSON || blockData.index < 10000) { this.#saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
+        if (saveJSON || blockData.index < 200) { this.#saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
     }
     /** @param {BlockInfo} blockInfo */
     addBlockInfo(blockInfo) {
