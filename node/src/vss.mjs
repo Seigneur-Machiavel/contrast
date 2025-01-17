@@ -7,6 +7,7 @@ import { UTXO } from "./transaction.mjs";
  * @property {string} anchor - Example: "0:bdadb7ab:0"
  * @property {number} amount - Example: 100
  */
+
 /**
  * @param {string} address - Example: "WCHMD65Q7qR2uH9XF5dJ"
  * @param {string} anchor - Example: "0:bdadb7ab:0"
@@ -14,11 +15,7 @@ import { UTXO } from "./transaction.mjs";
  * @returns {VssRange}
  */
 export const StakeReference = (address, anchor, amount) => {
-    return {
-        address,
-        anchor,
-        amount
-    };
+    return { address, anchor, amount };
 }
 
 export class spectrumFunctions {
@@ -30,10 +27,7 @@ export class spectrumFunctions {
         // just return the last key
         return parseInt(keys[keys.length - 1]);
     }
-    /** 
-     * @param {spectrum} spectrum
-     * @param {number} index - The index to search for
-     */
+    /** @param {spectrum} spectrum @param {number} index - The index to search*/
     static getStakeReferenceFromIndex(spectrum, index) {
         const keys = Object.keys(spectrum);
         if (keys.length === 0) { return undefined; }
@@ -49,46 +43,14 @@ export class spectrumFunctions {
 
         return undefined;
     }
-
-    // LOTTERY FUNCTIONS
-    /** Will return a number between 0 and maxRange from a blockHash - makes sure the result is unbiased
-     * @param {string} blockData
-     * @param {number} maxRange
-     * @param {number} maxAttempts
-     */
+    /** Will return a number between 0 and maxRange from a blockHash - makes sure the result is unbiased */
     static async hashToIntWithRejection(blockHash, lotteryRound = 0, maxRange = 1000000, maxAttempts = 1000) {
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             // Generate a hash including the nonce to get different results if needed
             const hash = await HashFunctions.SHA256(`${lotteryRound}${blockHash}`);
             const hashInt = BigInt('0x' + hash);
     
-            // Calculate the maximum acceptable range to avoid bias
-            return Number(hashInt % BigInt(maxRange));
-        }
-    
-        throw new Error("Max attempts reached. Consider increasing maxAttempts or revising the method.");
-    }
-
-    /** Will return a number between 0 and maxRange from a blockHash - makes sure the result is unbiased
-     * @param {string} blockData
-     * @param {number} maxRange
-     * @param {number} maxAttempts */
-    static async hashToIntWithRejection_v2(blockHash, lotteryRound = 0, maxRange = 1000000, maxAttempts = 1000) {
-        let nonce = 0;
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const hash = await HashFunctions.SHA256(`${lotteryRound}${blockHash}${nonce}`);
-            const troncatedHash = hash.slice(0, 12); // 6 bytes = 12 characters = 48 bits
-            const hashInt = parseInt(troncatedHash, 16);
-
-            // Calculate the maximum acceptable range to avoid bias
-            const maxAcceptableValue = Math.floor(2**48 / maxRange) * maxRange;
-
-            if (hashInt < maxAcceptableValue) {
-                const result = hashInt % maxRange;
-                return result;
-            } else {
-                nonce++; // Increment the nonce to try a new hash
-            }
+            return Number(hashInt % BigInt(maxRange)); // Calculate the maximum acceptable range to avoid bias
         }
     
         throw new Error("Max attempts reached. Consider increasing maxAttempts or revising the method.");
@@ -96,19 +58,20 @@ export class spectrumFunctions {
 }
 
 export class Vss {
+    /** Validator Selection Spectrum (VSS)
+     * - Can search key by number (will be converted to string).
+     * @example { '100': { address: 'WCHMD65Q7qR2uH9XF5dJ', anchor: '0:bdadb7ab:0' } }
+     * @type {Object<string, StakeReference | undefined>} */
+    spectrum = {};
+    /** @type {StakeReference[]} */
+    legitimacies = []; // the order of the stakes in the array is the order of legitimacy
+    currentRoundHash = '';
+    maxLegitimacyToBroadcast = 27; // node should not broadcast block if not in the top 27
+
     /** @param {number} maxSupply - The maximum supply value to be used in the VSS. */
     constructor(maxSupply) {
-        /** Validator Selection Spectrum (VSS)
-         * - Can search key with number, will be converted to string.
-         * @example { '100': { address: 'WCHMD65Q7qR2uH9XF5dJ', anchor: '0:bdadb7ab:0' } }
-         * @type {Object<string, StakeReference | undefined>} */
-        this.spectrum = {};
-        /** @type {StakeReference[]} */
-        this.legitimacies = []; // the order of the stakes in the array is the order of legitimacy
-        this.currentRoundHash = '';
         /** @type {number} */
         this.maxSupply = maxSupply; // Store the maxSupply passed in the constructor
-        this.maxLegitimacyToBroadcast = 27; // node should not broadcast block if not in the top 27
     }
 
     /** @param {UTXO} utxo @param {number | undefined} upperBound */
@@ -147,19 +110,19 @@ export class Vss {
     }
     /** @param {spectrum} spectrum @param {string} blockHash */
     async calculateRoundLegitimacies(blockHash, maxResultingArrayLength = 100) {
-        if (blockHash === this.currentRoundHash) { return; } // already calculated
-
         const startTimestamp = Date.now();
+        if (blockHash === this.currentRoundHash) { return; } // already calculated
+        
+        // everyone has considered 0 legitimacy when not enough stakes
+        const maxRange = spectrumFunctions.getHighestUpperBound(this.spectrum);
+        if (maxRange < 999_999) { this.legitimacies = []; return; } // no calculation needed
+        
         /** @type {StakeReference[]} */
         const roundLegitimacies = [];
         const spectrumLength = Object.keys(this.spectrum).length;
-
+        
         let i = 0;
         for (i; i < maxResultingArrayLength; i++) {
-            const maxRange = spectrumFunctions.getHighestUpperBound(this.spectrum);
-            // everyone has considered 0 legitimacy when not enough stakes
-            if (maxRange < 999_999) { this.legitimacies = roundLegitimacies; return; }
-            
             const winningNumber = await spectrumFunctions.hashToIntWithRejection(blockHash, i, maxRange);
             const stakeReference = spectrumFunctions.getStakeReferenceFromIndex(this.spectrum, winningNumber);
             roundLegitimacies.push(stakeReference);

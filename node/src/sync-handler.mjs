@@ -69,7 +69,7 @@ export class SyncHandler {
         this.node.blockchainStats.state = "syncing";
     
         const peersStatus = await this.#getAllPeersStatus();
-        if (!peersStatus || peersStatus.length === 0) { return await this.#handleSyncFailure('No peers available'); }
+        if (!peersStatus || peersStatus.length === 0) { return 'No peers available' }
 
         const consensus = this.#findConsensus(peersStatus);
         if (!consensus) { return await this.#handleSyncFailure(`Unable to get consensus -> sync failure`); }
