@@ -100,8 +100,8 @@ export class Vss {
             upperBound = updatedUpperBond;
         }
     }
-    /** @param {string} blockHash @param {number} maxResultingArrayLength */
-    async calculateRoundLegitimacies(blockHash, maxResultingArrayLength = 100) {
+    /** @param {string} blockHash @param {number} [maxResultingArrayLength] @param {number} [maxTry] */
+    async calculateRoundLegitimacies(blockHash, maxResultingArrayLength = 27, maxTry = 100) {
         const startTimestamp = Date.now();
         if (blockHash === this.currentRoundHash) { return; } // already calculated
         
@@ -114,11 +114,15 @@ export class Vss {
         const spectrumLength = Object.keys(this.spectrum).length;
         
         let i = 0;
-        for (i; i < maxResultingArrayLength; i++) {
+        for (i; i < maxTry; i++) {
             const winningNumber = await spectrumFunctions.hashToIntWithRejection(blockHash, i, maxRange);
             const stakeReference = spectrumFunctions.getStakeReferenceFromIndex(this.spectrum, winningNumber);
-            roundLegitimacies.push(stakeReference);
+            if (!stakeReference) { console.error(`[VSS] Stake not found for winning number: ${winningNumber}`); continue; }
+
+            // if stakeReference already in roundLegitimacies, try again
+            if (roundLegitimacies.find(stake => stake.anchor === stakeReference.anchor)) { continue; }
             
+            roundLegitimacies.push(stakeReference);
             if (roundLegitimacies.length >= spectrumLength) { break; } // If all stakes have been selected
             if (roundLegitimacies.length >= maxResultingArrayLength) { break; } // If the array is full
         }
@@ -134,7 +138,12 @@ export class Vss {
         return legitimacy !== -1 ? legitimacy : this.legitimacies.length; // if not found, return last index + 1
     }
     getAddressStakesInfo(address) {
-        const references = this.legitimacies.filter(stakeReference => stakeReference.address === address);
+        const references = [];
+        for (const [key, value] of Object.entries(this.spectrum)) {
+            if (value.address === address) {
+                references.push(value);
+            }
+        }
         return references;
     }
 }
