@@ -164,12 +164,16 @@ export class Blockchain {
     * @param {Vss} vss - The VSS to update.
     * @param {BlockData} block - The block to apply.
     * @param {boolean} [storeAddAddressAnchors=false] - Whether to store added address anchors. */
-    applyBlock(utxoCache, vss, block, storeAddAddressAnchors = false) {
+    applyBlock(utxoCache, vss, block) {
         const blockDataCloneToDigest = BlockUtils.cloneBlockData(block); // clone to avoid modification
         try {
-            const newStakesOutputs = utxoCache.digestFinalizedBlocks([blockDataCloneToDigest], storeAddAddressAnchors);
-            this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
+            const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = utxoCache.preDigestFinalizedBlock(blockDataCloneToDigest);
+            if (!vss.newStakesCanBeAdded(newStakesOutputs)) { throw new Error('VSS: Max supply reached.'); }
+
+            // here we are sure that the block can be applied
+            utxoCache.digestFinalizedBlock(blockDataCloneToDigest, newUtxos, consumedUtxoAnchors);
             vss.newStakes(newStakesOutputs);
+            this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
         } catch (error) {
             this.miniLogger.log(`Failed to apply block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
             throw error;

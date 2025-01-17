@@ -29,37 +29,41 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     }
 
     // ----- PUBLIC METHODS -----
-    /** Remove the consumed UTXOs and add the new UTXOs - Return the new stakes outputs @param {BlockData[]} blocksData */
-    digestFinalizedBlocks(blocksData) {
-        try {
-            /** @type {UTXO[]} */
-            const batchNewStakesOutputs = [];
-            /** @type {UTXO[]} */
-            const batchNewUtxos = [];
-            /** @type {string[]} */
-            const batchConsumedUtxoAnchors = [];
+    /** Sort new UTXOs and consumed UTXOs of the block @param {BlockData} blockData */
+    preDigestFinalizedBlock(blockData) {
+        const blockIndex = blockData.index;
+        const Txs = blockData.Txs;
+        if (!Array.isArray(Txs)) { throw new Error('Txs is not an array'); }
 
-            for (const blockData of blocksData) {
-                const Txs = blockData.Txs;
-                const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = this.#digestFinalizedBlockTransactions(blockData.index, Txs);
+        //console.log(`Digesting block ${blockIndex} with ${Txs.length} transactions`);
+        const newStakesOutputs = [];
+        const consumedUtxoAnchors = [];
+        const newUtxos = [];
 
-                const supplyFromBlock = blockData.supply;
-                const coinBase = blockData.coinBase;
-                this.totalSupply = supplyFromBlock + coinBase;
+        for (let i = 0; i < Txs.length; i++) {
+            const transaction = Txs[i];
+            const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(blockIndex, transaction);
+            newStakesOutputs.push(...newStakesOutputsFromTx);
+            newUtxos.push(...newUtxosFromTx);
 
-                batchNewStakesOutputs.push(...newStakesOutputs);
-                batchNewUtxos.push(...newUtxos);
-                batchConsumedUtxoAnchors.push(...consumedUtxoAnchors);
-            }
-
-            this.#digestNewUtxos(batchNewUtxos);
-            this.#digestConsumedUtxos(batchConsumedUtxoAnchors);
-
-            return batchNewStakesOutputs;
-        } catch (error) {
-            console.error(error);
-            throw error;
+            if (Transaction_Builder.isMinerOrValidatorTx(transaction, i)) { continue; }
+            consumedUtxoAnchors.push(...transaction.inputs);
         }
+
+        return { newStakesOutputs, newUtxos, consumedUtxoAnchors };
+    }
+    /** Add the new UTXOs and Remove the consumed UTXOs
+     * @param {BlockData} blockData
+     * @param {UTXO[]} newUtxos
+     * @param {UTXO[]} consumedUtxoAnchors
+     */
+    digestFinalizedBlock(blockData, newUtxos, consumedUtxoAnchors) {
+        const supplyFromBlock = blockData.supply;
+        const coinBase = blockData.coinBase;
+        this.totalSupply = supplyFromBlock + coinBase;
+
+        this.#digestNewUtxos(newUtxos);
+        this.#digestConsumedUtxos(consumedUtxoAnchors);
     }
     /** @param {string} address */
     getAddressAnchorsArray(address) {
@@ -203,26 +207,6 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         }
 
         return { newStakesOutputsFromTx, newUtxosFromTx };
-    }
-    /** Sort new UTXOs and consumed UTXOs of the block @param {number} blockIndex @param {Transaction[]} Txs */
-    #digestFinalizedBlockTransactions(blockIndex, Txs) {
-        if (!Array.isArray(Txs)) { throw new Error('Txs is not an array'); }
-        //console.log(`Digesting block ${blockIndex} with ${Txs.length} transactions`);
-        const newStakesOutputs = [];
-        const consumedUtxoAnchors = [];
-        const newUtxos = [];
-
-        for (let i = 0; i < Txs.length; i++) {
-            const transaction = Txs[i];
-            const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(blockIndex, transaction);
-            newStakesOutputs.push(...newStakesOutputsFromTx);
-            newUtxos.push(...newUtxosFromTx);
-
-            if (Transaction_Builder.isMinerOrValidatorTx(transaction, i)) { continue; }
-            consumedUtxoAnchors.push(...transaction.inputs);
-        }
-
-        return { newStakesOutputs, newUtxos, consumedUtxoAnchors };
     }
     /** Fill the UTXOs and addressesAnchors with the new UTXOs @param {UTXO[]} newUtxos */
     #digestNewUtxos(newUtxos) {

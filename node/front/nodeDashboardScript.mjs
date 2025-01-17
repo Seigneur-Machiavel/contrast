@@ -638,9 +638,6 @@ document.addEventListener('focusout', async (event) => {
 
 // Stake Input Confirm Button
 eHTML.stakeInput.confirmBtn.addEventListener('click', async () => {
-    //console.warn('Stacking fnc() is disabled');
-    //return;
-
     const amountToStake = parseInt(eHTML.stakeInput.input.value.replace(",","").replace(".",""));
     const validatorAddress = eHTML.validatorAddress.textContent;
     console.log(`amountToStake: ${amountToStake} | validatorAddress: ${validatorAddress}`);

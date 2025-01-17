@@ -6,6 +6,8 @@ import { UTXO } from "./transaction.mjs";
  * @property {string} address - Example: "WCHMD65Q7qR2uH9XF5dJ"
  * @property {string} anchor - Example: "0:bdadb7ab:0"
  * @property {number} amount - Example: 100
+ * 
+ * @typedef {Object<string, StakeReference | undefined>} Spectrum
  */
 
 /**
@@ -19,7 +21,7 @@ export const StakeReference = (address, anchor, amount) => {
 }
 
 export class spectrumFunctions {
-    /** @param {spectrum} spectrum */
+    /** @param {Spectrum} spectrum */
     static getHighestUpperBound(spectrum) {
         const keys = Object.keys(spectrum);
         if (keys.length === 0) { return 0; }
@@ -27,7 +29,7 @@ export class spectrumFunctions {
         // just return the last key
         return parseInt(keys[keys.length - 1]);
     }
-    /** @param {spectrum} spectrum @param {number} index - The index to search*/
+    /** @param {Spectrum} spectrum @param {number} index - The index to search*/
     static getStakeReferenceFromIndex(spectrum, index) {
         const keys = Object.keys(spectrum);
         if (keys.length === 0) { return undefined; }
@@ -61,7 +63,7 @@ export class Vss {
     /** Validator Selection Spectrum (VSS)
      * - Can search key by number (will be converted to string).
      * @example { '100': { address: 'WCHMD65Q7qR2uH9XF5dJ', anchor: '0:bdadb7ab:0' } }
-     * @type {Object<string, StakeReference | undefined>} */
+     * @type {Spectrum} */
     spectrum = {};
     /** @type {StakeReference[]} */
     legitimacies = []; // the order of the stakes in the array is the order of legitimacy
@@ -73,42 +75,32 @@ export class Vss {
         /** @type {number} */
         this.maxSupply = maxSupply; // Store the maxSupply passed in the constructor
     }
-
-    /** @param {UTXO} utxo @param {number | undefined} upperBound */
-    newStake(utxo, upperBound) {
-        const address = utxo.address;
-        const anchor = utxo.anchor;
-        const amount = utxo.amount;
-        
-        if (!upperBound) {
-            const lastUpperBound = spectrumFunctions.getHighestUpperBound(this.spectrum);
-            if (lastUpperBound + amount > this.maxSupply) { throw new Error('VSS: Max supply reached.'); }
-            this.spectrum[lastUpperBound + amount] = StakeReference(address, anchor, amount);
-            return;
+    /** @param {UTXO[]} utxos */
+    newStakesCanBeAdded(utxos) {
+        let upperBound = spectrumFunctions.getHighestUpperBound(this.spectrum);
+        for (const utxo of utxos) {
+            const updatedUpperBond = upperBound + utxo.amount;
+            if (updatedUpperBond > this.maxSupply) { return false; }
+            upperBound = updatedUpperBond;
         }
-
-        const lowerBound = upperBound - amount;
-        const existingUpperBounds = Object.keys(this.spectrum).map(key => parseInt(key));
-        existingUpperBounds.sort((a, b) => a - b);
-    
-        for (let i = 0; i < existingUpperBounds.length; i++) {
-            const existingUpperBound = existingUpperBounds[i];
-            const existingLowerBound = i === 0 ? 0 : existingUpperBounds[i - 1];
-        
-            if (!(upperBound <= existingLowerBound || lowerBound >= existingUpperBound)) {
-                throw new Error('VSS: Overlapping stake ranges.');
-            }
-        }
-        
-        if (upperBound > this.maxSupply) { throw new Error('VSS: Max supply exceeded.'); }
-        
-        this.spectrum[upperBound] = StakeReference(address, anchor, amount);
+        return true;
     }
     /** @param {UTXO[]} utxos */
     newStakes(utxos) {
-        for (const utxo of utxos) { this.newStake(utxo); }
+        let upperBound = spectrumFunctions.getHighestUpperBound(this.spectrum);
+        for (const utxo of utxos) {
+            const address = utxo.address;
+            const anchor = utxo.anchor;
+            const amount = utxo.amount;
+            
+            const updatedUpperBond = upperBound + amount;
+            if (updatedUpperBond > this.maxSupply) { throw new Error('VSS: Max supply reached.'); }
+            this.spectrum[updatedUpperBond] = StakeReference(address, anchor, amount);
+    
+            upperBound = updatedUpperBond;
+        }
     }
-    /** @param {spectrum} spectrum @param {string} blockHash */
+    /** @param {string} blockHash @param {number} maxResultingArrayLength */
     async calculateRoundLegitimacies(blockHash, maxResultingArrayLength = 100) {
         const startTimestamp = Date.now();
         if (blockHash === this.currentRoundHash) { return; } // already calculated
