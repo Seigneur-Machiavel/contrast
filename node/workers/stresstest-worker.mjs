@@ -45,27 +45,23 @@ const testParams = {
         userSendToAllOthers: { active: true, start: 10, end: 100000, interval: 3 },
         userSendToNextUser: { active: true, start: 20, end: 100000, interval: 2 },
         stakeVss: { active: true, start: 100, end: 120, interval: 1 },
-        simpleUserToUser: { active: false, start: 2, end: 100000, interval: 2 },
+        simpleUserToUser: { active: true, start: 1, end: 100000, interval: 2 },
     },
 }
 
-/** Simple user to user transaction @param {Account[]} accounts @param {number} senderAccountIndex @param {number} receiverAccountIndex */
-async function userSendToUser(accounts, senderAccountIndex = 0, receiverAccountIndex = 2) {
+/** Simple user to user transaction @param {Account} senderAccount @param {string} receiverAddress @param {number} amount */
+async function userSendToUser(senderAccount, receiverAddress, amount = 1_000_000) {
     txsTaskDoneThisBlock['userSendToUser'] = true;
 
-    const senderAccount = accounts[senderAccountIndex];
-    const receiverAddress = accounts[receiverAccountIndex].address;
-
-    const amountToSend = 2_222;
     let broadcasted = 0;
-    const { signedTx, error } = await Transaction_Builder.createAndSignTransfer(senderAccount, amountToSend, receiverAddress);
+    const { signedTx, error } = await Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress);
     if (signedTx) {
-        testMiniLogger.log(`[TEST-USTU] SEND: ${senderAccount.address} -> ${amountToSend} -> ${receiverAddress} | txID: ${signedTx.id}`, (m) => console.log(m));
+        testMiniLogger.log(`[TEST-USTU] SEND: ${senderAccount.address} -> ${amount} -> ${receiverAddress} | txID: ${signedTx.id}`, (m) => console.log(m));
         const result = await node.pushTransaction(signedTx);
         if (result.broadcasted) { broadcasted++; }
     } else { testMiniLogger.log(error, (m) => console.error(m)); return; }
 
-    testMiniLogger.log(`[TEST-USTU] sent ${amountToSend} to ${receiverAddress} | Broadcasted: ${broadcasted}`, (m) => console.info(m));
+    testMiniLogger.log(`[TEST-USTU] sent ${amount} to ${receiverAddress} | Broadcasted: ${broadcasted}`, (m) => console.info(m));
 }
 /** All users send to the next user @param {Account[]} accounts */
 async function userSendToNextUser(accounts) {
@@ -185,13 +181,15 @@ async function test() {
     wallet.loadAccounts();
 
     const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(testParams.nbOfAccounts, testParams.addressType);
-    if (!derivedAccounts) { testMiniLogger.log(`Failed to derive addresses.`, (m) => console.error(m)); return; }
+    const mainAccount = (await wallet.deriveAccounts(1, "C")).derivedAccounts[0];
+    if (!derivedAccounts || !mainAccount) { testMiniLogger.log(`Failed to derive addresses.`, (m) => console.error(m)); return; }
 
     wallet.saveAccounts();
 
     const accounts = derivedAccounts;
     const account0Address = derivedAccounts[0].address;
     refreshAllBalances(accounts);
+    refreshAllBalances([mainAccount]);
     
     // INFO MESSAGE
     testMiniLogger.log(`--------------------------------------------
@@ -216,6 +214,7 @@ async function test() {
         }
 
         refreshAllBalances(accounts);
+        refreshAllBalances([mainAccount]);
 
         // user send to all others
         if (testParams.txsSeqs.userSendToAllOthers.active && currentHeight >= testParams.txsSeqs.userSendToAllOthers.start && (currentHeight - 1) % testParams.txsSeqs.userSendToAllOthers.interval === 0 && txsTaskDoneThisBlock['userSendToAllOthers'] === undefined) {
@@ -239,7 +238,7 @@ async function test() {
         // simple user to user transactions
         if (testParams.txsSeqs.simpleUserToUser.active && currentHeight >= testParams.txsSeqs.simpleUserToUser.start && (currentHeight - 1) % testParams.txsSeqs.simpleUserToUser.interval === 0 && txsTaskDoneThisBlock['userSendToUser'] === undefined) {
             txsTaskDoneThisBlock['userSendToUser'] = false;
-            try { await userSendToUser(accounts); } catch (error) { console.error(error); }
+            try { await userSendToUser(mainAccount, account0Address); } catch (error) { console.error(error); }
         }
     }
 }

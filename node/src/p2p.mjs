@@ -173,7 +173,7 @@ class P2PNetwork extends EventEmitter {
 
         if (!verifySize || data.byteLength <= this.topicsTreatment[topic].maxSize) { return true; }
         
-        this.miniLogger.log(`Message size exceeds maximum allowed size from ${from}`, (m) => { console.error(m); });
+        this.miniLogger.log(`Message size exceeds maximum allowed size, topic: ${topic}`, (m) => { console.error(m); });
         return false;
     }
 

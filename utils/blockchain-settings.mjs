@@ -1,7 +1,7 @@
 export const BLOCKCHAIN_SETTINGS = {
     // BLOCK
     targetBlockTime: 120_000, // 120_000, // 2 min
-    maxBlockSize: 100_000, // ~100KB
+    maxBlockSize: 200_000, // ~100KB
     maxTransactionSize: 100_000, // ~100KB
     
     // DISTRIBUTION
