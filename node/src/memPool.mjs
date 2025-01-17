@@ -100,7 +100,7 @@ export class MemPool {
         try { await TxValidation.controlTransactionHash(transaction); }
         catch (error) { throw new Error(`Transaction hash not valid - ${error.message}`); }
         
-        try { TxValidation.isConformTransaction(involvedUTXOs, transaction, false, true, utxoCache.nodeVersion); } 
+        try { TxValidation.isConformTransaction(involvedUTXOs, transaction, false, utxoCache.nodeVersion); } 
         catch (error) { throw new Error(`Transaction not conform - ${error.message}`); }
 
         const identicalIDTransaction = this.transactionsByID[transaction.id];

@@ -38,9 +38,9 @@ export class TxValidation {
      * @param {Object<string, UTXO>} involvedUTXOs
      * @param {Transaction} transaction
      * @param {boolean} specialTx - 'miner' || 'validator' or false
-     * @param {boolean} checkSpendableUtxos
+     * @param {number} nodeVersion
      */
-    static isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos = true, nodeVersion) {
+    static isConformTransaction(involvedUTXOs, transaction, specialTx, nodeVersion) {
         if (!transaction) { throw new Error(`missing transaction: ${transaction}`); }
         if (typeof transaction.id !== 'string') { throw new Error('Invalid transaction ID !== string'); }
         if (typeof transaction.version !== 'number') { throw new Error('Invalid version !== number'); }
@@ -71,8 +71,6 @@ export class TxValidation {
             }
         }
 
-        if (!checkSpendableUtxos) { return; }
-
         for (const input of transaction.inputs) {
             if (specialTx && typeof input !== 'string') { throw new Error('Invalid coinbase input'); }
             if (specialTx) { continue; }
@@ -83,6 +81,7 @@ export class TxValidation {
             const utxo = involvedUTXOs[anchor];
             if (!utxo) { throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${anchor}`); }
             if (utxo.spent) { throw new Error(`Invalid transaction: UTXO already spent: ${anchor}`); }
+            if (utxo.rule === 'SigOrSlash') { throw new Error(`Invalid transaction: SigOrSlash UTXO cannot be spend: ${anchor}`); }
         }
     }
     /** @param {TxOutput} txOutput */
@@ -316,9 +315,8 @@ export class TxValidation {
         const logPerf = false;
 
         const result = { fee: 0, success: false, discoveredPubKeysAddresses: {} };
-        const checkSpendableUtxos = false; // at this stage we already checked UTXOs are spendable
         performance.mark('startConformityValidation');
-        TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos, nodeVersion); // also check spendable UTXOs
+        TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, nodeVersion); // also check spendable UTXOs
         performance.mark('endConformityValidation');
 
         performance.mark('startControlTransactionHash');
@@ -365,8 +363,7 @@ export class TxValidation {
      * @param {string} nodeVersion */
     static async partialTransactionValidation(involvedUTXOs, memPool, transaction, specialTx, nodeVersion) {
         const result = { fee: 0, success: false, impliedKnownPubkeysAddresses: {} };
-        const checkSpendableUtxos = false; // at this stage we already checked UTXOs are spendable
-        TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, checkSpendableUtxos, nodeVersion); // also check spendable UTXOs
+        TxValidation.isConformTransaction(involvedUTXOs, transaction, specialTx, nodeVersion); // also check spendable UTXOs
         await TxValidation.controlTransactionHash(transaction);
 
         // if transaction is already in the memPool, we don't need to validate it again
@@ -451,10 +448,9 @@ export class BlockValidation {
         await vss.calculateRoundLegitimacies(block.prevHash);
         const validatorAddress = block.Txs[1]?.inputs[0]?.split(':')[0];
         const validatorLegitimacy = vss.getAddressLegitimacy(validatorAddress);
+        if (validatorLegitimacy === block.legitimacy) { return true; }
 
-        if (validatorLegitimacy !== block.legitimacy) {
-            throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - expected: ${validatorLegitimacy}`);
-        }
+        throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - expected: ${validatorLegitimacy}`);
     }
     /** @param {BlockData} blockData */
     static isFinalizedBlockDoubleSpending(blockData) {
