@@ -25,9 +25,7 @@ async function stopIfDashAppStoppedLoop() {
     while(dashApp.stopped === false) { await new Promise(resolve => setTimeout(resolve, 1000)); }
     await stop();
 }
-
 parentPort.on('message', async (message) => {
-    console.info('Dashboard worker message:', message);
     switch(message.type) {
         case 'stop':
             await stop();

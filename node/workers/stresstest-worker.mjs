@@ -28,8 +28,22 @@ async function stopIfDashAppStoppedLoop() {
     while(dashApp.stopped === false) { await new Promise(resolve => setTimeout(resolve, 1000)); }
     await stop();
 }
-
-parentPort.on('message', async (message) => { if (message.type === 'stop') { await stop(); } });
+parentPort.on('message', async (message) => {
+    switch(message.type) {
+        case 'stop':
+            await stop();
+            break;
+        case 'set_private_key':
+            console.info('Setting private key');
+            await dashApp.init(message.data);
+            dashApp.nodesSettings[dashApp.node.id].privateKey = message.data;
+            dashApp.saveNodeSettings();
+            console.info('Private key set');
+            break;
+        default:
+            console.error('Unknown message type:', message.type);
+    }
+});
 stopIfDashAppStoppedLoop();
 
 // STRESS TEST
