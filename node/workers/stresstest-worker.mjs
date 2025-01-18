@@ -12,9 +12,6 @@ const dashboardPort = workerData.dashboardPort || 27271;
 const observerPort = workerData.observerPort || 27270;
 
 const dashApp = new DashboardWsApp(undefined, nodePort, dashboardPort);
-while(!dashApp.node) { await new Promise(resolve => setTimeout(resolve, 1000)); }
-const observApp = new ObserverWsApp(dashApp.node, observerPort);
-
 async function stop() {
     try {
         await dashApp.stop();
@@ -45,6 +42,8 @@ parentPort.on('message', async (message) => {
     }
 });
 stopIfDashAppStoppedLoop();
+while(!dashApp.node) { await new Promise(resolve => setTimeout(resolve, 1000)); }
+const observApp = new ObserverWsApp(dashApp.node, observerPort);
 
 // STRESS TEST
 const testMiniLogger = new MiniLogger('stress-test');
