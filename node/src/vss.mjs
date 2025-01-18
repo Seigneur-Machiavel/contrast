@@ -140,9 +140,7 @@ export class Vss {
     getAddressStakesInfo(address) {
         const references = [];
         for (const [key, value] of Object.entries(this.spectrum)) {
-            if (value.address === address) {
-                references.push(value);
-            }
+            if (value.address === address) { references.push(value); }
         }
         return references;
     }
