@@ -89,7 +89,7 @@ export class MemPool {
         }
     }
     /** @param {UtxoCache} utxoCache @param {Transaction} transaction */
-    async pushTransaction(utxoCache, transaction) { 
+    async pushTransaction(utxoCache, transaction) {
         const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(transaction);
         if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }
 

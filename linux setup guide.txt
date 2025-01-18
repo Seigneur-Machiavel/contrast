@@ -13,11 +13,11 @@ nvm install node
 NAVIGATE TO PROJECT FOLDER AND INSTALL DEPENDENCIES:
 cd contrast && npm i
 
-TEST (choose one option):
+RUN:
 node node/run.mjs
-node node/run.mjs -na stresstest
+Options:
+-na stresstest (spend a lot of Txs)
+-pk [private_key] (setup a private without dashboard access)
 
-RUN (choose one option):
-nohup node run/pureObserver.mjs > output.log 2>&1 &
-nohup node run/dashboard.mjs > output.log 2>&1 &
-nohup node run/runMultiNodeWithDashboard.mjs > output.log 2>&1 &
+(Optional) Use "nohup" if you want the process in the background (usefull for ssh connection)
+nohup node node/run.mjs -na dashboard -pk [private_key] > output.log 2>&1 &

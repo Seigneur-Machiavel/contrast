@@ -17,7 +17,6 @@ export const mining = {
 
         if (typeof blockIndex !== 'number') { console.error('Invalid blockIndex'); return difficulty; }
         if (blockIndex === 0) { return difficulty; }
-
         if (blockIndex % MINING_PARAMS.blocksBeforeAdjustment !== 0) { return difficulty; }
 
         const deviation = 1 - (averageBlockTimeMS / BLOCKCHAIN_SETTINGS.targetBlockTime);
@@ -111,7 +110,7 @@ export const mining = {
     },
     /** @param {string} HashBitsAsString @param {BlockData} blockData */
     verifyBlockHashConformToDifficulty: (HashBitsAsString = '', blockData) => {
-        if (typeof HashBitsAsString !== 'string') { throw new Error('Invalid HashBitsAsString'); }
+        if (typeof HashBitsAsString !== 'string') { return false; } //throw new Error('Invalid HashBitsAsString'); }
 
         const { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty } = mining.getBlockFinalDifficulty(blockData);
         const { zeros, adjust } = mining.decomposeDifficulty(finalDifficulty);

@@ -206,12 +206,23 @@ export class Node {
     }
 
     // BLOCK CANDIDATE CREATION ---------------------------------------------------------
+    #calculateAverageBlockTimeAndDifficulty() {
+        const lastBlock = this.blockchain.lastBlock;
+        if (!lastBlock) { return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty }; }
+        
+        const olderBlock = this.blockchain.getBlock(Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
+        const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
+        const newDifficulty = mining.difficultyAdjustment(lastBlock, averageBlockTime);
+        return { averageBlockTime, newDifficulty };
+    }
     /** Aggregates transactions from mempool, creates a new block candidate, signs it and returns it */
     async #createBlockCandidate() {
         const startTime = Date.now();
+
         // Create the block candidate, genesis block if no lastBlockData
         const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.timeSynchronizer.getCurrentTime();
-        let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, 27, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
+        let blockCandidate = BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, MINING_PARAMS.initialDifficulty, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
+        
         // If not genesis block: fill the block candidate with transactions etc...
         if (this.blockchain.lastBlock) {
             await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
@@ -219,9 +230,8 @@ export class Node {
             this.blockchainStats.lastLegitimacy = myLegitimacy;
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
-            const olderBlock = this.blockchain.getBlock(Math.max(0, this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
-            this.blockchainStats.averageBlockTime = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
-            const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, this.blockchainStats.averageBlockTime);
+            const { averageBlockTime, newDifficulty } = this.#calculateAverageBlockTimeAndDifficulty();
+            this.blockchainStats.averageBlockTime = averageBlockTime;
             const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
             const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
             blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, this.blockchain.lastBlock.hash, Txs, posTimestamp);
@@ -333,6 +343,8 @@ export class Node {
         timer.endPhase('legitimacy');
 
         timer.startPhase('difficulty-check');
+        const { averageBlockTime, newDifficulty } = this.#calculateAverageBlockTimeAndDifficulty();
+        if (finalizedBlock.difficulty !== newDifficulty) throw new Error(`!banBlock! !applyOffense! Invalid difficulty: ${finalizedBlock.difficulty} - expected: ${newDifficulty}`);
         const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
         if (!hashConfInfo.conform) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (difficulty): ${finalizedBlock.hash} -> ${hashConfInfo.message}`);
         timer.endPhase('difficulty-check');
@@ -367,6 +379,7 @@ export class Node {
      * @param {boolean} [options.broadcastNewCandidate] - default: true
      * @param {boolean} [options.isSync] - default: false
      * @param {boolean} [options.persistToDisk] - default: true
+     * @param {number} [byteLength] - default: serializedBlock.byteLength
      */
     async digestFinalizedBlock(finalizedBlock, options = {}, byteLength) {
         if (this.restartRequested) return;
@@ -491,18 +504,6 @@ export class Node {
                     if (!this.roles.includes('miner')) { break; }
                     if (!this.roles.includes('validator')) { break; }
 
-                    /*if (this.miner.highestBlockIndex > data.index) { // avoid processing old blocks
-                        this.miniLogger.log(`highest #${this.miner.highestBlockIndex} > #${data.index} -> skip`, (m) => { console.info(m); });
-                        break;
-                    }
-                    if (lastBlockIndex +1 > data.index) {
-                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 > #${data.index} -> skip`, (m) => { console.info(m); });
-                        break;
-                    }
-                    if (lastBlockIndex +1 < data.index) {
-                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 < #${data.index} -> skip`, (m) => { console.info(m); });
-                        break;
-                    }*/
                     if (lastBlockIndex +1 !== data.index) {
                         this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 !== #${data.index} -> skip candidate`, (m) => { console.info(m); });
                         break;

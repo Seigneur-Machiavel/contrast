@@ -28,6 +28,7 @@ export const MINING_PARAMS = {
         hashLen: 32,
     },
     nonceLength: 4,
+    initialDifficulty: 27,
     blocksBeforeAdjustment: 30, // ~120sec * 30 = ~3600 sec = ~1 hour
     thresholdPerDiffIncrement: 3.2, // meaning 3.4% threshold for 1 diff point
     maxDiffIncrementPerAdjustment: 32, // 32 diff points = 100% of diff

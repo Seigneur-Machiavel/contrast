@@ -261,8 +261,9 @@ export class SyncHandler {
             
             for (const serializedBlock of serializedBlocks) {
                 try {
+                    const byteLength = serializedBlock.byteLength;
                     const block = serializer.deserialize.block_finalized(serializedBlock);
-                    await this.node.digestFinalizedBlock(block, { skipValidation: false, broadcastNewCandidate: false, isSync: true, persistToDisk: true });
+                    await this.node.digestFinalizedBlock(block, { broadcastNewCandidate: false, isSync: true }, byteLength);
                     desiredBlock++;
                 } catch (blockError) {
                     this.miniLogger.log(`Sync Error while processing block #${desiredBlock}`, (m) => { console.error(m); });
