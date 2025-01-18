@@ -306,6 +306,7 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     }
     setPrivateKey(privateKey = '') {
         this.worker.postMessage({ type: 'set_private_key', data: privateKey });
+        console.info('set_private_key msg sent to NodeAppWorker');
     }
     async autoRestartLoop() {
         while (true) {

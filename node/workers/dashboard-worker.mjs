@@ -32,9 +32,11 @@ parentPort.on('message', async (message) => {
             await stop();
             break;
         case 'set_private_key':
+            console.info('Setting private key');
             await dashApp.init(message.data);
             dashApp.nodesSettings[dashApp.node.id].privateKey = message.data;
             dashApp.saveNodeSettings();
+            console.info('Private key set');
             break;
         default:
             console.error('Unknown message type:', message.type);
