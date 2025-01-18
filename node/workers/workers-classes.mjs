@@ -288,8 +288,24 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
         this.initWorker();
         this.autoRestartLoop();
     }
-    stop() {
+    async stop(awaitTermination = true) {
+        this.autoRestart = false;
         this.worker.postMessage({ type: 'stop' });
+
+        if (!awaitTermination) { return true; }
+
+        while (true) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (this.worker.threadId === -1) { break; }
+        }
+        console.log('NodeAppWorker stopped');
+        return true;
+    }
+    restart() {
+        this.worker.postMessage({ type: 'stop' });
+    }
+    setPrivateKey(privateKey = '') {
+        this.worker.postMessage({ type: 'set_private_key', data: privateKey });
     }
     async autoRestartLoop() {
         while (true) {

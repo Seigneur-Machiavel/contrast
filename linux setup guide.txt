@@ -1,0 +1,23 @@
+CLONE THE REPO:
+git clone https://github.com/Seigneur-Machiavel/contrast
+
+NO NVM? INSTALL IT:
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.1/install.sh | bash
+THEN RESTART OR ENTER:
+export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+GET LAST NODE VERSION:
+nvm install node
+
+NAVIGATE TO PROJECT FOLDER AND INSTALL DEPENDENCIES:
+cd contrast && npm i
+
+TEST (choose one option):
+node node/run.mjs
+node node/run.mjs -na stresstest
+
+RUN (choose one option):
+nohup node run/pureObserver.mjs > output.log 2>&1 &
+nohup node run/dashboard.mjs > output.log 2>&1 &
+nohup node run/runMultiNodeWithDashboard.mjs > output.log 2>&1 &

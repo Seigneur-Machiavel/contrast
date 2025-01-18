@@ -263,7 +263,9 @@ class P2PNetwork extends EventEmitter {
             /** @type {SyncResponse} */
             const response = serializer.deserialize.rawData(data);
             return response;
-        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); }
+        } catch (err) {
+            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+        }
     }
     /** @param {Stream} stream */
     static async streamRead(stream) {

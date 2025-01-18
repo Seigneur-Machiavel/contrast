@@ -26,5 +26,18 @@ async function stopIfDashAppStoppedLoop() {
     await stop();
 }
 
-parentPort.on('message', async (message) => { if (message.type === 'stop') { await stop(); } });
+parentPort.on('message', async (message) => {
+    switch(message.type) {
+        case 'stop':
+            await stop();
+            break;
+        case 'set_private_key':
+            await dashApp.init(message.data);
+            dashApp.nodesSettings[dashApp.node.id].privateKey = message.data;
+            dashApp.saveNodeSettings();
+            break;
+        default:
+            console.error('Unknown message type:', message.type);
+    }
+});
 stopIfDashAppStoppedLoop();

@@ -104,7 +104,7 @@ class AppStaticFncs {
 }
 
 export class DashboardWsApp {
-    #nodesSettings = {};
+    nodesSettings = {};
     stopping = false;
     stopped = false;
     /** @param {Node} node */
@@ -150,16 +150,16 @@ export class DashboardWsApp {
         this.wss.on('close', () => { console.log('Server closed'); });
         
         this.#loadNodeSettings();
-        const defaultNodeId = Object.keys(this.#nodesSettings)[0];
-        const defaultSettings = this.#nodesSettings[defaultNodeId];
+        const defaultNodeId = Object.keys(this.nodesSettings)[0];
+        const defaultSettings = this.nodesSettings[defaultNodeId];
         const defaultPrivKey = defaultSettings ? defaultSettings.privateKey : null;
         const usablePrivKey = privateKey || defaultPrivKey;
         if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey); }
         if (!this.node) { console.info("Not active Node and No private keys provided, can't auto init node..."); return; }
         
-        const activeNodeAssociatedSettings = this.#nodesSettings[this.node.id];
+        const activeNodeAssociatedSettings = this.nodesSettings[this.node.id];
         if (!activeNodeAssociatedSettings) { // Save the settings for the new node
-            this.#nodesSettings[this.node.id] = {
+            this.nodesSettings[this.node.id] = {
                 privateKey: usablePrivKey,
                 validatorRewardAddress: this.node.validatorRewardAddress,
                 minerAddress: this.node.minerAddress,
@@ -216,18 +216,18 @@ export class DashboardWsApp {
         const node = this.node;
         if (!node) { console.error(`Node ${nodeId} not found`); return; }
 
-        const associatedValidatorRewardAddress = this.#nodesSettings[nodeId].validatorRewardAddress;
+        const associatedValidatorRewardAddress = this.nodesSettings[nodeId].validatorRewardAddress;
         if (associatedValidatorRewardAddress) { 
             node.validatorRewardAddress = associatedValidatorRewardAddress;
         }
         
-        const associatedMinerAddress = this.#nodesSettings[nodeId].minerAddress;
+        const associatedMinerAddress = this.nodesSettings[nodeId].minerAddress;
         if (associatedMinerAddress) { 
             node.minerAddress = associatedMinerAddress;
             node.miner.address = associatedMinerAddress;
         }
 
-        const associatedMinerThreads = Number(this.#nodesSettings[nodeId].minerThreads);
+        const associatedMinerThreads = Number(this.nodesSettings[nodeId].minerThreads);
         if (associatedMinerThreads && !isNaN(associatedMinerThreads)) {
             node.miner.nbOfWorkers = associatedMinerThreads;
         }
@@ -260,8 +260,8 @@ export class DashboardWsApp {
                 break;
             case 'set_private_key':
                 await this.init(data);
-                this.#nodesSettings[this.node.id].privateKey = data;
-                this.#saveNodeSettings();
+                this.nodesSettings[this.node.id].privateKey = data;
+                this.saveNodeSettings();
                 break;
             case 'update_git':
                 this.miniLogger.log(`update_git disabled`, (m) => { console.log(m); });
@@ -273,10 +273,10 @@ export class DashboardWsApp {
                 if (!this.node) { console.error('No active node'); break; }
                 try {
                     addressUtils.conformityCheck(data)
-                    this.#nodesSettings[this.node.id].validatorRewardAddress = data;
+                    this.nodesSettings[this.node.id].validatorRewardAddress = data;
 
                     this.#injectNodeSettings(this.node.id);
-                    this.#saveNodeSettings();
+                    this.saveNodeSettings();
                 } catch (error) {
                     console.error(`Error setting validator address: ${data}, not conform`);
                 }
@@ -286,10 +286,10 @@ export class DashboardWsApp {
                 if (!this.node.miner) { console.error('No miner found'); break; }
                 try {
                     addressUtils.conformityCheck(data)
-                    this.#nodesSettings[this.node.id].minerAddress = data;
+                    this.nodesSettings[this.node.id].minerAddress = data;
 
                     this.#injectNodeSettings(this.node.id);
-                    this.#saveNodeSettings();
+                    this.saveNodeSettings();
                 } catch (error) {
                     console.error(`Error setting miner address: ${data}, not conform`);
                 }
@@ -311,8 +311,8 @@ export class DashboardWsApp {
                 if (!this.node) { console.error('No active node'); break; }
                 this.node.miner.nbOfWorkers = data;
 
-                this.#nodesSettings[this.node.id].minerThreads = data;
-                this.#saveNodeSettings();
+                this.nodesSettings[this.node.id].minerThreads = data;
+                this.saveNodeSettings();
                 break;
             case 'new_unsigned_transaction':
                 console.log(`signing transaction ${data.id}`);
@@ -351,9 +351,9 @@ export class DashboardWsApp {
                 break;
         }
     }
-    #saveNodeSettings() {
-        Storage.saveJSON('nodeSettings', this.#nodesSettings);
-        console.log(`Nodes settings saved: ${Object.keys(this.#nodesSettings).length}`);
+    saveNodeSettings() {
+        Storage.saveJSON('nodeSettings', this.nodesSettings);
+        console.log(`Nodes settings saved: ${Object.keys(this.nodesSettings).length}`);
     }
     #loadNodeSettings() {
         const nodeSettings = Storage.loadJSON('nodeSettings');
@@ -362,8 +362,8 @@ export class DashboardWsApp {
             return;
         }
         
-        this.#nodesSettings = nodeSettings;
-        console.log(`nodeSettings loaded: ${Object.keys(this.#nodesSettings).length}`);
+        this.nodesSettings = nodeSettings;
+        console.log(`nodeSettings loaded: ${Object.keys(this.nodesSettings).length}`);
     }
     async #stopNodeIfRequestedLoop() {
         while (true) {

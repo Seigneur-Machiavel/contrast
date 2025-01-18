@@ -57,8 +57,11 @@ export const mining = {
     /** @param {BlockData} lastBlock @param {BlockData} olderBlock */
     calculateAverageBlockTime: (lastBlock, olderBlock) => {
         if (!olderBlock) { return BLOCKCHAIN_SETTINGS.targetBlockTime; }
-        const periodInterval = lastBlock.timestamp - olderBlock.posTimestamp;
-        return periodInterval / MINING_PARAMS.blocksBeforeAdjustment;
+        if (lastBlock.index <= olderBlock.index) { return BLOCKCHAIN_SETTINGS.targetBlockTime; }
+
+        const periodInterval = lastBlock.timestamp - olderBlock.timestamp;
+        const blockCount = lastBlock.index - olderBlock.index;
+        return periodInterval / blockCount;
     },
     /** @param {number} length - Nonce length in bytes */
     generateRandomNonce: (length = MINING_PARAMS.nonceLength) => {

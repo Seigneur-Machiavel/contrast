@@ -20,7 +20,7 @@ let dashboardWorker;
         const restartTime = Math.floor(Math.random() * 480000) + 120000;
         mainLogger.log(`--- Restarting node worker in ${(restartTime / 1000).toFixed(2)}s ---`, (m) => { console.log(m); });
         await new Promise(resolve => setTimeout(resolve, restartTime));
-        dashboardWorker.stop(); // but auto restarts
+        dashboardWorker.restart();
     }
 })();
 function createLoggerSettingWindow() {
@@ -91,4 +91,7 @@ app.on('ready', async () => {
     //(async () => { import('./node/run/dashboard.mjs'); })(); // -> trying as worker
 });
 
-app.on('will-quit', () => { globalShortcut.unregisterAll(); });
+app.on('will-quit', async () => {
+    globalShortcut.unregisterAll();
+    if (dashboardWorker) await dashboardWorker.stop();
+});

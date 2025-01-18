@@ -219,11 +219,9 @@ export class Node {
             this.blockchainStats.lastLegitimacy = myLegitimacy;
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
-            const lowerBoundBlockIndex = this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment;
-            const olderBlock = lowerBoundBlockIndex < 0 ? null : this.blockchain.getBlock(lowerBoundBlockIndex);
-            const averageBlockTimeMS = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
-            this.blockchainStats.averageBlockTime = averageBlockTimeMS;
-            const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, averageBlockTimeMS);
+            const olderBlock = this.blockchain.getBlock(Math.max(0, this.blockchain.lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
+            this.blockchainStats.averageBlockTime = mining.calculateAverageBlockTime(this.blockchain.lastBlock, olderBlock);
+            const newDifficulty = mining.difficultyAdjustment(this.blockchain.lastBlock, this.blockchainStats.averageBlockTime);
             const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
             const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
             blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, this.blockchain.lastBlock.hash, Txs, posTimestamp);
