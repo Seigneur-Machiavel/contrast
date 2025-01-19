@@ -233,15 +233,16 @@ class P2PNetwork extends EventEmitter {
             const ma = multiaddr(addr);
             const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
             this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
-            promises.push(async () => {
-                try {
-                    const con = await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+
+            promises.push(this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) })
+                .then(con => {
                     const peerIdStr = con.remotePeer.toString();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
-                } catch (err) {
+                })
+                .catch(err => {
                     this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
-                }
-            });
+                })
+            );
         }
 
         await Promise.all(promises);
