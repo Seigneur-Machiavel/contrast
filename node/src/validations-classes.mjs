@@ -444,10 +444,16 @@ export class BlockValidation {
         if (timeDiffFinal > 1000) { throw new Error(`!applyMinorOffense! Rejected: #${block.index} -> ${timeDiffFinal} > timestamp_diff_tolerance: 1000`); }
     }
     /** @param {BlockData} block @param {Vss} vss */
-    static async validateLegitimacy(block, vss) {
-        await vss.calculateRoundLegitimacies(block.prevHash);
-        const validatorAddress = block.Txs[1]?.inputs[0]?.split(':')[0];
-        const validatorLegitimacy = vss.getAddressLegitimacy(validatorAddress);
+    static async validateLegitimacy(block, vss, isCandidateBlock = false) {
+        //await vss.calculateRoundLegitimacies(block.prevHash);
+        const txs = block.Txs;
+        const validatorTx = isCandidateBlock ? txs[0] : txs[1];
+        if (!validatorTx) { throw new Error('Validator transaction not found'); }
+
+        const validatorAddress = validatorTx.inputs[0].split(':')[0];
+        if (!validatorAddress) { throw new Error('Validator address not found'); }
+
+        const validatorLegitimacy = await vss.getAddressLegitimacy(validatorAddress, block.prevHash);
         if (validatorLegitimacy === block.legitimacy) { return true; }
 
         throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - expected: ${validatorLegitimacy}`);

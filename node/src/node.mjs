@@ -225,8 +225,10 @@ export class Node {
         
         // If not genesis block: fill the block candidate with transactions etc...
         if (this.blockchain.lastBlock) {
-            await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
-            const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
+            //await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
+            //const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
+            const prevHash = this.blockchain.lastBlock.hash;
+            const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address, prevHash);
             this.blockchainStats.lastLegitimacy = myLegitimacy;
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
@@ -234,7 +236,7 @@ export class Node {
             this.blockchainStats.averageBlockTime = averageBlockTime;
             const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
             const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
-            blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, this.blockchain.lastBlock.hash, Txs, posTimestamp);
+            blockCandidate = BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, Txs, posTimestamp);
         }
 
         // Sign the block candidate
@@ -509,10 +511,13 @@ export class Node {
                         break;
                     }
 
-                    await this.vss.calculateRoundLegitimacies(data.hash);
+                    /*await this.vss.calculateRoundLegitimacies(data.hash);
                     const validatorAddress = data.Txs[0].inputs[0].split(':')[0];
                     const validatorLegitimacy = this.vss.getAddressLegitimacy(validatorAddress);
-                    if (validatorLegitimacy === data.legitimacy) { this.miner.updateBestCandidate(data); break; }
+                    if (validatorLegitimacy === data.legitimacy) { this.miner.updateBestCandidate(data); break; }*/
+
+                    const legitimacyValidated = await BlockValidation.validateLegitimacy(data, this.vss, true);
+                    if (legitimacyValidated) { this.miner.updateBestCandidate(data); break; }
                     
                     this.miniLogger.log(`${topic} -> #${data.index} -> Invalid legitimacy!`, (m) => { console.info(m); });
                     break;

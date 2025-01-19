@@ -67,6 +67,8 @@ export class Vss {
     spectrum = {};
     /** @type {StakeReference[]} */
     legitimacies = []; // the order of the stakes in the array is the order of legitimacy
+    /** @type {Object<string, Object<string, number>>} */
+    blockLegitimaciesByAddress = {}; // { 'WCHMD65Q7qR2uH9XF5dJ': 0 }
     currentRoundHash = '';
     maxLegitimacyToBroadcast = 27; // node should not broadcast block if not in the top 27
 
@@ -103,6 +105,42 @@ export class Vss {
     /** @param {string} blockHash @param {number} [maxResultingArrayLength] @param {number} [maxTry] */
     async calculateRoundLegitimacies(blockHash, maxResultingArrayLength = 27, maxTry = 100) {
         const startTimestamp = Date.now();
+        if (this.blockLegitimaciesByAddress[blockHash]) { return; } // already calculated
+        
+        // everyone has considered 0 legitimacy when not enough stakes
+        const maxRange = spectrumFunctions.getHighestUpperBound(this.spectrum);
+        if (maxRange < 999_999) { this.legitimacies = []; return; } // no calculation needed
+        
+        /** @type {Object<string, number>} */
+        const roundLegitimacies = {};
+        const spectrumLength = Object.keys(this.spectrum).length;
+        
+        let leg = 0;
+        let i = 0;
+        for (i; i < maxTry; i++) {
+            const winningNumber = await spectrumFunctions.hashToIntWithRejection(blockHash, i, maxRange);
+            const stakeReference = spectrumFunctions.getStakeReferenceFromIndex(this.spectrum, winningNumber);
+            if (!stakeReference) { console.error(`[VSS] Stake not found for winning number: ${winningNumber}`); continue; }
+
+            // if stakeReference already in roundLegitimacies, try again
+            if (roundLegitimacies[stakeReference.address]) { continue; }
+            
+            //roundLegitimacies.push(stakeReference);
+            roundLegitimacies[stakeReference.address] = leg;
+            leg++;
+
+            if (leg >= spectrumLength) { break; } // If all stakes have been selected
+            if (leg >= maxResultingArrayLength) { break; } // If the array is full
+        }
+
+        this.blockLegitimaciesByAddress[blockHash] = roundLegitimacies;
+
+        console.log(`[VSS] -- Calculated round legitimacies in ${((Date.now() - startTimestamp)/1000).toFixed(2)}s. | ${i} iterations. -->`);
+        console.info(roundLegitimacies)
+    }
+    /** @param {string} blockHash @param {number} [maxResultingArrayLength] @param {number} [maxTry] */
+    async calculateRoundLegitimaciesOLD(blockHash, maxResultingArrayLength = 27, maxTry = 100) { // DEPRECATED
+        const startTimestamp = Date.now();
         if (blockHash === this.currentRoundHash) { return; } // already calculated
         
         // everyone has considered 0 legitimacy when not enough stakes
@@ -132,8 +170,16 @@ export class Vss {
 
         //console.log(`[VSS] <-- Calculated round legitimacies in ${((Date.now() - startTimestamp)/1000).toFixed(2)}s. | ${i} iterations. -->`);
     }
+    /** @param {string} address @param {string} prevHash */
+    async getAddressLegitimacy(address, prevHash) {
+        const legitimacies = this.blockLegitimaciesByAddress[prevHash] || await this.calculateRoundLegitimacies(prevHash);
+        if (!legitimacies) { return 0; }
+
+        const legitimacy = legitimacies[address] || Object.keys(legitimacies).length; // if not found, return last index + 1
+        return legitimacy;
+    }
     /** @param {string} address */
-    getAddressLegitimacy(address) {
+    getAddressLegitimacyOLD(address) { // DEPRECATED
         const legitimacy = this.legitimacies.findIndex(stakeReference => stakeReference.address === address);
         return legitimacy !== -1 ? legitimacy : this.legitimacies.length; // if not found, return last index + 1
     }
