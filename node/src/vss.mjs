@@ -123,7 +123,7 @@ export class Vss {
             if (!stakeReference) { console.error(`[VSS] Stake not found for winning number: ${winningNumber}`); continue; }
 
             // if stakeReference already in roundLegitimacies, try again
-            if (roundLegitimacies[stakeReference.address]) { continue; }
+            if (roundLegitimacies[stakeReference.address] !== undefined) { continue; }
             
             //roundLegitimacies.push(stakeReference);
             roundLegitimacies[stakeReference.address] = leg;
@@ -175,7 +175,8 @@ export class Vss {
         const legitimacies = this.blockLegitimaciesByAddress[prevHash] || await this.calculateRoundLegitimacies(prevHash);
         if (!legitimacies) { return 0; }
 
-        const legitimacy = legitimacies[address] || Object.keys(legitimacies).length; // if not found, return last index + 1
+        // if not found, return last index + 1 (= array length)
+        const legitimacy = legitimacies[address] !== undefined ? legitimacies[address] : Object.keys(legitimacies).length;
         return legitimacy;
     }
     /** @param {string} address */
