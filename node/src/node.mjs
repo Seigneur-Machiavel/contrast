@@ -228,7 +228,7 @@ export class Node {
             //await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
             //const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
             const prevHash = this.blockchain.lastBlock.hash;
-            const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address, prevHash);
+            const myLegitimacy = await this.vss.getAddressLegitimacy(this.account.address, prevHash);
             this.blockchainStats.lastLegitimacy = myLegitimacy;
             if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
 
@@ -510,11 +510,6 @@ export class Node {
                         this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 !== #${data.index} -> skip candidate`, (m) => { console.info(m); });
                         break;
                     }
-
-                    /*await this.vss.calculateRoundLegitimacies(data.hash);
-                    const validatorAddress = data.Txs[0].inputs[0].split(':')[0];
-                    const validatorLegitimacy = this.vss.getAddressLegitimacy(validatorAddress);
-                    if (validatorLegitimacy === data.legitimacy) { this.miner.updateBestCandidate(data); break; }*/
 
                     const legitimacyValidated = await BlockValidation.validateLegitimacy(data, this.vss, true);
                     if (legitimacyValidated) { this.miner.updateBestCandidate(data); break; }
