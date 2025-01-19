@@ -484,8 +484,9 @@ export class Node {
 
                     if (!this.roles.includes('validator')) { break; }
 
-                    const isInCache = this.reorganizator.isFinalizedBlockInCache(data);
-                    if (!isInCache) { this.opStack.push('digestPowProposal', message); break; }
+                    const isInBlockchainCache = this.blockchain.cache.blockHeightByHash.has(data.hash);
+                    const isInReorganizatorCache = this.reorganizator.isFinalizedBlockInCache(data);
+                    if (!isInBlockchainCache && !isInReorganizatorCache) { this.opStack.push('digestPowProposal', message); break; }
                     
                     this.miniLogger.log(`Already processed ${topic} #${data.index} -> skip`, (m) => { console.warn(m); });
                     break;
