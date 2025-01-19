@@ -101,13 +101,6 @@ class P2PNetwork extends EventEmitter {
         this.reputationManager.on('identifierUnbanned', ({ identifier }) => {
             this.miniLogger.log(`Peer ${identifier} has been unbanned`, (m) => { console.info(m); });
         });
-
-        (async () => { // connexionsMaintenerLoop
-            while(true) {
-                await new Promise(resolve => setTimeout(resolve, 10000));
-                await this.connectToBootstrapNodes();
-            }
-        });
     }
 
     #handlePeerDiscovery = async (event) => {
@@ -214,6 +207,14 @@ class P2PNetwork extends EventEmitter {
         } catch (error) {
             this.miniLogger.log('Failed to start P2P network', { error: error.message });
             throw error;
+        }
+
+        this.#connectionMaintainerLoop();
+    }
+    async #connectionMaintainerLoop() {
+        while(true) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            await this.connectToBootstrapNodes();
         }
     }
     async stop() {
