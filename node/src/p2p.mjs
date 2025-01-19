@@ -47,6 +47,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
+    myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
     /** @type {string} */
@@ -225,6 +226,7 @@ class P2PNetwork extends EventEmitter {
     async connectToBootstrapNodes() {
         const promises = [];
         for (const addr of this.options.bootstrapNodes) {
+            if (this.myAddr === addr) { continue; } // Skip if recognize as myself
             // Check if already connected to this bootstrap node
             for (const peerIdStr in this.connectedBootstrapNodes) {
                 if (this.connectedBootstrapNodes[peerIdStr] === addr) { return; }
@@ -232,7 +234,7 @@ class P2PNetwork extends EventEmitter {
 
             const ma = multiaddr(addr);
             const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
-            this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
+            //this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
 
             promises.push(this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) })
                 .then(con => {
@@ -240,12 +242,15 @@ class P2PNetwork extends EventEmitter {
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                 })
                 .catch(err => {
-                    this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
+                    if (err.message === 'Can not dial self') { this.myAddr = addr; }
+                    //this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                 })
             );
         }
 
-        await Promise.all(promises);
+        await Promise.allSettled(promises);
+        const connectedBootstraps = Object.keys(this.connectedBootstrapNodes).length + (this.myAddr ? 1 : 0);
+        this.miniLogger.log(`Connected to ${connectedBootstraps}/${this.options.bootstrapNodes.length} bootstrap nodes`, (m) => { console.info(m); });
     }
     /** @param {string} topic */
     async broadcast(topic, message) {
