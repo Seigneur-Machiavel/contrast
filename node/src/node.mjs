@@ -55,6 +55,7 @@ export class Node {
     bootstrapNodes = [
         '/dns4/pinkparrot.science/tcp/27260',
         '/dns4/pinkparrot.observer/tcp/27261',
+        '/dns4/contrast.observer/tcp/27260',
         '/dns4/pariah.monster/tcp/27260'
     ];
     memPool = new MemPool();
@@ -112,7 +113,10 @@ export class Node {
     async start(startFromScratch = false) {
         this.#updateState("starting");
 
-        this.bootstrapNodes = Storage.loadJSON('bootstrapNodes') || this.bootstrapNodes;
+        const loadedBootstrapNodes = Storage.loadJSON('bootstrapNodes');
+        if (loadedBootstrapNodes) { for (const node of loadedBootstrapNodes) {
+            if (!this.bootstrapNodes.includes(node)) { this.bootstrapNodes.push(node); }
+        }}
         this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
         Storage.saveJSON('bootstrapNodes', this.bootstrapNodes);
 
