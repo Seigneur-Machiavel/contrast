@@ -36,6 +36,7 @@ export class Node {
     id;
     account;
     roles;
+    listenAddress;
     version;
     validatorRewardAddress;
     useDevArgon2 = false;
@@ -74,19 +75,16 @@ export class Node {
     logValidationTime = false;
 
     /** @param {Account} account */
-    constructor(account, roles = ['validator'], p2pOptions = {}, version = 1) {
+    constructor(account, roles = ['validator'], listenAddress = '/ip4/0.0.0.0/tcp/27260', version = 1) {
         this.id = account.address;
         this.account = account;
         this.roles = roles; // 'miner', 'validator', ...
+        this.listenAddress = listenAddress;
         this.version = version;
         this.validatorRewardAddress = account.address;
 
         /** @type {P2PNetwork} */
-        this.p2pNetwork = new P2PNetwork({
-            role: this.roles.join('_'),
-            ...p2pOptions
-        }, this.timeSynchronizer);
-        this.p2pOptions = p2pOptions;
+        this.p2pNetwork = new P2PNetwork(this.timeSynchronizer, this.listenAddress);
 
         /** @type {Vss} */
         this.vss = new Vss(BLOCKCHAIN_SETTINGS.maxSupply);
@@ -154,16 +152,35 @@ export class Node {
         this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
         this.opStack.pushFirst('syncWithPeers', null);
 
-        this.#connexionsMaintenerLoop();
+        //this.#connexionsMaintenerLoop();
     }
-    async #connexionsMaintenerLoop() {
+    async #connexionsMaintenerLoop() { // DEPRECATED
+        //let i = 0;
         while(true) {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            const nbOfPeers = await this.#waitSomePeers();
-            if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
+            //i++;
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            await this.p2pNetwork.connectToBootstrapNodes();
+            //if (i % 10 === 0) { await this.p2pNetwork.connectToBootstrapNodes(); }
+            //const nbOfPeers = await this.#waitSomePeers();
+            //if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
         }
     }
-    async #waitSomePeers(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) {
+    async #waitSomePeers(nbOfPeers = 1, maxAttempts = 30, delay = 1000) {
+        const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
+        let connectedPeers = 0;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            if (this.restartRequested) { break; }
+
+            const peersIds = this.p2pNetwork.getConnectedPeers();
+            connectedPeers = peersIds.length - (peersIds.includes(myPeerId) ? 1 : 0);
+            if (connectedPeers >= nbOfPeers) { return connectedPeers; }
+
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+
+        return connectedPeers;
+    }
+    async #waitSomePeersOLD(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) { // DEPRECATED
         if (this.restartRequested) { return 0; }
 
         const checkPeerCount = () => {
@@ -181,7 +198,7 @@ export class Node {
 
                 await this.p2pNetwork.connectToBootstrapNodes();
                 peerCount = checkPeerCount();
-                
+
                 if (peerCount >= nbOfPeers) {
                     this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''} after connecting to bootstrap nodes`, (m) => { console.info(m); });
                     this.opStack.pushFirst('syncWithPeers', null);

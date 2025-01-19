@@ -169,24 +169,17 @@ export class DashboardWsApp {
         this.#injectNodeSettings(this.node.account.address);
         this.#injectCallbacks();
     }
-    async initMultiNode(nodePrivateKey = 'ff', local = false, useDevArgon2 = false) {
-        const wallet = new Wallet(nodePrivateKey, useDevArgon2);
+    async initMultiNode(nodePrivateKey = 'ff') {
+        const wallet = new Wallet(nodePrivateKey);
         wallet.loadAccounts();
 
         const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(2, "C");
         if (!derivedAccounts) { console.error('Failed to derive addresses.'); return; }
         wallet.saveAccounts();
 
-        this.node = new Node(
-            derivedAccounts[0],
-            ['validator', 'miner', 'observer'],
-            {listenAddress: local ? '/ip4/0.0.0.0/tcp/0' : `/ip4/0.0.0.0/tcp/${this.nodePort}`}
-        );
+        this.node = new Node(derivedAccounts[0], ['validator', 'miner', 'observer'], `/ip4/0.0.0.0/tcp/${this.nodePort}`);
         this.node.minerAddress = derivedAccounts[1].address;
-
-        this.node.useDevArgon2 = useDevArgon2; // we remove that one ?
         await this.node.start();
-        this.node.memPool.useDevArgon2 = useDevArgon2;
 
         console.log(`Multi node started, account : ${this.node.account.address}`);
         return this.node;

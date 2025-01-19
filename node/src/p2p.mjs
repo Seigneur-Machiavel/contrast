@@ -47,6 +47,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
+    timeSynchronizer;
     fastConverter = new FastConverter();
     /** @type {string} */
     static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
@@ -76,23 +77,22 @@ class P2PNetwork extends EventEmitter {
             deserialize: (data) => serializer.deserialize.block_finalized(data),
             maxSize: BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05,
         },
-    }
-    timeSynchronizer;
+    };
+    connectedBootstrapNodes = {};
     
-    /** @param {Object} [options={}] @param {TimeSynchronizer} timeSynchronizer */
-    constructor(options = {}, timeSynchronizer) {
+    /** @param {TimeSynchronizer} timeSynchronizer */
+    constructor(timeSynchronizer, listenAddress = '/ip4/0.0.0.0/tcp/27260') {
         super();
         this.timeSynchronizer = timeSynchronizer;
-        const defaultOptions = {
+        this.options = {
             bootstrapNodes: [],
             maxPeers: 12,
             logLevel: 'info',
             logging: true,
-            listenAddress: '/ip4/0.0.0.0/tcp/27260',
+            listenAddress: listenAddress,
             dialTimeout: 3000,
             reputationOptions: {}, // Options for ReputationManager
         };
-        this.options = { ...defaultOptions, ...options };
         this.reputationManager = new ReputationManager(this.options.reputationOptions);
         this.reputationManager.on('identifierBanned', ({ identifier }) => {
             //this.disconnectPeer(identifier);
@@ -100,6 +100,14 @@ class P2PNetwork extends EventEmitter {
         });
         this.reputationManager.on('identifierUnbanned', ({ identifier }) => {
             this.miniLogger.log(`Peer ${identifier} has been unbanned`, (m) => { console.info(m); });
+        });
+
+        // connexionsMaintenerLoop
+        (async () => {
+            while(true) {
+                await new Promise(resolve => setTimeout(resolve, 10000));
+                await this.connectToBootstrapNodes();
+            }
         });
     }
 
@@ -137,7 +145,8 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`--------> Peer ${peerIdStr} disconnected`, (m) => { console.debug(m); });
         if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status === 'open') { await this.openStreams[peerIdStr].close(); }
         if (this.openStreams[peerIdStr]) { delete this.openStreams[peerIdStr]; }
-        delete this.peers[peerIdStr];
+        if (this.peers[peerIdStr]) { delete this.peers[peerIdStr]; }
+        if (this.connectedBootstrapNodes[peerIdStr]) { delete this.connectedBootstrapNodes[peerIdStr]; }
     };
     /** @param {CustomEvent} event */
     #handlePubsubMessage = async (event) => {
@@ -203,8 +212,6 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
             p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
             this.p2pNode = p2pNode;
-
-            // await this.connectToBootstrapNodes(); -> we call it after setup syncHandler in node.start()
         } catch (error) {
             this.miniLogger.log('Failed to start P2P network', { error: error.message });
             throw error;
@@ -216,17 +223,28 @@ class P2PNetwork extends EventEmitter {
         await this.reputationManager.shutdown();
     }
     async connectToBootstrapNodes() {
-        //return;
-        await Promise.all(this.options.bootstrapNodes.map(async (addr) => {
+        const promises = [];
+        for (const addr of this.options.bootstrapNodes) {
+            // Check if already connected to this bootstrap node
+            for (const peerIdStr in this.connectedBootstrapNodes) {
+                if (this.connectedBootstrapNodes[peerIdStr] === addr) { return; }
+            }
+
             const ma = multiaddr(addr);
             const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
             this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
-            try {
-                await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            } catch (err) {
-                this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
-            }
-        }));
+            promises.push(async () => {
+                try {
+                    const con = await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    const peerIdStr = con.remotePeer.toString();
+                    this.connectedBootstrapNodes[peerIdStr] = addr;
+                } catch (err) {
+                    this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
+                }
+            });
+        }
+
+        await Promise.all(promises);
     }
     /** @param {string} topic */
     async broadcast(topic, message) {

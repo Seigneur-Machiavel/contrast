@@ -14,6 +14,17 @@ class TimeSynchronizer {
     lastSyncedTime = null;
     offset = 0; // Time offset between system time and NTP time
     ntpServers = ['0.pool.ntp.org', '1.pool.ntp.org', '2.pool.ntp.org', '3.pool.ntp.org'];
+    /** 
+     * @param {Object} options
+     * @param {string[]} options.ntpServers
+     * @param {number} options.ntpPort
+     * @param {number} options.syncInterval
+     * @param {number} options.epochInterval
+     * @param {number} options.roundInterval
+     * @param {number} options.retryAttempts
+     * @param {number} options.retryDelay
+     * @param {boolean} options.autoStart
+     */
     constructor(options = {}) {
         /** @type {MiniLogger} */
         this.miniLogger = new MiniLogger('TimeSynchronizer');
