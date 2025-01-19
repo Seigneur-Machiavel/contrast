@@ -133,10 +133,11 @@ export class Vss {
             if (leg >= maxResultingArrayLength) { break; } // If the array is full
         }
 
-        this.blockLegitimaciesByAddress[blockHash] = roundLegitimacies;
-
         console.log(`[VSS] -- Calculated round legitimacies in ${((Date.now() - startTimestamp)/1000).toFixed(2)}s. | ${i} iterations. -->`);
         console.info(roundLegitimacies)
+        
+        this.blockLegitimaciesByAddress[blockHash] = roundLegitimacies;
+        return roundLegitimacies;
     }
     /** @param {string} blockHash @param {number} [maxResultingArrayLength] @param {number} [maxTry] */
     async calculateRoundLegitimaciesOLD(blockHash, maxResultingArrayLength = 27, maxTry = 100) { // DEPRECATED
