@@ -229,7 +229,7 @@ class P2PNetwork extends EventEmitter {
             if (this.myAddr === addr) { continue; } // Skip if recognize as myself
             // Check if already connected to this bootstrap node
             for (const peerIdStr in this.connectedBootstrapNodes) {
-                if (this.connectedBootstrapNodes[peerIdStr] === addr) { return; }
+                if (this.connectedBootstrapNodes[peerIdStr] === addr) { continue; }
             }
 
             const ma = multiaddr(addr);
