@@ -151,19 +151,6 @@ export class Node {
 
         this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
         this.opStack.pushFirst('syncWithPeers', null);
-
-        //this.#connexionsMaintenerLoop();
-    }
-    async #connexionsMaintenerLoop() { // DEPRECATED
-        //let i = 0;
-        while(true) {
-            //i++;
-            await new Promise(resolve => setTimeout(resolve, 10000));
-            await this.p2pNetwork.connectToBootstrapNodes();
-            //if (i % 10 === 0) { await this.p2pNetwork.connectToBootstrapNodes(); }
-            //const nbOfPeers = await this.#waitSomePeers();
-            //if (!nbOfPeers || nbOfPeers < 1) { this.restartRequested = 'connexionsMaintenerLoop: not enough peers'; return; }
-        }
     }
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 30, delay = 1000) {
         const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
@@ -179,47 +166,6 @@ export class Node {
         }
 
         return connectedPeers;
-    }
-    async #waitSomePeersOLD(nbOfPeers = 1, maxAttempts = 60, timeOut = 30000) { // DEPRECATED
-        if (this.restartRequested) { return 0; }
-
-        const checkPeerCount = () => {
-            const peersIds = this.p2pNetwork.getConnectedPeers();
-            const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
-            return peersIds.length - (peersIds.includes(myPeerId) ? 1 : 0);
-        };
-
-        const attemptConnection = async () => {
-            for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                if (this.restartRequested) { return 0; }
-
-                let peerCount = checkPeerCount();
-                if (peerCount >= nbOfPeers) { return peerCount; }
-
-                await this.p2pNetwork.connectToBootstrapNodes();
-                peerCount = checkPeerCount();
-
-                if (peerCount >= nbOfPeers) {
-                    this.miniLogger.log(`Connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''} after connecting to bootstrap nodes`, (m) => { console.info(m); });
-                    this.opStack.pushFirst('syncWithPeers', null);
-                    return peerCount;
-                }
-
-                this.miniLogger.log(`Waiting for ${nbOfPeers} peer${nbOfPeers !== 1 ? 's' : ''}, currently connected to ${peerCount} peer${peerCount !== 1 ? 's' : ''}`, (m) => { console.info(m); });
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            }
-
-            this.miniLogger.log(`Failed to connect to ${nbOfPeers} peers within ${maxAttempts} attempts`, (m) => { console.error(m); });
-            return 0;
-        };
-
-        const result = await Promise.race([
-            attemptConnection(),
-            new Promise((resolve) => setTimeout(() => resolve(0), timeOut))
-        ]);
-
-        if (result < nbOfPeers) { this.miniLogger.log(`Failed to connect to ${nbOfPeers} peers within ${timeOut / 1000} seconds`, (m) => { console.error(m); }); }
-        return result;
     }
 
     // BLOCK CANDIDATE CREATION ---------------------------------------------------------
@@ -242,8 +188,6 @@ export class Node {
         
         // If not genesis block: fill the block candidate with transactions etc...
         if (this.blockchain.lastBlock) {
-            //await this.vss.calculateRoundLegitimacies(this.blockchain.lastBlock.hash);
-            //const myLegitimacy = this.vss.getAddressLegitimacy(this.account.address);
             const prevHash = this.blockchain.lastBlock.hash;
             const myLegitimacy = await this.vss.getAddressLegitimacy(this.account.address, prevHash);
             this.blockchainStats.lastLegitimacy = myLegitimacy;

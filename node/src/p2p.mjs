@@ -102,8 +102,7 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Peer ${identifier} has been unbanned`, (m) => { console.info(m); });
         });
 
-        // connexionsMaintenerLoop
-        (async () => {
+        (async () => { // connexionsMaintenerLoop
             while(true) {
                 await new Promise(resolve => setTimeout(resolve, 10000));
                 await this.connectToBootstrapNodes();
