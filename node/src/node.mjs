@@ -458,11 +458,7 @@ export class Node {
                     if (this.syncHandler.isSyncing || this.opStack.syncRequested) { return; }
                     if (!this.roles.includes('validator')) { break; }
 
-                    this.opStack.push('pushTransaction', {
-                        byteLength,
-                        utxoCache: this.utxoCache,
-                        transaction: data // signedTransaction
-                    });
+                    this.opStack.push('pushTransaction', data);
                     break;
                 case 'new_block_candidate':
                     try { BlockValidation.checkBlockIndexIsNumber(data); } catch (error) { throw error; }

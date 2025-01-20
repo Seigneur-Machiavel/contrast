@@ -126,6 +126,21 @@ export class MemPool {
 
         this.#addMempoolTransaction(transaction, collidingTx);
     }
+    /** @param {UtxoCache} utxoCache @param {Transaction[]} transactions */
+    async pushTransactions(utxoCache, transactions) {
+        /** @type {{ success: Transaction[], failed: string[] }} */
+        const results = { success: [], failed: [] };
+        for (const transaction of transactions) {
+            try {
+                await this.pushTransaction(utxoCache, transaction);
+                results.success.push(transaction);
+            } catch (error) {
+                results.failed.push(error.message);
+            }
+        }
+
+        return results;
+    }
     /** @param {UtxoCache} utxoCache */
     getMostLucrativeTransactionsBatch(utxoCache) {
         const totalBytesTrigger = BLOCKCHAIN_SETTINGS.maxBlockSize * 0.98;

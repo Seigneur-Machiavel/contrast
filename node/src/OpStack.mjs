@@ -39,7 +39,7 @@ export class OpStack {
         return newCallStack;
     }
     async #healthCheckLoop() {
-        const delayBetweenChecks = 10000; // 10 second
+        const delayBetweenChecks = 10_000; // 10 second
         while (!this.terminated) {
             await new Promise(resolve => setTimeout(resolve, delayBetweenChecks));
             //if (this.healthInfo.waitingForCheck) { continue; }
@@ -48,7 +48,7 @@ export class OpStack {
 
             const now = Date.now();
             
-            if (this.healthInfo.lastDigestTime === null && this.healthInfo.lastSyncTime === null) { break; }
+            if (this.healthInfo.lastDigestTime === null && this.healthInfo.lastSyncTime === null) { continue; }
             const lastDigestTime = this.healthInfo.lastDigestTime || 0;
             const lastSyncTime = this.healthInfo.lastSyncTime || 0;
             const lastDigestOrSyncTime = Math.max(lastDigestTime, lastSyncTime);
@@ -64,16 +64,16 @@ export class OpStack {
             if (!this.syncRequested && timeSinceLastDigestOrSync > this.healthInfo.delayBeforeSyncCheck) {
                 this.pushFirst('syncWithPeers', null);
                 this.miniLogger.log(`syncWithPeers requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                break;
+                continue;
             }
             
             const lastReorgCheckTime = this.healthInfo.lastReorgCheckTime;
             const timeSinceLastReorgCheck = lastReorgCheckTime ? now - lastReorgCheckTime : now - lastDigestOrSyncTime;
-            if (timeSinceLastDigestOrSync < this.healthInfo.delayBeforeReorgCheck) { break; }
+            if (timeSinceLastDigestOrSync < this.healthInfo.delayBeforeReorgCheck) { continue; }
             if (timeSinceLastReorgCheck > this.healthInfo.delayBeforeReorgCheck) {
                 this.healthInfo.lastReorgCheckTime = Date.now();
                 const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('healthCheck');
-                if (!reorgTasks) { break; }
+                if (!reorgTasks) { continue; }
 
                 this.securelyPushFirst(reorgTasks);
             }
@@ -96,11 +96,27 @@ export class OpStack {
 
             await new Promise(resolve => setImmediate(resolve));
 
-            const task = this.tasks.shift();
+            let task = this.tasks.shift();
             if (!task) { continue; }
 
-            this.executingTask = task;
-            await this.#executeTask(task);
+            const nextTaskIsPushTransaction = this.tasks[0] && this.tasks[0].type === 'pushTransaction';
+            if (!nextTaskIsPushTransaction) {
+                this.executingTask = task;
+                await this.#executeTask(task);
+                continue;
+            }
+
+            // Upgrade successive pushTransaction tasks to a single pushTransactions
+            const upgradedTask = { type: 'pushTransactions', data: [] };
+            while (task.type === 'pushTransaction') {
+                upgradedTask.data.push(task.data);
+                task = this.tasks.shift();
+                if (!task) { break; }
+                if (task.type !== 'pushTransaction') { this.tasks.unshift(task); break; }
+            }
+
+            this.executingTask = upgradedTask;
+            await this.#executeTask(upgradedTask);
         }
 
         this.miniLogger.log('--------- OpStack terminated ---------', (m) => console.info(m));
@@ -114,7 +130,7 @@ export class OpStack {
             switch (task.type) {
                 case 'pushTransaction':
                     try {
-                        await this.node.memPool.pushTransaction(content.utxoCache, content.transaction, byteLength); 
+                        await this.node.memPool.pushTransaction(this.node.utxoCache, content); 
                     } catch (error) {
                         if (error.message.includes('Transaction already in mempool')) { break; }
                         if (error.message.includes('Conflicting UTXOs')) { break; }
@@ -127,6 +143,10 @@ export class OpStack {
                         this.miniLogger.log(`[OpStack] Error while pushing transaction:`, (m) => console.error(m));
                         this.miniLogger.log(error, (m) => console.error(m));
                     }
+                    break;
+                case 'pushTransactions':
+                    const { success, failed } = await this.node.memPool.pushTransactions(this.node.utxoCache, content);
+                    this.miniLogger.log(`[OpStack] pushTransactions: ${success.length} success, ${failed.length} failed`, (m) => console.info(m));
                     break;
                 case 'digestPowProposal':
                     if (content.Txs[1].inputs[0] === undefined) { this.miniLogger.log(`[OpStack] Invalid block validator`, (m) => console.error(m)); return; }
@@ -282,16 +302,22 @@ export class OpStack {
 
     /** @param {string} type @param {object} data */
     push(type, data) {
-        if (type === 'syncWithPeers' && this.node.syncHandler.isSyncing) { return; }
-        if (type === 'syncWithPeers' && this.syncRequested) { return; }
-        if (type === 'syncWithPeers') { this.syncRequested = true; }
+        if (type === 'syncWithPeers') {
+            if (this.node.syncHandler.isSyncing) { return; }
+            if (this.syncRequested) { return; }
+            this.syncRequested = true;
+        }
+
         this.tasks.push({ type, data });
     }
     /** @param {string} type @param {object} data */
     pushFirst(type, data) {
-        if (type === 'syncWithPeers' && this.node.syncHandler.isSyncing) { return; }
-        if (type === 'syncWithPeers' && this.syncRequested) { return; }
-        if (type === 'syncWithPeers') { this.syncRequested = true; }
+        if (type === 'syncWithPeers') {
+            if (this.node.syncHandler.isSyncing) { return; }
+            if (this.syncRequested) { return; }
+            this.syncRequested = true;
+        }
+
         this.tasks.unshift({ type, data });
     }
     securelyPushFirst(tasks) {
