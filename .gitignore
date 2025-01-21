@@ -3,7 +3,7 @@ not published
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
-save storage 1000 blocks maxBlockSize 100
+storage - 1000 blocks
 node/storage/bootstrapNodes.json
 node/storage/nodeSettings.json
 node/storage/blocks
