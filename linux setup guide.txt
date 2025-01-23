@@ -16,8 +16,16 @@ cd contrast && npm i
 RUN:
 node node/run.mjs
 Options:
--na stresstest (spend a lot of Txs)
+-np [PORT]
 -pk [private_key] (setup a private without dashboard access)
+-na stresstest (spend a lot of Txs)
 
-(Optional) Use "nohup" if you want the process in the background (usefull for ssh connection)
+(Optional)
+--> Use "nohup" if you want the process in the background (usefull for ssh connection)
 nohup node node/run.mjs -na dashboard -pk [private_key] > output.log 2>&1 &
+--> For long term run, prefer to use PM2
+pm2 kill && git pull && pm2 start node/run.mjs -- -np 27261 -na stresstest && pm2 logs
+
+
+Reset blockchain datas:
+cd node/storage && node clear.js && cd .. && cd ..

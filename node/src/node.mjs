@@ -55,7 +55,7 @@ export class Node {
     bootstrapNodes = [
         '/dns4/pinkparrot.science/tcp/27260',
         '/dns4/pinkparrot.observer/tcp/27261',
-        '/dns4/contrast.observer/tcp/80',
+        '/dns4/contrast.observer/tcp/27260',
         '/dns4/pariah.monster/tcp/27260'
     ];
     memPool = new MemPool();
@@ -110,17 +110,22 @@ export class Node {
         for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
         return [...new Set(topicsToSubscribe)];
     }
+    #loadBootstrapNodesList() {
+        const loadedBootstrapNodes = Storage.loadJSON('bootstrapNodes');
+        if (loadedBootstrapNodes) {
+            for (const node of loadedBootstrapNodes) {
+                if (!this.bootstrapNodes.includes(node)) { this.bootstrapNodes.push(node); }
+            }
+        }
+        // if include '/dns4/contrast.observer/tcp/27260', remove it
+        this.bootstrapNodes = this.bootstrapNodes.filter(node => node !== '/dns4/contrast.observer/tcp/27260');
+
+        this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
+    }
     async start(startFromScratch = false) {
         this.#updateState("starting");
 
-        const loadedBootstrapNodes = Storage.loadJSON('bootstrapNodes');
-        if (loadedBootstrapNodes) { for (const node of loadedBootstrapNodes) {
-            if (!this.bootstrapNodes.includes(node)) { this.bootstrapNodes.push(node); }
-        }
-        // cleaning
-        this.bootstrapNodes = this.bootstrapNodes.filter(node => node !== '/dns4/contrast.observer/tcp/27260');
-    }
-        this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
+        this.#loadBootstrapNodesList();
         Storage.saveJSON('bootstrapNodes', this.bootstrapNodes);
 
         await this.timeSynchronizer.syncTimeWithRetry(5, 500);
