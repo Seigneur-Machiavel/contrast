@@ -117,8 +117,6 @@ export class Node {
                 if (!this.bootstrapNodes.includes(node)) { this.bootstrapNodes.push(node); }
             }
         }
-        // if include '/dns4/contrast.observer/tcp/27260', remove it
-        this.bootstrapNodes = this.bootstrapNodes.filter(node => node !== '/dns4/contrast.observer/tcp/80');
 
         this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
     }

@@ -136,6 +136,7 @@ export class AddressesTxsRefsStorage {
         if (!this.architecture[lvl0][lvl1][address]) { return []; }
 
         const filePath = path.join(PATH.TXS_REFS, lvl0, lvl1, `${address}.bin`);
+        if (!fs.existsSync(filePath)) { delete this.architecture[lvl0][lvl1][address]; return []; }
 
         const serialized = fs.readFileSync(filePath);
         /** @type {Array<string>} */
