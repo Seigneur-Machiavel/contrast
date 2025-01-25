@@ -846,7 +846,12 @@ export class BlockExplorerWidget {
 
         const row = document.createElement('tr');
         row.classList.add('cbe-TxRow');
-        createHtmlElement('td', undefined, [], row).textContent = txIndex;
+
+        const indexElmnt = createHtmlElement('td', undefined, [], row)
+        indexElmnt.textContent = txIndex;
+        if (txIndex === 0) { indexElmnt.textContent = indexElmnt.textContent + ' (CoinBase)'; }
+        if (txIndex === 1) { indexElmnt.textContent = indexElmnt.textContent + ' (Validator)'; }
+
         createHtmlElement('td', undefined, [], row).textContent = tx.id;
         createHtmlElement('td', undefined, [], row).textContent = `${convert.formatNumberAsCurrency(outputsAmount)} c`;
         createHtmlElement('td', undefined, [], row).textContent = `${weight} B`;
@@ -1260,10 +1265,6 @@ class BlockChainElementsManager {
 
 blockExplorerWidget = new BlockExplorerWidget();
 window.blockExplorerWidget = blockExplorerWidget;
- //test - ignore
-/*setTimeout(() => {
-    ws.send(JSON.stringify({ type: 'get_blocks_data_by_height', data: 104 }));
-}, 1000);*/
 
 //#region FUNCTIONS -------------------------------------------------------
 function getTimeSinceBlockConfirmedString(timestamp) {

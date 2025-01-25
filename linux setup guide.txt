@@ -17,14 +17,20 @@ RUN:
 node node/run.mjs
 Options:
 -np [PORT]
--pk [private_key] (setup a private without dashboard access)
+-pk [private_key] (setup a private key without dashboard access)
 -na stresstest (spend a lot of Txs)
 
 (Optional)
---> Use "nohup" if you want the process in the background (usefull for ssh connection)
+--> Use "nohup" if you want the process in the background (usefull for ssh connection) --
 nohup node node/run.mjs -na dashboard -pk [private_key] > output.log 2>&1 &
---> For long term run, prefer to use PM2
-pm2 kill && git pull && pm2 start node/run.mjs -- -np 27261 -na stresstest && pm2 logs
+
+--> For long term run, prefer to use PM2 ------------------------------------------------
+pm2 kill && git pull && pm2 start node/run.mjs -- -na stresstest && pm2 logs
+
+--> Bootstrap nodes needs open firewall port 27260 --------------------------------------
+sudo iptables -A INPUT -p tcp --dport 27260 -j ACCEPT && sudo iptables -A OUTPUT -p tcp --sport 27260 -j ACCEPT
+or
+sudo firewall-cmd --zone=public --add-port=27260/tcp --permanent && sudo firewall-cmd --reload
 
 
 Reset blockchain datas:
