@@ -15,7 +15,7 @@ async function localStorage_v1Lib() {
         const l = await import("../../utils/storage-manager.mjs");
         return l;
     }
-    return null;
+    return { Storage: null };
 };
 const { Storage } = await localStorage_v1Lib();
 

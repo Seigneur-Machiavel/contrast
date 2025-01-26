@@ -22,3 +22,4 @@ node/test-storage
 npm_install_log.txt
 release-builds
 contrast-win32-x64
+wallet-plugin

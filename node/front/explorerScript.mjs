@@ -1,3 +1,4 @@
+await new Promise((resolve) => { setTimeout(() => { resolve(); }, 1); });
 console.log('run/explorerScript.mjs');
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const anime = require('animejs');
@@ -199,10 +200,7 @@ async function connectWSLoop() {
 
         const clonedData = blockExplorerWidget.getCloneBeforeReset();
         blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
-
-        if (clonedData.modalContainer) {
-            blockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer);
-        }
+        if (clonedData.modalContainer) { blockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer); }
 
         connectWS();
     }

@@ -12,7 +12,8 @@ async function msgPackLib() {
         const m = await import('../libs/msgpack.min.js');
         return m.default;
     }
-    return MessagePack;
+    //return MessagePack;
+    return window.msgpack;
 };
 const msgpack = await msgPackLib();
 const fastConverter = new FastConverter();
