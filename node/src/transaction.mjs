@@ -272,7 +272,7 @@ export class Transaction_Builder {
      */
     static async createTransfer(senderAccount, transfers, feePerByte = Math.round(Math.random() * 10) + 1) {
         const senderAddress = senderAccount.address;
-        const UTXOs = senderAccount.UTXOs;
+        const UTXOs = senderAccount.UTXOs.filter(utxo => utxo.rule !== 'sigOrSlash');
         if (UTXOs.length === 0) { throw new Error('No UTXO to spend'); }
         if (transfers.length === 0) { throw new Error('No transfer to make'); }
 
@@ -282,7 +282,6 @@ export class Transaction_Builder {
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig', 1);
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress);
         if (changeOutput) { outputs.push(changeOutput); }
-
         if (conditionnals.arrayIncludeDuplicates(outputs)) { throw new Error('Duplicate outputs'); }
 
         return await this.#newTransaction(utxos, outputs);
@@ -296,7 +295,7 @@ export class Transaction_Builder {
      */
     static async createStakingVss(senderAccount, stakingAddress, amount, feePerByte = Math.round(Math.random() * 10) + 1) {
         const senderAddress = senderAccount.address;
-        const UTXOs = senderAccount.UTXOs;
+        const UTXOs = senderAccount.UTXOs.filter(utxo => utxo.rule !== 'sigOrSlash');
         if (UTXOs.length === 0) { throw new Error('No UTXO to spend'); }
 
         this.checkMalformedAnchorsInUtxosArray(UTXOs);
@@ -307,9 +306,7 @@ export class Transaction_Builder {
 
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom([{ recipientAddress: stakingAddress, amount }], 'sigOrSlash', 1);
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, amount);
-
         if (changeOutput) { outputs.push(changeOutput); }
-
         if (conditionnals.arrayIncludeDuplicates(outputs)) { throw new Error('Duplicate outputs'); }
 
         return await this.#newTransaction(utxos, outputs);

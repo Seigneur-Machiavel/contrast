@@ -24,22 +24,17 @@ validationObs.observe({ entryTypes: ['measure'] });*/
 const ValidationMiniLogger = new MiniLogger('validation');
 
 export class TxValidation {
-    /** ==> Simple hash control, low computation cost.
-     * - control the transaction hash (SHA256) 
-     * @param {Transaction} transaction */
+    /** ==> Simple hash control, low computation cost. - control the transaction hash (SHA256) @param {Transaction} transaction */
     static async controlTransactionHash(transaction) {
         const expectedID = Transaction_Builder.hashId(transaction);
         if (expectedID !== transaction.id) { throw new Error(`Invalid transaction hash: ${transaction.id} !== ${expectedID}`); }
     }
 
-    /** ==> First validation, low computation cost.
-     * 
-     * - control format of : amount, address, rule, version, TxID, UTXOs spendable
+    /** ==> First validation, low computation cost. - control format of : amount, address, rule, version, TxID, UTXOs spendable
      * @param {Object<string, UTXO>} involvedUTXOs
      * @param {Transaction} transaction
      * @param {boolean} specialTx - 'miner' || 'validator' or false
-     * @param {number} nodeVersion
-     */
+     * @param {number} nodeVersion */
     static isConformTransaction(involvedUTXOs, transaction, specialTx, nodeVersion) {
         if (!transaction) { throw new Error(`missing transaction: ${transaction}`); }
         if (typeof transaction.id !== 'string') { throw new Error('Invalid transaction ID !== string'); }
@@ -81,7 +76,7 @@ export class TxValidation {
             const utxo = involvedUTXOs[anchor];
             if (!utxo) { throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${anchor}`); }
             if (utxo.spent) { throw new Error(`Invalid transaction: UTXO already spent: ${anchor}`); }
-            if (utxo.rule === 'SigOrSlash') { throw new Error(`Invalid transaction: SigOrSlash UTXO cannot be spend: ${anchor}`); }
+            if (utxo.rule === 'sigOrSlash') { throw new Error(`Invalid transaction: sigOrSlash UTXO cannot be spend: ${anchor}`); }
         }
     }
     /** @param {TxOutput} txOutput */
@@ -103,9 +98,7 @@ export class TxValidation {
      * --- NO COINBASE OR FEE TRANSACTION ---
      * - control : input > output
      * - control the fee > 0 or = 0 for miner's txs
-     * @param {Object<string, UTXO>} involvedUTXOs
-     * @param {Transaction} transaction
-     */
+     * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction */
     static calculateRemainingAmount(involvedUTXOs, transaction) {
         // AT THIS STAGE WE HAVE ENSURED THAT THE TRANSACTION IS CONFORM
 
@@ -127,11 +120,8 @@ export class TxValidation {
         return fee;
     }
 
-    /** ==> Fourth validation, low computation cost.
-     * 
-     * - control the right to create outputs using the rule
-     * @param {Transaction} transaction
-     */
+    /** ==> Fourth validation, low computation cost. - control the right to create outputs using the rule
+     * @param {Transaction} transaction */
     static controlTransactionOutputsRulesConditions(transaction) { //TODO: NOT SURE IF WE CONSERVE THIS
         for (let i = 0; i < transaction.outputs.length; i++) {
             const inRule = transaction.inputs[i] ? transaction.inputs[i].rule : undefined;
@@ -144,12 +134,8 @@ export class TxValidation {
         }
     } // NOT SURE IF WE CONSERVE THIS
 
-    /** ==> Fifth validation, medium computation cost.
-     * 
-     * - control the signature of the inputs
-     * @param {MemPool} memPool
-     * @param {Transaction} transaction
-     */
+    /** ==> Fifth validation, medium computation cost. - control the signature of the inputs
+     * @param {MemPool} memPool @param {Transaction} transaction */
     static async controlAllWitnessesSignatures(memPool, transaction) {
         //const startTime = Date.now();
         if (!Array.isArray(transaction.witnesses)) { throw new Error(`Invalid witnesses: ${transaction.witnesses} !== array`); }

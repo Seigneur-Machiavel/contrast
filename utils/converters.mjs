@@ -389,7 +389,7 @@ export const convert = {
     /** @param {number} num - Integer to convert to readable change */
     formatNumberAsCurrencyChange: (num) => {
         const prefix = num < 0 ? '-' : '+';
-        return `${prefix}${Convert.formatNumberAsCurrency(Math.abs(num))}`;
+        return `${prefix}${convert.formatNumberAsCurrency(Math.abs(num))}`;
     }
 };
 
