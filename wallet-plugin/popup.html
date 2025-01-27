@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="./popup-styles.css">
+
+    <!-- <script src="../scripts/bip39-3.1.0.js"></script> useless ? -->
+    <script src="./scripts/modulesLoader.mjs" type="module"></script>
+    <script src="./dist(do not modify)/libs/anime.min.js"></script>
+    <script src="./dist(do not modify)/libs/msgpack.min.js"></script>
+    <script src="./scripts/htmlAnimations.mjs"></script>
+    
+    <script src="./scripts/pattern-generator.js"></script>
+    <script src="./scripts/classes.js"></script>
+    <script src="./scripts/popup.js" defer></script>
+
+    <link rel="stylesheet" href="./dist(do not modify)/node/front/explorerWidget.css">
+    <script src="./dist(do not modify)/node/front/explorerScript.mjs" type="module" defer></script>
+    
+    <title>Authentification</title>
+</head>
+<body>
+    <div id="popUpExplorer" class="hidden">
+        <div id="cbe-contrastBlocksWidget"></div>
+        <div id="txHistoryWrap" class="cbe-TxHistoryWrap cbe-unfolded">
+            <table class="cbe-TxHistoryTable cbe-Table">
+                <thead>
+                    <tr>
+                        <th>Amount</th>
+                        <th>Fee</th>
+                        <th>Block:Transaction-ID</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="w-addressTxRow">
+                        <td class="w-addressTxAmount">+19.544084</td>
+                        <td class="w-addressTxFee">0.000000</td>
+                        <td class="w-addressTxReference">116:b8d77a4f</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="txHistoryHeader">
+                <h2>Transaction history: <span id="txHistoryAddress"></span></h2>
+            </div>
+        </div>
+    </div>
+    <div id="popUpContent">
+        <div class="wrap">
+            <div id="appTitle" class="appTitle">
+                <h1 class="ml3">CONTRAST</h1>
+                <!--<span class="titleSufix">BETA</span>-->
+            </div>
+            <canvas id="welcomeCanvas"></canvas>
+            <canvas id="welcomeCanvas2"></canvas>
+            
+            <div class="centerScreenBtnContrainer">
+                <div id="centerScreenBtnWrap">
+                    <div class="wrap">
+                        <svg id="pickAxe" class="invisible" xmlns="http://www.w3.org/2000/svg" enable-background="new 0 0 512 512" viewBox="0 0 512 512"><path fill="plum" d="M457.489 110.294l-40.171 40.172-55.785-55.785 40.171-40.172c8.651-8.651 22.678-8.651 31.329 0l24.456 24.456C466.14 87.616 466.14 101.643 457.489 110.294zM60.872 503.748c93.853-117.572 201.207-223.858 319.746-316.544l-55.824-55.823C232.11 249.92 125.823 357.274 8.252 451.127c-9.082 7.25-10.954 20.406-3.989 29.708 7.679 10.255 16.646 19.223 26.901 26.901C40.466 514.702 53.622 512.83 60.872 503.748z"></path><path d="M60.902,503.733c-7.265,9.094-20.424,10.974-29.721,4.014c-7.824-5.894-14.937-12.498-21.237-19.916c2.236,2.032,4.573,3.861,7.011,5.69c9.298,6.96,22.457,5.081,29.722-4.014c93.839-117.515,201.192-223.852,319.723-316.574l14.226,14.226C262.094,279.88,154.69,386.167,60.902,503.733z" opacity=".08"></path><path fill="#e5e3e5" d="M491.465,387.773c-3.621,6.016-12.882,3.479-13.209-3.536c-3.473-74.56-53.263-152.659-125.55-224.946S202.321,37.215,127.761,33.742c-7.014-0.327-9.552-9.588-3.536-13.209C199.173-24.575,321.464,6.266,413.598,98.4S536.574,312.825,491.465,387.773z"></path><path fill="#f2f0f0" d="M454.931,141.335l-63.945,63.945c-5.612,5.612-14.711,5.612-20.322,0l-63.945-63.945c-5.612-5.612-5.612-14.711,0-20.322l63.945-63.945c5.612-5.612,14.711-5.612,20.322,0l63.945,63.945C460.543,126.624,460.543,135.723,454.931,141.335z"></path><path fill="#fff" d="M73.901,429.251l-13.968,13.968c-2.669,2.669-6.996,2.669-9.665,0h0c-2.669-2.669-2.669-6.996,0-9.665l13.968-13.968c2.669-2.669,6.996-2.669,9.665,0h0C76.57,422.255,76.57,426.582,73.901,429.251z" opacity=".4"></path><path fill="#e5e3e5" d="M383.775 105.361c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C387.195 96.398 387.195 101.941 383.775 105.361zM419.02 140.605c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C422.439 131.643 422.439 137.186 419.02 140.605z"></path><g><path fill="#e5e3e5" d="M354.976 134.16c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C358.395 125.197 358.396 130.74 354.976 134.16zM390.221 169.405c-3.42 3.42-8.927 3.384-12.346-.036-3.42-3.42-3.456-8.927-.036-12.346 3.42-3.42 8.963-3.419 12.382 0C393.64 160.442 393.64 165.985 390.221 169.405z"></path></g></svg>
+                        <div id="centerScreenBtn">
+                            <div class="lockCircle">
+                                <!--<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                                    <path d="M 30 5 Q 50 0 70 5"/>
+                                </svg>-->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+    
+            <form id="waitingForConnectionForm" class="hidden">
+                <h2>Waiting for connection...</h2>
+                <div class="loadingSvgDiv"></div>
+            </form>
+    
+            <form id="passwordCreationForm" class="hidden">
+                <input type="password" placeholder="Password" autocomplete="off">
+                <input type="password" placeholder="Confirm password" autocomplete="off">
+                <button type="submit">Set password</button>
+            </form>
+    
+            <form id="loginForm" class="hidden">
+                <input type="password" placeholder="Password" autocomplete="off">
+                <button type="submit" class="classy">UNLOCK</button>
+                <p class="textInfo"></p>
+            </form>
+
+            <form id="createWalletForm" class="hidden">
+                <h1>Wallet creation</h1>
+                <input id="privateKeyHexInput" placeholder="Private key" autocomplete="off">
+                <button id="randomizeBtn">Randomize</button>
+                <button id="confirmPrivateKeyBtn" class="disabled">Confirm</button>
+                <p class="textInfo"></p>
+            </form>
+
+            <form id="mnemonicOverviewForm" class="hidden">
+                <h1>Mnemonic (seedphrase)</h1>
+                <div id="mnemonicOverview"></div>
+                <button id="mnemonicOverviewBtn">My key is securely stored</button>
+            </form>
+
+            <form id="walletForm" class="hidden">
+                <div class="miniFormsWrap">
+                    <div id="spendMiniForm" class="miniFold">
+                        <button class="foldBtn"></button>
+                        <p class="textInfo"></p>
+                        <h2>sender: <span class="senderAddress"></span></h2>
+                        <input class="amountInput" type="text" placeholder="Amount to send">
+                        <input type="text" placeholder="Receiver address">
+                        <button class="sendBtn holdBtn"><div>Send</div></button>
+                    </div>
+                    <div id="stakeMiniForm" class="miniFold">
+                        <p class="textInfo"></p>
+                        <button class="foldBtn"></button>
+                        <h2>sender: <span class="senderAddress"></span></h2>
+                        <input class="amountInput" type="text" placeholder="Amount to stake">
+                        <input type="text" placeholder="Receiver address" style="display: none;">
+                        <button class="stakeBtn holdBtn"><div>Stake</div></button>
+                    </div>
+                </div>
+                <h1><span id="spendableBalanceStr">0.00</span>c</h1>
+                <h2 class="stakedBalance">Staked: <span id="stakedStr">0.00</span>c</h2>
+                <div class="buttonBar">
+                    <!--<button><div class="btnBackground"></div><img src="../images/qr-code32.png" alt="Receive">Receive</button>-->
+                    <button id="buttonBarSend"><div class="btnBackground"></div><img src="../images/send32.png" alt="Send">Send</button>
+                    <button id="buttonBarStake"><div class="btnBackground"></div><img src="../images/stake64.png" alt="Stake">Stake</button>
+                    <button id="buttonBarSwap" class="disabled"><div class="btnBackground"></div><img src="../images/swap32.png" alt="Swap">Swap</button>
+                    <button id="buttonBarSpecial" class="disabled"><div class="btnBackground"></div><img src="../images/specialtx64.png" alt="Swap">Special</button>
+                </div>
+                <div class="wrap">
+                    <div id="accountsWrap">
+                        <!--<div class="accountLabel">
+                            <div class="accountImgWrap">
+                                <div></div>
+                                <div></div>
+                                <img src="../images/qr-code32.png" alt="Account">
+                            </div>
+                            <div class="accountLabelInfoWrap">
+                                <div class="accountLabelNameAndValueWrap">
+                                    <h2>Account 1</h2>
+                                    <h3>0.00c</h3>
+                                </div>
+                                <div class="accountLabelAddress">
+                                    <h3>WKDEJFIUHESVUOHEIUEF</h3>
+                                </div>
+                            </div>
+                        </div>-->
+                        <button id="newAddressBtn">+</button>
+                    </div>
+                </div>
+                <p class="textInfo"></p>
+            </form>
+    
+            <form id="settingsForm" class="hidden">
+                <p class="textInfo"></p>
+                <button id="changePasswordBtn" style="display: none;">Change password</button>
+                <button id="deleteDataBtn" class="holdBtn"><div>Delete data</div></button>
+                <!--<div class="inlineCheckBox">
+                    <label>
+                        <input id="autoCloudSync" type="checkbox" name="cloudSyncOption" value="autoCloudSync" checked>
+                        Cloud synchronization
+                    </label>
+                </div>-->
+            </form>
+    
+            <div id="bottomBar" class="bottomBar">
+                <!--<button id="explorerBtn"><img src="../images/explorer96.png" alt="Explorer"></button>-->
+                <button id="explorerBtn"><div class="icon"></div></button>
+                <button id="walletBtn"><img src="../images/wallet128.png" alt="Wallet"></button>
+                <button id="settingsBtn"><img src="../images/settings48.png" alt="Settings"></button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

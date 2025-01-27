@@ -1,0 +1,2 @@
+node build.mjs
+pause

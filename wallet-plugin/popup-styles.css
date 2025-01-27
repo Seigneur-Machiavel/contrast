@@ -1,0 +1,994 @@
+:root {
+    --color1: white;
+    --color2: black;
+    --color3: #4f4f4f; /* to delete, use opacity instead */
+
+    --primary-color: #f2f8ff;
+    --secondary-color: #b9d9f3;
+
+    --invalid-color: indianred;
+    --valid-color: cornflowerblue;
+    --correct-color: green;
+
+    /* EXPLORER CUSTOMIZABLE CSS */
+    --cbe-widget-margin: 0%;
+    --cbe-color4: #787878;
+    --cbe-color3: #4f4f4f;
+
+    --cbe-widget-padding: 22.6px 10px;
+    --inner-height: 140px;
+    --wrap-border-radius: 0px;
+    /*--search-menu-width: calc(370px - 12px);*/
+}
+
+@font-face {
+    font-family: 'Contrast'; /* Nom que vous donnez à votre police */
+    src: url('./dist(do not modify)/fonts/vertopal.com_Contrast\ V0.89.ttf') format('truetype'); /* Chemin relatif ou absolu vers le fichier de police */
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    box-shadow: inset 0 0 5px gray;
+    border-radius: 2px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--color1);
+    border-radius: 2px;
+}
+html {
+    overflow: hidden;
+}
+body {
+    /*overflow: hidden;*/
+    font-family: monospace;
+    color: var(--color2);
+    background: var(--color1);
+    margin: 0;
+    height: 402px;
+}
+h1, h2 {
+    color: var(--color2);
+}
+#welcomeCanvas {
+    position: absolute;
+    margin-top: 0px;
+    margin-left: 50%;
+    transform: translate(-50%, -10%) scale(.9);
+    opacity: 0;
+    filter: blur(4px);
+    transition: opacity 1.2s ease-in-out, filter .6s .6s ease-in-out;
+
+    /* TEST MORPHING */
+    transition: background-image 1s ease-in-out, transform .6s ease-in-out;
+    background-repeat: no-repeat;
+    background-position: 50%;
+}
+#welcomeCanvas2 {
+    position: fixed;
+    /*top: 10px;*/
+    top: 0;
+}
+#loginForm, #passwordCreationForm {
+    position: absolute;
+    z-index: 1;
+    height: initial;
+    bottom: 0;
+    margin-bottom: 20px;
+}
+
+#popUpExplorer {
+    z-index: 3;
+    position: absolute;
+    height: 100%;
+    opacity: 1;
+    transition: opacity 0.12s ease-in-out;
+    /*overflow: hidden;*/
+}
+#cbe-contrastBlocksWidget {
+    z-index: 2;
+    background: linear-gradient(90deg, var(--color1) 80%, transparent 200%) !important;
+    filter: brightness(1);
+    width: calc(100% - 20px);
+    box-shadow: 0px 0px 0px 0px var(--color2);
+}
+#cbe-contrastBlocksWidget.focused {
+
+}
+#explorerBtn .icon {
+    pointer-events: none;
+    /*width: 32px;
+    height: 32px;*/
+    background-image: url(../images/explorer96.png);
+    background-size: 32px;
+    filter: brightness(0.4);
+    transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out, background-image 0.12s ease-in-out;
+}
+#explorerBtn.explorerOpenned .icon {
+    background-image: url(../images/arrow-right96.png);
+}
+#explorerBtn.active:hover .icon {
+    transform: scale(1.02);
+    filter: brightness(1);
+    filter: brightness(1) drop-shadow(0px 0px 2px rgba(255, 255, 255, .2));
+}
+
+#txHistoryWrap {
+    border-top: 3px solid var(--cbe-color2, var(--cbe-color2-default));
+    /*height: -webkit-fill-available;*/
+    max-height: 271px;
+    background: var(--color1);
+}
+.txHistoryHeader {
+    display: none;
+}
+.txHistoryHeader h2 {
+    text-align: center;
+    color: var(--cbe-color2, var(--cbe-color2-default));
+}
+#txHistoryWrap table {
+    padding: 0;
+    background: var(--color2) content-box;
+}
+#txHistoryWrap table thead {
+    color: var(--cbe-color3);
+    font-weight: bolder;
+}
+#txHistoryWrap table thead tr th {
+    color: var(--color1);
+}
+
+#txHistoryWrap table thead tr th, #txHistoryWrap table tbody tr td {
+    padding: 0 8px;
+}
+.w-addressTxRow {
+    cursor: pointer;
+    background: linear-gradient(90deg, var(--color1) -100%, var(--color1) 200%);
+}
+.w-addressTxRow:hover {
+    background: linear-gradient(90deg, var(--color2) 0%, var(--color1) 10%, var(--color2) 20%);
+    background-position: 50% 100%;
+    animation: lineHover .4s ease-in-out forwards;
+}
+@keyframes lineHover {
+    0% { /* A WHITE BAR */
+        background-size: 0% 100%;
+    }
+    90% {
+        background-size: 2% 100%;
+    }
+    100% { /* A BLACK BAR */
+        background-size: 200% 100%;
+    }
+}
+.w-addressTxRow:hover td, .w-addressTxRow:hover th {
+    color: var(--color1);
+}
+/*.w-addressTxAmount, .w-addressTxFee, .w-addressTxReference {
+
+}*/
+
+#popUpContent {
+    z-index: 2;
+    background: var(--color1);
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 302px;
+    height: 100%;
+}
+#popUpContent.large {
+    width: 322px;
+}
+#popUpContent .wrap {
+    /*height: -webkit-fill-available !important;*/
+}
+
+.input-range {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 10px 0;
+    height: 12px;
+    background: plum;
+    opacity: 0.7;
+}
+.input-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: rgb(127, 127, 127);
+    cursor: pointer;
+    border-radius: 50%;
+  }
+.wrap {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.hidden {
+    display: none !important;
+}
+@keyframes blink {
+    0% {
+        opacity: .8;
+        scale: 1;
+    }
+    50% {
+        opacity: 1;
+        scale: 1.02;
+    }
+    100% {
+        opacity: .8;
+        scale: 1;
+    }
+}
+@keyframes textColorBlink {
+    0% {
+        color: var(--color2);
+    }
+    10% {
+        color: var(--color3);
+    }
+    40% {
+        color: var(--color2);
+    }
+    100% {
+        color: var(--color2);
+    }
+}
+.appTitle {
+    position: absolute;
+    z-index: 1;
+    font-family: 'Contrast', sans-serif;
+    text-align: center;
+    width: 100%;
+    height: 58px;
+    border-bottom-style: solid;
+    border-width: 3px;
+    border-color: var(--color2);
+    transition: color 0.12s ease-in-out;
+    background: var(--color1);
+}
+.appTitle h1 {
+    color: var(--color2);
+    padding-top: 6px;
+}
+.ml3 {
+    font-weight: 600;
+    font-size: 26px;
+    margin: 10px 0;
+}
+.ml3 .letter {
+    opacity: 0;
+}
+.appTitle .titleSufix {
+    position: absolute;
+    margin-left: 74%;
+    top: 10%;
+    left: 0;
+    font-size: 12px;
+    color: var(--color3);
+}
+form {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    height: calc(100% - 50.8px);
+}
+input {
+    width: 236px;
+    height: 40px;
+    border-radius: 10px;
+    border-style: none;
+    margin-bottom: 10px;
+    font-size: large;
+    text-align: center;
+    background-color: var(--color2);
+    color: var(--color1);
+}
+input.wrong {
+    border: 2px solid red;
+    animation: shake 0.5s;
+}
+input:focus {
+    outline: none;
+}
+@keyframes shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    50% { transform: translateX(10px); }
+    75% { transform: translateX(-10px); }
+    100% { transform: translateX(0); }
+}
+button {
+    cursor: pointer;
+    width: 240px;
+    height: 42px;
+    border-style: none;
+    border-radius: 10px;
+    font-size: large;
+    background: var(--color2);
+    transition: transform .08s ease-in-out;
+    color: var(--color1);
+}
+/*button:not(.disabled):hover {
+    transform: scale(1.02);
+}*/
+button.disabled {
+    background-color: var(--color2);
+    color: #c1c1c1;
+    cursor: not-allowed;
+}
+button.classy {
+    border: 1px solid transparent;
+    background: linear-gradient(120deg, var(--color2) 0%, var(--color2) 258%) padding-box, white;
+    background-size: .01% 100%;
+    background-position: 50% 100%;
+    font-family: 'Contrast', sans-serif;
+    font-size: large;
+    padding-top: 5px;
+}
+button.classy.clicked:not(.disabled) {
+    border: 2px solid transparent;
+    background: linear-gradient(120deg, var(--color2) 0%, var(--color2) 258%) padding-box, linear-gradient(269deg, #fdfdfd, #9e9e9e, var(--primary-color), #3d3d3d, #000000);
+    background-size: .01% 100%;
+    background-position: 50% 100%;
+    animation: classyBtnAnimation .8s linear forwards;
+}
+@keyframes classyBtnAnimation {
+    0% {
+        background-size: .01% 100%;
+        filter: blur(1px) brightness(1.6);
+    }
+    30% {
+        background-size: 5% 100%;
+        filter: blur(2px) brightness(1);
+    }
+    40% {
+        background-size: 10% 100%;
+        filter: blur(0px);
+    }
+    100% {
+        background-size: 103% 100%;
+        filter: blur(0px);
+    }
+}
+#waitingForConnectionForm h2 {
+    animation: blink 1s infinite;
+}
+.loadingSvgDiv {
+    width: 240px;
+    height: 42px;
+}
+.textInfo {
+    text-align: center;
+    font-weight: bold;
+    font-size: 14px;
+    animation: blink 1s infinite;
+    height: 32px;
+    width: 100%;
+    margin: 0;
+}
+.buttonBar {
+    display: flex;
+    justify-content: space-between;
+    width: 84%;
+    margin: 10px 0px;
+    border-bottom: solid #80808024 1px;
+    padding: 0 0 10px 0;
+}
+.buttonBar button {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-around;
+    width: 56px;
+    height: 56px;
+    border-radius: 10px;
+    font-size: small;
+    border-style: none;
+    cursor: pointer;
+    transition: background .12s ease-in-out, transform 0.12s ease-in-out, box-shadow .04s ease-in-out, color .18s .12s;
+    padding: 0;
+    box-shadow: 3px 2px 5px var(--neumo-color1), -2px -2px 4px var(--neumo-color2);
+    font-weight: bold;
+
+    background: var(--color2);
+    color: var(--color1);
+}
+.buttonBar button:not(.disabled):hover {
+    transform: none !important;
+    box-shadow: -2px -2px 7px -4px white, 1px 1px 10px -6px var(--primary-color);
+
+    background: var(--color1);
+    color: var(--color2);
+}
+.buttonBar button.disabled {
+    opacity: .6;
+    cursor: initial;
+    filter: brightness(0.8);
+    box-shadow: 3px 2px 5px var(--neumo-color2), -2px -2px 4px var(--neumo-color1);
+}
+.buttonBar button img {
+    pointer-events: none;
+    width: 24px;
+    filter: invert(0) drop-shadow(4px 3px .8px rgba(0, 0, 0, .2)) drop-shadow(-3px -1px .6px rgba(255, 255, 255, .06));
+    transform: translateY(5px);
+}
+.buttonBar button:not(.disabled):hover img {
+    /*box-shadow: 6px 3px 7px var(--neumo-color1), -5px -3px 8px var(--neumo-color2);*/
+    filter: invert(1) brightness(1) drop-shadow(-3px -1px .6px rgba(0, 0, 0, .2)) drop-shadow(4px 3px .8px rgba(255, 255, 255, .06));
+    transform: skew(-1deg, -.4deg) translateY(4px);
+    transition: filter 0.12s .12s ease-in-out, transform 0.12s ease-in-out;
+}
+.btnBackground {
+    pointer-events: none;
+    /*cursor: pointer;*/
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    background-color: transparent;
+    background: linear-gradient(135deg, var(--neumo-color1) 0%, var(--neumo-color2) 85%);
+    opacity: 0.5;
+    transition: background 0.28s ease-in-out, transform 0.12s ease-in-out, opacity 0.12s ease-in-out;
+}
+.buttonBar button:not(.disabled):hover .btnBackground {
+    background: linear-gradient(-45deg, var(--neumo-color1) 25%, var(--neumo-color2) 85%);
+    /*background: var(--primary-color);*/
+    transform: scale(1.02);
+    opacity: 0.1;
+}
+
+#walletForm .miniFormsWrap {
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+#walletForm .wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    /*height: 222px !important;*/
+    height: 166px !important;
+}
+#walletForm .textInfo {
+    position: absolute;
+    bottom: 44px;
+    opacity: 0;
+}
+#accountsWrap {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    padding-bottom: 10px;
+    height: 100%;
+    width: 100%;
+    box-shadow: inset 0px 0px 14px -11px black;
+}
+.accountLabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: var(--color1);
+    margin-top: 10px;
+    padding: 2px 12px;
+    border-radius: 10px;
+    transition: box-shadow .12s .06s ease-in-out;
+    width: 86%;
+    box-shadow: inset 0px 0px 6px -4px var(--color2), -.2px -.2px 0px 1px var(--color2);
+}
+.accountLabel.active {
+    box-shadow: inset -1px -1px 8px -6px var(--color2), .2px .2px 0px 2px var(--color2);
+}
+.accountLabel .accountImgWrap {
+    cursor: pointer;
+    position: relative;
+    width: 52px;
+    height: 52px;
+    filter: invert(0);
+    transition: filter 0.12s ease-in-out;
+}
+.accountLabel .accountImgWrap:hover {
+    /*transform: scale(1.02);*/
+    filter: invert(.5);
+}
+.accountLabel .accountImgWrap div {
+    pointer-events: none;
+    position: absolute;
+    border-radius: 50%;
+    box-shadow: inset 3px 3px 10px var(--neumo-color1), inset -5px -5px 10px var(--neumo-color2);
+    width: 100%;
+    height: 100%;
+    transition: box-shadow 0.12s ease-in-out;
+}
+.accountLabel .accountImgWrap:hover div {
+    box-shadow: inset 0px 0px 10px var(--neumo-color1), inset 0px 0px 10px var(--neumo-color2);
+    transition: box-shadow 0.12s ease-in-out;
+}
+.accountLabel.active .accountImgWrap {
+    filter: invert(1);
+}
+.accountLabel.active .accountImgWrap div:first-child {
+    animation: spinTransformGlowShadowA 9.9s infinite alternate-reverse cubic-bezier(.71,.93,.86,.7) !important
+}
+.accountLabel.active .accountImgWrap div {
+    display: none !important;
+    animation: spinTransformGlowShadowB 10.9s infinite alternate cubic-bezier(.08,.62,.86,.42);
+}
+@keyframes spinTransformGlowShadowA {
+    0% {
+        box-shadow: 0px 0px 4px var(--color1);
+        transform: rotate(0deg) skew(0deg, 14deg) scale(.8);
+        filter: brightness(1) drop-shadow(0px 2px 1px var(--color2)) blur(1px);
+    }
+    40% {
+        box-shadow: 0px 2px 8px var(--color1);
+        transform: rotate(216deg) skew(2deg, 0deg) scale(.76);
+        filter: brightness(.8) drop-shadow(0px 0px 2px var(--color2)) blur(1.05px);
+    }
+    50% {
+        box-shadow: 3px 2px 6px var(--color1);
+        transform: rotate(144deg) skew(4deg, 2deg) scale(.8);
+        filter: brightness(.6) drop-shadow(2px 2px 3px var(--color2)) blur(1.2px);
+    }
+    60% {
+        box-shadow: 5px 2px 2px var(--color1);
+        transform: rotate(216deg) skew(2deg, 4deg) scale(.86);
+        filter: brightness(1) drop-shadow(0px 0px 4px var(--color2)) blur(1.35px);
+    }
+    70% {
+        box-shadow: 1px 2px 2px var(--color1);
+        transform: rotate(288deg) skew(0deg, 2deg) scale(.8);
+        filter: brightness(1.15) drop-shadow(0px 2px 5px var(--color2)) blur(2.5px);
+    }
+    100% {
+        box-shadow: 5px 0px 3px var(--color1);
+        transform: rotate(144deg) skew(14deg, 2deg) scale(.92); 
+        filter: brightness(.9) drop-shadow(0px 2px 10px var(--color2)) blur(3px);
+    }
+}
+@keyframes spinTransformGlowShadowB {
+    0% {
+        box-shadow: 0px 0px 4px var(--color1);
+        transform: rotate(0deg) skew(0deg, 0deg) scale(.92);
+        filter: brightness(1) drop-shadow(0px 2px 1px var(--color2)) blur(1px);
+    }
+    20% {
+        box-shadow: 0px 2px 2px var(--color1);
+        transform: rotate(72deg) skew(0deg, 0deg) scale(.8);
+        filter: brightness(.8) drop-shadow(0px 0px 2px var(--color2)) blur(1.05px);
+    }
+    40% {
+        box-shadow: 3px 2px 1px var(--color1);
+        transform: rotate(144deg) skew(2deg, 7deg) scale(.86);
+        filter: brightness(.6) drop-shadow(2px 2px 3px var(--color2)) blur(1.2px);
+    }
+    60% {
+        box-shadow: 5px 2px 2px var(--color1);
+        transform: rotate(216deg) skew(2deg, -20deg) scale(.86);
+        filter: brightness(0.3) drop-shadow(0px 0px 4px var(--color2)) blur(1.35px);
+    }
+    80% {
+        box-shadow: 1px 2px 2px var(--color1);
+        transform: rotate(288deg) skew(0deg, 2deg) scale(.9);
+        filter: brightness(.8) drop-shadow(0px 2px 5px var(--color2)) blur(2.5px);
+    }
+    100% {
+        box-shadow: 2px 0px 3px var(--color1);
+        transform: rotate(360deg) scale(.82);
+        filter: brightness(.9) drop-shadow(0px 2px 10px var(--color2)) blur(3px);
+    }
+}
+.accountLabel .accountImgWrap canvas {
+    pointer-events: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    filter: blur(.4px) brightness(.9);
+    transition: box-shadow 0.12s ease-in-out, filter 0.12s ease-in-out;
+}
+.accountLabel.active .accountImgWrap canvas {
+    box-shadow: 0px 0px 1px 2px var(--color1);
+    filter: blur(0px) brightness(1);
+    animation: brightnessGlow 2s infinite;
+}
+@keyframes brightnessGlow {
+    0% {
+        filter: brightness(1.06);
+    }
+    40% {
+        filter: brightness(1.27);
+    }
+    100% {
+        filter: brightness(.96);
+    }
+}
+.accountLabelInfoWrap {
+    pointer-events: none;
+    width: calc(100% - 64px);
+}
+.accountLabelNameAndValueWrap {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2px;
+}
+.accountLabelNameAndValueWrap h2 {
+    pointer-events: all;
+    color: var(--color2);
+    opacity: .7;
+}
+.accountLabelNameAndValueWrap h3 {
+    pointer-events: all;
+    color: var(--color2);
+}
+.accountLabelAddress {
+    display: flex;
+    justify-content: flex-end;
+}
+.accountLabelAddress h3 {
+    pointer-events: all;
+    color: var(--color2);
+    text-align: right;
+    font-size: 1.6em;
+    margin: 0 0 4px 0;
+    opacity: .6;
+}
+#newAddressBtn {
+    position: relative;
+    margin-top: 6px;
+    width: 34px;
+    height: 34px;
+    background: var(--color2);
+    color: var(--color1);
+    font-size: 24px;
+    border-radius: 12px;
+    transition: width .12s;
+}
+#newAddressBtn:hover {
+    background: var(--neumo-color2);
+    color: var(--color2);
+}
+#newAddressBtn.loading {
+    border: 2px solid transparent;
+    background: linear-gradient(120deg, var(--color1) 0%, rgba(0, 0, 0, 1) 258%) padding-box, linear-gradient(269deg, #fdfdfd, #9e9e9e, var(--primary-color), #3d3d3d, #000000);
+    background-size: .01% 100%;
+    background-position: 50% 100%;
+    animation: loadingBtnBorderAnimation 2s alternate infinite;
+}
+@keyframes loadingBtnBorderAnimation {
+    0% {
+        background-size: 1% 100%;
+        background-position: 50% 100%;
+    }
+    100% {
+        background-size: 103% 100%;
+        background-position: 50% 100%;
+    }
+}
+
+#createWalletForm {
+    height: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#createWalletForm h1 {
+    margin: 30px 0;
+}
+#createWalletForm button:not(:last-child) {
+    margin: 0 0 20px 0;
+}
+
+#walletForm {
+
+}
+#spendMiniForm, #stakeMiniForm {
+    pointer-events: all;
+    z-index: 1;
+    position: absolute;
+    top: 0;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    height: 185px;
+    margin: 0;
+    margin-top: 25px;
+    /*transform: translateX(100%);*/
+    box-shadow: -1px 0px 10px 2px rgb(0 0 0 / 50%);
+    /*overflow: hidden;*/
+    transform: rotateY(60deg) translateX(-160%);
+    opacity: 0;
+    background-color: var(--color1);
+    flex-direction: column;
+    align-items: center;
+}
+#spendMiniForm .textInfo, #stakeMiniForm .textInfo {
+    position: absolute;
+    opacity: 0;
+    top: 14px;
+    width: 80%;
+    background: var(--color1);
+    animation: textColorBlink 1s infinite;
+    transition: opacity 0.2s ease-in-out;
+}
+#spendMiniForm h2, #stakeMiniForm h2 {
+    color: var(--color2);
+}
+#spendMiniForm input, #stakeMiniForm input {
+    height: 30px !important;
+    margin: 10px 0 0 0 !important;
+}
+#spendMiniForm input:first-child, #stakeMiniForm input:first-child {
+    margin: 20px 0 0 0 !important;
+}
+#spendMiniForm button, #stakeMiniForm button {
+    font-weight: bold;
+    color: var(--neumo-color2) !important;
+    margin: 10px 0 !important;
+    background: linear-gradient(90deg, var(--color1) 0%, var(--color2) 0%);
+    transition: background 0.24s ease-in-out;
+}
+.holdBtn {
+    box-shadow: inset 0px 0px 0px 2px var(--color2);
+}
+.holdBtn div {
+    pointer-events: none;
+    mix-blend-mode: difference;
+    color: white;
+}
+#spendMiniForm button.foldBtn, #stakeMiniForm button.foldBtn {
+    position: absolute;
+    border-radius: 0 20px 30px 0;
+    left: 0px;
+    filter: brightness(.92);
+    /*background: linear-gradient(90deg, #6d6d6d, transparent);*/
+    background: linear-gradient(90deg, var(--primary-color), transparent), radial-gradient(circle, var(--primary-color) 0%, transparent 0%);
+    height: 100%;
+    width: 20px;
+    margin: 0 !important;
+    transition: filter .18s ease-in-out;
+}
+#spendMiniForm button.foldBtn img, #stakeMiniForm button.foldBtn img {
+    pointer-events: none;
+    width: 100%;
+}
+#spendMiniForm button.foldBtn:hover, #stakeMiniForm button.foldBtn:hover {
+    filter: brightness(.8);
+    /*background: linear-gradient(90deg, #6d6d6d, transparent), radial-gradient(circle, var(--primary-color) -100%, transparent 100%);*/
+}
+#walletForm h1 {
+    margin: 20px 0 0px 0;
+    font-size: xx-large;
+}
+.stakedBalance {
+    border-top: solid #80808024 1px;
+    margin: 10px 0 16px 0;
+    padding-top: 4px;
+    color: var(--color3);
+}
+
+
+#settingsForm {
+    justify-content: initial;
+}
+#settingsForm button {
+    height: 32px;
+    margin: 0 0 20px 0;
+    border: solid 2px var(--button-color);
+    transition: background 0.24s ease-in-out, color 0.12s ease-in-out;
+}
+#settingsForm button:hover {
+    transform: scale(1.02);
+}
+#settingsForm .textInfo {
+    /*position: absolute;*/
+    top: 0px;
+    margin: 8px 0;
+    background: var(--color1);
+    width: 100%;
+    animation: textColorBlink 1s infinite;
+}
+
+.inlineCheckBox {
+    margin-top: 20px;
+}
+.inlineCheckBox label {
+    display: flex;
+    align-items: flex-end;
+}
+.inlineCheckBox input {
+    width: 16px;
+    height: 16px;
+    margin: 0 10px 0 0;
+}
+#bottomBar {
+    display: flex;
+    align-items: center;
+    border-top-style: solid;
+    border-width: 1px;
+    border-color: #ffffff17;
+    /*padding: 6px 0;*/
+    margin: 0 4px;
+    height: 50px;
+
+    /*position: absolute;*/
+    position: relative;
+    bottom: 0;
+    width: calc(100% - 8px);
+}
+#bottomBar button {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: transparent;
+    cursor: initial;
+}
+#bottomBar button.active {
+    cursor: pointer;
+}
+#bottomBar button.active:hover {
+    background-color: var(--color2);
+}
+#bottomBar button.active:hover img {
+    transform: scale(1.02);
+    filter: brightness(1) drop-shadow(0px 0px 2px rgba(255, 255, 255, .2));
+}
+#bottomBar button img, #bottomBar button .icon {
+    pointer-events: none;
+    /*height: 70%;*/
+    height: 32px;
+    width: 32px;
+    filter: brightness(0);
+    transition: transform 0.12s ease-in-out, filter 0.12s ease-in-out;
+}
+#bottomBar .inlineCheckBox {
+    width: 220px;
+}
+
+#bottomBar button.selected {
+    animation: bottomButtonSelected .6s forwards;
+}
+@keyframes bottomButtonSelected {
+    0% {
+        box-shadow: 0px 0px 0px 0px var(--color2), inset 0px 0px 0px 0px var(--color2);
+    }
+    30% {
+        box-shadow: 0px 0px 0px 2px var(--color1), inset 0px 0px 0px 0px var(--color2);
+    }
+    60% {
+        box-shadow: 0px 0px 2px 0px var(--color2), inset 0px 0px 2px 0px var(--color2);
+    }
+    80% {
+        box-shadow: 0px 0px 6px -2px var(--color2), inset 0px 0px 8px 0px var(--color2);
+    }
+    100% {
+        box-shadow: 0px 0px 0px .6px var(--color2), inset 0px 0px 0px .6px var(--color2);
+    }
+}
+
+.inlineRange {
+    display: flex;
+    justify-content: space-around;
+    background-color: #ffffff0d;
+    padding: 10px;
+    width: -webkit-fill-available;
+    border-radius: 6px;
+}
+.inlineRange label {
+    font-size: medium;
+    font-weight: bold;
+}
+.inlineRange input {
+    width: auto;
+    margin: 3px 0 0;
+}
+
+/* Center Screen Button - Visual only */
+.centerScreenBtnContrainer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 200px;
+    filter: drop-shadow(-2px -1px 5px black) blur(.2px) brightness(1);
+    animation: centerScreenBtnContrainer 2s infinite;
+    transition: filter 0.12s ease-in-out;
+}
+@keyframes centerScreenBtnContrainer {
+    0% { filter: drop-shadow(-2px -1px 5px black) blur(.2px) brightness(1); }
+    50% { filter: drop-shadow(-1px 0px 7px black) blur(.26px) brightness(.96); }
+    100% { filter: drop-shadow(-2px -1px 5px black) blur(.2px) brightness(1); }
+}
+#centerScreenBtnWrap {
+    pointer-events: none;
+    width: 120px;
+    height: 120px;
+    filter: brightness(1.2);
+}
+#centerScreenBtnWrap.active {
+    pointer-events: none;
+    /*pointer-events: all;
+    cursor: pointer;*/
+}
+#centerScreenBtnWrap.active:hover {
+    filter: blur(.3px) brightness(1.02);
+    transform: scale(1.01);
+}
+#centerScreenBtn {
+    border-radius: 50%;
+    height: 100%;
+    width: 100%;
+
+    filter: invert(1) drop-shadow(-2px 3px 4px var(--color2));
+    background: radial-gradient(circle, rgba(207, 207, 207, 1) 0%, rgba(216, 216, 216, .8) 30%, rgba(252, 252, 252, .72) 42%, rgba(232, 232, 232, .92) 64%, rgb(236 236 236 / 50%) 72%);
+}
+#centerScreenBtn .wrap {
+    overflow: visible;
+    position: absolute;
+    /*filter: drop-shadow(0px 0px 1px rgba(0, 0, 0, .1));*/
+    filter: drop-shadow(0px 0px 1px rgba(0, 0, 0, 4));
+}
+#pickAxe {
+    pointer-events: none;
+    z-index: 1;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    margin-left: 50%;
+    transform: scale(.6) rotate(0deg) translate(20%, 0%);
+    opacity: 1;
+    transition: opacity 0.24s ease-in-out;
+}
+#pickAxe.invisible {
+    opacity: 0 !important;
+}
+.lockCircle {
+    position: absolute;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    transform: scale(.9);
+    stroke-width: 3.2px;
+}
+.lockCircle svg {
+    position: absolute;
+    overflow: visible;
+    transform: rotate(0deg);
+    width: 100%;
+    height: 100%;
+}
+#centerScreenBtn .wrap:nth-child(1) .lockCircle { transform: scale(.88); stroke-width: 3.2px; }
+#centerScreenBtn .wrap:nth-child(2) .lockCircle { transform: scale(.79); stroke-width: 3.52px; }
+#centerScreenBtn .wrap:nth-child(3) .lockCircle { transform: scale(.70); stroke-width: 3.872px; }
+#centerScreenBtn .wrap:nth-child(4) .lockCircle { transform: scale(.61); stroke-width: 4.24px; }
+#centerScreenBtn .wrap:nth-child(5) .lockCircle { transform: scale(.52); stroke-width: 4.64px; }
+#centerScreenBtn .wrap:nth-child(6) .lockCircle { transform: scale(.43); stroke-width: 5.04px; }
+#centerScreenBtn .wrap:nth-child(7) .lockCircle { transform: scale(.34); stroke-width: 5.44px; }
+.lockCircle svg path {
+    fill: none;
+    stroke: black;
+    stroke-linecap: round;
+}
+.lockCircle svg:nth-child(1) { transform: rotate(0deg); }
+.lockCircle svg:nth-child(2) { transform: rotate(60deg); }
+.lockCircle svg:nth-child(3) { transform: rotate(120deg); }
+.lockCircle svg:nth-child(4) { transform: rotate(180deg); }
+.lockCircle svg:nth-child(5) { transform: rotate(240deg); }
+.lockCircle svg:nth-child(6) { transform: rotate(300deg); }
