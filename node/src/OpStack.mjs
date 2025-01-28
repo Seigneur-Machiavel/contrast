@@ -21,7 +21,6 @@ export class OpStack {
     paused = false;
     executingTask = null;
     healthInfo = {
-        waitingForCheck: false,
         lastDigestTime: null,
         lastSyncTime: null,
         lastReorgCheckTime: null,
@@ -42,12 +41,8 @@ export class OpStack {
         const delayBetweenChecks = 10_000; // 10 second
         while (!this.terminated) {
             await new Promise(resolve => setTimeout(resolve, delayBetweenChecks));
-            //if (this.healthInfo.waitingForCheck) { continue; }
-            //this.healthInfo.waitingForCheck = true;
-            //this.pushFirst('healthCheck', null);
-
-            const now = Date.now();
             
+            const now = Date.now();
             if (this.healthInfo.lastDigestTime === null && this.healthInfo.lastSyncTime === null) { continue; }
             const lastDigestTime = this.healthInfo.lastDigestTime || 0;
             const lastSyncTime = this.healthInfo.lastSyncTime || 0;
@@ -178,17 +173,24 @@ export class OpStack {
                     const syncResult = await this.node.syncHandler.syncWithPeers();
                     this.node.syncHandler.isSyncing = false;
                     this.syncRequested = false;
-                    if (syncResult === 'Already at the consensus height') {
-                        this.node.syncAndReady = true;
-                        this.node.syncHandler.syncFailureCount = 0;
-                        this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished at #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                        this.healthInfo.lastSyncTime = Date.now();
-                        this.pushFirst('createBlockCandidateAndBroadcast', 0);
-                        break;
+                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers result: ${syncResult}, lastBlock: #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
+                    
+                    switch (syncResult) {
+                        case 'Already at the consensus height':
+                            this.node.syncAndReady = true;
+                            this.node.syncHandler.syncFailureCount = 0;
+                            this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished at #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
+                            this.healthInfo.lastSyncTime = Date.now();
+                            this.pushFirst('createBlockCandidateAndBroadcast', 0);
+                            break;
+                        case 'Verifying consensus':
+                            this.pushFirst('syncWithPeers', null);
+                            break;
+                        default:
+                            this.healthInfo.lastReorgCheckTime = Date.now();
+                            const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('syncWithPeers failed');
+                            if (reorgTasks) { this.securelyPushFirst(reorgTasks); } else { this.pushFirst('syncWithPeers', null); }
                     }
-
-                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers: ${syncResult}, lastBlock: #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                    this.pushFirst('syncWithPeers', null);
 
                     break;
                 case 'createBlockCandidateAndBroadcast':
@@ -213,40 +215,6 @@ export class OpStack {
                     this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
                     this.securelyPushFirst(reorgTasks);
                     break;
-                case 'healthCheck': // DEPRECATED
-                    this.healthInfo.waitingForCheck = false;
-                    const now = Date.now();
-            
-                    if (this.healthInfo.lastDigestTime === null && this.healthInfo.lastSyncTime === null) { break; }
-                    const lastDigestTime = this.healthInfo.lastDigestTime || 0;
-                    const lastSyncTime = this.healthInfo.lastSyncTime || 0;
-                    const lastDigestOrSyncTime = Math.max(lastDigestTime, lastSyncTime);
-                    const timeSinceLastDigestOrSync = now - lastDigestOrSyncTime;
-        
-                    if (timeSinceLastDigestOrSync > this.healthInfo.delayBeforeRestart) {
-                        this.miniLogger.log(`[OpStack] Restart requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                        this.node.restartRequested = 'OpStack.healthCheckLoop() -> delayBeforeRestart reached!';
-                        this.terminate();
-                        break;
-                    }
-        
-                    if (!this.syncRequested && timeSinceLastDigestOrSync > this.healthInfo.delayBeforeSyncCheck) {
-                        this.pushFirst('syncWithPeers', null);
-                        this.miniLogger.log(`syncWithPeers requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                        break;
-                    }
-                    
-                    const lastReorgCheckTime = this.healthInfo.lastReorgCheckTime;
-                    const timeSinceLastReorgCheck = lastReorgCheckTime ? now - lastReorgCheckTime : now - lastDigestOrSyncTime;
-                    if (timeSinceLastDigestOrSync < this.healthInfo.delayBeforeReorgCheck) { break; }
-                    if (timeSinceLastReorgCheck > this.healthInfo.delayBeforeReorgCheck) {
-                        this.healthInfo.lastReorgCheckTime = Date.now();
-                        const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('healthCheck');
-                        if (!reorgTasks) { break; }
-        
-                        this.securelyPushFirst(reorgTasks);
-                    }
-                    break;
                 default:
                     this.miniLogger.log(`[OpStack] Unknown task type: ${task.type}`, (m) => console.error(m));
             }
@@ -262,14 +230,10 @@ export class OpStack {
 
         // reorg management
         if (error.message.includes('!store!')) { this.node.reorganizator.storeFinalizedBlockInCache(block); }
-
         if (error.message.includes('!reorg!')) {
             this.healthInfo.lastReorgCheckTime = Date.now();
             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('digestPowProposal: !reorg!');
             if (reorgTasks) { this.securelyPushFirst(reorgTasks); }
-                //this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
-                //this.securelyPushFirst(reorgTasks);
-            //}
         }
 
         // ban/offenses management

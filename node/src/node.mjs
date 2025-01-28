@@ -493,9 +493,12 @@ export class Node {
 
                     const isInBlockchainCache = this.blockchain.cache.blockHeightByHash.has(data.hash);
                     const isInReorganizatorCache = this.reorganizator.isFinalizedBlockInCache(data);
-                    if (!isInBlockchainCache && !isInReorganizatorCache) { this.opStack.push('digestPowProposal', message); break; }
+                    if (!isInBlockchainCache && !isInReorganizatorCache) {
+                        this.opStack.push('digestPowProposal', message);
+                        break;
+                    }
                     
-                    this.miniLogger.log(`Already processed ${topic} #${data.index} -> skip`, (m) => { console.warn(m); });
+                    //this.miniLogger.log(`Already processed ${topic} #${data.index} -> skip`, (m) => { console.warn(m); });
                     break;
                 case 'test':
                     this.miniLogger.log(`[TEST] heavy msg bytes: ${new Uint8Array(Object.values(data)).length}`, (m) => { console.warn(m); });

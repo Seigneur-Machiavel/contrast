@@ -126,13 +126,13 @@ export class Reorganizator {
         if (!this.node.blockchain.lastBlock) { return false; }
         const legitimateReorg = await this.#getLegitimateReorg();
         if (legitimateReorg.tasks.length === 0) {
-            console.warn(`[REORGANIZATOR] Reorg: no legitimate branch > ${this.node.blockchain.lastBlock.index}`);
+            console.warn(`[REORGANIZATOR] Reorg: no legitimate branch > ${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''}`);
             return false;
         }
         
         legitimateReorg.tasks.push('reorg_end');
         legitimateReorg.tasks.unshift('reorg_start');
-        console.warn(`[REORGANIZATOR] ---( Possible Reorg )--- (from #${this.node.blockchain.lastBlock.index} ${reason ? `| ${reason}` : ''})`);
+        console.warn(`[REORGANIZATOR] ---( Possible Reorg )--- (from #${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''})`);
         return legitimateReorg.tasks;
     }
     /** @param {BlockData} finalizedBlock */

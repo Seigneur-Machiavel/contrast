@@ -62,47 +62,33 @@ export class Miner {
         if (!posReward || !powReward) { console.info(`[MINER] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`); return; }
         if (Math.abs(posReward - powReward) > 1) { console.info(`[MINER] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`); return; }
 
-        const changed = this.#setBestCandidateIfChanged(blockCandidate);
-        if (!changed) { return; }
-
-        // check if block is different than the highest block index, then reset the addressOfCandidatesBroadcasted
-        //if (blockCandidate.index > this.highestBlockIndex) { this.addressOfCandidatesBroadcasted = []; }
-        if (blockCandidate.index !== this.bestCandidateIndex()) { this.addressOfCandidatesBroadcasted = []; }
-        
-        //this.highestBlockIndex = blockCandidate.index;
-        this.bets[blockCandidate.index] = this.bets[blockCandidate.index] || this.#betPowTime();
-
-        if (this.wsCallbacks.onBestBlockCandidateChange) { this.wsCallbacks.onBestBlockCandidateChange.execute(blockCandidate); }
-    }
-    /** @param {BlockData} blockCandidate */
-    #setBestCandidateIfChanged(blockCandidate) {
         const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
-        if (blockCandidate.prevHash !== prevHash) { return false; }
+        if (blockCandidate.prevHash !== prevHash) { return; }
         
         let reasonChange = '(unknown)';
-        const missingBestCandidate = !this.bestCandidate;
-        const invalidBestPrevHash = this.bestCandidate && this.bestCandidate.prevHash !== prevHash;
-        const sameIndex = this.bestCandidate && blockCandidate.index === this.bestCandidate.index;
-
-        if (missingBestCandidate) {
+        if (!this.bestCandidate) {
             reasonChange = '(no best candidate, set first)';
         } else if (blockCandidate.index > this.bestCandidate.index) {
             reasonChange = '(replacing by higher block)';
-        } else if (invalidBestPrevHash) {
+        } else if (this.bestCandidate.prevHash !== prevHash) {
             reasonChange = '(replacing invalid prevHash)';
-        } else if (sameIndex) {
+        } else if (blockCandidate.index === this.bestCandidate.index) {
             const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate);
             const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate);
-            if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return false; }
+            if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return; }
             reasonChange = '(replacing by easier block)';
-        }
+        } else { reasonChange = '(unknown - this should not happen)'; }
 
         console.info(`[MINER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
 to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
-
+        
+        // if block is different than the highest block index, then reset the addressOfCandidatesBroadcasted
+        if (blockCandidate.index !== this.bestCandidateIndex()) { this.addressOfCandidatesBroadcasted = []; }
         this.bestCandidate = blockCandidate;
-        return true;
+        
+        this.bets[blockCandidate.index] = this.bets[blockCandidate.index] || this.#betPowTime();
+        if (this.wsCallbacks.onBestBlockCandidateChange) { this.wsCallbacks.onBestBlockCandidateChange.execute(blockCandidate); }
     }
     #betPowTime(nbOfBets = 32) {
         const bets = [];

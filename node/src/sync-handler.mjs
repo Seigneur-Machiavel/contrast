@@ -266,7 +266,7 @@ export class SyncHandler {
                     desiredBlock++;
                 } catch (blockError) {
                     this.miniLogger.log(`Sync Error while processing block #${desiredBlock}`, (m) => { console.error(m); });
-                    this.miniLogger.log(blockError, (m) => { console.error(m); });
+                    this.miniLogger.log(blockError.message, (m) => { console.error(m); });
                     return false;
                 }
             }
