@@ -358,7 +358,8 @@ export class Node {
         if (this.restartRequested) return;
         
         const timer = new BlockDigestionTimer();
-        this.#updateState(`digesting finalized block #${finalizedBlock.index}`);
+        const statePrefix = options.isSync ? '(syncing) ' : '';
+        this.#updateState(`${statePrefix}finalized block #${finalizedBlock.index}`);
     
         timer.startPhase('initialization');
         // SUPPLEMENTARY TEST (INITIAL === DESERIALIZE)
@@ -383,14 +384,14 @@ export class Node {
         let totalFees;
         if (!skipValidation) {
             timer.startPhase('block-validation');
-            this.#updateState(`block-validation #${finalizedBlock.index}`);
+            this.#updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
             validationResult = await this.#validateBlockProposal(finalizedBlock, blockBytes);
             hashConfInfo = validationResult.hashConfInfo;
             if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
             timer.endPhase('block-validation');
         }
         
-        this.#updateState(`applying finalized block #${finalizedBlock.index}`);
+        this.#updateState(`${statePrefix}applying finalized block #${finalizedBlock.index}`);
         timer.startPhase('add-confirmed-block');
         if (!skipValidation && !hashConfInfo?.conform) throw new Error('Failed to validate block');
         const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);

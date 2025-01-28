@@ -130,13 +130,12 @@ export class OpStack {
             switch (task.type) {
                 case 'pushTransaction':
                     try {
-                        await this.node.memPool.pushTransaction(this.node.utxoCache, content); 
+                        await this.node.memPool.pushTransaction(this.node.utxoCache, content);
                     } catch (error) {
                         if (error.message.includes('Transaction already in mempool')) { break; }
                         if (error.message.includes('Conflicting UTXOs')) { break; }
                         if (error.message.includes('UTXO not found in involvedUTXOs')) {
-                            this.miniLogger.log(error, (m) => console.error(m));
-                            this.miniLogger.log(`${content.transaction.id} -> rejecting transaction`, (m) => console.error(m));
+                            this.miniLogger.log(`${content.id} -> rejecting transaction`, (m) => console.error(m));
                             break;
                         }
 

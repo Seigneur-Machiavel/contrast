@@ -65,24 +65,15 @@ export class P2P extends EventEmitter {
             timeout: 3000
         });
         this.node = await createLibp2p({
-            addresses: { 
-                listen: [
-                    this.listenAddr,
-                    '/ip4/0.0.0.0/tcp/0' // Allow dynamic port allocation
-                ]
-            },
-            transports: [
-                tcp(),
-            ],
+            addresses: {listen: [this.listenAddr, '/ip4/0.0.0.0/tcp/0' ]},
+            transports: [tcp()],
             streamMuxers: [yamux()],
             connectionEncrypters: [noise()],
             privateKey: privateKeyObject,
             services: {
                 identify: identify({
                     protocolPrefix: '/dchat',
-                    host: {
-                        agentVersion: 'p2pchat/1.0.0'
-                    },
+                    host: { agentVersion: 'p2pchat/1.0.0' },
                     push: true
                 }),
                 pubsub: gossipsub({
