@@ -201,7 +201,12 @@ export class Node {
             const prevHash = this.blockchain.lastBlock.hash;
             const myLegitimacy = await this.vss.getAddressLegitimacy(this.account.address, prevHash);
             this.blockchainStats.lastLegitimacy = myLegitimacy;
-            if (myLegitimacy > this.vss.maxLegitimacyToBroadcast) { return null; }
+
+            let maxLegitimacyToBroadcast = this.vss.maxLegitimacyToBroadcast;
+            if (this.roles.includes('miner') && this.miner.bestCandidateIndex() === this.blockchain.lastBlock.index + 1) {
+                maxLegitimacyToBroadcast = Math.min(maxLegitimacyToBroadcast, this.miner.bestCandidateLegitimacy());
+            }
+            if (myLegitimacy > maxLegitimacyToBroadcast) { return null; }
 
             const { averageBlockTime, newDifficulty } = this.#calculateAverageBlockTimeAndDifficulty();
             this.blockchainStats.averageBlockTime = averageBlockTime;
@@ -234,7 +239,6 @@ export class Node {
             
             if (this.roles.includes('miner')) {
                 const updated = this.miner.updateBestCandidate(this.blockCandidate);
-                // if the created candidate isn't easier than the best known, don't broadcast it
                 if (!updated) { this.#updateState("idle", "creating block candidate"); return false; }
             }
             

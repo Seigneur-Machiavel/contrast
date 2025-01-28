@@ -52,8 +52,10 @@ export class Miner {
         /** @type {Object<string, WebSocketCallBack>} */
         this.wsCallbacks = {};
     }
+
     bestCandidateIndex() { return this.bestCandidate ? this.bestCandidate.index : -1; }
     bestCandidateLegitimacy() { return this.bestCandidate ? this.bestCandidate.legitimacy : 0; }
+
     /** @param {BlockData} blockCandidate */
     updateBestCandidate(blockCandidate) {
         // check if powReward is coherent
@@ -69,18 +71,24 @@ export class Miner {
         if (!this.bestCandidate) {
             reasonChange = '(no best candidate, set first)';
         } else if (blockCandidate.index > this.bestCandidate.index) {
-            reasonChange = '(replacing by higher block)';
+            reasonChange = '(replacing by higher block height)';
         } else if (this.bestCandidate.prevHash !== prevHash) {
             reasonChange = '(replacing invalid prevHash)';
         } else if (blockCandidate.index === this.bestCandidate.index) {
             const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate).finalDifficulty;
             const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate).finalDifficulty;
+            if (newCandidateFinalDiff > bestCandidateFinalDiff) { return false; };
             if (newCandidateFinalDiff < bestCandidateFinalDiff) { reasonChange = `(easier block: ${newCandidateFinalDiff} < ${bestCandidateFinalDiff})`; }
-            
-            if (reasonChange === 'none' && newCandidateFinalDiff !== bestCandidateFinalDiff) { return false; }
-            if (posReward > this.bestCandidate.Txs[0].outputs[0].amount) { reasonChange = `(higher posReward: ${posReward} > ${this.bestCandidate.Txs[0].outputs[0].amount})`; }
+            // if everything is the same, then check the powReward to decide
+            if (reasonChange === 'none' && powReward > this.bestCandidate.powReward ) {
+                reasonChange = `(higher powReward: ${powReward} > ${this.bestCandidate.powReward})`;
+            }
+            // preserve the current best candidate, but update considered as true to encourage re-bradcasting
+            if (reasonChange === 'none') { return true; }
         }
-        if (reasonChange === 'none') { return false; }
+
+        // preserve the current best candidate, but update considered as true to encourage re-bradcasting
+        if (reasonChange === 'none') { return true; }
 
         console.info(`[MINER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
