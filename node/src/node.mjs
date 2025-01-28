@@ -221,33 +221,35 @@ export class Node {
         return blockCandidate;
     }
     /** Creates a new block candidate, signs it and broadcasts it */
-    async createBlockCandidateAndBroadcast(delay = 0, awaitBroadcast = false) {
-        this.#updateState(`creating block candidate #${this.blockchain.lastBlock ? this.blockchain.lastBlock.index + 1 : 0}`);
-        if (!this.roles.includes('validator')) { return false; }
+    async createBlockCandidateAndBroadcast(delay = 0) {
+        const startHeight = this.blockchain.currentHeight;
 
-        this.blockCandidate = await this.#createBlockCandidate();
-        if (this.blockCandidate === null) { this.#updateState("idle", "creating block candidate"); return false; }
-
-        if (this.roles.includes('miner')) this.miner.updateBestCandidate(this.blockCandidate);
-
-        let broadcasted = null;
-        this.#updateState(`broadcasting block candidate #${this.blockCandidate.index} in ${delay}ms`, "creating block candidate");
         setTimeout(async () => {
+            if (startHeight !== this.blockchain.currentHeight) { return false; } // to late
+            this.#updateState(`creating block candidate #${this.blockchain.lastBlock ? this.blockchain.lastBlock.index + 1 : 0}`);
+            if (!this.roles.includes('validator')) { return false; }
+    
+            this.blockCandidate = await this.#createBlockCandidate();
+            if (this.blockCandidate === null) { this.#updateState("idle", "creating block candidate"); return false; }
+            
+            if (this.roles.includes('miner')) {
+                const updated = this.miner.updateBestCandidate(this.blockCandidate);
+                // if the created candidate isn't easier than the best known, don't broadcast it
+                if (!updated) { this.#updateState("idle", "creating block candidate"); return false; }
+            }
+            
+            this.#updateState(`broadcasting block candidate #${this.blockCandidate.index}`, "creating block candidate");
+
             try {
                 await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
-                broadcasted = true;
-                this.#updateState("idle", "broadcasting block candidate");
+                setTimeout(() => { this.#updateState("idle", "broadcasting block candidate"); }, 2000); // let time to read
 
                 const callback = this.wsCallbacks.onBroadcastNewCandidate;
                 if (callback) callback.execute(BlockUtils.getBlockHeader(this.blockCandidate));
-            } catch (error) {
-                this.miniLogger.log(`Failed to broadcast new block candidate: ${error.message}`, (m) => { console.error(m); });
-            }
+            } catch (error) { this.miniLogger.log(`Failed to broadcast new block candidate: ${error.message}`, (m) => { console.error(m); }); }
         }, delay ? delay : 0);
 
-        if (!awaitBroadcast) { return true; }
-        while (broadcasted === null) { await new Promise(resolve => setTimeout(resolve, 100)); }
-        return broadcasted;
+        return true;
     }
 
     // SNAPSHOT: LOAD/SAVE ---------------------------------------------------------------
@@ -348,7 +350,6 @@ export class Node {
     /**
      * @param {BlockData} finalizedBlock
      * @param {Object} [options] - Configuration options for the blockchain.
-     * @param {boolean} [options.skipValidation] - default: false
      * @param {boolean} [options.broadcastNewCandidate] - default: true
      * @param {boolean} [options.isSync] - default: false
      * @param {boolean} [options.persistToDisk] - default: true
@@ -374,7 +375,7 @@ export class Node {
             console.error(deserializedBlock);
             throw new Error('Invalid block signature'); }
 
-        const { skipValidation = false, broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
+        const { broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
         if (!finalizedBlock || !this.roles.includes('validator') || (this.syncHandler.isSyncing && !isSync)) 
             throw new Error(!finalizedBlock ? 'Invalid block candidate' : !this.roles.includes('validator') ? 'Only validator can process PoW block' : "Node is syncing, can't process block");
         timer.endPhase('initialization');
@@ -382,18 +383,15 @@ export class Node {
         let hashConfInfo = false;
         let validationResult;
         let totalFees;
-        if (!skipValidation) {
-            timer.startPhase('block-validation');
-            this.#updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
-            validationResult = await this.#validateBlockProposal(finalizedBlock, blockBytes);
-            hashConfInfo = validationResult.hashConfInfo;
-            if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
-            timer.endPhase('block-validation');
-        }
+        timer.startPhase('block-validation');
+        this.#updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
+        validationResult = await this.#validateBlockProposal(finalizedBlock, blockBytes);
+        hashConfInfo = validationResult.hashConfInfo;
+        if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
+        timer.endPhase('block-validation');
         
         this.#updateState(`${statePrefix}applying finalized block #${finalizedBlock.index}`);
         timer.startPhase('add-confirmed-block');
-        if (!skipValidation && !hashConfInfo?.conform) throw new Error('Failed to validate block');
         const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
         timer.endPhase('add-confirmed-block');
     
@@ -407,13 +405,11 @@ export class Node {
         const waitStart = Date.now();
     
         timer.startPhase('block-storage'); // callback ?
-        if (!skipValidation && this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
+        if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
         timer.endPhase('block-storage');
     
-        //if (blockBytes > 102_400 && !skipValidation) {
         this.miniLogger.log(`#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
         if (this.logValidationTime){ timer.displayResults();}
-        //}
     
         const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);
         const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);

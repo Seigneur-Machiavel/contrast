@@ -194,7 +194,9 @@ export class OpStack {
 
                     break;
                 case 'createBlockCandidateAndBroadcast':
-                    await this.node.createBlockCandidateAndBroadcast(content || 0); // content = delay(ms)
+                    // RE CREATE AND BROADCAST AFTER HALF BLOCK_TIME FOR MORE CONSISTENCY
+                    this.node.createBlockCandidateAndBroadcast(content || 0); // content = delay(ms)
+                    this.node.createBlockCandidateAndBroadcast((content || 0) + BLOCKCHAIN_SETTINGS.targetBlockTime / 2);
                     break;
                 case 'rollBackTo':
                     this.node.loadSnapshot(content, false);

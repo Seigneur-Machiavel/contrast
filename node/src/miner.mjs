@@ -63,9 +63,11 @@ export class Miner {
         if (Math.abs(posReward - powReward) > 1) { console.info(`[MINER] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`); return; }
 
         const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
-        if (blockCandidate.prevHash !== prevHash) { return; }
+        if (blockCandidate.prevHash !== prevHash) { return false; }
+
+        const betterReward = posReward > this.bestCandidate.Txs[0].outputs[0].amount;
         
-        let reasonChange = '(unknown)';
+        let reasonChange = 'none';
         if (!this.bestCandidate) {
             reasonChange = '(no best candidate, set first)';
         } else if (blockCandidate.index > this.bestCandidate.index) {
@@ -73,11 +75,12 @@ export class Miner {
         } else if (this.bestCandidate.prevHash !== prevHash) {
             reasonChange = '(replacing invalid prevHash)';
         } else if (blockCandidate.index === this.bestCandidate.index) {
-            const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate);
-            const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate);
-            if (newCandidateFinalDiff.finalDifficulty >= bestCandidateFinalDiff.finalDifficulty) { return; }
-            reasonChange = '(replacing by easier block)';
-        } else { reasonChange = '(unknown - this should not happen)'; }
+            const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate).finalDifficulty;
+            const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate).finalDifficulty;
+            if (newCandidateFinalDiff < bestCandidateFinalDiff) { reasonChange = `(easier block: ${newCandidateFinalDiff} < ${bestCandidateFinalDiff})`; }
+            if (newCandidateFinalDiff === bestCandidateFinalDiff && betterReward) { reasonChange = `(higher posReward: ${posReward} > ${this.bestCandidate.Txs[0].outputs[0].amount})`; }
+        }
+        if (reasonChange === 'none') { return false; }
 
         console.info(`[MINER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
@@ -89,6 +92,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
         
         this.bets[blockCandidate.index] = this.bets[blockCandidate.index] || this.#betPowTime();
         if (this.wsCallbacks.onBestBlockCandidateChange) { this.wsCallbacks.onBestBlockCandidateChange.execute(blockCandidate); }
+        return true;
     }
     #betPowTime(nbOfBets = 32) {
         const bets = [];
