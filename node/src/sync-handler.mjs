@@ -4,7 +4,7 @@ import { Storage } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { HashFunctions } from './conCrypto.mjs';
-import P2PNetwork from './p2p.mjs';
+import { P2PNetwork, readableId } from './p2p.mjs';
 import ReputationManager from './peers-reputation.mjs';
 
 /**
@@ -88,11 +88,11 @@ export class SyncHandler {
                 if (knownPubKeysInfo.height !== consensus.knownPubKeysInfo.height) { continue; }
                 if (knownPubKeysInfo.hash !== consensus.knownPubKeysInfo.hash) { continue; }                
                 
-                this.miniLogger.log(`Attempting to sync PubKeysAddresses with peer ${peerIdStr}`, (m) => { console.info(m); });
+                this.miniLogger.log(`Attempting to sync PubKeysAddresses with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
                 const synchronized = await this.#getPubKeysAddresses(peerIdStr, knownPubKeysInfo.hash);
                 if (!synchronized) { continue; }
 
-                this.miniLogger.log(`Successfully synced PubKeysAddresses with peer ${peerIdStr}`, (m) => { console.info(m); });
+                this.miniLogger.log(`Successfully synced PubKeysAddresses with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
                 break;
             }
         }
@@ -102,11 +102,11 @@ export class SyncHandler {
             const { peerIdStr, currentHeight, latestBlockHash } = peerStatus;
             if (latestBlockHash !== consensus.blockHash) { continue; } // Skip peers with different hash than consensus
 
-            this.miniLogger.log(`Attempting to sync blocks with peer ${peerIdStr}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Attempting to sync blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight);
             if (!synchronized) { continue; }
             
-            this.miniLogger.log(`Successfully synced blocks with peer ${peerIdStr}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Successfully synced blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             return 'Verifying consensus';
         }
 
@@ -119,8 +119,7 @@ export class SyncHandler {
         if (!stream) { return; }
         
         const peerIdStr = lstream.connection.remotePeer.toString();
-        const readablePeerId = peerIdStr.replace('12D3KooW', '').slice(0, 12);
-        this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readablePeerId}`, (m) => { console.info(m); });
+        this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
@@ -128,7 +127,7 @@ export class SyncHandler {
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${data.length} bytes) from ${readablePeerId}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${data.length} bytes) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             
             /** @type {SyncResponse} */
             const response = {
@@ -155,7 +154,7 @@ export class SyncHandler {
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
             if (msg.type === 'getPubKeysAddresses') logComplement = `: ${msg.pubKeysHash}`;
-            this.miniLogger.log(`Sent response to ${readablePeerId} (type: ${msg.type}${logComplement}} | ${serialized.length} bytes)`, (m) => { console.info(m); });
+            this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (type: ${msg.type}${logComplement}} | ${serialized.length} bytes)`, (m) => { console.info(m); });
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
@@ -241,8 +240,8 @@ export class SyncHandler {
     }
     /** @param {string} peerIdStr @param {number} peerCurrentHeight*/
     async #getMissingBlocks(peerIdStr, peerCurrentHeight) {
-        this.node.blockchainStats.state = `syncing with peer ${peerIdStr}`;
-        this.miniLogger.log(`Synchronizing with peer ${peerIdStr}`, (m) => { console.info(m); });
+        this.node.blockchainStats.state = `syncing with peer ${readableId(peerIdStr)}`;
+        this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         
         let peerHeight = peerCurrentHeight;
         let desiredBlock = this.node.blockchain.currentHeight + 1;

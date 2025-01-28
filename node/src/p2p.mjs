@@ -97,10 +97,10 @@ class P2PNetwork extends EventEmitter {
         this.reputationManager = new ReputationManager(this.options.reputationOptions);
         this.reputationManager.on('identifierBanned', ({ identifier }) => {
             //this.disconnectPeer(identifier);
-            this.miniLogger.log(`Peer ${identifier} has been banned`, (m) => { console.info(m); });
+            this.miniLogger.log(`Peer ${readableId(identifier)} has been banned`, (m) => { console.info(m); });
         });
         this.reputationManager.on('identifierUnbanned', ({ identifier }) => {
-            this.miniLogger.log(`Peer ${identifier} has been unbanned`, (m) => { console.info(m); });
+            this.miniLogger.log(`Peer ${readableId(identifier)} has been unbanned`, (m) => { console.info(m); });
         });
     }
 
@@ -114,7 +114,7 @@ class P2PNetwork extends EventEmitter {
         try {
             await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
         } catch (err) {
-            this.miniLogger.log(`(Discovery) Failed to dial peer ${peerIdStr}`, (m) => { console.error(m); });
+            this.miniLogger.log(`(Discovery) Failed to dial peer ${readableId(peerIdStr)}`, (m) => { console.error(m); });
         }
     };
     /** @param {CustomEvent} event */
@@ -122,7 +122,7 @@ class P2PNetwork extends EventEmitter {
         /** @type {PeerId} */
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
-        this.miniLogger.log(`(Connect) Dialed peer ${peerIdStr}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`(Connect) Dialed peer ${readableId(peerIdStr)}`, (m) => { console.debug(m); });
 
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
@@ -135,7 +135,7 @@ class P2PNetwork extends EventEmitter {
         /** @type {PeerId} */
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
-        this.miniLogger.log(`--------> Peer ${peerIdStr} disconnected`, (m) => { console.debug(m); });
+        this.miniLogger.log(`--------> Peer ${readableId(peerIdStr)} disconnected`, (m) => { console.debug(m); });
         if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status === 'open') { await this.openStreams[peerIdStr].close(); }
         if (this.openStreams[peerIdStr]) { delete this.openStreams[peerIdStr]; }
         if (this.peers[peerIdStr]) { delete this.peers[peerIdStr]; }
@@ -337,7 +337,7 @@ class P2PNetwork extends EventEmitter {
         if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
 
         this.peers[peerIdStr] = updatedPeer;
-        this.miniLogger.log(`Peer ${peerIdStr} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`Peer ${readableId(peerIdStr)} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
     }
     /** @param {string} identifier - peerIdStr or ip */
     async disconnectPeer(identifier) {
@@ -349,7 +349,7 @@ class P2PNetwork extends EventEmitter {
             if (identifier !== peerIdStr && identifier !== ip) { continue; }
 
             this.p2pNode.components.connectionManager.closeConnections(peerIdStr);
-            this.miniLogger.log(`Disconnected peer ${identifier}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Disconnected peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         }
     }
     /** @param {string} peerIdStr @param {string} reason */
@@ -364,5 +364,9 @@ class P2PNetwork extends EventEmitter {
     }
 }
 
+function readableId(peerIdStr) {
+    return peerIdStr.replace('12D3KooW', '').slice(0, 12);
+}
+
 export default P2PNetwork;
-export { P2PNetwork };
+export { P2PNetwork, readableId };
