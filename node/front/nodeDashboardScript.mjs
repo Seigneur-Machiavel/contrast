@@ -155,6 +155,7 @@ const eHTML = {
     minerRewardAddress: document.getElementById('minerRewardAddress'), // Assuming this exists if needed
     minerAddressEditBtn: document.getElementById('minerAddressEditBtn'),
     minerHeight: document.getElementById('minerHeight'),
+    minerLegitimacy: document.getElementById('minerLegitimacy'),
     minerBalance: document.getElementById('minerBalance'),
     hashRate: document.getElementById('hashRate'),
 
@@ -214,9 +215,10 @@ function displayNodeInfo(data) {
     // Update Miner information
     eHTML.minerAddress.textContent = data.minerAddress ? data.minerAddress : '';
     eHTML.minerBalance.textContent = convert.formatNumberAsCurrency(minerBalance);
-    eHTML.minerHeight.textContent = data.highestBlockIndex ? data.highestBlockIndex : 0;
-    eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 1;
+    eHTML.minerHeight.textContent = data.bestCandidateIndex || 0;
+    eHTML.minerLegitimacy.textContent = data.bestCandidateLegitimacy || 0;
     eHTML.hashRate.textContent = data.minerHashRate ? data.minerHashRate.toFixed(2) : 0;
+    eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 1;
 
     // Update Global Information
     eHTML.peersConnected.textContent = data.peersConnected ? data.peersConnected : 0;

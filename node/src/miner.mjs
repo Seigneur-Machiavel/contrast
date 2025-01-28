@@ -28,8 +28,6 @@ export class Miner {
         /** @type {Node} */
         this.node = node;
 
-        this.highestBlockIndex = -1;
-        this.useDevArgon2 = false;
         /** @type {MinerWorker[]} */
         this.workers = [];
         this.nbOfWorkers = 1;
@@ -54,6 +52,8 @@ export class Miner {
         /** @type {Object<string, WebSocketCallBack>} */
         this.wsCallbacks = {};
     }
+    bestCandidateIndex() { return this.bestCandidate ? this.bestCandidate.index : -1; }
+    bestCandidateLegitimacy() { return this.bestCandidate ? this.bestCandidate.legitimacy : 0; }
     /** @param {BlockData} blockCandidate */
     updateBestCandidate(blockCandidate) {
         // check if powReward is coherent
@@ -65,31 +65,14 @@ export class Miner {
         const changed = this.#setBestCandidateIfChanged(blockCandidate);
         if (!changed) { return; }
 
-        // check if block is higher than the highest block
-        if (blockCandidate.index > this.highestBlockIndex) {
-            this.addressOfCandidatesBroadcasted = [];
-        }
+        // check if block is different than the highest block index, then reset the addressOfCandidatesBroadcasted
+        //if (blockCandidate.index > this.highestBlockIndex) { this.addressOfCandidatesBroadcasted = []; }
+        if (blockCandidate.index !== this.bestCandidateIndex()) { this.addressOfCandidatesBroadcasted = []; }
         
-        this.highestBlockIndex = blockCandidate.index;
+        //this.highestBlockIndex = blockCandidate.index;
         this.bets[blockCandidate.index] = this.bets[blockCandidate.index] || this.#betPowTime();
 
-        if (this.wsCallbacks.onBestBlockCandidateChange) {
-            this.wsCallbacks.onBestBlockCandidateChange.execute(blockCandidate);
-        }
-    }
-    #betPowTime(nbOfBets = 32) {
-        const bets = [];
-        for (let i = 0; i < nbOfBets; i++) {
-            if (!this.useBetTimestamp) { bets.push(0); continue; }
-            const targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime;
-            const betBasis = targetBlockTime * this.betRange.min;
-            const betRandom = Math.random() * (this.betRange.max - this.betRange.min) * targetBlockTime;
-            const bet = Math.floor(betBasis + betRandom);
-
-            bets.push(bet);
-        }
-
-        return bets;
+        if (this.wsCallbacks.onBestBlockCandidateChange) { this.wsCallbacks.onBestBlockCandidateChange.execute(blockCandidate); }
     }
     /** @param {BlockData} blockCandidate */
     #setBestCandidateIfChanged(blockCandidate) {
@@ -121,6 +104,20 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
         this.bestCandidate = blockCandidate;
         return true;
     }
+    #betPowTime(nbOfBets = 32) {
+        const bets = [];
+        for (let i = 0; i < nbOfBets; i++) {
+            if (!this.useBetTimestamp) { bets.push(0); continue; }
+            const targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime;
+            const betBasis = targetBlockTime * this.betRange.min;
+            const betRandom = Math.random() * (this.betRange.max - this.betRange.min) * targetBlockTime;
+            const bet = Math.floor(betBasis + betRandom);
+
+            bets.push(bet);
+        }
+
+        return bets;
+    }
     #getAverageHashrate() {
         let totalHashRate = 0;
         for (const worker of this.workers) { totalHashRate += worker.hashRate; }
@@ -129,8 +126,8 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
     /** @param {BlockData} finalizedBlock */
     async broadcastFinalizedBlock(finalizedBlock) {
         // Avoid sending the block pow if a higher block candidate is available to be mined
-        if (this.highestBlockIndex > finalizedBlock.index) {
-            console.info(`[MINER-${this.address.slice(0, 6)}] Block finalized is not the highest block candidate: #${finalizedBlock.index} < #${this.highestBlockIndex}`);
+        if (this.bestCandidateIndex() > finalizedBlock.index) {
+            console.info(`[MINER-${this.address.slice(0, 6)}] Block finalized is not the highest block candidate: #${finalizedBlock.index} < #${this.bestCandidateIndex()}`);
             return;
         }
         
@@ -169,7 +166,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
 
         for (let i = 0; i < missingWorkers; i++) {
             const workerIndex = readyWorkers + i;
-            const blockBet = this.bets && this.bets[this.highestBlockIndex] ? this.bets[this.highestBlockIndex][workerIndex] : 0;
+            const blockBet = this.bets && this.bets[this.bestCandidateIndex()] ? this.bets[this.bestCandidateIndex()][workerIndex] : 0;
             this.workers.push(new MinerWorker(this.address, blockBet, this.timeSynchronizer.offset));
             readyWorkers++;
         }
@@ -194,7 +191,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
             
             const blockCandidate = this.bestCandidate;
             if (!blockCandidate) { continue; }
-            if (blockCandidate.index !== this.highestBlockIndex) {
+            if (blockCandidate.index !== this.bestCandidateIndex()) {
                 console.info(`[MINER-${this.address.slice(0, 6)}] Block candidate is not the highest block candidate`);
                 continue;
             }
@@ -204,7 +201,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
             timings.workersUpdate = Date.now();
             
             for (let i = 0; i < readyWorkers; i++) {
-                const blockBet = this.bets && this.bets[this.highestBlockIndex] ? this.bets[this.highestBlockIndex][i] : 0;
+                const blockBet = this.bets && this.bets[this.bestCandidateIndex()] ? this.bets[this.bestCandidateIndex()][i] : 0;
                 await this.workers[i].updateInfo(this.address, blockBet, this.timeSynchronizer.offset);
             }
             timings.updateInfo = Date.now();

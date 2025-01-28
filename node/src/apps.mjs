@@ -32,9 +32,7 @@ class AppStaticFncs {
     static extractPrivateNodeInfo(node) {
         if (!node) { return { error: 'No active node' }; }
 
-        const result = {
-            roles: node.roles,
-        };
+        const result = { roles: node.roles };
 
         if (node.roles.includes('validator')) {
             const { balance, UTXOs, spendableBalance } = node.getAddressUtxos(node.account.address);
@@ -58,9 +56,10 @@ class AppStaticFncs {
             result.minerBalance = balance;
             result.minerUTXOs = UTXOs;
             result.minerSpendableBalance = spendableBalance;
-            result.highestBlockIndex = node.miner.highestBlockIndex;
-            result.minerThreads = node.miner.nbOfWorkers;
+            result.bestCandidateIndex = node.miner.bestCandidateIndex();
+            result.bestCandidateLegitimacy = node.miner.bestCandidateLegitimacy();
             result.minerHashRate = node.miner.hashRate;
+            result.minerThreads = node.miner.nbOfWorkers;
         }
         result.peersConnected = node.p2pNetwork?.getConnectedPeers().length ?? "Not Connected";
 
@@ -89,10 +88,8 @@ class AppStaticFncs {
         return result;
     }
     /** @param {Node} node */
-    extractPublicNodeInfo(node) {
-        const result = {
-            roles: node.roles,
-        };
+    static extractPublicNodeInfo(node) {
+        const result = { roles: node.roles };
 
         if (node.roles.includes('validator')) {
             result.validatorAddress = node.account.address;
@@ -510,7 +507,8 @@ export class ObserverWsApp {
                     ws.send(JSON.stringify({ type: 'current_height', data: this.node.blockchain.currentHeight }));
                     break;
                 case 'get_node_info':
-                    ws.send(JSON.stringify({ type: 'node_info', data: AppStaticFncs.extractNodeInfo(this.node) }));
+                    const nodeInfo = AppStaticFncs.extractPrivateNodeInfo(this.node);
+                    ws.send(JSON.stringify({ type: 'node_info', data: nodeInfo }));
                     break;
                 case 'reconnect':
                     this.#initConnectionMessage(ws);
