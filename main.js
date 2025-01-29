@@ -107,6 +107,9 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
 });
 
 app.on('ready', async () => {
+    // show the app version
+    dialog.showMessageBox({ message: `Version: ${app.getVersion()}` });
+
     if (!isDev) { // autoUpdater
         console.log('feedUrl:', autoUpdater.getFeedURL());
         autoUpdater.checkForUpdates();
