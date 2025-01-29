@@ -25,4 +25,6 @@ wallet-plugin/mjiipclahahbedeiifgpfoagmncdcnoj.crx
 
 npm_install_log.txt
 release-builds
+release-builds_dev
+release-builds_no_asar
 contrast-win32-x64

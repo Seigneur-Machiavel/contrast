@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
     "electron-packager": "^17.1.2"
   },
   "files": [

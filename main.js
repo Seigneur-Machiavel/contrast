@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, globalShortcut } = require('electron');
+const { app, BrowserWindow, Menu, globalShortcut, autoUpdater, dialog } = require('electron');
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 Menu.setApplicationMenu(null); // remove the window top menu
@@ -7,6 +7,10 @@ Menu.setApplicationMenu(null); // remove the window top menu
 const mainLogger = new MiniLogger('main');
 const isDev = true;
 const startNode = true;
+/** @type {BrowserWindow} */
+let mainWindow;
+/** @type {BrowserWindow[]} */
+const windows = {};
 let dashboardWorker;
 
 (async () => { // -- start node worker --
@@ -14,6 +18,22 @@ let dashboardWorker;
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
+
+    //TEST
+    await new Promise(resolve => setTimeout(resolve, 5000)); // wait for the dashboard to start
+
+    const dialogOpts = {
+        type: 'info',
+        buttons: ['Redémarrer', 'Plus tard'],
+        title: "Mise à jour de l'application",
+        message: process.platform === 'win32' ? releaseNotes : releaseName,
+        detail: 'Une nouvelle version a été téléchargée. Redémarrez l\'application pour appliquer les mises à jour.'
+    };
+     
+    dialog.showMessageBox(mainWindow, dialogOpts).then((returnValue) => {
+        //if (returnValue.response === 0) autoUpdater.quitAndInstall();
+        if (returnValue.response === 0) console.log('Redémarrage');
+    });
 
     return;
     while(isDev) { // -- test restart after 120s to 600s --
@@ -75,14 +95,13 @@ async function createMainWindow() {
 }
 
 app.on('ready', async () => {
-    const windows = {};
     windows.logger = createLoggerSettingWindow();
     windows.logger.hide();
 
     windows.nodeDashboard = createNodeDashboardWindow();
     windows.nodeDashboard.hide();
 
-    const mainWindow = await createMainWindow();
+    mainWindow = await createMainWindow();
     setShortcuts(windows, isDev);
     if (isDev) mainWindow.webContents.toggleDevTools(); // dev tools on start
     //BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
@@ -93,5 +112,6 @@ app.on('ready', async () => {
 
 app.on('will-quit', async () => {
     globalShortcut.unregisterAll();
-    if (dashboardWorker) await dashboardWorker.stop();
+    if (dashboardWorker) dashboardWorker.stop();
+    await new Promise(resolve => setTimeout(resolve, 5000));
 });
