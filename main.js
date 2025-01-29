@@ -118,7 +118,7 @@ app.on('ready', async () => {
     dialog.showMessageBox({ message: `Version: ${app.getVersion()}` });
 
     if (!isDev) { // autoUpdater
-        console.log('feedUrl:', autoUpdater.getFeedURL());
+        //console.log('feedUrl:', autoUpdater.getFeedURL()); // deprecated
         autoUpdater.checkForUpdatesAndNotify();
     }
 

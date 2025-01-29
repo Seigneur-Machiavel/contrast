@@ -28,7 +28,22 @@
             "outputCapture": "std"
         },
         {
-            "name": "Debug Electron (packaged like)",
+            "type": "node",
+            "request": "launch",
+            "name": "Debug Electron (packaged test-setup)",
+            "program": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
+            "args": ["--inspect=9222"],
+            "stopOnEntry": false,
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "${workspaceFolder}/test-setup/Contrast.exe",
+            "windows": {
+                "runtimeExecutable": "${workspaceFolder}/test-setup/Contrast.exe"
+            },
+            "sourceMaps": true,
+            "outputCapture": "std"
+        },
+        {
+            "name": "Debug Electron (packaged-like)",
             "type": "node",
             "request": "launch",
             "cwd": "${workspaceFolder}",
