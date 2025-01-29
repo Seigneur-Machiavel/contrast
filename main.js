@@ -1,4 +1,6 @@
 const { app, BrowserWindow, Menu, globalShortcut, autoUpdater, dialog } = require('electron');
+autoUpdater.logger = require("electron-log");
+autoUpdater.logger.transports.file.level = "info";
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 Menu.setApplicationMenu(null); // remove the window top menu
@@ -13,6 +15,7 @@ let mainWindow;
 /** @type {BrowserWindow[]} */
 const windows = {};
 let dashboardWorker;
+//if (isDev) autoUpdater.setFeedURL( `https://github.com/Seigneur-Machiavel/contrast/releases/download/` );
 
 (async () => { // -- start node worker --
     if (!startNode) return;
@@ -97,11 +100,18 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     };
 
     dialog.showMessageBox(dialogOpts).then((returnValue) => {
+        return; // TEST
+        if (isDev) { console.log('downloaded'); return; } // avoid restart in dev mode
         if (returnValue.response === 0) autoUpdater.quitAndInstall();
     });
 });
 
 app.on('ready', async () => {
+    if (!isDev) { // autoUpdater
+        console.log('feedUrl:', autoUpdater.getFeedURL());
+        autoUpdater.checkForUpdates();
+    }
+
     windows.logger = createWindow(true, false, './miniLogger/miniLoggerSetting.html', 300, 500);
     windows.nodeDashboard = createWindow(false, true, 'http://localhost:27271', 1366, 768);
 
@@ -114,9 +124,6 @@ app.on('ready', async () => {
 
     // BrowserWindow.getFocusedWindow()
     //(async () => { import('./node/run/dashboard.mjs'); })(); // -> trying as worker
-
-    // autoUpdater
-    if (!isDev) autoUpdater.checkForUpdates();
 });
 
 app.on('will-quit', async () => {

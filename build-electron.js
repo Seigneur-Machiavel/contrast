@@ -47,7 +47,7 @@ builder.build({
     ],
     productName: 'Contrast',
     buildVersion: version,
-    directories: { output: 'release-builds' },
+    directories: { output: 'dist' },
     win: { target: 'nsis', icon: 'img/icon.ico' },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true },
     asar: true,
