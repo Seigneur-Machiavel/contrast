@@ -27,3 +27,4 @@ dist
 release-builds_dev
 release-builds_no_asar
 contrast-win32-x64
+test-setup

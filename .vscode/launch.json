@@ -15,16 +15,31 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Debug Electron App Build",
+            "name": "Debug Electron (packaged dist)",
             "program": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
-            "args": [],
+            "args": ["--inspect=9222"],
             "stopOnEntry": false,
             "cwd": "${workspaceFolder}",
-            "runtimeExecutable": "${workspaceFolder}/release-builds/win-unpacked/Contrast.exe",
+            "runtimeExecutable": "${workspaceFolder}/dist/win-unpacked/Contrast.exe",
             "windows": {
-                "runtimeExecutable": "${workspaceFolder}/release-builds/win-unpacked/Contrast.exe"
+                "runtimeExecutable": "${workspaceFolder}/dist/win-unpacked/Contrast.exe"
             },
-            "sourceMaps": false
+            "sourceMaps": true,
+            "outputCapture": "std"
+        },
+        {
+            "name": "Debug Electron (packaged like)",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+            "windows": {
+                "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd"
+            },
+            "program": "${workspaceFolder}/main.js",
+            "args" : ["${workspaceFolder}/dist"],
+            "outputCapture": "std",
+            "sourceMaps": true
         }
     ]
 }

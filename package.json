@@ -1,7 +1,7 @@
 {
   "name": "contrast",
-  "version": "0.0.3",
-  "description": "All-in-one Contrast app",
+  "version": "0.0.1",
+  "description": "All-in-one Contrast application",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -22,6 +22,7 @@
     "archiver": "^7.0.1",
     "argon2": "^0.41.1",
     "electron-log": "^5.2.4",
+    "electron-updater": "^6.3.9",
     "express": "^4.21.2",
     "libp2p": "^2.3.1",
     "ntp-client": "^0.5.3",

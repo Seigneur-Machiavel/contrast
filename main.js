@@ -1,6 +1,11 @@
-const { app, BrowserWindow, Menu, globalShortcut, autoUpdater, dialog } = require('electron');
-autoUpdater.logger = require("electron-log");
-autoUpdater.logger.transports.file.level = "info";
+const { app, BrowserWindow, Menu, globalShortcut, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
+log.transports.file.level = 'info';
+log.info('--- Test log ---');
+console.log(app.getPath('userData'));
+autoUpdater.logger = log;
+
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 Menu.setApplicationMenu(null); // remove the window top menu
@@ -15,7 +20,10 @@ let mainWindow;
 /** @type {BrowserWindow[]} */
 const windows = {};
 let dashboardWorker;
-//if (isDev) autoUpdater.setFeedURL( `https://github.com/Seigneur-Machiavel/contrast/releases/download/` );
+/*if (autoUpdater.getFeedURL() === '') { probably not needed
+    console.log('setting feedURL');
+    autoUpdater.setFeedURL( `https://github.com/Seigneur-Machiavel/contrast/releases/download/` );
+}*/
 
 (async () => { // -- start node worker --
     if (!startNode) return;
@@ -87,21 +95,20 @@ async function createMainWindow() {
 }
 
 autoUpdater.on('update-available', () => {
-    console.log('Une mise à jour est disponible.');
+    console.log('A new update is available');
 });
 
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     const dialogOpts = {
         type: 'info',
-        buttons: ['Redémarrer', 'Plus tard'],
-        title: 'Mise à jour de l\'application',
+        buttons: ['Restart', 'Later'],
+        title: 'Updating application',
         message: process.platform === 'win32' ? releaseNotes : releaseName,
-        detail: 'Une nouvelle version a été téléchargée. Redémarrez l\'application pour appliquer les mises à jour.'
+        detail: 'A new version has been downloaded. Restart the application to apply the updates now?'
     };
 
     dialog.showMessageBox(dialogOpts).then((returnValue) => {
-        return; // TEST
-        if (isDev) { console.log('downloaded'); return; } // avoid restart in dev mode
+        if (isDev) { console.log('downloaded'); return; } // avoid restart/install in dev mode
         if (returnValue.response === 0) autoUpdater.quitAndInstall();
     });
 });
@@ -112,7 +119,7 @@ app.on('ready', async () => {
 
     if (!isDev) { // autoUpdater
         console.log('feedUrl:', autoUpdater.getFeedURL());
-        autoUpdater.checkForUpdates();
+        autoUpdater.checkForUpdatesAndNotify();
     }
 
     windows.logger = createWindow(true, false, './miniLogger/miniLoggerSetting.html', 300, 500);
