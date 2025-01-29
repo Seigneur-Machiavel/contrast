@@ -5,7 +5,8 @@ Menu.setApplicationMenu(null); // remove the window top menu
 
 // GLOBAL VARIABLES
 const mainLogger = new MiniLogger('main');
-const isDev = true;
+const isDev = !app.isPackaged;
+let isQuiting = false;
 const startNode = true;
 /** @type {BrowserWindow} */
 let mainWindow;
@@ -19,14 +20,16 @@ let dashboardWorker;
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
 
-    //TEST
+    return; 
+    //TEST (successful)
     await new Promise(resolve => setTimeout(resolve, 5000)); // wait for the dashboard to start
 
     const dialogOpts = {
         type: 'info',
         buttons: ['Redémarrer', 'Plus tard'],
         title: "Mise à jour de l'application",
-        message: process.platform === 'win32' ? releaseNotes : releaseName,
+        //message: process.platform === 'win32' ? releaseNotes : releaseName,
+        message: 'toto',
         detail: 'Une nouvelle version a été téléchargée. Redémarrez l\'application pour appliquer les mises à jour.'
     };
      
@@ -43,30 +46,26 @@ let dashboardWorker;
         dashboardWorker.restart();
     }
 })();
-function createLoggerSettingWindow() {
-    const loggerWindow = new BrowserWindow({
-        width: 300,
-        height: 500,
+/** @param {boolean} nodeIntegration @param {boolean} contextIsolation @param {string} url_or_file */
+function createWindow(nodeIntegration, contextIsolation, url_or_file, width = 1366, height = 768, startHidden = true) {
+    const window = new BrowserWindow({
+        width: width,
+        height: height,
         icon: 'img/icon_128.png',
-        webPreferences: { nodeIntegration: true, contextIsolation: false }
+        webPreferences: { nodeIntegration, contextIsolation }
     });
 
-    loggerWindow.on('close', (e) => { e.preventDefault(); loggerWindow.hide(); });
-    loggerWindow.loadFile('./miniLogger/miniLoggerSetting.html');
-    return loggerWindow;
-}
-function createNodeDashboardWindow() {
-    const nodeDashboardWindow = new BrowserWindow({
-        width: 1366,
-        height: 768,
-        icon: 'img/icon_128.png',
-        webPreferences: { nodeIntegration: false, contextIsolation: true }
-    });
+    window.on('close', (e) => { if (isQuiting) return; e.preventDefault(); window.hide(); });
+    if (url_or_file.startsWith('http')) {
+        window.loadURL(url_or_file);
+    } else {
+        window.loadFile(url_or_file);
+    }
 
-    nodeDashboardWindow.on('close', (e) => { e.preventDefault(); nodeDashboardWindow.hide(); });
-    nodeDashboardWindow.loadURL('http://localhost:27271');
-    return nodeDashboardWindow;
+    if (startHidden) window.hide();
+    return window;
 }
+
 async function createMainWindow() {
     /** @type {BrowserWindow} */
     const mainWindow = new BrowserWindow({
@@ -81,37 +80,49 @@ async function createMainWindow() {
     });
 
     await mainWindow.loadFile('index/index.html');
-
-    /*let loaded;
-    mainWindow.webContents.on('did-finish-load', () => { loaded = true; });
-    while(!loaded) { await new Promise(resolve => setTimeout(resolve, 100)); }*/
-
-	/*mainWindow.webContents.on('will-navigate', async (event) => { // EXPERIMENTAL and useless
-		await chatHandler.cleanup();
-		globalShortcut.unregisterAll();
-	});*/
-
     return mainWindow;
 }
 
-app.on('ready', async () => {
-    windows.logger = createLoggerSettingWindow();
-    windows.logger.hide();
+autoUpdater.on('update-available', () => {
+    console.log('Une mise à jour est disponible.');
+});
 
-    windows.nodeDashboard = createNodeDashboardWindow();
-    windows.nodeDashboard.hide();
+autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+    const dialogOpts = {
+        type: 'info',
+        buttons: ['Redémarrer', 'Plus tard'],
+        title: 'Mise à jour de l\'application',
+        message: process.platform === 'win32' ? releaseNotes : releaseName,
+        detail: 'Une nouvelle version a été téléchargée. Redémarrez l\'application pour appliquer les mises à jour.'
+    };
+
+    dialog.showMessageBox(dialogOpts).then((returnValue) => {
+        if (returnValue.response === 0) autoUpdater.quitAndInstall();
+    });
+});
+
+app.on('ready', async () => {
+    windows.logger = createWindow(true, false, './miniLogger/miniLoggerSetting.html', 300, 500);
+    windows.nodeDashboard = createWindow(false, true, 'http://localhost:27271', 1366, 768);
 
     mainWindow = await createMainWindow();
+    // if mainWindow close -> close all windows
+    mainWindow.on('close', (e) => { isQuiting = true; app.quit(); });
     setShortcuts(windows, isDev);
     if (isDev) mainWindow.webContents.toggleDevTools(); // dev tools on start
     //BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
 
     // BrowserWindow.getFocusedWindow()
     //(async () => { import('./node/run/dashboard.mjs'); })(); // -> trying as worker
+
+    // autoUpdater
+    if (!isDev) autoUpdater.checkForUpdates();
 });
 
 app.on('will-quit', async () => {
     globalShortcut.unregisterAll();
     if (dashboardWorker) dashboardWorker.stop();
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    await new Promise(resolve => setTimeout(resolve, 10000));
 });
+
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

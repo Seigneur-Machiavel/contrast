@@ -3,12 +3,21 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 let fs;
 let path;
 let __dirname;
+let basePath = __dirname;
 (async () => {
     if (!isNode) { return; }
 
-    fs = await import('fs');
     path = await import('path');
-    __dirname = path.resolve('miniLogger');
+    fs = await import('fs');
+    const url = await import('url');
+    //basePath = path.resolve('miniLogger');
+    //const { app } = await electron;
+    //basePath = path.resolve('miniLogger');
+
+    const __filename = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
+    const parentFolder = path.dirname(__filename);
+    basePath = path.join(path.dirname(parentFolder), 'miniLogger');
+    //basePath = parentFolder;
 })();
 
 const HistoricalLog = (type = 'log', message = 'toto') => {
@@ -38,14 +47,14 @@ const MiniLoggerConfig = () => {
 }
 
 async function loadedImports() {
-    while (!fs || !path || !__dirname) { await new Promise(resolve => setTimeout(resolve, 100)); }
+    while (!fs || !path || !basePath) { await new Promise(resolve => setTimeout(resolve, 100)); }
 }
 
 /** @returns {MiniLoggerConfig} */
 export async function loadDefaultConfig() {
     await loadedImports();
 
-    const defaultConfigPath = path.join(__dirname, 'mini-logger-config.json');
+    const defaultConfigPath = path.join(basePath, 'mini-logger-config.json');
     if (!fs.existsSync(defaultConfigPath)) return MiniLoggerConfig();
 
     const defaultConfig = JSON.parse(fs.readFileSync(defaultConfigPath));
@@ -56,7 +65,7 @@ export async function loadMergedConfig() {
     await loadedImports();
 
     const defaultConfig = await loadDefaultConfig();
-    const customConfigPath = path.join(__dirname, 'mini-logger-config-custom.json');
+    const customConfigPath = path.join(basePath, 'mini-logger-config-custom.json');
     if (!fs.existsSync(customConfigPath)) return defaultConfig;
 
     const customConfig = JSON.parse(fs.readFileSync(customConfigPath));
@@ -93,7 +102,7 @@ export class MiniLogger {
 
         await loadedImports();
 
-        this.filePath = path.join(__dirname, 'history', `${this.category}-history.json`);
+        this.filePath = path.join(basePath, 'history', `${this.category}-history.json`);
         this.history = await this.#loadAndConcatHistory();
 
         this.miniLoggerConfig = await loadMergedConfig();
@@ -105,7 +114,7 @@ export class MiniLogger {
         this.#saveHistoryLoop();
     }
     async #loadAndConcatHistory() {
-        if (!fs.existsSync(path.join(__dirname, 'history'))) { fs.mkdirSync(path.join(__dirname, 'history')); };
+        if (!fs.existsSync(path.join(basePath, 'history'))) { fs.mkdirSync(path.join(basePath, 'history')); };
         if (!fs.existsSync(this.filePath)) { return []; }
         
         try {

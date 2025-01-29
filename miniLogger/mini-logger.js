@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { app } = require('electron');
+let basePath = __dirname;
+if (app.isPackaged) { basePath = path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), "miniLogger"); }
 
 const HistoricalLog = (type = 'log', message = 'toto') => {
     /*
@@ -29,7 +32,7 @@ const MiniLoggerConfig = () => {
 
 /** @returns {MiniLoggerConfig} */
 function loadDefaultConfig() {
-    const defaultConfigPath = path.join(__dirname, 'mini-logger-config.json');
+    const defaultConfigPath = path.join(basePath, 'mini-logger-config.json');
     if (!fs.existsSync(defaultConfigPath)) return MiniLoggerConfig();
 
     const defaultConfig = JSON.parse(fs.readFileSync(defaultConfigPath));
@@ -38,7 +41,7 @@ function loadDefaultConfig() {
 /** @returns {MiniLoggerConfig} */
 function loadMergedConfig() {
     const defaultConfig = loadDefaultConfig();
-    const customConfigPath = path.join(__dirname, 'mini-logger-config-custom.json');
+    const customConfigPath = path.join(basePath, 'mini-logger-config-custom.json');
     if (!fs.existsSync(customConfigPath)) return defaultConfig;
 
     const customConfig = JSON.parse(fs.readFileSync(customConfigPath));
@@ -61,12 +64,12 @@ class MiniLogger {
     /** @param {MiniLoggerConfig} miniLoggerConfig */
     constructor(category = 'global', miniLoggerConfig) {
         this.category = category;
-        this.filePath = path.join(__dirname, 'history', `${this.category}.json`);
+        this.filePath = path.join(basePath, 'history', `${this.category}.json`);
         this.history = this.#loadHistory();
         /** @type {MiniLoggerConfig} */
         this.miniLoggerConfig = miniLoggerConfig || loadMergedConfig();
         this.shouldLog = this.#isCategoryActive();
-        if (!fs.existsSync(path.join(__dirname, 'history'))) { fs.mkdirSync(path.join(__dirname, 'history')); }
+        if (!fs.existsSync(path.join(basePath, 'history'))) { fs.mkdirSync(path.join(basePath, 'history')); }
     }
 
     #isCategoryActive() {
@@ -106,4 +109,6 @@ class MiniLogger {
 
 if (typeof module !== 'undefined') {
     module.exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };
+} else {
+    exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };
 }

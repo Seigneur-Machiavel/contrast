@@ -15,7 +15,6 @@ node/storage/accounts
 node/storage/addresses-txs-refs
 node/storage/AddressesTxsRefsStorage_config.json
 
-node/nodes-data
 node/application.log
 node/test-storage
 

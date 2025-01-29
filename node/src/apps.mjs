@@ -21,11 +21,14 @@ const APPS_VARS = {
     __dirname: path.dirname( fileURLToPath(import.meta.url) ),
     __nodeDir: path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ),
     __contrastDir: path.dirname( path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ) ),
-    /*__httpsOptions: {
-        cert: fs.readFileSync('/chemin/vers/votre/certificate.crt'),
-        key: fs.readFileSync('/chemin/vers/votre/private.key')
-    }*/
 };
+
+/*const APPS_VARS = { __filename: '', __dirname: '', __nodeDir: '', __contrastDir: '' };
+APPS_VARS.__filename = fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
+APPS_VARS.__dirname = path.dirname(APPS_VARS.__filename);
+APPS_VARS.__nodeDir = path.dirname(APPS_VARS.__dirname);
+APPS_VARS.__contrastDir = path.dirname(APPS_VARS.__nodeDir);
+console.log(APPS_VARS);*/
 
 class AppStaticFncs {
     /** @param {Node} node */
@@ -78,12 +81,12 @@ class AppStaticFncs {
         result.peerIds = node.p2pNetwork?.getConnectedPeers() ?? 'No Peer IDs';
         result.repScores = node.p2pNetwork?.reputationManager?.getScores() ?? 'No Rep Scores';
         result.nodeState = node.blockchainStats.state ?? 'No State';
-        result.peerHeights = node.syncHandler.peersHeights ?? 'No Peer Height';
+        result.peerHeights = node.syncHandler?.peersHeights ?? 'No Peer Height';
         result.listenAddress = node.p2pNetwork?.p2pNode?.getMultiaddrs() ?? 'No Listen Address';
         result.lastLegitimacy = node.blockchainStats?.lastLegitimacy ?? 'No Legitimacy';
         result.peers = node.p2pNetwork?.peers ?? 'No Peers';
         result.ignoreIncomingBlocks = node.ignoreIncomingBlocks;
-        result.disabledSync = node.syncHandler.syncDisabled;
+        result.disabledSync = node.syncHandler?.syncDisabled ?? false;
 
         return result;
     }

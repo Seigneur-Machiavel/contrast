@@ -45,7 +45,7 @@ const COPY_OPERATIONS = [
     ['../utils/utxo-rules.mjs', 'utils'],
     ['../utils/progress-logger.mjs', 'utils'],
 
-    ['../miniLogger/mini-logger.mjs', 'miniLogger'],
+    //['../miniLogger/mini-logger.mjs', 'miniLogger'],
     ['../fonts/vertopal.com_Contrast V0.89.ttf', 'fonts'],
 ];
 

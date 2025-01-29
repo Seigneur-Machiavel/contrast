@@ -18,12 +18,14 @@ const storageMiniLogger = new MiniLogger('storage');
 const fs = await import('fs');
 const path = await import('path');
 const url = await import('url');
-const __filename = url.fileURLToPath(import.meta.url);
+const __filename = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
 const parentFolder = path.dirname(__filename);
 const __dirname = path.join(path.dirname(parentFolder), 'node');
 const BLOCK_PER_DIRECTORY = 1000;
-const PATH = {
+export const PATH = {
     STORAGE: path.join(__dirname, 'storage'),
+    TRASH: path.join(__dirname, 'storage', 'trash'),
+    SNAPSHOTS: path.join(__dirname, 'storage', 'snapshots'),
     BLOCKS: path.join(__dirname, 'storage', 'blocks'),
     JSON_BLOCKS: path.join(__dirname, 'storage', 'json-blocks'),
     BLOCKS_INFO: path.join(__dirname, 'storage', 'blocks-info'),

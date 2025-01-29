@@ -128,7 +128,8 @@ export class Wallet {
         const nbOfExistingAccounts = this.accountsGenerated[addressPrefix].length;
         const accountToGenerate = nbOfAccounts - nbOfExistingAccounts < 0 ? 0 : nbOfAccounts - nbOfExistingAccounts;
         this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`, (m) => { console.info(m); });
-        
+        //console.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`);
+
         const progressLogger = new ProgressLogger(accountToGenerate, '[WALLET] deriving accounts');
         let iterationsPerAccount = 0;
 
@@ -161,12 +162,14 @@ export class Wallet {
             if (!derivationResult) {
                 const derivedAccounts = this.accounts[addressPrefix].slice(nbOfExistingAccounts).length;
                 this.miniLogger.log(`Failed to derive account (derived: ${derivedAccounts})`, (m) => { console.error(m); });
+                //console.log(`Failed to derive account (derived: ${derivedAccounts})`);
                 return {};
             }
 
             const account = derivationResult.account;
             const iterations = derivationResult.iterations;
             if (!account) { this.miniLogger.log('deriveAccounts interrupted!', (m) => { console.error(m); }); return {}; }
+            //if (!account) { console.log('deriveAccounts interrupted!'); return {}; }
 
             iterationsPerAccount += iterations;
             this.accounts[addressPrefix].push(account);
@@ -175,6 +178,7 @@ export class Wallet {
 
         if (this.accounts[addressPrefix].length !== nbOfAccounts) {
             this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m) => { console.error(m); });
+            //console.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`);
             return {};
         }
         
@@ -183,6 +187,8 @@ export class Wallet {
         const avgIterations = derivedAccounts.length > 0 ? Math.round(iterationsPerAccount / derivedAccounts.length) : 0;
         this.miniLogger.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
 avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, (m) => { console.info(m); });
+        /*console.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
+avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`);*/
 
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
     }
@@ -260,6 +266,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
                 const errorSkippingLog = ['Address does not meet the security level'];
                 if (!errorSkippingLog.includes(error.message.slice(0, 40))) {
                     this.miniLogger.log(error.stack, (m) => { console.error(m); });
+                    //console.error(error.stack);
                 }
             }
         }

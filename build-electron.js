@@ -18,7 +18,11 @@ packager({
 });*/
 
 // UPDATED WITH electron-builder
+//process.env.DEBUG = 'electron-builder';
 const fs = require('fs');
+const version = JSON.parse(fs.readFileSync('package.json')).version;
+console.log('Building version:', version);
+
 const builder = require('electron-builder');
 const files = ["**/*"]
 const ignorePatterns = fs.readFileSync('.gitignore', 'utf-8')
@@ -38,12 +42,21 @@ files.push('!wallet-plugin');
 builder.build({
   config: {
     appId: 'science.contrast',
+    publish: [
+      { provider: "github", owner: "Seigneur-Machiavel", repo: "contrast" }
+    ],
     productName: 'Contrast',
-    buildVersion: '0.0.1',
+    buildVersion: version,
     directories: { output: 'release-builds' },
-    win: { target: 'nsis', icon: 'img/icon_256.png' },
+    win: { target: 'nsis', icon: 'img/icon.ico' },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true },
     asar: true,
+    asarUnpack: [
+      //"miniLogger/mini-logger-config-custom.json",
+      "miniLogger/*",
+      "node/storage/*",
+      "utils/storage-manager.mjs"
+    ],
     files
   }
 }).then(() => {

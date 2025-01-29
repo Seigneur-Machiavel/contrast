@@ -3,16 +3,28 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Launch Electron App",
+            "name": "Debug Main Process",
             "runtimeExecutable": "electron",
             "program": "${workspaceFolder}/main.js",
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {},
             "sourceMaps": false,
-            "outFiles": [
-                "${workspaceFolder}/**/*.js"
-            ]
+            "outFiles": ["${workspaceFolder}/**/*.js"]
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug Electron App Build",
+            "program": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
+            "args": [],
+            "stopOnEntry": false,
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "${workspaceFolder}/release-builds/win-unpacked/Contrast.exe",
+            "windows": {
+                "runtimeExecutable": "${workspaceFolder}/release-builds/win-unpacked/Contrast.exe"
+            },
+            "sourceMaps": false
         }
     ]
 }

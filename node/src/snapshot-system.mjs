@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 const url = await import('url');
 
-import { Storage } from '../../utils/storage-manager.mjs';
+import { Storage, PATH } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { HashFunctions } from './conCrypto.mjs';
@@ -29,11 +29,6 @@ function copyFolderRecursiveSync(src, dest) {
 }
 
 export class SnapshotSystem {
-	__parentFolderPath = path.dirname(url.fileURLToPath(import.meta.url));
-	__nodePath = path.dirname(this.__parentFolderPath);
-	__storagePath = path.join(this.__nodePath, 'storage');
-	__trashPath = path.join(this.__storagePath, 'trash');
-	__snapshotPath = path.join(this.__storagePath, 'snapshots');
 	fastConverter = new FastConverter();
 	loadedSnapshotHeight = 0;
 	snapshotHeightModulo = 5;
@@ -41,18 +36,18 @@ export class SnapshotSystem {
 	knownPubKeysAddressesSnapInfo = {height: 0, hash: ''};
 
 	#createMissingDirectories() {
-		if (!fs.existsSync(this.__storagePath)) { fs.mkdirSync(this.__storagePath); }
-		if (!fs.existsSync(this.__trashPath)) { fs.mkdirSync(this.__trashPath); }
-		if (!fs.existsSync(this.__snapshotPath)) { fs.mkdirSync(this.__snapshotPath); }
+		if (!fs.existsSync(PATH.STORAGE)) { fs.mkdirSync(PATH.STORAGE); }
+		if (!fs.existsSync(PATH.TRASH)) { fs.mkdirSync(PATH.TRASH); }
+		if (!fs.existsSync(PATH.SNAPSHOTS)) { fs.mkdirSync(PATH.SNAPSHOTS); }
 	}
 	#createSnapshotSubDirectories(height) {
-		const heightPath = path.join(this.__snapshotPath, `${height}`);
+		const heightPath = path.join(PATH.SNAPSHOTS, `${height}`);
 		if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
 
 		return heightPath;
 	}
 	#controlSnapshotQuality(dirName = '') {
-		const dirPath = path.join(this.__snapshotPath, dirName);
+		const dirPath = path.join(PATH.SNAPSHOTS, dirName);
 		const files = fs.readdirSync(dirPath);
 		if (!files.includes('memPool.bin')) { return "memPool.bin missing"; }
 		if (!files.includes('utxoCache.bin')) { return "utxoCache.bin missing"; }
@@ -63,7 +58,7 @@ export class SnapshotSystem {
 	/** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
 	getSnapshotsHeights() {
 		try {
-			const dirs = fs.readdirSync(this.__snapshotPath);
+			const dirs = fs.readdirSync(PATH.SNAPSHOTS);
 			if (dirs.length === 0) { return []; }
 
 			const snapshotsHeights = [];
@@ -131,7 +126,7 @@ export class SnapshotSystem {
 	 * @param {MemPool} memPool */
 	rollBackTo(height, utxoCache, vss, memPool) {
 		const logPerf = true;
-		const heightPath = path.join(this.__snapshotPath, `${height}`);
+		const heightPath = path.join(PATH.SNAPSHOTS, `${height}`);
 
 		performance.mark('startLoadSpectrum'); // LOAD VSS SPECTRUM
 		const serializedSpectrum = Storage.loadBinary('vss', heightPath);
@@ -171,8 +166,8 @@ export class SnapshotSystem {
 	}
 	/** Erase a snapshot @param {number} height */
 	#eraseSnapshot(height) {
-		const utxoCacheSnapHeightPath = path.join(this.__snapshotPath, `${height}`);
-		const trashSnapPath = path.join(this.__trashPath, `${height}`);
+		const utxoCacheSnapHeightPath = path.join(PATH.SNAPSHOTS, `${height}`);
+		const trashSnapPath = path.join(PATH.TRASH, `${height}`);
 		copyFolderRecursiveSync(utxoCacheSnapHeightPath, trashSnapPath);
 		fs.rmSync(utxoCacheSnapHeightPath, { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
 		
@@ -182,8 +177,8 @@ export class SnapshotSystem {
 		const height = this.loadedSnapshotHeight;
 		if (height === 0) { return false; }
 
-		const heightPath = path.join(this.__snapshotPath, `${height}`);
-		const trashSnapPath = path.join(this.__trashPath, `${height}`);
+		const heightPath = path.join(PATH.SNAPSHOTS, `${height}`);
+		const trashSnapPath = path.join(PATH.TRASH, `${height}`);
 
 		if (!fs.existsSync(trashSnapPath)) { return false; }
 		if (fs.existsSync(heightPath) && !overwrite) { return false; }
@@ -201,9 +196,9 @@ export class SnapshotSystem {
 		if (!clearTrash) { return true; }
 
 		// clear the trash
-		const trashSnapshots = fs.readdirSync(this.__trashPath);
+		const trashSnapshots = fs.readdirSync(PATH.TRASH);
 		for (const snap of trashSnapshots) {
-			fs.rmSync(path.join(this.__trashPath, snap), { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
+			fs.rmSync(path.join(PATH.TRASH, snap), { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
 		}
 
 		console.info('Trash cleared');

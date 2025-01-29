@@ -53,7 +53,7 @@ function connectWS() {
         const message = JSON.parse(event.data);
         const trigger = message.trigger;
         const data = message.data;
-        if (data && data.error) { console.info(message.error); }
+        if (data && data.error) { console.info(data.error); }
         switch (message.type) {
             case 'error':
                 if (data === 'No active node' && !modalOpen) {
@@ -201,6 +201,7 @@ function displayNodeInfo(data) {
     const validatorStaked = validatorStakesReference ? validatorStakesReference.reduce((acc, stake) => acc + stake.amount, 0) : 0;
     const validatorBalance = data.validatorBalance ? data.validatorBalance : 0;
     const minerBalance = data.minerBalance ? data.minerBalance : 0;
+    if (!data.roles) { console.info('Roles not found in data:', data); return; }
 
     // Update roles
     eHTML.roles.textContent = data.roles.join(' - ');

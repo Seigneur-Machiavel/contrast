@@ -206,7 +206,8 @@ class P2PNetwork extends EventEmitter {
             p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
             this.p2pNode = p2pNode;
         } catch (error) {
-            this.miniLogger.log('Failed to start P2P network', { error: error.message });
+            this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
+            this.miniLogger.log(error.stack, (m) => { console.error(m); });
             throw error;
         }
 
