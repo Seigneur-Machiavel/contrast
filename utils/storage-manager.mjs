@@ -18,16 +18,20 @@ const storageMiniLogger = new MiniLogger('storage');
 const fs = await import('fs');
 const path = await import('path');
 const url = await import('url');
-const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
+const BLOCK_PER_DIRECTORY = 1000;
+let isProductionEnv = false;
 
 function targetStorageFolder() {
     let storagePath = '';
+
+    const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked'); // path to the storage-manager.mjs file
     if (!filePath.includes('app.asar')) {
         const rootFolder = path.dirname(path.dirname(filePath));
-        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
+        storagePath = path.join(path.dirname(rootFolder), 'Contrast-storage');
     } else {
+        isProductionEnv = true; 
         const rootFolder = path.dirname(path.dirname(path.dirname(path.dirname(filePath))));
-        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
+        storagePath = path.join(path.dirname(rootFolder), 'Contrast-storage');
         console.log('-----------------------------');
         console.log('-----------------------------');
         console.log(storagePath);
@@ -35,20 +39,13 @@ function targetStorageFolder() {
         console.log('-----------------------------');
     }
 
-    return storagePath;
+    return { filePath, storagePath };
 }
 
-const storagePath = targetStorageFolder();
-if (!fs.existsSync(storagePath)) { fs.mkdirSync(storagePath); }
-
-const clearJsPath = path.join(storagePath, 'clear.js');
-if (!fs.existsSync(clearJsPath)) { fs.copyFileSync(path.join(path.dirname(filePath), 'clear.js'), clearJsPath); }
-const clearBatPath = path.join(storagePath, 'clear-storage.bat');
-if (!fs.existsSync(clearBatPath)) { fs.copyFileSync(path.join(path.dirname(filePath), 'clear-storage.bat'), clearBatPath); }
-
-const BLOCK_PER_DIRECTORY = 1000;
+const basePath = targetStorageFolder();
 export const PATH = {
-    STORAGE: path.join(storagePath),
+    BASE_FILE: basePath.filePath, // path to the storage-manager.mjs file
+    STORAGE: basePath.storagePath, // path to the storage folder (out of the root directory)
     TRASH: path.join(storagePath, 'trash'),
     SNAPSHOTS: path.join(storagePath, 'snapshots'),
     BLOCKS: path.join(storagePath, 'blocks'),
@@ -57,7 +54,15 @@ export const PATH = {
     TXS_REFS: path.join(storagePath, 'addresses-txs-refs'),
     TEST_STORAGE: path.join(storagePath, 'test')
 }
+if (isProductionEnv) { delete PATH.TEST_STORAGE; delete PATH.JSON_BLOCKS; }
+// create the storage folder if it doesn't exist, and any other subfolder
 for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
+
+// copy the clear.js and clear-storage.bat files to the storage folder (usefull for manual cleaning)
+const clearJsPath = path.join(storagePath, 'clear.js');
+const clearBatPath = path.join(storagePath, 'clear-storage.bat');
+if (!fs.existsSync(clearJsPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear.js'), clearJsPath); }
+if (!fs.existsSync(clearBatPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear-storage.bat'), clearBatPath); }
 
 export class Storage {
     /** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
@@ -291,6 +296,8 @@ export class BlockchainStorage {
         this.#saveBlockBinary(blockData);
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
+
+        if (isProductionEnv) { return; } // Avoid saving heavy JSON format in production
         if (saveJSON || blockData.index < 200) { this.#saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
     }
     /** @param {BlockInfo} blockInfo */
