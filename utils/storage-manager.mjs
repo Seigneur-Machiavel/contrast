@@ -46,21 +46,21 @@ const basePath = targetStorageFolder();
 export const PATH = {
     BASE_FILE: basePath.filePath, // path to the storage-manager.mjs file
     STORAGE: basePath.storagePath, // path to the storage folder (out of the root directory)
-    TRASH: path.join(storagePath, 'trash'),
-    SNAPSHOTS: path.join(storagePath, 'snapshots'),
-    BLOCKS: path.join(storagePath, 'blocks'),
-    JSON_BLOCKS: path.join(storagePath, 'json-blocks'),
-    BLOCKS_INFO: path.join(storagePath, 'blocks-info'),
-    TXS_REFS: path.join(storagePath, 'addresses-txs-refs'),
-    TEST_STORAGE: path.join(storagePath, 'test')
+    TRASH: path.join(basePath.storagePath, 'trash'),
+    SNAPSHOTS: path.join(basePath.storagePath, 'snapshots'),
+    BLOCKS: path.join(basePath.storagePath, 'blocks'),
+    JSON_BLOCKS: path.join(basePath.storagePath, 'json-blocks'),
+    BLOCKS_INFO: path.join(basePath.storagePath, 'blocks-info'),
+    TXS_REFS: path.join(basePath.storagePath, 'addresses-txs-refs'),
+    TEST_STORAGE: path.join(basePath.storagePath, 'test')
 }
 if (isProductionEnv) { delete PATH.TEST_STORAGE; delete PATH.JSON_BLOCKS; }
 // create the storage folder if it doesn't exist, and any other subfolder
 for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
 
 // copy the clear.js and clear-storage.bat files to the storage folder (usefull for manual cleaning)
-const clearJsPath = path.join(storagePath, 'clear.js');
-const clearBatPath = path.join(storagePath, 'clear-storage.bat');
+const clearJsPath = path.join(basePath.storagePath, 'clear.js');
+const clearBatPath = path.join(basePath.storagePath, 'clear-storage.bat');
 if (!fs.existsSync(clearJsPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear.js'), clearJsPath); }
 if (!fs.existsSync(clearBatPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear-storage.bat'), clearBatPath); }
 
