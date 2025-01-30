@@ -4,10 +4,10 @@ const { MiniLogger } = require('./miniLogger/mini-logger.js');
 const shortcutsLogger = new MiniLogger('shortcuts');
 
 const shortcutsKeys = {
-    reload: { key: "F5", enabled: true, devOnly: true },
+    reload: { key: "F5", enabled: true, devOnly: false },
     nodeDashboard: { key: "F6", enabled: true, devOnly: false },
     toggleLoggerSettingsMenu: { key: "F9", enabled: true, devOnly: false },
-    toggleDevTools: { key: "F10", enabled: true, devOnly: true },
+    toggleDevTools: { key: "F10", enabled: true, devOnly: false },
 };
 /** @param {Object<string, BrowserWindow>} windows */
 function setShortcuts(windows, dev = true) {

@@ -3,27 +3,14 @@ not published
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
-storage - 1000 blocks
-node/storage/bootstrapNodes.json
-node/storage/nodeSettings.json
-node/storage/blocks
-node/storage/json-blocks
-node/storage/blocks-info
-node/storage/snapshots
-node/storage/trash
-node/storage/accounts
-node/storage/addresses-txs-refs
-node/storage/AddressesTxsRefsStorage_config.json
-
 node/application.log
-node/test-storage
 
 wallet-plugin/builds
 wallet-plugin/dist(do not modify)
 wallet-plugin/mjiipclahahbedeiifgpfoagmncdcnoj.crx
 
-npm_install_log.txt
 dist
+npm_install_log.txt
 release-builds_dev
 release-builds_no_asar
 contrast-win32-x64

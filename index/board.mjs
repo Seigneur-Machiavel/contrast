@@ -5,9 +5,7 @@ if (false) { // Just for better completion
 } // For better completion ---------------
 
 import { AppConfig, appsConfig } from '../apps/apps-config.mjs';
-const appsMainClasses = {
-	'ChatUI': ChatUI
-}
+const appsMainClasses = { 'ChatUI': ChatUI }
 
 /** @param {string} tag @param {string[]} classes @param {string} innerHTML @param {HTMLElement} [parent] */
 function newElement(tag, classes, innerHTML, parent) {

@@ -18,19 +18,44 @@ const storageMiniLogger = new MiniLogger('storage');
 const fs = await import('fs');
 const path = await import('path');
 const url = await import('url');
-const __filename = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
-const parentFolder = path.dirname(__filename);
-const __dirname = path.join(path.dirname(parentFolder), 'node');
+const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
+
+function targetStorageFolder() {
+    let storagePath = '';
+    if (!filePath.includes('app.asar')) {
+        const rootFolder = path.dirname(path.dirname(filePath));
+        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
+    } else {
+        const rootFolder = path.dirname(path.dirname(path.dirname(path.dirname(filePath))));
+        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
+        console.log('-----------------------------');
+        console.log('-----------------------------');
+        console.log(storagePath);
+        console.log('-----------------------------');
+        console.log('-----------------------------');
+    }
+
+    return storagePath;
+}
+
+const storagePath = targetStorageFolder();
+if (!fs.existsSync(storagePath)) { fs.mkdirSync(storagePath); }
+
+const clearJsPath = path.join(storagePath, 'clear.js');
+if (!fs.existsSync(clearJsPath)) { fs.copyFileSync(path.join(path.dirname(filePath), 'clear.js'), clearJsPath); }
+const clearBatPath = path.join(storagePath, 'clear-storage.bat');
+if (!fs.existsSync(clearBatPath)) { fs.copyFileSync(path.join(path.dirname(filePath), 'clear-storage.bat'), clearBatPath); }
+
 const BLOCK_PER_DIRECTORY = 1000;
 export const PATH = {
-    STORAGE: path.join(__dirname, 'storage'),
-    TRASH: path.join(__dirname, 'storage', 'trash'),
-    SNAPSHOTS: path.join(__dirname, 'storage', 'snapshots'),
-    BLOCKS: path.join(__dirname, 'storage', 'blocks'),
-    JSON_BLOCKS: path.join(__dirname, 'storage', 'json-blocks'),
-    BLOCKS_INFO: path.join(__dirname, 'storage', 'blocks-info'),
-    TXS_REFS: path.join(__dirname, 'storage', 'addresses-txs-refs'),
-    TEST_STORAGE: path.join(__dirname, 'test-storage'),
+    STORAGE: path.join(storagePath),
+    TRASH: path.join(storagePath, 'trash'),
+    SNAPSHOTS: path.join(storagePath, 'snapshots'),
+    BLOCKS: path.join(storagePath, 'blocks'),
+    JSON_BLOCKS: path.join(storagePath, 'json-blocks'),
+    BLOCKS_INFO: path.join(storagePath, 'blocks-info'),
+    TXS_REFS: path.join(storagePath, 'addresses-txs-refs'),
+    TEST_STORAGE: path.join(storagePath, 'test')
 }
 for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
 

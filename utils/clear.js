@@ -1,5 +1,4 @@
 const fs = require('fs');
-
 console.log('Cleaning...');
 
 const directories = [
@@ -10,11 +9,6 @@ const directories = [
     "snapshots",
     "addresses-txs-refs"
 ];
-
-const files = [
-    "AddressesTxsRefsStorage_config.json"
-];
-
 directories.forEach(dir => {
     if (fs.existsSync(dir)) {
         fs.rmSync(dir, { recursive: true });
@@ -22,6 +16,9 @@ directories.forEach(dir => {
     }
 });
 
+const files = [
+    "AddressesTxsRefsStorage_config.json"
+];
 files.forEach(file => {
     if (fs.existsSync(file)) {
         fs.unlinkSync(file);

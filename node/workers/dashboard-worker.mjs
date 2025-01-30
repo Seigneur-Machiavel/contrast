@@ -8,11 +8,13 @@ const nodePort = workerData.nodePort || 27260;
 const dashboardPort = workerData.dashboardPort || 27271;
 const observerPort = workerData.observerPort || 27270;
 
+/** @type {ObserverWsApp} */
+let observApp;
 const dashApp = new DashboardWsApp(undefined, nodePort, dashboardPort);
 async function stop() {
     try {
         await dashApp.stop();
-        observApp.stop();
+        if (observApp) observApp.stop();
         parentPort.postMessage({ type: 'stopped' });
         parentPort.close();
         console.log('Dashboard worker stopped.');
@@ -40,4 +42,4 @@ parentPort.on('message', async (message) => {
 });
 stopIfDashAppStoppedLoop();
 while(!dashApp.node) { await new Promise(resolve => setTimeout(resolve, 1000)); }
-const observApp = new ObserverWsApp(dashApp.node, observerPort);
+observApp = new ObserverWsApp(dashApp.node, observerPort);
