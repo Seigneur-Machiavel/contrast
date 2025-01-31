@@ -36,9 +36,6 @@ builder.build({
       "miniLogger/*",
       "utils/clear.js",
       "utils/clear-storage.bat"
-      //"miniLogger/mini-logger-config-custom.json",
-      //"node/storage/*",
-      //"utils/storage-manager.mjs"
     ],
     files
   }

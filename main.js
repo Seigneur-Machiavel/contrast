@@ -1,4 +1,14 @@
-if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // for better import detection
+if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // For better completion
+
+/**
+ * @typedef {Object} WindowOptions
+ * @property {boolean} nodeIntegration
+ * @property {boolean} contextIsolation
+ * @property {string} url_or_file
+ * @property {number} width
+ * @property {number} height
+ * @property {boolean} [startHidden] - default true
+ * @property {boolean} [isMainWindow] - default false */
 
 const fs = require('fs');
 const { app, BrowserWindow, Menu, globalShortcut, dialog } = require('electron');
@@ -6,15 +16,19 @@ const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 log.transports.file.level = 'info';
 log.info('--- Test log ---');
-console.log(app.getPath('userData'));
 autoUpdater.logger = log;
+//console.log(app.getPath('userData'));
 
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
-//const { MiniLogger } = import('./miniLogger/mini-logger.mjs');
 Menu.setApplicationMenu(null); // remove the window top menu
 
 // GLOBAL VARIABLES
+const windowsOptions = {
+    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
+    nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
+    mainWindow: { nodeIntegration: true, contextIsolation: false, url_or_file: 'index/index.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
+}
 const mainLogger = new MiniLogger('main');
 const isDev = !app.isPackaged;
 let isQuiting = false;
@@ -25,13 +39,13 @@ const windows = {};
 /** @type {NodeAppWorker} */
 let dashboardWorker;
 
-async function startNode() {
+async function startNode(randomRestartTest = false) {
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
 
-    return;
-    //TEST (successful)
+    if (!randomRestartTest) return;
+
     await new Promise(resolve => setTimeout(resolve, 5000)); // wait for the dashboard to start
     while(isDev) { // -- test restart after 120s to 600s --
         const restartTime = Math.floor(Math.random() * 480000) + 120000;
@@ -40,50 +54,40 @@ async function startNode() {
         dashboardWorker.restart();
     }
 }
-/** @param {boolean} nodeIntegration @param {boolean} contextIsolation @param {string} url_or_file */
-function createWindow(nodeIntegration, contextIsolation, url_or_file, width = 1366, height = 768, startHidden = true) {
+/** @param {WindowOptions} options */
+async function createWindow(options) {
+    const { nodeIntegration, contextIsolation, url_or_file, width, height, startHidden = true, isMainWindow = false } = options;
+
     const window = new BrowserWindow({
-        width: width,
-        height: height,
+        width,
+        height,
         icon: 'img/icon_128.png',
-        webPreferences: { nodeIntegration, contextIsolation }
+        webPreferences: {
+            nodeIntegration,
+            contextIsolation,
+            // preload: isMainWindow ? path.join(__dirname, 'preload.js') : undefined //(not with nodeIntegration: true)
+        }
     });
 
-    window.on('close', (e) => { if (!isQuiting) { e.preventDefault(); window.hide() } });
-    if (url_or_file.startsWith('http')) {
-        window.loadURL(url_or_file);
+    if (isMainWindow) {
+        window.on('close', () => { if (!isQuiting) app.quit(); });
+        const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
+        window.webContents.executeJavaScript(`document.getElementById('index-version').innerText = "v${version}";`, true);
     } else {
-        window.loadFile(url_or_file);
+        window.on('close', (e) => { if (!isQuiting) { e.preventDefault(); window.hide() } });
     }
+
+    const isUrl = url_or_file.startsWith('http');
+    if (isUrl) { window.loadURL(url_or_file); } else { window.loadFile(url_or_file); }
 
     if (startHidden) window.hide();
     return window;
 }
-async function createMainWindow() {
-    /** @type {BrowserWindow} */
-    const mainWindow = new BrowserWindow({
-        width: 1366,
-        height: 768,
-        icon: 'img/icon_128.png',
-        webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
-            // preload: path.join(__dirname, 'preload.js') not with nodeIntegration: true
-        }
-    });
 
-    await mainWindow.loadFile('index/index.html');
-    mainWindow.on('close', (e) => { if (!isQuiting) app.quit(); });
-
-    const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
-    mainWindow.webContents.executeJavaScript(`document.getElementById('index-version').innerText = "v${version}";`, true);
-
-    return mainWindow;
-}
-
-autoUpdater.on('update-available', () => {
-    console.log('A new update is available');
-});
+autoUpdater.on('update-available', (e) => { console.log(`A new update is available: v${e.version}`); });
+app.on('before-quit', () => { isQuiting = true; globalShortcut.unregisterAll(); if (dashboardWorker) { dashboardWorker.stop(); } });
+app.on('will-quit', async () => { await new Promise(resolve => setTimeout(resolve, 10000)) }); // let time for the node to stop properly
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     const dialogOpts = {
@@ -99,35 +103,15 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
         if (returnValue.response === 0) autoUpdater.quitAndInstall();
     });
 });
-
 app.on('ready', async () => {
-    if (!isDev) { // autoUpdater
-        //console.log('feedUrl:', autoUpdater.getFeedURL()); // deprecated
-        autoUpdater.checkForUpdatesAndNotify();
-    }
+    if (!isDev) autoUpdater.checkForUpdatesAndNotify();
 
     startNode();
 
-    windows.logger = createWindow(true, false, './miniLogger/miniLoggerSetting.html', 300, 500);
-    windows.nodeDashboard = createWindow(false, true, 'http://localhost:27271', 1366, 768);
+    windows.logger = await createWindow(windowsOptions.logger);
+    windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard);
+    mainWindow = await createWindow(windowsOptions.mainWindow);
 
-    mainWindow = await createMainWindow();
-    // if mainWindow close -> close all windows
-    mainWindow.on('close', (e) => { app.quit(); });
     setShortcuts(windows, isDev);
     if (isDev) mainWindow.webContents.toggleDevTools(); // dev tools on start
-    //BrowserWindow.getFocusedWindow().webContents.toggleDevTools(); // dev tools on start
-
-    // BrowserWindow.getFocusedWindow()
-    //(async () => { import('./node/run/dashboard.mjs'); })(); // -> trying as worker
 });
-
-app.on('before-quit', () => {
-    isQuiting = true;
-    globalShortcut.unregisterAll();
-    if (dashboardWorker) { dashboardWorker.stop(); }
-});
-// let time for the node to stop properly
-app.on('will-quit', async () => { await new Promise(resolve => setTimeout(resolve, 10000)) });
-
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

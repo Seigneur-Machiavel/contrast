@@ -1,8 +1,7 @@
-if (false) { // Just for better completion
+if (false) { // For better completion
 	const anime = require('animejs');
 	const ChatUI = require('../apps/chat/front-scripts/chat-renderer.js');
-	
-} // For better completion ---------------
+}
 
 import { AppConfig, appsConfig } from '../apps/apps-config.mjs';
 const appsMainClasses = { 'ChatUI': ChatUI }
@@ -199,10 +198,7 @@ class AppsManager {
 
 	#buildAppsConfig(appsConf) {
 		const result = {};
-		for (const appName in appsConf) {
-			const conf = appsConf[appName];
-			result[appName] = AppConfig(appName, conf);
-		}
+		for (const appName in appsConf) { result[appName] = AppConfig(appName, appsConf[appName]); }
 		return result;
 	}
 	updateCssAnimationsDuration() {
@@ -211,11 +207,7 @@ class AppsManager {
 	initApps() {
 		this.buttonsBar.element.innerHTML = '';
 		for (const app in this.appsConfig) { this.buttonsBar.addButton(app, this.appsConfig[app]); }
-
-		for (const app in this.appsConfig) {
-			if (!this.appsConfig[app].preload) { continue; }
-			this.loadApp(app);
-		}
+		for (const app in this.appsConfig) { if (this.appsConfig[app].preload) this.loadApp(app); }
 	}
 	loadApp(appName) {
 		if (!this.appsConfig[appName]) return;
@@ -250,10 +242,7 @@ class AppsManager {
 			const origin = this.buttonsBar.getButtonOrigin(appName);
 			const folded = this.windows[appName].toggleFold(origin.x, origin.y, this.transitionsDuration);
 			const firstUnfolded = Object.values(this.windows).find(w => w.folded === false);
-			if (folded && firstUnfolded) {
-				console.log('firstUnfolded', firstUnfolded);
-				appToFocus = firstUnfolded.appName;
-			}
+			if (folded && firstUnfolded) { appToFocus = firstUnfolded.appName; }
 		}
 
 		console.log('appToFocus', appToFocus);
@@ -261,10 +250,7 @@ class AppsManager {
 		setTimeout(() => { this.setFrontWindow(appToFocus); }, delay);
 	}
 	calculateBoardSize() {
-		return {
-			width: window.innerWidth,
-			height: window.innerHeight - this.buttonsBar.element.offsetHeight
-		};
+		return { width: window.innerWidth, height: window.innerHeight - this.buttonsBar.element.offsetHeight };
 	}
 	setFrontWindow(appName) {
 		if (!this.windows[appName]) return;
@@ -278,7 +264,7 @@ class AppsManager {
 		this.windows[appName].element.style.zIndex = 1;
 		this.windows[appName].element.classList.add('front');
 	}
-
+	// HANDLERS
 	clickAppButtonsHandler(e) {
 		const button = e.target.closest('.app-button');
 		if (!button) return;
@@ -370,28 +356,14 @@ const appsManager = new AppsManager(
 	appsConfig
 );
 appsManager.initApps();
-window.appsManager = appsManager; // 
+window.appsManager = appsManager;
 
 // better implementation with less event listeners
-document.addEventListener('click', (e) => {
-	appsManager.clickAppButtonsHandler(e);
-	appsManager.clickWindowHandler(e);
-});
-// double click
-document.addEventListener('dblclick', (e) => {
-	if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e);
-});
-document.addEventListener('mousedown', (e) => {
-	appsManager.grabWindowHandler(e);
-});
-document.addEventListener('mousemove', (e) => {
-	appsManager.moveWindowHandler(e);
-});
-document.addEventListener('mouseup', (e) => {
-	appsManager.releaseWindowHandler(e);
-});
-
-// DARK MODE
+document.addEventListener('click', (e) => { appsManager.clickAppButtonsHandler(e); appsManager.clickWindowHandler(e); });
+document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
+document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
+document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });
+document.addEventListener('mouseup', (e) => { appsManager.releaseWindowHandler(e); });
 document.addEventListener('change', (event) => {
 	switch(event.target.id) {
 		case 'dark-mode-toggle':
