@@ -29,7 +29,7 @@ builder.build({
     productName: 'Contrast',
     buildVersion: version,
     directories: { output: 'dist' },
-    win: { target: 'nsis', icon: 'img/icon.ico', artifactName: `Contrast-Setup-${version}.exe` },
+    win: { target: 'nsis', icon: 'electron-app/img/icon.ico', artifactName: `Contrast-Setup-${version}.exe` },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true },
     asar: true,
     asarUnpack: [

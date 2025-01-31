@@ -1,4 +1,4 @@
-if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // For better completion
+if (false) { const { NodeAppWorker } = require('../node/workers/workers-classes.mjs'); } // For better completion
 
 /**
  * @typedef {Object} WindowOptions
@@ -20,14 +20,14 @@ autoUpdater.logger = log;
 //console.log(app.getPath('userData'));
 
 const setShortcuts = require('./shortcuts.js');
-const { MiniLogger } = require('./miniLogger/mini-logger.js');
+const { MiniLogger } = require('../miniLogger/mini-logger.js');
 Menu.setApplicationMenu(null); // remove the window top menu
 
 // GLOBAL VARIABLES
 const windowsOptions = {
-    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
+    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: '../miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
     nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
-    mainWindow: { nodeIntegration: true, contextIsolation: false, url_or_file: 'index/index.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
+    mainWindow: { nodeIntegration: true, contextIsolation: false, url_or_file: 'index/board.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
 }
 const mainLogger = new MiniLogger('main');
 const isDev = !app.isPackaged;
@@ -40,7 +40,7 @@ const windows = {};
 let dashboardWorker;
 
 async function startNode(randomRestartTest = false) {
-    const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
+    const { NodeAppWorker } = await import('../node/workers/workers-classes.mjs');
     const nodeApp = isDev ? 'stresstest' : 'dashboard';
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
 
@@ -61,7 +61,7 @@ async function createWindow(options) {
     const window = new BrowserWindow({
         width,
         height,
-        icon: 'img/icon_128.png',
+        icon: 'electron-app/img/icon_256.png',
         webPreferences: {
             nodeIntegration,
             contextIsolation,

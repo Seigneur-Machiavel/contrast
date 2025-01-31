@@ -1,9 +1,9 @@
 if (false) { // For better completion
 	const anime = require('animejs');
-	const ChatUI = require('../apps/chat/front-scripts/chat-renderer.js');
+	const ChatUI = require('../../apps/chat/front-scripts/chat-renderer.js');
 }
 
-import { AppConfig, appsConfig } from '../apps/apps-config.mjs';
+import { AppConfig, appsConfig } from '../../apps/apps-config.mjs';
 const appsMainClasses = { 'ChatUI': ChatUI }
 
 /** @param {string} tag @param {string[]} classes @param {string} innerHTML @param {HTMLElement} [parent] */
