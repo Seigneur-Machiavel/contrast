@@ -333,7 +333,7 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
         this.worker = null;
         this.worker = newWorker(`./${app}-worker.mjs`, '', { nodePort, dashboardPort, observerPort });
 
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         this.worker.on('exit', (code) => { console.log(`NodeAppWorker stopped with exit code ${code} -> should restart`); });
         this.worker.on('close', () => { console.log('NodeAppWorker closed'); });

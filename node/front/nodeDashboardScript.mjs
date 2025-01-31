@@ -22,7 +22,7 @@ let validatorUTXOs = [];
 let minerUTXOs = [];
 let modalOpen = false;
 let currentAction = null;
-let currentActionPeerId = null; 
+let currentActionPeerId = null;
 const ACTIONS = {
     HARD_RESET: 'hard_reset',
     UPDATE_GIT: 'update_git',
@@ -105,14 +105,13 @@ function connectWS() {
     };
 }
 
-async function getGetNodeInfoLoop() {
+(async() => {
     while (true) {
         await new Promise((resolve) => { setTimeout(() => { resolve(); }, WS_SETTINGS.GET_NODE_INFO_INTERVAL); });
         if (!ws || ws.readyState !== 1) { continue; }
         try { ws.send(JSON.stringify({ type: 'get_node_info', data: Date.now() })) } catch (error) {};
     }
-}; 
-getGetNodeInfoLoop();
+})();
 connectWS();
 
 const eHTML = {
@@ -204,7 +203,7 @@ function displayNodeInfo(data) {
     if (!data.roles) { console.info('Roles not found in data:', data); return; }
 
     // Update roles
-    eHTML.roles.textContent = data.roles.join(' - ');
+    //eHTML.roles.textContent = data.roles.join(' - ');
 
     // Update Validator information
     eHTML.validatorAddress.textContent = data.validatorAddress ? data.validatorAddress : ''; 
@@ -355,7 +354,6 @@ function renderPeers(peers) {
         eHTML.peersConnectedList.appendChild(li);
     });
 }
-
 function renderPeersHeight (peers) {
     eHTML.peersHeightList.innerHTML = ''; // Clear existing list
 
@@ -436,7 +434,6 @@ function handleDisconnectPeer(peerId) {
         showInput: false
     });
 }
-
 function handleBanPeer(peerId) {
     console.log(`Banning peer: ${peerId}`);
     currentAction = 'ban_peer';
@@ -446,8 +443,6 @@ function handleBanPeer(peerId) {
         showInput: false
     });
 }
-
-
 function handleAskSyncPeer(peerId) {
     console.log(`Asking peer ${peerId} to sync`);
     currentAction = 'ask_sync_peer';
@@ -660,112 +655,6 @@ eHTML.minerThreads.input.addEventListener('change', () => {
 });
 eHTML.minerThreads.decrementBtn.addEventListener('click', () => adjustInputValue(eHTML.minerThreads.input, -1));
 eHTML.minerThreads.incrementBtn.addEventListener('click', () => adjustInputValue(eHTML.minerThreads.input, 1));
-
-// Admin Panel Toggle Button
-eHTML.toggleAdminPanelBtn.addEventListener('click', toggleAdminPanel);
-function toggleAdminPanel() {
-    const isHidden = eHTML.adminPanelButtons.classList.contains('hidden');
-
-    if (isHidden) {
-        // Show the panel
-        console.log('toggleAdminPanelBtn clicked - Show');
-        eHTML.adminPanelButtons.classList.remove('hidden');
-        // Ensure the element is visible and has a maxHeight of 0 for the animation to start
-        eHTML.adminPanelButtons.style.maxHeight = '0px';
-        // Force a reflow to apply the maxHeight before animating
-        eHTML.adminPanelButtons.offsetHeight; // This forces the browser to recognize the change
-
-        // Get the full height of the panel
-        const fullHeight = eHTML.adminPanelButtons.scrollHeight + 'px';
-
-        anime({
-            targets: eHTML.adminPanelButtons,
-            maxHeight: [0, fullHeight],
-            duration: 200,
-            easing: 'easeInOutQuad',
-            begin: () => {
-                eHTML.toggleAdminPanelBtn.textContent = 'Hide Admin Panel';
-                eHTML.adminPanelButtons.style.overflow = 'hidden'; // Ensure overflow is hidden during animation
-            },
-            complete: () => {
-                // Optionally, remove the maxHeight to allow the panel to adjust dynamically if content changes
-                eHTML.adminPanelButtons.style.maxHeight = 'none';
-            }
-        });
-    } else {
-        // Hide the panel
-        console.log('toggleAdminPanelBtn clicked - Hide');
-        // Get the current height to animate from
-        const currentHeight = eHTML.adminPanelButtons.scrollHeight;
-
-        anime({
-            targets: eHTML.adminPanelButtons,
-            maxHeight: [currentHeight + 'px', 0],
-            duration: 200,
-            easing: 'easeInOutQuad',
-            begin: () => {
-                eHTML.toggleAdminPanelBtn.textContent = 'Show Admin Panel';
-                eHTML.adminPanelButtons.style.overflow = 'hidden'; // Ensure overflow is hidden during animation
-            },
-            complete: () => {
-                eHTML.adminPanelButtons.classList.add('hidden');
-                eHTML.adminPanelButtons.style.maxHeight = '0px';
-                // Optionally, reset overflow
-                eHTML.adminPanelButtons.style.overflow = '';
-            }
-        });
-    }
-}
-
-
-// Admin Buttons Event Listeners
-eHTML.forceRestartBtn.addEventListener('click', () => {
-    console.log('forceRestartBtn clicked'); // Debugging line
-    currentAction = ACTIONS.FORCE_RESTART;
-    openModal(ACTIONS.FORCE_RESTART, {
-        message: 'Are you sure you want to restart the node? This action may interrupt ongoing processes.',
-        showInput: false
-    });
-});
-
-
-eHTML.RevalidateBtn.addEventListener('click', () => {
-    currentAction = ACTIONS.REVALIDATE;
-    openModal(ACTIONS.REVALIDATE, {
-        message: 'Are you sure you want to revalidate the blocks? This may take some time.',
-        showInput: false
-    });
-});
-
-eHTML.resetInfoBtn.addEventListener('click', () => {
-    console.log('resetInfoBtn clicked');
-    currentAction = ACTIONS.RESET_WALLET;
-    openModal(ACTIONS.RESET_WALLET, {
-        message: 'Are you sure you want to reset the wallet? Please enter your private key below.',
-        inputLabel: 'Private Key:',
-        inputType: 'password',
-        showInput: true,
-        showToggle: true
-    });
-});
-
-eHTML.hardResetBtn.addEventListener('click', () => {
-    console.log('hardResetBtn clicked');
-    currentAction = ACTIONS.HARD_RESET;
-    openModal(ACTIONS.HARD_RESET, {
-        message: 'Are you sure you want to perform a hard reset? This will reset all data and resync the chain.',
-        showInput: false
-    });
-});
-
-eHTML.updateGitBtn.addEventListener('click', () => {
-    console.log('updateGitBtn clicked');
-    currentAction = ACTIONS.UPDATE_GIT;
-    openModal(ACTIONS.UPDATE_GIT, {
-        message: 'Do you want to update the client using Git?',
-        showInput: false
-    });
-});
 
 eHTML.modals.unifiedModal.cancelBtn.addEventListener('click', () => {
     console.log('Cancel button clicked');

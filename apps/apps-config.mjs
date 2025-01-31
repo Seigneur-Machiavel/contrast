@@ -38,18 +38,20 @@ export const appsConfig = {
 		title: 'WALLET',
 		content: 'This is a notes app.'
 	},*/
-	vault: {
+	/*vault: {
 		preload: true,
 		minWidth: 600,
 		minHeight: 600,
 		iconWidth: '68%',
 		title: 'VAULT',
 		content: '../../apps/vault/vault-content.html',
-	},
-	/*node: {
-		preload: false,
+	},*/
+	node: {
+		preload: true,
+		minWidth: 800,
+		minHeight: 600,
 		iconWidth: '56%',
 		title: 'NODE',
-		content: 'This is a node app.'
-	}*/
+		content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>',
+	}
 };

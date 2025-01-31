@@ -107,6 +107,7 @@ export class DashboardWsApp {
     nodesSettings = {};
     stopping = false;
     stopped = false;
+    waitingForPrivKey = false;
     /** @param {Node} node */
     constructor(node, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
@@ -134,7 +135,7 @@ export class DashboardWsApp {
             this.app.use('/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
             this.app.use('/node/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
             this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
-            this.app.use('/fonts', express.static(path.join(APPS_VARS.__contrastDir, 'fonts')));
+            this.app.use('/styles', express.static(path.join(APPS_VARS.__contrastDir, 'styles')));
             this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));
             this.app.use('/miniLogger', express.static(path.join(APPS_VARS.__contrastDir, 'miniLogger')));
             
@@ -155,7 +156,11 @@ export class DashboardWsApp {
         const defaultPrivKey = defaultSettings ? defaultSettings.privateKey : null;
         const usablePrivKey = privateKey || defaultPrivKey;
         if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey); }
-        if (!this.node) { console.info("Not active Node and No private keys provided, can't auto init node..."); return; }
+        if (!this.node) {
+            this.waitingForPrivKey = true;
+            console.info("Not active Node and No private keys provided, can't auto init node...");
+            return;
+        }
         
         const activeNodeAssociatedSettings = this.nodesSettings[this.node.id];
         if (!activeNodeAssociatedSettings) { // Save the settings for the new node
@@ -184,7 +189,7 @@ export class DashboardWsApp {
         console.log(`Multi node started, account : ${this.node.account.address}`);
         return this.node;
     }
-    #onConnection(ws, req, localonly = false) {
+    async #onConnection(ws, req, localonly = false) {
         const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
 
         // Allow only localhost connections
@@ -199,8 +204,12 @@ export class DashboardWsApp {
 
         const messageHandler = (message) => { this.#onMessage(message, ws); };
         ws.on('message', messageHandler);
-
-        if (!this.node) {
+        
+        while (!this.node) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            if (this.waitingForPrivKey) break;
+        }
+        if (this.waitingForPrivKey) {
             console.info("Node active Node and No private keys provided, can't auto init node...");
             ws.send(JSON.stringify({ type: 'error', data: 'No active node' }));
         }

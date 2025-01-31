@@ -72,7 +72,7 @@ async function createWindow(options) {
     if (isMainWindow) {
         window.on('close', () => { if (!isQuiting) app.quit(); });
         const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
-        window.webContents.executeJavaScript(`document.getElementById('index-version').innerText = "v${version}";`, true);
+        window.webContents.executeJavaScript(`document.getElementById('board-version').innerText = "v${version}";`, true);
     } else {
         window.on('close', (e) => { if (!isQuiting) { e.preventDefault(); window.hide() } });
     }

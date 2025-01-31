@@ -23,9 +23,7 @@ files.push('!wallet-plugin');
 builder.build({
   config: {
     appId: 'science.contrast',
-    publish: [
-      { provider: "github", owner: "Seigneur-Machiavel", repo: "contrast" }
-    ],
+    publish: [{ provider: "github", owner: "Seigneur-Machiavel", repo: "contrast" }],
     productName: 'Contrast',
     buildVersion: version,
     directories: { output: 'dist' },

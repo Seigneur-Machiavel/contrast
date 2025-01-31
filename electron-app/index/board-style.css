@@ -1,103 +1,8 @@
-@font-face {
-    font-family: 'Contrast';
-    src: url('../../fonts/vertopal.com_Contrast\ V0.89.ttf') format('truetype');
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Bold.woff') format('woff');
-    font-weight: bold;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-BoldItalic.woff') format('woff');
-    font-weight: bold;
-    font-style: italic;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-ExtraLight.woff') format('woff');
-    font-weight: 200;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-ExtraLightItalic.woff') format('woff');
-    font-weight: 200;
-    font-style: italic;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Italic.woff') format('woff');
-    font-style: italic;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Light.woff') format('woff');
-    font-weight: 300;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-LightItalic.woff') format('woff');
-    font-weight: 300;
-    font-style: italic;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Medium.woff') format('woff');
-    font-weight: 500;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-MediumItalic.woff') format('woff');
-    font-weight: 500;
-    font-style: italic;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Regular.woff') format('woff');
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-SemiBold.woff') format('woff');
-    font-weight: 600;
-}
-@font-face {
-    font-family: 'IBM';
-    src: url('../../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-SemiBoldItalic.woff') format('woff');
-    font-weight: 600;
-    font-style: italic;
-}
-:root {
-    --dark-mode: 0;
-    --color1: white;
-    --color1_1: #f0f0f0;
-    --color1_2: #e0e0e0;
-
-    --color2: black;
-    --color2_1: #161616;
-    --color2_2: #323232;
-
-    --buttons-bar-height: 70px;
-    --windows-animation-duration: 400ms;
-}
-.dark-mode {
-    --dark-mode: 1;
-    --color1: black;
-    --color1_1: #161616;
-    --color1_2: #323232;
-
-    --color2: white;
-    --color2_1: #f0f0f0;
-    --color2_2: #e0e0e0;
-}
 body {
-    background-color: var(--color1);
-    color: var(--color2);
     overflow: hidden;
-    margin: 0;
-    font-family: 'IBM', sans-serif;
 }
 
-#index-bottom-buttons-bar {
+#board-bottom-buttons-bar {
     position: fixed;
     display: flex;
     justify-content: center;
@@ -106,7 +11,7 @@ body {
     height: var(--buttons-bar-height);
     bottom: 0;
 }
-#index-bottom-buttons-bar button {
+#board-bottom-buttons-bar button {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -120,15 +25,15 @@ body {
     color: var(--color1);
     transition: transform 0.2s;
 }
-#index-bottom-buttons-bar button:hover {
+#board-bottom-buttons-bar button:hover {
     cursor: pointer;
     transform: scale(1.1);
 }
-#index-bottom-buttons-bar button img {
+#board-bottom-buttons-bar button img {
     width: 70%;
-    filter: invert(calc(1 - var(--dark-mode)));
+    filter: invert(calc(1 - var(--dark-mode-boolean)));
 }
-#index-version {
+#board-version {
     position: fixed;
     bottom: 10px;
     left: 14px;
@@ -225,7 +130,7 @@ body {
     filter: invert(1);
 }
 .window .title-bar .buttons-wrap img {
-    filter: invert(var(--dark-mode));
+    filter: invert(var(--dark-mode-boolean));
     margin: 0 0 0 12px;
     height: 70%;
 }
@@ -244,48 +149,4 @@ body {
     /*padding: 10px;
     width: calc(100% - 20px);
     height: calc(100% - 20px - 32px);*/
-}
-
-/* DARK MODE SWITCH */
-.index-switch {
-    z-index: 4;
-    position: fixed;
-    right: 10px;
-    bottom: 10px;
-    display: inline-block;
-    width: 60px;
-    height: 34px;
-}
-.index-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.index-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: var(--color2);
-    transition: .3s;
-    border-radius: 34px;
-}
-.index-slider:before {
-    position: absolute;
-    content: "";
-    height: 26px;
-    width: 26px;
-    left: 4px;
-    bottom: 4px;
-    background-color: var(--color1);
-    transition: .3s;
-    border-radius: 50%;
-}
-input:checked+.index-slider {
-    background-color: var(--color2);
-}
-input:checked+.index-slider:before {
-    transform: translateX(26px);
 }

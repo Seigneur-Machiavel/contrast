@@ -81,10 +81,21 @@ class SubWindow {
 		this.element.style.minHeight = this.minSize.height + 'px';
 		
 		if (fromX && fromY) {
-			this.element.style.opacity = 0;
-			this.element.style.transform = 'scale(.1)';
-			this.element.style.left = (fromX - this.element.offsetWidth / 2) + 'px';
-			this.element.style.top = (fromY - this.element.offsetHeight) + 'px';
+			this.element.style.opacity = 1;
+			this.element.style.transform = 'scale(1)';
+			this.element.style.top = document.body.offsetHeight + 1000 + 'px';
+
+			anime({
+				targets: this.element,
+				opacity: 0,
+				scale: .1,
+				duration: 100,
+				delay: 100,
+				complete: () => {
+					this.element.style.top = (fromX - this.element.offsetWidth / 2) + 'px';
+					this.element.style.left = (fromY - this.element.offsetHeight) + 'px';
+				}
+			});
 		}
 	}
 	#newTitleBar(title) {
@@ -315,7 +326,6 @@ class AppsManager {
 			subWindow.unsetFullScreen(this.transitionsDuration);
 		}
 	}
-
 	grabWindowHandler(e) {
 		if (!e.target.classList.contains('title-bar')) return;
 
@@ -351,8 +361,8 @@ class AppsManager {
 }
 
 const appsManager = new AppsManager(
-	document.getElementById('index-windows-wrap'),
-	document.getElementById('index-bottom-buttons-bar'),
+	document.getElementById('board-windows-wrap'),
+	document.getElementById('board-bottom-buttons-bar'),
 	appsConfig
 );
 appsManager.initApps();
@@ -371,3 +381,6 @@ document.addEventListener('change', (event) => {
 			break;
 	}
 });
+
+await new Promise(resolve => setTimeout(resolve, 400));
+appsManager.windows.node.toggleFold();
