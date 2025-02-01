@@ -41,6 +41,20 @@ function targetStorageFolder() {
 
     return { filePath, storagePath };
 }
+function copyFolderRecursiveSync(src, dest) {
+    const exists = fs.existsSync(src);
+    const stats = exists && fs.statSync(src);
+    const isDirectory = exists && stats.isDirectory();
+
+    if (exists && isDirectory) {
+        if (!fs.existsSync(dest)) { fs.mkdirSync(dest); }
+        fs.readdirSync(src).forEach(function(childItemName) {
+            copyFolderRecursiveSync(path.join(src, childItemName), path.join(dest, childItemName));
+        });
+    } else {
+        fs.copyFileSync(src, dest);
+    }
+}
 
 const basePath = targetStorageFolder();
 export const PATH = {
@@ -57,6 +71,19 @@ export const PATH = {
 if (isProductionEnv) { delete PATH.TEST_STORAGE; delete PATH.JSON_BLOCKS; }
 // create the storage folder if it doesn't exist, and any other subfolder
 for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
+
+// Old storage to migrate
+const oldStoragePath = path.join(path.dirname(path.dirname(url.fileURLToPath(import.meta.url))), 'node', 'storage');
+if (fs.existsSync(oldStoragePath)) {
+    copyFolderRecursiveSync(path.join(oldStoragePath, 'accounts'), path.join(PATH.STORAGE, 'accounts'));
+    copyFolderRecursiveSync(path.join(oldStoragePath, 'snapshots'), PATH.SNAPSHOTS);
+    copyFolderRecursiveSync(path.join(oldStoragePath, 'blocks'), PATH.BLOCKS);
+    copyFolderRecursiveSync(path.join(oldStoragePath, 'blocks-info'), PATH.BLOCKS_INFO);
+    copyFolderRecursiveSync(path.join(oldStoragePath, 'addresses-txs-refs'), PATH.TXS_REFS);
+    fs.copyFileSync(path.join(oldStoragePath, 'AddressesTxsRefsStorage_config.json'), path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json'));
+    fs.copyFileSync(path.join(oldStoragePath, 'nodeSettings.json'), path.join(PATH.STORAGE, 'nodeSettings.json'));
+    fs.rmSync(oldStoragePath, { recursive: true });
+}
 
 // copy the clear.js and clear-storage.bat files to the storage folder (usefull for manual cleaning)
 const clearJsPath = path.join(basePath.storagePath, 'clear.js');
