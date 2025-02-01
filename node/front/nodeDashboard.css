@@ -1,22 +1,10 @@
 :root {
-    --foreground: #d4d4d4; /* Light text color */
-    --accent: #569cd6;      /* Accent color for buttons and highlights */
-    --input-bg: #2d2d2d;    /* Input background */
+    --cbe-widget-margin: 0 10px;
 }
-
-/* Reset margin, padding, and box-sizing for all elements */
 body {
-    /*font-family: "IBM Plex Mono", monospace;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    background-color: var(--background);
-    color: var(--foreground);*/
-}
-
-/* Utility class to hide elements */
-.hidden {
-    display: none !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 /* Remove spinner arrows from number inputs in WebKit browsers */
@@ -25,57 +13,42 @@ input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
-h1 {
-    font-size: 1.5rem;
-    margin: 10px 0;
+/*h1 {
     font-weight: 600;
 }
-
 h2 {
-    font-size: 1.25rem;
-    margin: 10px 0;
-    font-weight: 600;
+    font-weight: 400;
 }
-
 h3 {
-    font-size: 1rem; 
-    margin: 8px 0;
+    font-weight: 500;
+}*/
+h1 {
     font-weight: 600;
 }
-
-.container.validator h1,
-.container.miner h1,
-.global-info h1 {
-    font-size: 1.5rem; 
+h2 {
+    font-weight: 400;
 }
-
-.spacedText h3,
-#topBar h3 {
-    font-size: 1rem; 
-}
-
-/* General Button Styles */
-button {
-    font-family: 'IBM Plex Mono', monospace;
+h3 {
     font-weight: 500;
-    background: var(--accent);
-    color: var(--foreground);
-    padding: 5px 10px;
-    border: 1px solid var(--color2);
-    cursor: pointer;
-    transition: background 0.3s ease;
 }
 
-button:hover {
-    background: #6fa8dc; 
+.spacedText {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+.spacedText.column {
+    flex-direction: column;
+    align-items: flex-start;
+}
+.spacedText:not(:last-child) {
+    border-bottom: solid 1px var(--color1_2);
 }
 
 /* Specific Button Classes */
 .toggleAdminPanelButton {
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 500;
-    background: var(--accent);
-    color: var(--foreground);
     padding: 5px 10px;
     cursor: pointer;
     border: 1px solid var(--color2);
@@ -84,118 +57,27 @@ button:hover {
 .editButton {
     cursor: pointer;
     height: fit-content;
-    font-size: 18px; 
-    margin-left: 10px;
+    font-size: 22px;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    transform: translateX(140%) rotateY(180deg);
+    transition: transform 0.06s ease;
 }
-
 .editButton:hover {
-    transform: scale(1.1);
+    transform: translateX(140%) rotateY(180deg) scale(1.1);
 }
 
 /* Modal Specific Buttons */
 #toggleModalInput {
     padding: 10px;
-    background: var(--accent);
-    color: var(--foreground);
     cursor: pointer;
     font-size: 0.9rem;
-    transition: background 0.3s ease;
     margin-bottom: 20px; 
 }
 
-#toggleModalInput:hover {
-    background: #6fa8dc;
-}
-
-
-/* Modal Confirmation and Cancel Buttons */
-#modalConfirmBtn {
-    background: #28a745;
-    border: none;
-}
-
-#modalConfirmBtn:hover {
-    background: #218838;
-}
-
-#modalCancelBtn {
-    background: #dc3545; 
-    border: none;
-}
-
-#modalCancelBtn:hover {
-    background: #c82333;
-}
-
-
-
-/* Incremental Input Styles */
-.incrementalInput {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.amountInput {
-    text-align: right
-}
-
-
-.incrementalInput button:first-child,
-.incrementalInput button:last-child {
-    background: none;
-    color: var(--color2);
-    font-size: large;
-    font-weight: 600;
-}
-
-#topBar {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-    border-bottom: solid 1px var(--color2);
-}
-
-#topBar h3 {
-    width: auto;
-    opacity: 0.8;
-    margin: 5px 0;
-    flex-grow: 1;
-    text-align: center;
-}
-
-#topBar .btnWrap {
-    overflow: hidden;
-    max-height: 0;
-    transition: max-height 0.3s ease;
-}
-
-#topBar .btnWrap.visible {
-    max-height: 200px; 
-}
-
-#topBar .btnWrap div {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-around;
-    width: auto;
-    overflow: hidden;
-}
-
-#topBar .btnWrap div button {
-    cursor: pointer;
-    margin: 0 0 5px 0;
-}
-
-.adminPanelContainer {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-
-}
-
-/* Modal Wrapper */
 .modalsWrap {
+    z-index: 100;
     position: fixed;
     display: flex;
     justify-content: center;
@@ -206,25 +88,12 @@ button:hover {
     top: 0;
     transition: opacity 0.3s ease;
 }
-
-.modalsWrap.hidden > .modalsWrapBackground {
-    backdrop-filter: blur(0px) !important;
-}
-
-.modalsWrap > .modalsWrapBackground {
-    backdrop-filter: blur(2px);
-}
-
 .modalsWrapBackground {
     position: absolute;
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(2px);
-    transition: backdrop-filter 0.6s 0.4s;
 }
-
-/* Modal Content */
 .modalWrap {
     z-index: 1;
     width: 72%;
@@ -235,83 +104,127 @@ button:hover {
     background: var(--color1);
     border: 1px solid var(--color2);
 }
-
 .modalWrap .spacedText {
     align-items: center;
 }
-
-.modalWrap .spacedText input {
-    width: 260px;
-    text-align: center;
-    background: var(--input-bg);
-    color: var(--foreground);
-    border: solid 1px var(--color2);
-}
-
-/* Modal Input Section */
-#modalInputSection {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 20px; 
-}
-
-
 #modalInputLabel {
     align-self: flex-start;
     font-size: 1rem;
 }
-
-/* Modal Input Section Input */
-#modalInput {
-    flex: 1;
-    padding: 10px;
-    border-radius: 4px;
-    border: 1px solid var(--color2);
-    background: var(--input-bg);
-    color: var(--foreground);
-    font-size: 1rem;
-    margin-bottom: 20px;
-}
-
-
 #modalInputWrap {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 10px;
     width: 100%;
     max-width: 300px;
 }
+#modalInputWrap button {
 
-.dashboard,
-.dashboard-inner {
-    display: flex;
-    justify-content: space-around;
-    margin: 40px;
+}
+#modalConfirmBtn {
+    background: #28a745;
+    border: none;
+}
+#modalConfirmBtn:hover {
+    background: #218838;
+}
+#modalCancelBtn {
+    background: #dc3545; 
+    border: none;
+}
+#modalCancelBtn:hover {
+    background: #c82333;
 }
 
-.global-info {
-    width: 80% !important;
-    margin: 20px auto;
+
+.incrementalInput {
+
+}
+.amountInput {
+    width: 160px;
+    text-align: right
+}
+.incrementalInput button:first-child,
+.incrementalInput button:last-child {
+    background: none;
+    color: var(--color2);
+    font-size: large;
+    font-weight: 600;
+}
+/*
+#topBar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     padding: 20px;
-    border: 1px solid var(--color2);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    border-bottom: solid 1px var(--color2);
 }
-#stakeInputWrap {
-    transform: translateY(26%);
-    height: 100%;
+#topBar h3 {
+    width: auto;
+    opacity: 0.8;
+    margin: 5px 0;
+    flex-grow: 1;
+    text-align: center;
+}
+#topBar .btnWrap {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease;
+}
+#topBar .btnWrap.visible {
+    max-height: 200px; 
+}
+#topBar .btnWrap div {
     display: flex;
+    align-items: flex-start;
+    justify-content: space-around;
+    width: auto;
+    overflow: hidden;
 }
-#stakeInputWrap button {
-    padding: 2px 10px;
+#topBar .btnWrap div button {
+    cursor: pointer;
+    margin: 0 0 5px 0;
+}*/
+
+.adminPanelContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#stakeInputWrap {
+    display: flex;
+    gap: 10px;
 }
 
 .container {
-    width: 44%;
-    padding: 10px 20px;
-    border: 1px solid var(--color2);
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-
+    overflow: hidden;
+    width: 80%;
+    max-width: 600px;
+    padding: 0 40px 20px;
+    border: 2px solid var(--color2);
+    border-radius: 20px;
+    margin-bottom: 40px;
+}
+.container-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    background-color: var(--color2);
+    color: var(--color1);
+    margin: 0 -40px;
+    padding: 0 40px;
+}
+.container-header h2:not(:first-child) {
+    font-size: 1.2em;
+    font-weight: 400;
+    opacity: .5;
+}
+.container .spacedText h3 {
+    margin: 30px 0 10px 0;
+}
+.container .spacedText h3:not(:first-child), .container .spacedText div h3 {
+    opacity: .6;
 }
 
 #listenAddress li {
@@ -326,33 +239,25 @@ button:hover {
     overflow-y: auto;
     border: 1px solid var(--color2);
 }
-
 .network-list li {
     padding: 8px 12px;
     border-bottom: 1px solid var(--color2);
-    color: var(--foreground);
 }
-
 .network-list li:last-child {
     border-bottom: none;
 }
-
-/* Peer Item */
 .peer-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 5px 0;
 }
-
 .peer-id {
     flex: 1;
     margin-right: 10px;
 }
-
-/* Peer Buttons */
-.disconnect-btn,
-.ask-sync-btn {
+.disconnect-peer-btn,
+.ask-peer-sync-btn {
     margin-left: 5px;
     padding: 5px 10px;
     font-size: 0.9em;
@@ -361,44 +266,14 @@ button:hover {
     border-radius: 3px;
     transition: background-color 0.3s;
 }
-
-.disconnect-btn {
+.disconnect-peer-btn {
     background-color: #e74c3c;
     color: white;
 }
-
-.disconnect-btn:hover {
+.disconnect-peer-btn:hover {
     background-color: #c0392b;
 }
 
-.ask-sync-btn {
-    background-color: #3498db;
-    color: white;
-}
-
-.ask-sync-btn:hover {
-    background-color: #2980b9;
-}
-
-/* Spaced Text */
-.spacedText {
-    display: flex;
-    justify-content: space-between;
-}
-.spacedText.column {
-    flex-direction: column;
-    align-items: flex-start;
-}
-
-.spacedText:not(:last-child) {
-    border-bottom: solid 1px var(--color2);
-}
-
-.heightText {
-    height: fit-content;
-    padding: 10px;
-    border: 1px solid var(--color2);
-}
 .toggleWrap {
     display: flex;
     align-items: center;
@@ -406,13 +281,11 @@ button:hover {
     padding: 8px 16px;
     width: 100%;
 }
-
 .toggleSpan {
     min-width: 32px;
     text-align: center;
     padding: 2px 8px;
 }
-
 .toggleButton {
     position: relative;
     width: 44px;
@@ -422,7 +295,6 @@ button:hover {
     cursor: pointer;
     transition: background-color 0.2s;
 }
-
 .toggleButton::after {
     content: '';
     position: absolute;
@@ -433,11 +305,9 @@ button:hover {
     background-color: white;
     transition: transform 0.2s;
 }
-
 .toggleButton.active {
     background-color: #3498db;
 }
-
 .toggleButton.active::after {
     transform: translateX(20px);
 }

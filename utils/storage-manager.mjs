@@ -83,6 +83,7 @@ if (fs.existsSync(oldStoragePath)) {
     fs.copyFileSync(path.join(oldStoragePath, 'AddressesTxsRefsStorage_config.json'), path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json'));
     fs.copyFileSync(path.join(oldStoragePath, 'nodeSettings.json'), path.join(PATH.STORAGE, 'nodeSettings.json'));
     fs.rmSync(oldStoragePath, { recursive: true });
+    console.log('--- OLD STORAGE MIGRATED ---');
 }
 
 // copy the clear.js and clear-storage.bat files to the storage folder (usefull for manual cleaning)

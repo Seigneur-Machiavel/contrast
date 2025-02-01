@@ -12,9 +12,7 @@ function newElement(tag, classes, innerHTML, parent) {
 	element.classList.add(...classes);
 
 	if (innerHTML.includes('.html')) {
-		fetch(innerHTML).then(res => res.text()).then(html => {
-			element.innerHTML = html;
-		});
+		fetch(innerHTML).then(res => res.text()).then(html => { element.innerHTML = html; });
 	} else {
 		element.innerHTML = innerHTML;
 	}
@@ -374,6 +372,12 @@ document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('
 document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
 document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });
 document.addEventListener('mouseup', (e) => { appsManager.releaseWindowHandler(e); });
+document.addEventListener('resize', (e) => {
+	console.log('resize', e);
+	if (e.target.classList.contains('window')) {
+		document.body.style.userSelect = 'none';
+	}
+});
 document.addEventListener('change', (event) => {
 	switch(event.target.id) {
 		case 'dark-mode-toggle':

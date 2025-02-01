@@ -1,5 +1,6 @@
 import { Transaction_Builder, UTXO } from '../src/transaction.mjs';
 import { convert } from '../../utils/converters.mjs';
+//import { BlockExplorerWidget } from './explorerScript.mjs';
 
 /**
  * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
@@ -61,8 +62,7 @@ function connectWS() {
                         message: 'No active node detected. Please set up your private key.',
                         inputLabel: 'Private Key:',
                         inputType: 'password',
-                        showInput: true,
-                        showToggle: true
+                        showInput: true
                     });
                     console.log('No active node, opening setup modal');
                 }
@@ -88,6 +88,9 @@ function connectWS() {
             case 'broadcast_finalized_block':
                 //console.log('broadcast_finalized_block', data);
                 break;
+            case 'transaction_broadcasted':
+                console.log('transaction_broadcasted', data);
+                break;
             case 'hash_rate_updated':
                 if (isNaN(data)) { console.error(`hash_rate_updated: ${data} is not a number`); return; }
                 eHTML.hashRate.textContent = data.toFixed(2);
@@ -111,11 +114,10 @@ function connectWS() {
         if (!ws || ws.readyState !== 1) { continue; }
         try { ws.send(JSON.stringify({ type: 'get_node_info', data: Date.now() })) } catch (error) {};
     }
-})();
+})(); // INIT ANONYMOUS FUNCTION -> await ws then send "get_node_info"
 connectWS();
 
 const eHTML = {
-    dashboard: (nodeID) => document.getElementById(`dashboard-${nodeID}`),
     roles: document.getElementById('roles'),
     syncClock: document.getElementById('syncClock'),
     forceRestartBtn: document.getElementById('forceRestart'),
@@ -138,6 +140,7 @@ const eHTML = {
         }
     },
 
+    nodeState: document.getElementById('nodeState'),
     validatorAddress: document.getElementById('validatorAddress'),
     validatorRewardAddress: document.getElementById('validatorRewardAddress'),
     validatorAddressEditBtn: document.getElementById('validatorAddressEditBtn'),
@@ -176,7 +179,6 @@ const eHTML = {
     peersConnectedList: document.getElementById('peersConnectedList'),
     hardResetBtn: document.getElementById('hardReset'),
     updateGitBtn: document.getElementById('updateGit'),
-    nodeState: document.getElementById('nodeState'),
     repScoresList: document.getElementById('repScoreList'),
     peersHeightList: document.getElementById('peersHeightList'),
     listenAddress: document.getElementById('listenAddress'),
@@ -193,7 +195,6 @@ const eHTML = {
     }
 }
 
-// Function to display node information
 function displayNodeInfo(data) {
     /** @type {StakeReference[]} */
     const validatorStakesReference = data.validatorStakes ? data.validatorStakes : false;
@@ -259,7 +260,6 @@ function displayNodeInfo(data) {
         updateToggle(data.disabledSync, eHTML.disabledSyncToggle);
     }
 }
-
 function updateToggle(isIgnoring, eHTML_object) {
     const button = eHTML_object.button;
     const status = eHTML_object.status;
@@ -329,19 +329,19 @@ function renderPeers(peers) {
         // Create Disconnect Button
         const disconnectBtn = document.createElement('button');
         disconnectBtn.textContent = 'Disconnect';
-        disconnectBtn.classList.add('disconnect-btn'); // Add class for styling
+        disconnectBtn.classList.add('disconnect-peer-btn'); // Add class for styling
         disconnectBtn.dataset.peerId = peerId; // Store peerId for reference
 
         // Create Ban Button
         const banBtn = document.createElement('button');
         banBtn.textContent = 'Ban';
-        banBtn.classList.add('ban-btn'); // Add class for styling
+        banBtn.classList.add('ban-peer-btn'); // Add class for styling
         banBtn.dataset.peerId = peerId; // Store peerId for reference
 
         // Create Ask Sync Button
         const askSyncBtn = document.createElement('button');
         askSyncBtn.textContent = 'Ask Sync';
-        askSyncBtn.classList.add('ask-sync-btn'); // Add class for styling
+        askSyncBtn.classList.add('ask-peer-sync-btn'); // Add class for styling
         askSyncBtn.dataset.peerId = peerId; // Store peerId for reference
 
         // Append elements to the list item
@@ -354,7 +354,7 @@ function renderPeers(peers) {
         eHTML.peersConnectedList.appendChild(li);
     });
 }
-function renderPeersHeight (peers) {
+function renderPeersHeight(peers) {
     eHTML.peersHeightList.innerHTML = ''; // Clear existing list
 
     if (Object.keys(peers).length === 0) {
@@ -383,7 +383,6 @@ function renderPeersHeight (peers) {
     }
 
 }
-
 function renderScores(scores) {
     eHTML.repScoresList.innerHTML = ''; // Clear existing list
 
@@ -400,94 +399,74 @@ function renderScores(scores) {
         eHTML.repScoresList.appendChild(li);
     });
 }
-// Add event listener to the peersConnectedList for delegation
-eHTML.peersConnectedList.addEventListener('click', (event) => {
-    const target = event.target;
+/**
+ * @typedef {Object} ModalOptions
+ * @property {string} [message] - default 'Are you sure?'
+ * @property {string} [inputLabel] - default 'Input:'
+ * @property {string} [inputType] - default 'text'
+ * @property {string} [inputPlaceholder] - default ''
+ * @property {boolean} [showInput] - default false */
+/** @param {string} action @param {ModalOptions} options */
+function openModal(action, options) {
+    if (modalOpen) { return; }
+    modalOpen = true;
+    currentAction = action;
 
-    // Check if Disconnect button was clicked
-    if (target.classList.contains('disconnect-btn')) {
-        const peerId = target.dataset.peerId;
-        handleDisconnectPeer(peerId);
-    }
+    const modal = eHTML.modals.unifiedModal;
+    modal.message.textContent = options.message || 'Are you sure?';
+    modal.inputSection.classList.add('hidden');
+    if (options.showInput) { modal.inputSection.classList.remove('hidden'); }
+    modal.inputLabel.textContent = options.inputLabel || 'Input:';
+    
+    modal.input.value = '';
+    modal.input.type = options.inputType || 'text';
+    modal.input.placeholder = options.inputPlaceholder || options.inputType === 'password' ? 'Enter your private key' : '';
+    
+    modal.toggleInputBtn.textContent = 'Show';
+    modal.toggleInputBtn.style.display = options.inputType === 'password' ? 'inline' : 'none';
 
-    // Check if Ask Sync button was clicked
-    if (target.classList.contains('ask-sync-btn')) {
-        const peerId = target.dataset.peerId;
-        handleAskSyncPeer(peerId);
-    }
+    eHTML.modals.wrap.classList.remove('hidden', 'fold'); // Remove both classes
+    modal.wrap.classList.remove('hidden'); // Ensure modal is visible
 
-    // Check if Ban button was clicked
+    eHTML.modals.wrap.style.transform = 'scaleX(0) scaleY(0) skewX(0deg)';
+    eHTML.modals.wrap.style.opacity = 0;
+    eHTML.modals.wrap.style.clipPath = 'circle(6% at 50% 50%)';
 
-    if (target.classList.contains('ban-btn')) {
-        const peerId = target.dataset.peerId;
-        console.log('Ban button clicked for peer:', peerId);
-        handleBanPeer(peerId);
-    }
-});
-
-function handleDisconnectPeer(peerId) {
-    console.log(`Disconnecting peer: ${peerId}`);
-    currentAction = 'disconnect_peer';
-    currentActionPeerId = peerId;
-    openModal('disconnect_peer', {
-        message: `Are you sure you want to disconnect peer ${peerId}?`,
-        showInput: false
+    anime({
+        targets: eHTML.modals.wrap,
+        scaleX: 1,
+        scaleY: 1,
+        opacity: 1,
+        duration: 400,
+        easing: 'easeOutQuad',
+        complete: () => { if (options.showInput) { modal.input.focus(); } else { modal.confirmBtn.focus(); } }
+    });
+    anime({
+        targets: eHTML.modals.wrap,
+        clipPath: 'circle(100% at 50% 50%)',
+        duration: 800,
+        easing: 'easeOutQuad',
     });
 }
-function handleBanPeer(peerId) {
-    console.log(`Banning peer: ${peerId}`);
-    currentAction = 'ban_peer';
-    currentActionPeerId = peerId;
-    openModal('ban_peer', {
-        message: `Are you sure you want to ban peer ${peerId}?`,
-        showInput: false
-    });
-}
-function handleAskSyncPeer(peerId) {
-    console.log(`Asking peer ${peerId} to sync`);
-    currentAction = 'ask_sync_peer';
-    currentActionPeerId = peerId;
-    openModal('ask_sync_peer', {
-        message: `Do you want to request a sync from peer ${peerId}?`,
-        showInput: false
-    });
-}
-
-
-// Event listeners for modals
-eHTML.modals.wrap.addEventListener('click', (event) => {
-    if (event.target === eHTML.modals.modalsWrapBackground) { closeModal(); }
-});
-
-// Unified modal confirm button
-eHTML.modals.unifiedModal.confirmBtn.addEventListener('click', () => {
+function confirmModal() {
     console.log('Confirm button clicked with action:', currentAction);
     switch (currentAction) {
         case ACTIONS.SETUP:
             console.log('Setup: setting private key');
             const setupPrivKey = eHTML.modals.unifiedModal.input.value.trim();
-            if (!setupPrivKey) {
-                alert('Private key is required for setup.');
-                return;
-            }
+            if (!setupPrivKey) { alert('Private key is required for setup.'); return; }
             ws.send(JSON.stringify({ type: 'set_private_key', data: setupPrivKey }));
             break;
         case ACTIONS.SET_VALIDATOR_ADDRESS:
             console.log('Set Validator Address:', eHTML.modals.unifiedModal.input.value.trim());
             const newValidatorAddress = eHTML.modals.unifiedModal.input.value.trim();
-            if (!newValidatorAddress) {
-                alert('Validator address cannot be empty.');
-                return;
-            }
+            if (!newValidatorAddress) { alert('Validator address cannot be empty.'); return; }
             ws.send(JSON.stringify({ type: 'set_validator_address', data: newValidatorAddress }));
             break;
         case ACTIONS.SET_MINER_ADDRESS:
             console.log('Set Miner Address:', eHTML.modals.unifiedModal.input.value.trim());
             const newMinerAddress = eHTML.modals.unifiedModal.input.value.trim();
-            if (!newMinerAddress) {
-                alert('Miner address cannot be empty.');
-                return;
-            }
+            if (!newMinerAddress) { alert('Miner address cannot be empty.'); return; }
             ws.send(JSON.stringify({ type: 'set_miner_address', data: newMinerAddress }));
             break;
         case ACTIONS.HARD_RESET:
@@ -506,10 +485,7 @@ eHTML.modals.unifiedModal.confirmBtn.addEventListener('click', () => {
             break;
         case ACTIONS.RESET_WALLET:
             const resetPrivKey = eHTML.modals.unifiedModal.input.value.trim();
-            if (!resetPrivKey) {
-                alert('Private key is required to reset the wallet.');
-                return;
-            }
+            if (!resetPrivKey) { alert('Private key is required to reset the wallet.'); return; }
             ws.send(JSON.stringify({ type: 'reset_wallet', data: resetPrivKey }));
             break;
 
@@ -527,104 +503,50 @@ eHTML.modals.unifiedModal.confirmBtn.addEventListener('click', () => {
             const banPeerId = currentActionPeerId;
             console.log('Banning peer:', banPeerId);
             ws.send(JSON.stringify({ type: 'ban_peer', data: banPeerId }));
-            break;
-            
+            break;  
         default:
             console.error('Unknown action:', currentAction);
     }
-    currentAction = null;
     closeModal();
-});
-
-// Unified modal cancel button
-eHTML.modals.unifiedModal.cancelBtn.addEventListener('click', () => {
+};
+function closeModal() {
+    if (!modalOpen) return;
+    modalOpen = false;
     currentAction = null;
-    closeModal();
-});
 
-// Toggle password visibility in unified modal
-eHTML.modals.unifiedModal.toggleInputBtn.addEventListener('click', () => {
-    togglePasswordVisibility(eHTML.modals.unifiedModal.input, eHTML.modals.unifiedModal.toggleInputBtn);
-});
+    if (eHTML.modals.wrap.classList.contains('fold')) return;
+    eHTML.modals.wrap.classList.add('fold');
 
-// Validator Address Edit Button
-eHTML.validatorAddressEditBtn.addEventListener('click', () => {
-    console.log('validatorAddressEditBtn clicked');
-    openModal(ACTIONS.SET_VALIDATOR_ADDRESS, {
-        message: 'Please enter the new Validator Address:',
-        inputLabel: 'Validator Address:',
-        inputType: 'text',
-        inputPlaceholder: 'Enter new Validator Address',
-        showInput: true,
-        showToggle: false
-    });
-});
-
-
-// Miner Address Edit Button
-eHTML.minerAddressEditBtn.addEventListener('click', () => {
-    console.log('minerAddressEditBtn clicked');
-    openModal(ACTIONS.SET_MINER_ADDRESS, {
-        message: 'Please enter the new Miner Address:',
-        inputLabel: 'Miner Address:',
-        inputType: 'text',
-        inputPlaceholder: 'Enter new Miner Address',
-        showInput: true,
-        showToggle: false
-    });
-});
-
-if (eHTML.ignoreBlocksToggle.button) {
-    eHTML.ignoreBlocksToggle.button.addEventListener('click', () => {
-        console.log('ignoreBlocksToggle button clicked');
-        const currentState = eHTML.ignoreBlocksToggle.button.classList.contains('active');
-        const newState = !currentState;
-        
-        // Send the new state to the backend
-        ws.send(JSON.stringify({
-            type: 'ignore_incoming_blocks',
-            data: newState
-        }));
-        
-        // Update the toggle state immediately for responsive UI
-        updateToggle(newState, eHTML.ignoreBlocksToggle);
+    anime({
+        targets: eHTML.modals.wrap,
+        clipPath: 'circle(6% at 50% 50%)',
+        scaleX: 0,
+        scaleY: 0,
+        opacity: 0,
+        duration: 800,
+        easing: 'easeOutQuad',
+        complete: () => {
+            if (!eHTML.modals.wrap.classList.contains('fold')) return;
+            eHTML.modals.wrap.classList.add('hidden');
+            eHTML.modals.wrap.classList.remove('fold'); // Reset for next use
+        }
     });
 }
 
-if (eHTML.disabledSyncToggle.button) {
-    eHTML.disabledSyncToggle.button.addEventListener('click', () => {
-        console.log('disabledSyncToggle button clicked');
-        const currentState = eHTML.disabledSyncToggle.button.classList.contains('active');
-        const newState = !currentState;
-
-        // Send the new state to the backend
-        ws.send(JSON.stringify({
-            type: 'disable_sync',
-            data: newState
-        }));
-
-        // Update the toggle state immediately for responsive UI
-        updateToggle(newState, eHTML.disabledSyncToggle);
-    });
-}
-// Prevent form submission
+// EVENT LISTENERS
 document.addEventListener('submit', function(event) { event.preventDefault(); });
-
-// Input validation
 document.addEventListener('input', async (event) => {
-    const amountInput = event.target.classList.contains('amountInput');
-    if (amountInput) {
-        console.log('amountInput input');
+    if (event.target.classList.contains('amountInput')) {
         event.target.value = event.target.value.replace(/[^\d.]/g, '');
         const nbOfDecimals = event.target.value.split('.')[1] ? event.target.value.split('.')[1].length : 0;
         if (nbOfDecimals > 6) { event.target.value = parseFloat(event.target.value).toFixed(6); }
     }
 });
-
+document.addEventListener('focusin', async (event) => {
+    if (event.target.classList.contains('amountInput')) { event.target.value = ''; }
+});
 document.addEventListener('focusout', async (event) => {
-    const amountInput = event.target.classList.contains('amountInput');
-    if (amountInput) {
-        console.log('amountInput focusout');
+    if (event.target.classList.contains('amountInput')) {
         if (isNaN(parseFloat(event.target.value))) { event.target.value = ''; return; }
         event.target.value = parseFloat(event.target.value).toFixed(6);
 
@@ -633,146 +555,101 @@ document.addEventListener('focusout', async (event) => {
         event.target.value = formatedValue;
     }
 });
-
-// Stake Input Confirm Button
-eHTML.stakeInput.confirmBtn.addEventListener('click', async () => {
-    const amountToStake = parseInt(eHTML.stakeInput.input.value.replace(",","").replace(".",""));
-    const validatorAddress = eHTML.validatorAddress.textContent;
-    console.log(`amountToStake: ${amountToStake} | validatorAddress: ${validatorAddress}`);
-    
-    console.log('UTXOs', validatorUTXOs);
-    const senderAccount = { address: validatorAddress, UTXOs: validatorUTXOs };
-    const transaction = await Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amountToStake);
-
-    ws.send(JSON.stringify({ type: 'new_unsigned_transaction', data: transaction }));
-    eHTML.stakeInput.input.value = 0;
-});
-
-// Miner Threads Event Listeners
-eHTML.minerThreads.input.addEventListener('change', () => {
-    console.log('set_miner_threads', eHTML.minerThreads.input.value);
-    ws.send(JSON.stringify({ type: 'set_miner_threads', data: eHTML.minerThreads.input.value }));
-});
-eHTML.minerThreads.decrementBtn.addEventListener('click', () => adjustInputValue(eHTML.minerThreads.input, -1));
-eHTML.minerThreads.incrementBtn.addEventListener('click', () => adjustInputValue(eHTML.minerThreads.input, 1));
-
-eHTML.modals.unifiedModal.cancelBtn.addEventListener('click', () => {
-    console.log('Cancel button clicked');
-    currentAction = null;
-    closeModal();
-});
-
-
-// Function to open unified modal
-function openModal(action, options) {
-    if (modalOpen) { return; }
-    modalOpen = true;
-    currentAction = action;
-
-    const modals = eHTML.modals;
-    const modal = modals.unifiedModal;
-
-    // Set the message
-    modal.message.textContent = options.message || 'Are you sure?';
-
-    // Handle dynamic input
-    if (options.showInput) {
-        modal.inputSection.style.display = 'block';
-        modal.inputLabel.textContent = options.inputLabel || 'Input:';
-        modal.input.type = options.inputType || 'text';
-        modal.input.value = ''; // Clear previous value
-
-        // Set placeholder dynamically
-        if (options.inputPlaceholder) {
-            modal.input.placeholder = options.inputPlaceholder;
-        } else {
-            // Default placeholder based on input type
-            modal.input.placeholder = options.inputType === 'password' ? 'Enter your private key' : '';
-        }
-
-        if (options.inputType === 'password') {
-            modal.toggleInputBtn.style.display = 'inline';
-            modal.input.type = 'password';
-            modal.toggleInputBtn.textContent = 'Show';
-        } else {
-            modal.toggleInputBtn.style.display = 'none';
-        }
-    } else {
-        modal.inputSection.style.display = 'none';
-        modal.input.value = '';
+document.addEventListener('change', async (event) => {
+    const target = event.target;
+    switch (target) {
+        case eHTML.minerThreads.input:
+            console.log('set_miner_threads', eHTML.minerThreads.input.value);
+            ws.send(JSON.stringify({ type: 'set_miner_threads', data: eHTML.minerThreads.input.value }));
+            break;
     }
+});
+document.addEventListener('click', async (event) => {
+    const target = event.target;
+    switch (target) {
+        case eHTML.stakeInput.confirmBtn:
+            console.log('Stake Confirm Button clicked');
+            const amountToStake = parseInt(eHTML.stakeInput.input.value.replace(",","").replace(".",""));
+            const validatorAddress = eHTML.validatorAddress.textContent;
+            console.log(`amountToStake: ${amountToStake} | validatorAddress: ${validatorAddress}`);
+            
+            console.log('UTXOs', validatorUTXOs);
+            const senderAccount = { address: validatorAddress, UTXOs: validatorUTXOs };
+            const transaction = await Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amountToStake);
 
-    // Show the modal
-    modals.wrap.classList.remove('hidden', 'fold'); // Remove both classes
-    modal.wrap.classList.remove('hidden'); // Ensure modal is visible
-
-    // Initialize animation properties
-    modals.wrap.style.transform = 'scaleX(0) scaleY(0) skewX(0deg)';
-    modals.wrap.style.opacity = 0;
-    modals.wrap.style.clipPath = 'circle(6% at 50% 50%)';
-
-    // Animate the modal appearance
-    anime({
-        targets: modals.wrap,
-        scaleX: 1,
-        scaleY: 1,
-        opacity: 1,
-        duration: 1000,
-        easing: 'easeOutQuad',
-        complete: () => {
-            if (options.showInput) {
-                modal.input.focus();
-                console.log('Focused on input field.');
-            } else {
-                modal.confirmBtn.focus();
-                console.log('Focused on confirm button.');
-            }
-        }
-    });
-    anime({
-        targets: modals.wrap,
-        clipPath: 'circle(100% at 50% 50%)',
-        delay: 200,
-        duration: 800,
-        easing: 'easeOutQuad',
-    });
-}
-
-
-// Function to close unified modal
-function closeModal() {
-    if (!modalOpen) { return false; }
-    modalOpen = false;
-    const modals = eHTML.modals;
-    const modal = modals.unifiedModal;
-    const modalsWrap = modals.wrap;
-
-    if (modalsWrap.classList.contains('fold')) { return false; }
-    modalsWrap.classList.add('fold');
-
-    anime({
-        targets: modalsWrap,
-        clipPath: 'circle(6% at 50% 50%)',
-        duration: 600,
-        easing: 'easeOutQuad',
-    });
-    anime({
-        targets: modals.wrap,
-        scaleX: 0,
-        scaleY: 0,
-        opacity: 0,
-        duration: 800,
-        easing: 'easeOutQuad',
-        complete: () => {
-            if (!modalsWrap.classList.contains('fold')) { return; }
-
-            modals.wrap.classList.add('hidden');
-            modal.input.value = '';
-            modal.inputSection.style.display = 'none';
-            modalsWrap.classList.remove('fold'); // Reset for next use
-        }
-    });
-}
+            ws.send(JSON.stringify({ type: 'new_unsigned_transaction', data: transaction }));
+            eHTML.stakeInput.input.value = 0;
+            break;
+        case eHTML.minerThreads.decrementBtn:
+            adjustInputValue(eHTML.minerThreads.input, -1);
+            break;
+        case eHTML.minerThreads.incrementBtn:
+            adjustInputValue(eHTML.minerThreads.input, 1);
+            break;
+        case eHTML.minerAddressEditBtn:
+            console.log('minerAddressEditBtn clicked');
+            openModal(ACTIONS.SET_MINER_ADDRESS, {
+                message: 'Please enter the new Miner Address:',
+                inputLabel: 'Miner Address:',
+                inputType: 'text',
+                inputPlaceholder: 'Enter new Miner Address',
+                showInput: true
+            });
+            break;
+        case eHTML.validatorAddressEditBtn:
+            console.log('validatorAddressEditBtn clicked');
+            openModal(ACTIONS.SET_VALIDATOR_ADDRESS, {
+                message: 'Please enter the new Validator Address:',
+                inputLabel: 'Validator Address:',
+                inputType: 'text',
+                inputPlaceholder: 'Enter new Validator Address',
+                showInput: true
+            });
+            break;
+        case target.classList.contains('disconnect-peer-btn'):
+            currentActionPeerId = target.dataset.peerId;
+            openModal('disconnect_peer', { message: `Are you sure you want to disconnect peer ${target.dataset.peerId}?`, showInput: false });
+            break;
+        case target.classList.contains('ask-peer-sync-btn'):
+            currentActionPeerId = target.dataset.peerId;
+            openModal('ask_sync_peer', { message: `Do you want to request a sync from peer ${target.dataset.peerId}?`, showInput: false });
+            break;
+        case target.classList.contains('ban-peer-btn'):
+            currentActionPeerId = target.dataset.peerId;
+            openModal('ban_peer', { message: `Are you sure you want to ban peer ${target.dataset.peerId}?`, showInput: false });
+            break;
+        case eHTML.modals.unifiedModal.toggleInputBtn:
+            togglePasswordVisibility(eHTML.modals.unifiedModal.input, eHTML.modals.unifiedModal.toggleInputBtn);
+            break;
+        case eHTML.modals.unifiedModal.confirmBtn:
+            confirmModal();
+            break;
+        case eHTML.modals.unifiedModal.cancelBtn:
+            console.log('Cancel button clicked');
+            closeModal();
+            break;
+        case eHTML.modals.modalsWrapBackground:
+            console.log('Modal-Background clicked');
+            closeModal();
+            break;
+        case eHTML.ignoreBlocksToggle.button:
+            console.log('ignoreBlocksToggle button clicked');
+            ws.send(JSON.stringify({
+                type: 'ignore_incoming_blocks',
+                data: !eHTML.ignoreBlocksToggle.button.classList.contains('active')
+            }));
+            updateToggle(newState, eHTML.ignoreBlocksToggle);
+            break;
+        case eHTML.disabledSyncToggle.button:
+            console.log('disabledSyncToggle button clicked');
+            ws.send(JSON.stringify({
+                type: 'disable_sync',
+                data: !eHTML.disabledSyncToggle.button.classList.contains('active')
+            }));
+            updateToggle(newState, eHTML.disabledSyncToggle);
+            break;
+    }
+});
 
 function togglePasswordVisibility(inputElement, toggleButton) {
     if (inputElement.type === 'password') {

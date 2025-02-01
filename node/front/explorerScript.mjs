@@ -50,10 +50,10 @@ const SETTINGS = {
     LOCAL_PORT: "27270",
     LOCAL: window.explorerLOCAL || false,
     RECONNECT_INTERVAL: 2000,
-    GET_CURRENT_HEIGHT_INTERVAL: 5000,
+    GET_CURRENT_HEIGHT_INTERVAL: window.explorerLOCAL ? 1000 : 5000,
     ROLES: window.explorerROLES || ['chainExplorer', 'blockExplorer'],
 
-    AUTO_CHOSE_BEST_NODES: true,
+    AUTO_CHOSE_BEST_NODES: window.explorerLOCAL === true ? false : true,
     CURRENT_NODE_INDEX: 0,
     NODES_LIST: [ // used for redondant connections
         'ws://localhost:27270',
@@ -96,11 +96,15 @@ async function onMessage(event) {
     switch (message.type) {
         case 'current_height':
             const currentHeight = data;
-            const lastBlockIndex = blockExplorerWidget.getLastBlockInfoIndex();
-            if (lastBlockIndex === 0) { return; }
-            //console.log(`current_height: ${currentHeight}, lastBlockIndex: ${lastBlockIndex}`);
-            if (currentHeight - lastBlockIndex > 10) {
+            if (blockExplorerWidget.lastBlockInfoIndex === -1) { return; }
+            //console.log(`current_height: ${currentHeight}, lastBlockIndex: ${blockExplorerWidget.lastBlockInfoIndex}`);
+            /*if (currentHeight - blockExplorerWidget.lastBlockInfoIndex > 10) {
                 console.info('current_height n+10 -> ws.close()');
+                try { ws.close() } catch (error) {};
+                return;
+            }*/
+            if (data !== blockExplorerWidget.lastBlockInfoIndex) {
+                console.info(`current_height #${data} !== lastBlockIndex+1 #${blockExplorerWidget.lastBlockInfoIndex + 1} -> ws.close()`);
                 try { ws.close() } catch (error) {};
                 return;
             }
@@ -109,29 +113,21 @@ async function onMessage(event) {
             if (!data || !data[data.length - 1]) { return; }
             //console.log(`last_confirmed_block from ${data[0].header.index} to ${data[data.length - 1].header.index}`);
             //console.log('last_confirmed_block', data[data.length - 1]);
-            displayLastConfirmedBlock(data[data.length - 1].header);
-            for (const blockInfo of data) { blockExplorerWidget.fillBlockInfo(blockInfo); }
+            const blocksToDisplay = data.length > SETTINGS.NB_OF_CONFIRMED_BLOCKS ? data.slice(data.length - SETTINGS.NB_OF_CONFIRMED_BLOCKS) : data;
+            displayLastConfirmedBlock(blocksToDisplay[blocksToDisplay.length - 1].header);
+            for (const blockInfo of blocksToDisplay) { blockExplorerWidget.fillBlockInfo(blockInfo); }
             break;
         case 'broadcast_new_candidate':
             //console.log('broadcast_new_candidate', data);
             break;
         case 'new_block_confirmed':
             //console.log('new_block_confirmed', data);
-            displayLastConfirmedBlock(data.header);
-            
-            /*while (blockExplorerWidget.bcElmtsManager.isSucking) {
-                if (remainingAttempts === 0) { return; }
-                await new Promise((resolve) => { setTimeout(() => { resolve(); }, 100); });
-                remainingAttempts--;
-            }*/
-
-            /*const isGapBetweenBlocks = data.header.index - blockExplorerWidget.getLastBlockInfoIndex() > 1;
-            if (isGapBetweenBlocks) { 
-                console.info('new_block_confirmed -> isGapBetweenBlocks -> ws.close()');
+            if (data.header.index !== blockExplorerWidget.lastBlockInfoIndex + 1) {
+                console.info('new_block_confirmed n+1 -> ws.close()');
                 try { ws.close() } catch (error) {};
                 return;
-            }*/
-
+            }
+            displayLastConfirmedBlock(data.header);
             blockExplorerWidget.fillBlockInfo(data);
             break;
         case 'blocks_data_requested':
@@ -234,6 +230,7 @@ const HTML_ELEMENTS_ATTRIBUTES = {
 }
 
 export class BlockExplorerWidget {
+    lastBlockInfoIndex = -1;
     constructor(divToInjectId = 'cbe-contrastBlocksWidget', blocksDataByHash = {}, blocksDataByIndex = {}, blocksInfo = []) {
         /** @type {Object<string, HTMLElement>} */
         this.cbeHTML = {
@@ -647,9 +644,9 @@ export class BlockExplorerWidget {
                 break;
             }
     
-            const lastBlockInfoIndex = this.getLastBlockInfoIndex();
-            if (blockInfo.header.index <= lastBlockInfoIndex) { console.info(`already have block ${blockInfo.header.index}`); continue; }
-    
+            if (blockInfo.header.index <= this.lastBlockInfoIndex) { console.info(`already have block ${blockInfo.header.index}`); continue; }
+            this.lastBlockInfoIndex = blockInfo.header.index;
+
             this.blocksInfo.push(blockInfo);
             this.bcElmtsManager.fillFirstEmptyBlockElement(blockInfo);
             
@@ -1055,9 +1052,6 @@ export class BlockExplorerWidget {
         sendWsWhenReady({ type: 'get_address_exhaustive_data', data: address });
         return 'request sent';
     }
-    getLastBlockInfoIndex() {
-        return this.blocksInfo.length === 0 ? -1 : this.blocksInfo[this.blocksInfo.length - 1].header.index;
-    }
     getCloneBeforeReset() {
         const cloned = {
             /** @type {HTMLDivElement} */
@@ -1147,8 +1141,8 @@ class BlockChainElementsManager {
         this.isSucking = false;
     }
     /** @param {HTMLElement} chainWrap @param {number} nbBlocks */
-    createChainOfEmptyBlocksUntilFillTheDiv(chainWrap, nbBlocks = 10) {
-        const parentRect = chainWrap.parentElement.getBoundingClientRect();
+    createChainOfEmptyBlocksUntilFillTheDiv(chainWrap, nbBlocks = SETTINGS.NB_OF_CONFIRMED_BLOCKS + 2) {
+        const parentRect = chainWrap.parentElement.parentElement.getBoundingClientRect();
         for (let i = 0; i < nbBlocks; i++) {
             const block = this.createEmptyBlockElement();
             chainWrap.appendChild(block);
@@ -1203,6 +1197,8 @@ class BlockChainElementsManager {
 
         const nbTx = blockSquare.querySelector('.cbe-nbTx');
         nbTx.textContent = `${blockInfo.nbOfTxs} transactions`;
+
+        blockSquare.classList.add('filled');
     }
     #splitHash(hash, nbOfCharsPerLine = 16) {
         const hashSplitted = [];

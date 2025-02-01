@@ -51,7 +51,7 @@ export const appsConfig = {
 		minWidth: 800,
 		minHeight: 600,
 		iconWidth: '56%',
-		title: 'NODE',
+		title: 'NODE DASHBOARD',
 		content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>',
 	}
 };

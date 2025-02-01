@@ -891,9 +891,7 @@ function updateAddressExhaustiveDataFromNode(address) {
 //#endregion
 
 //#region - EVENT LISTENERS
-document.addEventListener('submit', function(e) {
-    e.preventDefault();
-});
+document.addEventListener('submit', function(e) { e.preventDefault(); });
 eHTML.passwordCreationForm.addEventListener('submit', async function(e) {
     if (busy.includes('passwordCreationForm')) return;
     busy.push('passwordCreationForm');
@@ -1286,20 +1284,17 @@ document.addEventListener('input', async (event) => {
         }
     }
 
-    const amountInput = event.target.classList.contains('amountInput');
-    if (amountInput) {
+    if (event.target.classList.contains('amountInput')) {
         event.target.value = event.target.value.replace(/[^\d.]/g, '');
         const nbOfDecimals = event.target.value.split('.')[1] ? event.target.value.split('.')[1].length : 0;
         if (nbOfDecimals > 6) { event.target.value = parseFloat(event.target.value).toFixed(6); }
     }
 });
 document.addEventListener('focusin', async (event) => {
-    const amountInput = event.target.classList.contains('amountInput');
-    if (amountInput) { event.target.value = ''; }
+    if (event.target.classList.contains('amountInput')) { event.target.value = ''; }
 });
 document.addEventListener('focusout', async (event) => {
-    const amountInput = event.target.classList.contains('amountInput');
-    if (amountInput) {
+    if (event.target.classList.contains('amountInput')) {
         if (isNaN(parseFloat(event.target.value))) { event.target.value = ''; return; }
         event.target.value = parseFloat(event.target.value).toFixed(6);
 

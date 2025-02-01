@@ -79,6 +79,18 @@
     --buttons-bar-height: 70px;
     --windows-animation-duration: 400ms;
 }
+::-webkit-scrollbar {
+    width: 8px;
+    height: calc(100% - 10px);
+}
+::-webkit-scrollbar-track {
+    box-shadow: inset 0 0 5px gray;
+    border-radius: 2px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--color1);
+    border-radius: 2px;
+}
 .dark-mode {
     --dark-mode-boolean: 1;
     --color1: black;
@@ -98,20 +110,28 @@ body {
 }
 input {
     /*width: 236px;*/
-    padding: 0 20px;
-    height: 30px;
-    margin-bottom: 10px;
-    font-size: large;
+    padding: 2px 20px;
+    font-size: 1.17em; /* same as h3 */
     text-align: center;
     background-color: var(--color2);
     color: var(--color1);
-    border-radius: 10px;
+    border-radius: 6px;
     border-style: none;
 }
 button {
+    cursor: pointer;
     border: none;
     background: var(--color2);
     color: var(--color1);
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 500;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 1em;
+}
+
+.hidden {
+    display: none !important;
 }
 
 /* DARK MODE SWITCH */
