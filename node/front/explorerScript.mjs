@@ -48,12 +48,13 @@ const SETTINGS = {
 
     LOCAL_DOMAIN: "localhost",
     LOCAL_PORT: "27270",
-    LOCAL: window.explorerLOCAL || false,
+    //LOCAL: window.explorerLOCAL || false,
+    LOCAL: window.location.hostname === 'localhost',
     RECONNECT_INTERVAL: 2000,
-    GET_CURRENT_HEIGHT_INTERVAL: window.explorerLOCAL ? 1000 : 5000,
+    GET_CURRENT_HEIGHT_INTERVAL: window.location.hostname === 'localhost' ? 1000 : 5000,
     ROLES: window.explorerROLES || ['chainExplorer', 'blockExplorer'],
 
-    AUTO_CHOSE_BEST_NODES: window.explorerLOCAL === true ? false : true,
+    AUTO_CHOSE_BEST_NODES: window.location.hostname === 'localhost' ? false : true,
     CURRENT_NODE_INDEX: 0,
     NODES_LIST: [ // used for redondant connections
         'ws://localhost:27270',
@@ -64,6 +65,7 @@ const SETTINGS = {
     ],
 
     NB_OF_CONFIRMED_BLOCKS: window.explorerNB_OF_CONFIRMED_BLOCKS || 5,
+    NB_OF_UNCONFIRMED_BLOCKS: window.explorerNB_OF_UNCONFIRMED_BLOCKS || 2,
 }
 //#region WEB SOCKET
 function onOpen() {
@@ -92,19 +94,18 @@ async function onMessage(event) {
     const message = JSON.parse(event.data);
     const trigger = message.trigger;
     const data = message.data;
+    
+    const lastBlockInfoIndex = blockExplorerWidget.lastBlockInfoIndex;
     let remainingAttempts = 10;
     switch (message.type) {
         case 'current_height':
-            const currentHeight = data;
-            if (blockExplorerWidget.lastBlockInfoIndex === -1) { return; }
-            //console.log(`current_height: ${currentHeight}, lastBlockIndex: ${blockExplorerWidget.lastBlockInfoIndex}`);
-            /*if (currentHeight - blockExplorerWidget.lastBlockInfoIndex > 10) {
-                console.info('current_height n+10 -> ws.close()');
-                try { ws.close() } catch (error) {};
-                return;
-            }*/
-            if (data !== blockExplorerWidget.lastBlockInfoIndex) {
-                console.info(`current_height #${data} !== lastBlockIndex+1 #${blockExplorerWidget.lastBlockInfoIndex + 1} -> ws.close()`);
+            if (lastBlockInfoIndex === -1) { return; }
+            if (data === lastBlockInfoIndex + 1) { // need the new block
+                try { ws.send(JSON.stringify({ type: 'get_new_block_confirmed', data: data })) } catch (error) {};
+            }
+
+            if (!data === lastBlockInfoIndex) {
+                console.info(`current_height #${data} !== lastBlockIndex #${lastBlockInfoIndex} || lastBlockIndex+1 #${lastBlockInfoIndex+1} -> ws.close()`);
                 try { ws.close() } catch (error) {};
                 return;
             }
@@ -122,7 +123,9 @@ async function onMessage(event) {
             break;
         case 'new_block_confirmed':
             //console.log('new_block_confirmed', data);
-            if (data.header.index !== blockExplorerWidget.lastBlockInfoIndex + 1) {
+            if (!data) { return; }
+            if (data.header.index === lastBlockInfoIndex) { return; }
+            if (data.header.index !== lastBlockInfoIndex + 1) {
                 console.info('new_block_confirmed n+1 -> ws.close()');
                 try { ws.close() } catch (error) {};
                 return;
@@ -246,6 +249,7 @@ export class BlockExplorerWidget {
         }
         /** @type {BlockChainElementsManager} */
         this.bcElmtsManager = new BlockChainElementsManager();
+        //window.bcElmtsManager = this.bcElmtsManager;
         /** @type {Object<string, BlockData>} */
         this.blocksDataByHash = blocksDataByHash;
         /** @type {Object<number, BlockData>} */
@@ -614,25 +618,39 @@ export class BlockExplorerWidget {
         this.blocksDataByIndex[blockData.index] = blockData;
     }
     async #blockFillingLoop() {
+        let canTryToModifyNbOfConfirmedBlocks = true;
         while (true) {
             let numberOfConfirmedBlocksShown = this.bcElmtsManager.getNumberOfConfirmedBlocksShown();
             let isFilled = numberOfConfirmedBlocksShown > this.nbOfConfirmedBlocks;
-
             await new Promise((resolve) => { setTimeout(() => { resolve(); }, isFilled ? 1000 : 100); });
+
+            /** @type {HTMLDivElement} */
+            const chainWrap = this.cbeHTML.chainWrap();
+            if (!chainWrap) { console.error('fillBlockInfo() error: chainWrap not found'); continue; }
+
+            /*const lastBlockElement = chainWrap.lastElementChild;
+            if (canTryToModifyNbOfConfirmedBlocks && lastBlockElement) {
+                const parentRect = chainWrap.parentElement.parentElement.getBoundingClientRect();
+                const lastBlocklockRect = lastBlockElement.getBoundingClientRect();
+                
+                if (lastBlocklockRect.left > parentRect.right) {
+                    console.log('to many blocks, removing the first one');
+                    this.nbOfConfirmedBlocks--;
+                    canTryToModifyNbOfConfirmedBlocks = false;
+                }
+            }*/
+
             if (this.incomingBlocksInfo.length === 0) { continue; }
             
             const blockInfo = this.incomingBlocksInfo.shift();
             for (let i = 0; i < this.blocksInfo; i++) { //TODO: find a better way to avoid empty blocks in the chain
                 const blockInfo = this.blocksInfo[i];
-    
-                /** @type {HTMLDivElement} */
-                const chainWrap = this.cbeHTML.chainWrap();
-                if (!chainWrap) { console.error('fillBlockInfo() error: chainWrap not found'); return; }
-    
-                //const blockElement = chainWrap.children.find(block => block.querySelector('.cbe-blockIndex').textContent === `#${blockInfo.header.index}`);
                 let blockElement = undefined;
                 for (const block of chainWrap.children) {
-                    if (block.querySelector('.cbe-blockIndex').textContent === `#${blockInfo.header.index}`) { blockElement = block; break; }
+                    if (block.querySelector('.cbe-blockIndex').textContent === `#${blockInfo.header.index}`) {
+                        blockElement = block;
+                        break;
+                    }
                 }
                 if (blockElement) { continue; }
     
@@ -645,8 +663,8 @@ export class BlockExplorerWidget {
             }
     
             if (blockInfo.header.index <= this.lastBlockInfoIndex) { console.info(`already have block ${blockInfo.header.index}`); continue; }
+            
             this.lastBlockInfoIndex = blockInfo.header.index;
-
             this.blocksInfo.push(blockInfo);
             this.bcElmtsManager.fillFirstEmptyBlockElement(blockInfo);
             
@@ -659,6 +677,7 @@ export class BlockExplorerWidget {
             const suckDuration = Math.min(this.animations.newBlockDuration, Math.max(500, 1000 - (nbOfBlocksInQueue * 250)));
             this.bcElmtsManager.suckFirstBlockElement(this.cbeHTML.chainWrap(), suckDuration);
             await new Promise((resolve) => { setTimeout(() => { resolve(); }, suckDuration); });
+            canTryToModifyNbOfConfirmedBlocks = true;
         }
     }
     /** @param {BlockInfo} blockInfo */
@@ -1141,7 +1160,7 @@ class BlockChainElementsManager {
         this.isSucking = false;
     }
     /** @param {HTMLElement} chainWrap @param {number} nbBlocks */
-    createChainOfEmptyBlocksUntilFillTheDiv(chainWrap, nbBlocks = SETTINGS.NB_OF_CONFIRMED_BLOCKS + 2) {
+    createChainOfEmptyBlocksUntilFillTheDiv(chainWrap, nbBlocks = SETTINGS.NB_OF_CONFIRMED_BLOCKS + SETTINGS.NB_OF_UNCONFIRMED_BLOCKS) {
         const parentRect = chainWrap.parentElement.parentElement.getBoundingClientRect();
         for (let i = 0; i < nbBlocks; i++) {
             const block = this.createEmptyBlockElement();

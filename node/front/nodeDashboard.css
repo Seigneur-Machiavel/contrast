@@ -13,39 +13,19 @@ input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
-/*h1 {
-    font-weight: 600;
-}
-h2 {
-    font-weight: 400;
-}
-h3 {
-    font-weight: 500;
-}*/
 h1 {
+    font-size: 1.1em;
     font-weight: 600;
 }
 h2 {
+    font-size: .86em;
     font-weight: 400;
 }
 h3 {
+    font-size: .74em;
     font-weight: 500;
 }
 
-.spacedText {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-}
-.spacedText.column {
-    flex-direction: column;
-    align-items: flex-start;
-}
-.spacedText:not(:last-child) {
-    border-bottom: solid 1px var(--color1_2);
-}
-
-/* Specific Button Classes */
 .toggleAdminPanelButton {
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 500;
@@ -53,22 +33,6 @@ h3 {
     cursor: pointer;
     border: 1px solid var(--color2);
 }
-
-.editButton {
-    cursor: pointer;
-    height: fit-content;
-    font-size: 22px;
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    transform: translateX(140%) rotateY(180deg);
-    transition: transform 0.06s ease;
-}
-.editButton:hover {
-    transform: translateX(140%) rotateY(180deg) scale(1.1);
-}
-
-/* Modal Specific Buttons */
 #toggleModalInput {
     padding: 10px;
     cursor: pointer;
@@ -136,12 +100,90 @@ h3 {
     background: #c82333;
 }
 
+.containers-wrap {
+    width: 92%;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    gap: 0px 20px;
+}
+.container {
+    overflow: hidden;
+    width: 36vw;
+    height: fit-content;
+    max-width: 500px;
+    min-width: 300px;
+    /*padding: 0 30px 30px;*/
+    padding: 0 20px 40px 40px;
+    border: 2px solid var(--color2);
+    border-radius: 20px;
+    margin-bottom: 40px;
+}
+.container.large {
+    width: 80vw;
+}
+.container-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    background-color: var(--color2);
+    color: var(--color1);
+    /*margin: 0 -30px;
+    padding: 0 30px;*/
+    margin: 0 -20px 0 -40px;
+    padding: 0 20px;
+}
+.container-header h2:not(:first-child) {
+    font-size: .9em;
+    font-weight: 400;
+    opacity: .5;
+}
+.container .spacedText h3 {
+    margin: 24px 0 6px 0;
+}
+.container .spacedText h3:not(:first-child), .container .spacedText div h3 {
+    opacity: .6;
+}
+
+.spacedText {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+.spacedText.column {
+    flex-direction: column;
+    align-items: flex-start;
+}
+.spacedText:not(:last-child):not(.end) {
+    border-bottom: solid 1px var(--color1_2);
+}
+.spacedText.end {
+    margin-bottom: 40px;
+}
+
+.editable-address-wrap {
+    transform: translateX(-17px);
+    position: relative;
+}
+.editButton {
+    cursor: pointer;
+    height: fit-content;
+    font-size: 17px;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    transform: translateX(105%) translateY(10%) rotateY(180deg);
+    transition: transform 0.06s ease;
+}
+.editButton:hover {
+    transform: translateX(105%) translateY(10%) rotateY(180deg) scale(1.1);
+}
 
 .incrementalInput {
 
 }
 .amountInput {
-    width: 160px;
+    width: 120px;
     text-align: right
 }
 .incrementalInput button:first-child,
@@ -195,36 +237,6 @@ h3 {
 #stakeInputWrap {
     display: flex;
     gap: 10px;
-}
-
-.container {
-    overflow: hidden;
-    width: 80%;
-    max-width: 600px;
-    padding: 0 40px 20px;
-    border: 2px solid var(--color2);
-    border-radius: 20px;
-    margin-bottom: 40px;
-}
-.container-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    background-color: var(--color2);
-    color: var(--color1);
-    margin: 0 -40px;
-    padding: 0 40px;
-}
-.container-header h2:not(:first-child) {
-    font-size: 1.2em;
-    font-weight: 400;
-    opacity: .5;
-}
-.container .spacedText h3 {
-    margin: 30px 0 10px 0;
-}
-.container .spacedText h3:not(:first-child), .container .spacedText div h3 {
-    opacity: .6;
 }
 
 #listenAddress li {

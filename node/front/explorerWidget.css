@@ -57,10 +57,10 @@
 #cbe-relativeWrap {
     /*display: flex;
     justify-content: center;*/
-    display: flex;
-    justify-content: space-evenly;
+    /*display: flex;
+    justify-content: space-evenly;*/
     position: relative;
-    width: 100%;
+    /*width: 100%;*/
     height: 100%;
 }
 #cbe-blockExplorerWrapUpperBackground {
@@ -169,6 +169,17 @@
     0px 0px 0px 0px var(--cbe-color2, var(--cbe-color2-default)),
     inset 0px 0px 4px -2px var(--cbe-color2, var(--cbe-color2-default));
     transform: scale(1);
+}
+.cbe-blockSquare:not(.filled):first-child {
+    animation: boxGlow .6s infinite alternate;
+}
+@keyframes boxGlow {
+    0% {
+        opacity: .4;
+    }
+    100% {
+        opacity: 1;
+    }
 }
 .cbe-blockSquare.filled {
     animation: boxHeavyToThin .44s .06s forwards;

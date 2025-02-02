@@ -48,10 +48,18 @@ export const appsConfig = {
 	},*/
 	node: {
 		preload: true,
-		minWidth: 800,
-		minHeight: 600,
-		iconWidth: '56%',
+		minWidth: 500,
+		minHeight: 192,
+		iconWidth: '69%',
 		title: 'NODE DASHBOARD',
 		content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>',
-	}
+	},
+	explorer: {
+		preload: true,
+		minWidth: 500,
+		minHeight: 192,
+		iconWidth: '69%',
+		title: 'BLOCKCHAIN EXPLORER',
+		content: '<iframe src="http://pinkparrot.science:27270" style="width: 100%; height: 100%; border: none;"></iframe>',
+	},
 };

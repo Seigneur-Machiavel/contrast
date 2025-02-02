@@ -673,3 +673,12 @@ function adjustInputValue(targetInput, delta, min = 1, max = 4) {
     }
     targetInput.dispatchEvent(new Event('change'));
 }
+
+/*let resizingTimeout;
+window.addEventListener('resize', function() {
+    clearTimeout(resizingTimeout);
+    document.body.style.pointerEvents = 'none';
+    resizingTimeout = setTimeout(() => {
+        document.body.style.pointerEvents = 'auto';
+    }, 800);
+});*/

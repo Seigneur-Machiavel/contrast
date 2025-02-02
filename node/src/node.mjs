@@ -532,7 +532,8 @@ export class Node {
             return { broadcasted: false, pushedInLocalMempool: false, consumedUTXOs: [], error: error.message };
         }
     }
-    getBlocksInfo(fromHeight = 0, toHeight = 10) {
+    getBlocksInfo(fromHeight = 0, toHeightParam) {
+        const toHeight = toHeightParam || this.blockchain.currentHeight;
         try {
             if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
             //if (toHeight - fromHeight > 10) { throw new Error('Cannot retrieve more than 10 blocks at once'); }

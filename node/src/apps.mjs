@@ -534,6 +534,10 @@ export class ObserverWsApp {
                     exhaustiveBlockData = this.node.getExhaustiveBlockDataByHash(data);
                     ws.send(JSON.stringify({ type: 'blocks_data_requested', data: exhaustiveBlockData }));
                     break;
+                case 'get_new_block_confirmed':
+                    const blocksInfo = this.node.getBlocksInfo(this.node.blockchain.currentHeight);
+                    ws.send(JSON.stringify({ type: 'new_block_confirmed', data: blocksInfo[0] }));
+                    break;
                 case 'get_address_utxos':
                     const UTXOs = this.node.getAddressUtxos(data);
                     ws.send(JSON.stringify({ type: 'address_utxos_requested', data: { address: data, UTXOs } }));

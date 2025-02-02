@@ -1,6 +1,7 @@
 /**
 * @typedef {import("./node.mjs").Node} Node
 * @typedef {import("./block-classes.mjs").BlockData} BlockData
+* @typedef {import("./block-classes.mjs").BlockInfo} BlockInfo
 */
 
 /** @typedef {Object} WebSocketCallBack
@@ -154,20 +155,20 @@ function sendToClients(message, wsClients) {
 const CALLBACKS_FUNCTIONS = {
     node: {
         /** send the block candidate when the local node broadcast it
-         * @param {BlockData} blockHeader
+         * @param {BlockData} block
          * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'broadcast_new_candidate', data: blockHeader, trigger }
+         * @emits msgSent: { type: 'broadcast_new_candidate', data: block, trigger }
          */
-        onBroadcastNewCandidate: (blockHeader, wsClients = [], trigger = '') => {
-            sendToClients({ type: 'broadcast_new_candidate', data: blockHeader, trigger }, wsClients);
+        onBroadcastNewCandidate: (block, wsClients = [], trigger = '') => {
+            sendToClients({ type: 'broadcast_new_candidate', data: block, trigger }, wsClients);
         },
         /** send the confirmed block header (without Txs) when the local node validate it
-         * @param {BlockData} blockHeader
+         * @param {BlockInfo} blockInfo
          * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'new_block_confirmed', data: blockHeader, trigger }
+         * @emits msgSent: { type: 'new_block_confirmed', data: blockInfo, trigger }
          */
-        onBlockConfirmed: (blockHeader, wsClients = [], trigger = '') => {
-            sendToClients({ type: 'new_block_confirmed', data: blockHeader, trigger }, wsClients);
+        onBlockConfirmed: (blockInfo, wsClients = [], trigger = '') => {
+            sendToClients({ type: 'new_block_confirmed', data: blockInfo, trigger }, wsClients);
         }
     },
     miner: {

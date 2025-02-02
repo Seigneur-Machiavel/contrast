@@ -60,6 +60,7 @@ class SubWindow {
 		this.element;
 		this.title = title;
 		this.content = content;
+		this.contentElement;
 
 		this.dragStart = { x: 0, y: 0 };
 		this.position = { left: 0, top: 0 };
@@ -71,12 +72,14 @@ class SubWindow {
 	}
 
 	render(parentElement = document.body, fromX= 0, fromY= 0) {
-		this.element = newElement('div', ['window'], '', parentElement);
+		this.element = newElement('div', ['window', 'resizable'], '', parentElement);
 		this.element.dataset.appName = this.appName;
 		this.element.appendChild(this.#newTitleBar(this.title));
-		newElement('div', ['content'], this.content, this.element);
+		this.contentElement = newElement('div', ['content'], this.content, this.element);
 		this.element.style.minWidth = this.minSize.width + 'px';
 		this.element.style.minHeight = this.minSize.height + 'px';
+		this.element.style.maxWidth = window.innerWidth + 'px';
+		this.element.style.maxHeight = window.innerHeight + 'px';
 		
 		if (fromX && fromY) {
 			this.element.style.opacity = 1;
@@ -194,15 +197,16 @@ class SubWindow {
 	}
 }
 class AppsManager {
+	/** @type {Object<string, SubWindow>} */
+	windows = {};
+	draggingWindow = null;
+	resizingWindow = null;
+	transitionsDuration = 400;
 	constructor(windowsWrap, buttonsBarElement, appsConf) {
-		this.transitionsDuration = 400;
 		this.windowsWrap = windowsWrap;
 		this.buttonsBar = new ButtonsBar(buttonsBarElement);
 		/** @type {Object<string, AppConfig>} */
 		this.appsConfig = this.#buildAppsConfig(appsConf);
-		/** @type {Object<string, SubWindow>} */
-		this.windows = {};
-		this.draggingWindow = null;
 	}
 
 	#buildAppsConfig(appsConf) {
@@ -325,20 +329,26 @@ class AppsManager {
 		}
 	}
 	grabWindowHandler(e) {
-		if (!e.target.classList.contains('title-bar')) return;
-
 		const subWindow = Object.values(this.windows).find(w => w.element.contains(e.target));
 		if (!subWindow) return;
 		if (subWindow.element.classList.contains('fullscreen')) { return; }
+
+		const appName = subWindow.element.dataset.appName;
+		this.setFrontWindow(appName);
+
+		const isThe20per20RightBottomCorner = e.clientX > subWindow.element.offsetWidth - 20 && e.clientY > subWindow.element.offsetHeight - 20;
+		if (isThe20per20RightBottomCorner) { 
+			subWindow.element.style.pointerEvents = 'none';
+			this.resizingWindow = subWindow;
+			return;
+		}
+
+		if (!e.target.classList.contains('title-bar')) return;
 
 		this.draggingWindow = subWindow;
 		subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
 		subWindow.dragStart.y = e.clientY - subWindow.element.offsetTop;
 		subWindow.element.classList.add('dragging');
-
-		// bring to front
-		const appName = subWindow.element.dataset.appName;
-		this.setFrontWindow(appName);
 	}
 	moveWindowHandler(e) {
 		const subWindow = this.draggingWindow;
@@ -348,13 +358,18 @@ class AppsManager {
 		subWindow.element.style.top = e.clientY - subWindow.dragStart.y + 'px';
 	}
 	releaseWindowHandler(e) {
-		const subWindow = this.draggingWindow;
-		if (!subWindow) return;
-
-		subWindow.position.left = e.clientX - subWindow.dragStart.x;
-		subWindow.position.top = e.clientY - subWindow.dragStart.y;
-		this.draggingWindow = null;
-		subWindow.element.classList.remove('dragging');
+		if (this.resizingWindow) {
+			this.resizingWindow.element.style.pointerEvents = 'auto';
+			this.resizingWindow = null;
+			return;
+		}
+		
+		if (this.draggingWindow) {
+			this.draggingWindow.position.left = e.clientX - this.draggingWindow.dragStart.x;
+			this.draggingWindow.position.top = e.clientY - this.draggingWindow.dragStart.y;
+			this.draggingWindow.element.classList.remove('dragging');
+			this.draggingWindow = null;
+		}
 	}
 }
 
@@ -372,12 +387,6 @@ document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('
 document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
 document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });
 document.addEventListener('mouseup', (e) => { appsManager.releaseWindowHandler(e); });
-document.addEventListener('resize', (e) => {
-	console.log('resize', e);
-	if (e.target.classList.contains('window')) {
-		document.body.style.userSelect = 'none';
-	}
-});
 document.addEventListener('change', (event) => {
 	switch(event.target.id) {
 		case 'dark-mode-toggle':
@@ -385,6 +394,13 @@ document.addEventListener('change', (event) => {
 			break;
 	}
 });
+window.addEventListener('resize', function() {
+	for (const app in appsManager.windows) {
+		appsManager.windows[app].element.style.maxWidth = window.innerWidth + 'px';
+		appsManager.windows[app].element.style.maxHeight = window.innerHeight + 'px';
+	}
+});
 
 await new Promise(resolve => setTimeout(resolve, 400));
-appsManager.windows.node.toggleFold();
+//appsManager.windows.node.toggleFold();
+appsManager.toggleAppWindow('node');

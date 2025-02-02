@@ -110,8 +110,8 @@ body {
 }
 input {
     /*width: 236px;*/
-    padding: 2px 20px;
-    font-size: 1.17em; /* same as h3 */
+    padding: 2px 12px;
+    font-size: .86em; /* same as h2 */
     text-align: center;
     background-color: var(--color2);
     color: var(--color1);
@@ -127,7 +127,7 @@ button {
     font-weight: 500;
     border-radius: 4px;
     padding: 4px 10px;
-    font-size: 1em;
+    font-size: .86em; /* same as h2 */
 }
 
 .hidden {
