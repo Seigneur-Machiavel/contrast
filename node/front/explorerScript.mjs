@@ -64,7 +64,7 @@ const SETTINGS = {
         'ws://pariah.monster:27270'
     ],
 
-    NB_OF_CONFIRMED_BLOCKS: window.explorerNB_OF_CONFIRMED_BLOCKS || 5,
+    NB_OF_CONFIRMED_BLOCKS: window.explorerNB_OF_CONFIRMED_BLOCKS || 3, //5,
     NB_OF_UNCONFIRMED_BLOCKS: window.explorerNB_OF_UNCONFIRMED_BLOCKS || 2,
 }
 //#region WEB SOCKET
@@ -198,7 +198,8 @@ async function connectWSLoop() {
         console.info('--- reseting blockExplorerWidget >>>');
 
         const clonedData = blockExplorerWidget.getCloneBeforeReset();
-        blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
+        blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget');
+        //blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
         if (clonedData.modalContainer) { blockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer); }
 
         connectWS();
@@ -1238,6 +1239,8 @@ class BlockChainElementsManager {
     /** @param {HTMLElement} chainWrap @param {number} duration */
     suckFirstBlockElement(chainWrap, duration = 1000) {
         this.isSucking = true;
+
+        
         // suck the first block
         this.firstBlockAnimation = anime({
             targets: this.blocksElements[0],
@@ -1248,9 +1251,13 @@ class BlockChainElementsManager {
             opacity: 0,
             duration,
             easing: 'easeInOutQuad',
-            complete: () => { 
+            begin: () => {
+                chainWrap.style.width = `${chainWrap.getBoundingClientRect().width}px`; // lock the width of the wrap
+            },
+            complete: () => {
                 this.removeFirstBlockElement();
                 chainWrap.appendChild(this.createEmptyBlockElement());
+                chainWrap.style.width = 'auto'; // unlock the width of the wrap
                 this.isSucking = false;
             }
         });
@@ -1327,6 +1334,8 @@ function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-blockHas
 
 // EVENT LISTENERS -------------------------------------------------------
 document.addEventListener('click', (event) => {
+    if (window.parent && window !== window.parent) window.parent.postMessage({ type: 'iframeClick' }, 'file://');
+
     if (!blockExplorerWidget) { return; }
     const nbOfParentToTry = 5;
 
@@ -1371,5 +1380,11 @@ document.addEventListener('mouseover', (event) => {
 
         if (element.parentElement === null) { return; }
         element = element.parentElement
+    }
+});
+window.addEventListener('message', function(event) {
+    const data = event.data;
+    if (data.type === 'darkMode' && typeof data.value === 'boolean') {
+        if (data.value) { document.body.classList.add('dark-mode'); } else { document.body.classList.remove('dark-mode'); }
     }
 });

@@ -111,7 +111,7 @@ body {
 input {
     /*width: 236px;*/
     padding: 2px 12px;
-    font-size: .86em; /* same as h2 */
+    font-size: 1em; /* same as h2 */
     text-align: center;
     background-color: var(--color2);
     color: var(--color1);

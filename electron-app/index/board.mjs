@@ -12,7 +12,14 @@ function newElement(tag, classes, innerHTML, parent) {
 	element.classList.add(...classes);
 
 	if (innerHTML.includes('.html')) {
-		fetch(innerHTML).then(res => res.text()).then(html => { element.innerHTML = html; });
+		let url;
+		fetch(innerHTML).then(res => { url = res.url; return res.text() }).then(html => {
+			/*const innerHTMLPath = url.substring(0, url.lastIndexOf('/') + 1);
+			console.log('injecting: innerHTMLPath ->', innerHTMLPath);
+			//html = html.replace(/src="([^"]+)"/g, `src="${innerHTMLPath}$1"`);
+			html = html.replace('="./', `="${innerHTMLPath}`);*/
+			element.innerHTML = html;
+		});
 	} else {
 		element.innerHTML = innerHTML;
 	}
@@ -61,10 +68,15 @@ class SubWindow {
 		this.title = title;
 		this.content = content;
 		this.contentElement;
+		// extract origin if present,
+		// ex: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
+		// => 'http://localhost:27271'
+		this.origin = content.match(/src="([^"]+)"/) ? content.match(/src="([^"]+)"/)[1] : '';
 
 		this.dragStart = { x: 0, y: 0 };
 		this.position = { left: 0, top: 0 };
 		this.minSize = { width: 0, height: 0 };
+		this.initialSize = { width: undefined, height: undefined };
 		this.windowSize = { width: 0, height: 0 };
 		this.folded = true;
 		this.animation = null;
@@ -75,11 +87,14 @@ class SubWindow {
 		this.element = newElement('div', ['window', 'resizable'], '', parentElement);
 		this.element.dataset.appName = this.appName;
 		this.element.appendChild(this.#newTitleBar(this.title));
+
 		this.contentElement = newElement('div', ['content'], this.content, this.element);
 		this.element.style.minWidth = this.minSize.width + 'px';
 		this.element.style.minHeight = this.minSize.height + 'px';
 		this.element.style.maxWidth = window.innerWidth + 'px';
 		this.element.style.maxHeight = window.innerHeight + 'px';
+		if (this.initialSize.width) { this.element.style.width = this.initialSize.width + 'px'; }
+		if (this.initialSize.height) { this.element.style.height = this.initialSize.height + 'px'; }
 		
 		if (fromX && fromY) {
 			this.element.style.opacity = 1;
@@ -229,6 +244,10 @@ class AppsManager {
 		this.windows[appName] = new SubWindow(appName, this.appsConfig[appName].title, this.appsConfig[appName].content);
 		this.windows[appName].minSize.width = this.appsConfig[appName].minWidth;
 		this.windows[appName].minSize.height = this.appsConfig[appName].minHeight;
+		this.windows[appName].initialSize.width = this.appsConfig[appName].initialWidth;
+		this.windows[appName].initialSize.height = this.appsConfig[appName].initialHeight;
+		this.windows[appName].position.top = this.appsConfig[appName].initTop || 0;
+
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
 
 		const appMainClassName = this.appsConfig[appName].mainClass;
@@ -382,7 +401,7 @@ appsManager.initApps();
 window.appsManager = appsManager;
 
 // better implementation with less event listeners
-document.addEventListener('click', (e) => { appsManager.clickAppButtonsHandler(e); appsManager.clickWindowHandler(e); });
+window.addEventListener('click', (e) => { appsManager.clickAppButtonsHandler(e); appsManager.clickWindowHandler(e); });
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
 document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
 document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });
@@ -391,6 +410,18 @@ document.addEventListener('change', (event) => {
 	switch(event.target.id) {
 		case 'dark-mode-toggle':
     		document.body.classList.toggle('dark-mode');
+			const darkModeState = document.body.classList.contains('dark-mode');
+			for (const app in appsManager.windows) {
+				//window.parent.postMessage({ type: '' }, 'file://');
+				//appsManager.windows[app].element.classList.toggle('dark-mode');
+				// send message to the iframe
+				//appsManager.windows[app].contentElement.contentWindow.postMessage({ type: 'darkMode', value: true
+				const iframe = appsManager.windows[app].contentElement.querySelector('iframe');
+				if (!iframe) continue;
+
+				iframe.contentWindow.postMessage({ type: 'darkMode', value: darkModeState }, appsManager.windows[app].origin);
+				console.log('darkMode msg sent:', darkModeState);
+			}
 			break;
 	}
 });
@@ -400,7 +431,17 @@ window.addEventListener('resize', function() {
 		appsManager.windows[app].element.style.maxHeight = window.innerHeight + 'px';
 	}
 });
+window.addEventListener('message', function(e) {
+	if (e.data.type && e.data.type === 'iframeClick') {
+		for (const app in appsManager.windows) {
+			if (appsManager.windows[app].origin !== e.origin) { continue; }
+			appsManager.setFrontWindow(app);
+			break;
+		}
+	}
+});
 
 await new Promise(resolve => setTimeout(resolve, 400));
 //appsManager.windows.node.toggleFold();
-appsManager.toggleAppWindow('node');
+appsManager.toggleAppWindow('explorer');
+appsManager.toggleAppWindow('dashboard');

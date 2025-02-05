@@ -3,7 +3,7 @@
     --cbe-color2-default: black;
 
     --cbe-widget-margin-default: 0% 10%;
-    --cbe-widget-padding-default: 10px 10px;
+    --cbe-widget-padding-default: 10px 0px;
     --cbe-color4-default: #787878;
     --cbe-color3-default: #4f4f4f;
 
@@ -12,7 +12,20 @@
     --search-menu-width-default: calc(420px - 12px);
 }
 
-#cbe-modalContentWrap::-webkit-scrollbar, #cbe-TxDetails::-webkit-scrollbar,
+::-webkit-scrollbar {
+    width: 8px;
+    height: calc(100% - 10px);
+}
+::-webkit-scrollbar-track {
+    box-shadow: inset 0 0 5px gray;
+    border-radius: 2px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--color1, var(--cbe-color1-default));
+    border-radius: 2px;
+}
+
+/*#cbe-modalContentWrap::-webkit-scrollbar, #cbe-TxDetails::-webkit-scrollbar,
 .cbe-utxosRuleWrap::-webkit-scrollbar {
     width: 8px;
 }
@@ -25,11 +38,11 @@
 .cbe-utxosRuleWrap::-webkit-scrollbar-thumb {
     background: var(--color1, var(--cbe-color1-default));
     border-radius: 2px;
-}
+}*/
 
 #cbe-contrastBlocksWidget {
     position: relative;
-    margin: var(--cbe-widget-margin, var(--cbe-widget-margin-default));
+    /*margin: var(--cbe-widget-margin, var(--cbe-widget-margin-default));*/
     /*padding: 0 10px;*/
     padding: var(--cbe-widget-padding, var(--cbe-widget-padding-default));
 
@@ -80,6 +93,7 @@
     position: relative;
     display: flex;
     align-items: center;
+    justify-content: center;
     overflow-x: hidden;
     height: 100%;
 }

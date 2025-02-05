@@ -11,17 +11,17 @@ if (false) { const { NodeAppWorker } = require('../node/workers/workers-classes.
  * @property {boolean} [isMainWindow] - default false */
 
 const fs = require('fs');
-const { app, BrowserWindow, Menu, globalShortcut, dialog } = require('electron');
-const { autoUpdater } = require('electron-updater');
-const log = require('electron-log');
-log.transports.file.level = 'info';
-log.info('--- Test log ---');
-autoUpdater.logger = log;
-//console.log(app.getPath('userData'));
+const path = require('path');
+const { app, BrowserWindow, Menu, globalShortcut, dialog, session } = require('electron');
+Menu.setApplicationMenu(null); // remove the window top menu
 
+const { autoUpdater } = require('electron-updater');
 const setShortcuts = require('./shortcuts.js');
 const { MiniLogger } = require('../miniLogger/mini-logger.js');
-Menu.setApplicationMenu(null); // remove the window top menu
+/*const log = require('electron-log');
+log.transports.file.level = 'info';
+log.info('--- Test log ---');
+autoUpdater.logger = log;*/
 
 // GLOBAL VARIABLES
 const windowsOptions = {
@@ -71,6 +71,9 @@ async function createWindow(options) {
 
     if (isMainWindow) {
         window.on('close', () => { if (!isQuiting) app.quit(); });
+        //const walletExtensionPath = path.resolve(__dirname, '../wallet-plugin');
+        //console.log(walletExtensionPath);
+        //await session.defaultSession.loadExtension(walletExtensionPath);
         const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
         window.webContents.executeJavaScript(`document.getElementById('board-version').innerText = "v${version}";`, true);
     } else {

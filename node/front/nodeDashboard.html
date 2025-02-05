@@ -12,48 +12,17 @@
     <script src="./front/nodeDashboardScript.mjs" type="module"></script>
     <link rel="stylesheet" href="../../styles/contrast-style.css">
     <link rel="stylesheet" href="./front/nodeDashboard.css">
-    
-    <!--<script>
-        window.explorerROLES = ['blockExplorer']; // prevent 'chainExplorer' role
-        window.explorerNB_OF_CONFIRMED_BLOCKS = 2;
-        window.explorerNB_OF_UNCONFIRMED_BLOCKS = 1;
-    </script>
-    <link rel="stylesheet" href="./front/explorerWidget.css">
-    <script src="./front/explorerScript.mjs" type="module" defer></script>-->
 </head>
 
 <body>
     <div style="width: 100%;">
         <div id="cbe-contrastBlocksWidget"></div>
     </div>
-    <!--<div id="topBar">
-        <h1>Contrast Node</h1>
-        <div style="display: flex; gap: 1rem; align-items: center;">
-            <a href="/log-config" class="navigation-link">
-                <button>Logs Config</button>
-            </a>
-            <a href="/log-viewer" class="navigation-link">
-                <button>Logs Viewer</button>
-            </a>
-            <div class="adminPanelContainer">
-                <div class="btnWrap hidden">
-                    <h3>roles: <span id="roles"></span></h3>
-                    <div>
-                        <button id="forceRestart">Restart</button>
-                        <button id="Revalidate">Revalidate</button>
-                        <button id="resetInfo">Reset Wallet Data</button>
-                        <button id="hardReset">Hard Reset (Git)</button>
-                        <button id="updateGit">Update (Git)</button>
-                    </div>
-                </div>
-                <button id="toggleAdminPanel" class="toggleAdminPanelButton">Show Admin Panel</button>
-            </div>
-        </div>
-    </div> -->
+    
     <div class="containers-wrap">
         <div class="container">
             <div class="container-header">
-                <h1>My node</h1>
+                <h1>Node</h1>
                 <h2>#<span id="validatorHeight">0</span></h2>
             </div>
             <div class="spacedText">
@@ -61,18 +30,60 @@
                 <h3 id="nodeState">Sync/Idle/Digest</h3>
             </div>
             <div class="spacedText">
+                <h3>My Last Legitimacy</h3>
+                <h3 id="lastLegitimacy">N/A</h3>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="container-header">
+                <h1>Miner</h1>
+                <h2>Legitimacy <span id="minerLegitimacy">0</span> | #<span id="minerHeight">0</span></h2>
+            </div>
+            <div class="spacedText">
+                <h3>HashRate</h3>
+                <h3><span id="hashRate" value="0"></span> H/s</h3>
+            </div>
+            <div class="spacedText">
+                <h3>Threads</h3>
+                <div id="minerThreadsIncrementalInput" class="incrementalInput">
+                    <button>-</button>
+                    <input type="number" value="1" min="1" max="4">
+                    <button>+</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="container-header">
+                <h1>Addresses</h1>
+            </div>
+            <div class="spacedText">
                 <h3>Public Address</h3>
                 <h3 id="validatorAddress"></h3>
             </div>
             <div class="spacedText">
-                <h3>Reward recipient</h3>
+                <h3>Mining reward</h3>
                 <h3 class="editable-address-wrap">
-                    <span id="validatorRewardAddress"></span>
-                    <div id="validatorAddressEditBtn" class="editButton">✎</div>
+                    <span id="minerAddress"></span>
+                    <div id="minerAddressEditBtn" class="editButton">✎</div>
+                    <div class="link-to-amount">]</div>
                 </h3>
             </div>
             <div class="spacedText">
-                <h3>Reward balance</h3>
+                <h3>Balance</h3>
+                <h3 id="minerBalance">0.000000</h3>
+            </div>
+            <div class="spacedText">
+                <h3>Validation reward</h3>
+                <h3 class="editable-address-wrap">
+                    <span id="validatorRewardAddress"></span>
+                    <div id="validatorAddressEditBtn" class="editButton">✎</div>
+                    <div class="link-to-amount">]</div>
+                </h3>
+            </div>
+            <div class="spacedText">
+                <h3>Validation reward balance</h3>
                 <h3 id="validatorBalance">0.000000</h3>
             </div>
             <div class="spacedText">
@@ -86,66 +97,9 @@
                     <button>Stake!</button>
                 </div>
             </div>
-
-            <div class="container-header">
-                <h1>My miner</h1>
-                <h2>Legitimacy <span id="minerLegitimacy">0</span> | #<span id="minerHeight">0</span></h2>
-            </div>
-            <div class="spacedText">
-                <h3>Reward address</h3>
-                <h3 class="editable-address-wrap">
-                    <span id="minerAddress"></span>
-                    <div id="minerAddressEditBtn" class="editButton">✎</div>
-                </h3>
-            </div>
-            <div class="spacedText">
-                <h3>Reward balance</h3>
-                <h3 id="minerBalance">0.000000</h3>
-            </div>
-            <div class="spacedText">
-                <h3>HashRate</h3>
-                <h3><span id="hashRate" value="0"></span> H/s</h3>
-            </div>
-            <div class="spacedText">
-                <h3>Threads</h3>
-                <div id="minerThreadsIncrementalInput" class="incrementalInput">
-                    <button>-</button>
-                    <input type="number" value="1" min="1" max="4">
-                    <button>+</button>
-                </div>
-            </div>
         </div>
-        <!--<div class="container">
-            <div class="container-header">
-                <h1>My miner</h1>
-                <h2>Legitimacy <span id="minerLegitimacy">0</span> | #<span id="minerHeight">0</span></h2>
-            </div>
-            <div class="spacedText">
-                <h3>Reward address</h3>
-                <h3 class="editable-address-wrap">
-                    <span id="minerAddress"></span>
-                    <div id="minerAddressEditBtn" class="editButton">✎</div>
-                </h3>
-            </div>
-            <div class="spacedText">
-                <h3>Reward balance</h3>
-                <h3 id="minerBalance">0.000000</h3>
-            </div>
-            <div class="spacedText">
-                <h3>HashRate</h3>
-                <h3><span id="hashRate" value="0"></span> H/s</h3>
-            </div>
-            <div class="spacedText">
-                <h3>Threads</h3>
-                <div id="minerThreadsIncrementalInput" class="incrementalInput">
-                    <button>-</button>
-                    <input type="number" value="1" min="1" max="4">
-                    <button>+</button>
-                </div>
-            </div>
-        </div>-->
         
-        <div class="container large">
+        <div class="container">
             <div class="container-header">
                 <h1>Detailed view (dev)</h1>
             </div>
@@ -175,11 +129,6 @@
             <div class="spacedText">
                 <h3>Last Block Info</h3>
                 <h3 id="lastBlockInfo">N/A</h3>
-            </div>
-            
-            <div class="spacedText">
-                <h3>My Last Legitimacy</h3>
-                <h3 id="lastLegitimacy">N/A</h3>
             </div>
     
             <div class="spacedText">

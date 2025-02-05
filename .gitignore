@@ -4,9 +4,10 @@ miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
 node/application.log
+node/front/dash-copy
 
 wallet-plugin/builds
-wallet-plugin/dist(do not modify)
+wallet-plugin/dist(do-not-modify)
 wallet-plugin/mjiipclahahbedeiifgpfoagmncdcnoj.crx
 
 dist

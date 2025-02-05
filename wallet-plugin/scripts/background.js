@@ -1,5 +1,5 @@
-import argon2 from '../dist(do not modify)/libs/argon2-ES6.min.mjs';
-import { cryptoLight } from '../dist(do not modify)/utils/cryptoLight.js';
+import argon2 from '../dist(do-not-modify)/libs/argon2-ES6.min.mjs';
+import { cryptoLight } from '../dist(do-not-modify)/utils/cryptoLight.js';
 cryptoLight.argon2 = argon2;
 
 /**

@@ -357,8 +357,7 @@ export class Node {
      * @param {boolean} [options.broadcastNewCandidate] - default: true
      * @param {boolean} [options.isSync] - default: false
      * @param {boolean} [options.persistToDisk] - default: true
-     * @param {number} [byteLength] - default: serializedBlock.byteLength
-     */
+     * @param {number} [byteLength] - default: serializedBlock.byteLength */
     async digestFinalizedBlock(finalizedBlock, options = {}, byteLength) {
         if (this.restartRequested) return;
         
@@ -412,7 +411,7 @@ export class Node {
         if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
         timer.endPhase('block-storage');
     
-        this.miniLogger.log(`#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
+        this.miniLogger.log(`${statePrefix} #${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
         if (this.logValidationTime){ timer.displayResults();}
     
         const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);

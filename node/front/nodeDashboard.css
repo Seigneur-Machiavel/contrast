@@ -1,6 +1,12 @@
 :root {
     --cbe-widget-margin: 0 10px;
 }
+html {
+    transition: transform 0.3s ease;
+    transform-origin: top;
+    transform: scale(.6);
+    height: 60%;
+}
 body {
     display: flex;
     flex-direction: column;
@@ -14,16 +20,13 @@ input::-webkit-inner-spin-button {
     margin: 0;
 }
 h1 {
-    font-size: 1.1em;
     font-weight: 600;
 }
 h2 {
-    font-size: .86em;
     font-weight: 400;
 }
 h3 {
-    font-size: .74em;
-    font-weight: 500;
+    font-weight: 400;
 }
 
 .toggleAdminPanelButton {
@@ -103,39 +106,30 @@ h3 {
 .containers-wrap {
     width: 92%;
     display: flex;
-    flex-wrap: wrap;
-    justify-content: space-around;
     gap: 0px 20px;
+    flex-direction: column;
+    align-items: center;
 }
 .container {
-    overflow: hidden;
-    width: 36vw;
+    width: 100%;
     height: fit-content;
-    max-width: 500px;
-    min-width: 300px;
-    /*padding: 0 30px 30px;*/
-    padding: 0 20px 40px 40px;
-    border: 2px solid var(--color2);
-    border-radius: 20px;
-    margin-bottom: 40px;
-}
-.container.large {
-    width: 80vw;
+    max-width: 1000px;
+    min-width: 500px;
+    /*margin-bottom: 50px;*/
+    margin-bottom: 20px;
+    margin-top: 10px;
 }
 .container-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    background-color: var(--color2);
-    color: var(--color1);
-    /*margin: 0 -30px;
-    padding: 0 30px;*/
-    margin: 0 -20px 0 -40px;
-    padding: 0 20px;
+    background-color: var(--color1);
+    color: var(--color2);
+    /*padding-top: 50px;*/
+    margin-bottom: -18px;
 }
 .container-header h2:not(:first-child) {
-    font-size: .9em;
-    font-weight: 400;
+    font-size: 1.25em;
     opacity: .5;
 }
 .container .spacedText h3 {
@@ -154,18 +148,15 @@ h3 {
     flex-direction: column;
     align-items: flex-start;
 }
-.spacedText:not(:last-child):not(.end) {
+.spacedText:not(:last-child) {
     border-bottom: solid 1px var(--color1_2);
-}
-.spacedText.end {
-    margin-bottom: 40px;
 }
 
 .editable-address-wrap {
     transform: translateX(-17px);
     position: relative;
 }
-.editButton {
+.editable-address-wrap .editButton {
     cursor: pointer;
     height: fit-content;
     font-size: 17px;
@@ -175,8 +166,16 @@ h3 {
     transform: translateX(105%) translateY(10%) rotateY(180deg);
     transition: transform 0.06s ease;
 }
-.editButton:hover {
+.editable-address-wrap .editButton:hover {
     transform: translateX(105%) translateY(10%) rotateY(180deg) scale(1.1);
+}
+.editable-address-wrap .link-to-amount {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    font-size: 66px;
+    transform: translate(58px, 58px);
+    opacity: .1;
 }
 
 .incrementalInput {
@@ -193,40 +192,6 @@ h3 {
     font-size: large;
     font-weight: 600;
 }
-/*
-#topBar {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-    border-bottom: solid 1px var(--color2);
-}
-#topBar h3 {
-    width: auto;
-    opacity: 0.8;
-    margin: 5px 0;
-    flex-grow: 1;
-    text-align: center;
-}
-#topBar .btnWrap {
-    overflow: hidden;
-    max-height: 0;
-    transition: max-height 0.3s ease;
-}
-#topBar .btnWrap.visible {
-    max-height: 200px; 
-}
-#topBar .btnWrap div {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-around;
-    width: auto;
-    overflow: hidden;
-}
-#topBar .btnWrap div button {
-    cursor: pointer;
-    margin: 0 0 5px 0;
-}*/
 
 .adminPanelContainer {
     display: flex;
@@ -322,4 +287,17 @@ h3 {
 }
 .toggleButton.active::after {
     transform: translateX(20px);
+}
+
+@media (min-width: 768px) {
+    html {
+        transform: scale(.75);
+        height: 75%;
+    }
+}
+@media (min-width: 1200px) {
+    html {
+        transform: scale(.9);
+        height: 90%;
+    }
 }

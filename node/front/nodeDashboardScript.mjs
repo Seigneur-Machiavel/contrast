@@ -565,6 +565,8 @@ document.addEventListener('change', async (event) => {
     }
 });
 document.addEventListener('click', async (event) => {
+    if (window.parent && window !== window.parent) window.parent.postMessage({ type: 'iframeClick' }, 'file://');
+
     const target = event.target;
     switch (target) {
         case eHTML.stakeInput.confirmBtn:
@@ -648,6 +650,12 @@ document.addEventListener('click', async (event) => {
             }));
             updateToggle(newState, eHTML.disabledSyncToggle);
             break;
+    }
+});
+window.addEventListener('message', function(event) {
+    const data = event.data;
+    if (data.type === 'darkMode' && typeof data.value === 'boolean') {
+        if (data.value) { document.body.classList.add('dark-mode'); } else { document.body.classList.remove('dark-mode'); }
     }
 });
 

@@ -3,7 +3,7 @@ import path from 'path';
 import { compressFiles, copyFiles } from '../utils/compressor.mjs';
 
 const __dirname = path.resolve();
-const DESTINATION = path.resolve(__dirname, 'dist(do not modify)'); // destination folder of contrast files
+const DESTINATION = path.resolve(__dirname, 'dist(do-not-modify)'); // destination folder of contrast files
 if (!fs.existsSync(DESTINATION)) fs.mkdirSync(DESTINATION);
 
 // extract version in manifest.json

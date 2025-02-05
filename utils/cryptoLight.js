@@ -4,6 +4,7 @@ export const cryptoLight = {
     argon2Worker: null,
     cryptoStrength: 'heavy',
     argon2Mem: { heavy: 2**16, medium: 2**14, light: 2**12 },
+    /** @type {CryptoKey} */
     key: null,
     /** @type {Uint8Array} */
     iv: null,
@@ -180,7 +181,7 @@ export const cryptoLight = {
     },
     /** Generate a Uint8Array using password, and a salt.
 	 * - Will be called 2 times to generate the salt and the IV
-	 * - The memory cost provides better security over Brute Force attacks
+	 * - The memory cost provides security over Brute Force attacks
 	 * @param {string} masterMnemonicStr
 	 * @param {string} saltStr
 	 * @param {number} length */
@@ -222,10 +223,11 @@ export const cryptoLight = {
         splited.pop();
         return { encoded: splited.join('$') + '$' + hash, hash: hash }
     },
-    concatUint8(salt1, salt2) {
-        const result = new Uint8Array(salt1.length + salt2.length);
-        result.set(salt1);
-        result.set(salt2, salt1.length);
+    /** @param {Uint8Array} array1 @param {Uint8Array} array2 */
+    concatUint8(array1, array2) {
+        const result = new Uint8Array(array1.length + array2.length);
+        result.set(array1);
+        result.set(array2, array1.length);
         return result;
     },
     generateRdnHex(length = 32) {
@@ -255,10 +257,12 @@ export const cryptoLight = {
     
         return keyPair;
     },
+    /** @param {CryptoKey} key */
     async exportPublicKey(key) {
         const exportedKey = await crypto.subtle.exportKey("spki", key);
         return new Uint8Array(exportedKey);
     },
+    /** @param {Uint8Array} exportedKey */
     async publicKeyFromExported(exportedKey) {
         const buffer = new Uint8Array(Object.values(exportedKey));
         const publicKey = await crypto.subtle.importKey(
@@ -270,21 +274,23 @@ export const cryptoLight = {
         );
         return publicKey;
     },
-    async encryptData(publicKey, data) {
+    /** @param {CryptoKey} key - usually the public key */
+    async encryptData(key, data) {
         const encodedData = new TextEncoder().encode(data);
         const encryptedData = await crypto.subtle.encrypt(
             { name: "RSA-OAEP" },
-            publicKey,
+            key,
             encodedData
         );
     
         return encryptedData;
     },
-    async decryptData(privateKey, data) {
+    /** @param {CryptoKey} key - usually the private key */
+    async decryptData(key, data) {
         const encryptedData = this.base64ToUint8Array(data);
         const decryptedData = await crypto.subtle.decrypt(
             { name: "RSA-OAEP" },
-            privateKey,
+            key,
             encryptedData
         );
     

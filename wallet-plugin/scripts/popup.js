@@ -1,14 +1,14 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)-
-    const anime = require("../dist(do not modify)/libs/anime.min.js");
+    const anime = require("../dist(do-not-modify)/libs/anime.min.js");
     const PatternGenerator = require("./pattern-generator.js");
-	const { cryptoLight } = require("../dist(do not modify)/utils/cryptoLight.js");
+	const { cryptoLight } = require("../dist(do-not-modify)/utils/cryptoLight.js");
     const { CenterScreenBtn, Communication, AuthInfo, Sanitizer, Miner } = require("./classes.js");
     const { WelcomeAnimationBlob, horizontalBtnLoading } = require('./htmlAnimations.mjs');
-    const { Wallet, Account } = require("../dist(do not modify)/node/src/wallet.mjs");
-    const { convert } = require("../dist(do not modify)/utils/converters.mjs");
-    const { typeValidation } = require("../dist(do not modify)/utils/type-validation.mjs");
-    const { addressUtils } = require("../dist(do not modify)/utils/addressUtils.mjs");
-    const { Transaction, Transaction_Builder, utxoExtraction } = require("../dist(do not modify)/node/src/transaction.mjs");
+    const { Wallet, Account } = require("../dist(do-not-modify)/node/src/wallet.mjs");
+    const { convert } = require("../dist(do-not-modify)/utils/converters.mjs");
+    const { typeValidation } = require("../dist(do-not-modify)/utils/type-validation.mjs");
+    const { addressUtils } = require("../dist(do-not-modify)/utils/addressUtils.mjs");
+    const { Transaction, Transaction_Builder, utxoExtraction } = require("../dist(do-not-modify)/node/src/transaction.mjs");
 }
 
 /**
