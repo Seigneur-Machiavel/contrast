@@ -281,6 +281,7 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     /** @type {Worker} */
     worker = null;
     autoRestart = true;
+    nodeStarted = false;
     /** @type {BrowserWindow} */
     mainWindow;
     constructor (app = "dashboard", nodePort = 27260, dashboardPort = 27271, observerPort = 27270, mainWindow = null) {
@@ -388,6 +389,7 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
                     this.worker.terminate();
                     break;
                 case 'message_to_mainWindow':
+                    if (message.data === 'node-started') { this.nodeStarted = true; }
                     if (this.#avoidMainWindowMessage(message)) return;
                     this.mainWindow.webContents.send(message.data);
                     break;
