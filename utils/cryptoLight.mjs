@@ -14,6 +14,7 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
  * @property {string} salt
  */
 
+import { crypto } from 'crypto';
 export class CryptoLight {
     /** @type {argon2HashFunction} */
     argon2Hash = null; // Function to hash a password using Argon2 (NodeJs only)
