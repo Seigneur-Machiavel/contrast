@@ -10,7 +10,7 @@ const nodeApp = args.includes('-na') ? nextArg('-na') : 'dashboard'; // dashboar
 const privateKey = args.includes('-pk') ? nextArg('-pk') : null;
 
 const dashboardWorker = new NodeAppWorker(nodeApp, nodePort, dashboardPort, observerPort);
-if (privateKey) { await new Promise(resolve => setTimeout(resolve, 5000)); dashboardWorker.setPrivateKey(privateKey); }
+if (privateKey) { await new Promise(resolve => setTimeout(resolve, 5000)); dashboardWorker.generatePrivateKeyAndStartNode(privateKey); }
 
 process.on('uncaughtException', (error) => { console.error('Uncatched exception:', error.stack); });
 process.on('unhandledRejection', (reason, promise) => { console.error('Promise rejected:', promise, 'reason:', reason); });

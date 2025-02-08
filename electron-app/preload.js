@@ -1,26 +1,27 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-const chatApi = {
+const electronAPI = {
     // Methods
-    startChat: (nickname, listenAddr) => ipcRenderer.invoke('start-chat', nickname, listenAddr),
-    sendMessage: (data) => ipcRenderer.invoke('send-message', data),
-    joinChannel: (channel) => ipcRenderer.invoke('join-channel', channel),
-    connectPeer: (addr) => ipcRenderer.invoke('connect-peer', addr),
-    shareFile: (data) => ipcRenderer.invoke('share-file', data),
-    downloadFile: (data) => ipcRenderer.invoke('download-file', data),
+    setPassword: (password) => ipcRenderer.send('set-password', password),
+    generatePrivateKeyAndStartNode: () => ipcRenderer.send('generate-private-key-and-start-node'),
+    setPrivateKeyAndStartNode: (privateKey) => ipcRenderer.send('set-private-key-and-start-node', privateKey),
+    extractPrivateKey: (password) => ipcRenderer.send('extract-private-key', password),
 
     // Listeners
-    onChatMessage: (callback) => ipcRenderer.on('message', (event, data) => callback(data)),
-    onPeerJoined: (callback) => ipcRenderer.on('peer-joined', (event, data) => callback(data)),
-    onPeerLeft: (callback) => ipcRenderer.on('peer-left', (event, data) => callback(data)),
-    onPeerConnecting: (callback) => ipcRenderer.on('peer-connecting', (event, data) => callback(data)),
-    onFileProgress: (callback) => ipcRenderer.on('file-progress', (event, data) => callback(data)),
-    onFileComplete: (callback) => ipcRenderer.on('file-complete', (event, data) => callback(data)),
+    onNoExistingPassword: (func) => { ipcRenderer.on('no-existing-password', (event, ...args) => func(...args)); },
+    onSetNewPasswordResult: (func) => { ipcRenderer.on('set-new-password-result', (event, ...args) => func(...args)); },
 
-    // Remove event listeners
-    removeAllListeners: (channel) => { ipcRenderer.removeAllListeners(channel); }
+    onPasswordRequested: (func) => { ipcRenderer.on('password-requested', (event, ...args) => func(...args)); },
+    onSetPasswordResult: (func) => { ipcRenderer.on('set-password-result', (event, ...args) => func(...args)); },
+
+    onWaitingForPrivKey: (func) => { ipcRenderer.on('waiting-for-priv-key', (event, ...args) => func(...args)); },
+    onNodeStarted: (func) => { ipcRenderer.on('node-started', (event, ...args) => func(...args)); },
+    onNodeSettingsSaved: (func) => { ipcRenderer.on('node-settings-saved', (event, ...args) => func(...args)); },
+
+    onAssistantMessage: (func) => { ipcRenderer.on('assistant-message', (event, message) => func(message)); },
+    onWindowToFront: (func) => { ipcRenderer.on('window-to-front', (event, appName) => func(appName)); },
 };
 
 // Expose protected methods that allow the renderer process to use
 // specific IPC channels safely in isolation
-contextBridge.exposeInMainWorld('chatAPI', chatApi);
+contextBridge.exposeInMainWorld('electronAPI', electronAPI);

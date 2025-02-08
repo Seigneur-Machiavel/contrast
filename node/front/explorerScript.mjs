@@ -49,7 +49,7 @@ const SETTINGS = {
     LOCAL_DOMAIN: "localhost",
     LOCAL_PORT: "27270",
     //LOCAL: window.explorerLOCAL || false,
-    LOCAL: window.location.hostname === 'localhost',
+    LOCAL: (window.parent && window !== window.parent) || window.location.hostname === 'localhost' ? true : false,
     RECONNECT_INTERVAL: 2000,
     GET_CURRENT_HEIGHT_INTERVAL: window.location.hostname === 'localhost' ? 1000 : 5000,
     ROLES: window.explorerROLES || ['chainExplorer', 'blockExplorer'],

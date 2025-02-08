@@ -1,7 +1,7 @@
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)-
     const anime = require("../dist(do-not-modify)/libs/anime.min.js");
     const PatternGenerator = require("./pattern-generator.js");
-	const { cryptoLight } = require("../dist(do-not-modify)/utils/cryptoLight.js");
+	const { CryptoLight } = require("../dist(do-not-modify)/utils/cryptoLight.js");
     const { CenterScreenBtn, Communication, AuthInfo, Sanitizer, Miner } = require("./classes.js");
     const { WelcomeAnimationBlob, horizontalBtnLoading } = require('./htmlAnimations.mjs');
     const { Wallet, Account } = require("../dist(do-not-modify)/node/src/wallet.mjs");
@@ -17,6 +17,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)-
 * @typedef {import("../../node/front/explorerScript.mjs").BlockExplorerWidget} BlockExplorerWidget
 */
 
+const cryptoLight = new CryptoLight();
 /** @type {BlockExplorerWidget} */
 let blockExplorerWidget;
 

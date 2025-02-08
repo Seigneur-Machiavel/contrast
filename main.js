@@ -1,4 +1,4 @@
-if (false) { const { NodeAppWorker } = require('../node/workers/workers-classes.mjs'); } // For better completion
+if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // For better completion
 
 /**
  * @typedef {Object} WindowOptions
@@ -12,12 +12,12 @@ if (false) { const { NodeAppWorker } = require('../node/workers/workers-classes.
 
 const fs = require('fs');
 const path = require('path');
-const { app, BrowserWindow, Menu, globalShortcut, dialog, session } = require('electron');
+const { app, BrowserWindow, Menu, globalShortcut, dialog, ipcMain } = require('electron');
 Menu.setApplicationMenu(null); // remove the window top menu
 
 const { autoUpdater } = require('electron-updater');
-const setShortcuts = require('./shortcuts.js');
-const { MiniLogger } = require('../miniLogger/mini-logger.js');
+const setShortcuts = require('./electron-app/shortcuts.js');
+const { MiniLogger } = require('./miniLogger/mini-logger.js');
 /*const log = require('electron-log');
 log.transports.file.level = 'info';
 log.info('--- Test log ---');
@@ -25,27 +25,20 @@ autoUpdater.logger = log;*/
 
 // GLOBAL VARIABLES
 const windowsOptions = {
-    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: '../miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
+    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
     nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
-    mainWindow: { nodeIntegration: true, contextIsolation: false, url_or_file: 'index/board.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
+    mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
 }
 const mainLogger = new MiniLogger('main');
 const isDev = !app.isPackaged;
+const nodeApp = isDev ? 'stresstest' : 'dashboard';
 let isQuiting = false;
-/** @type {BrowserWindow} */
-let mainWindow;
-/** @type {BrowserWindow[]} */
+/** @type {Object<string, BrowserWindow>} */
 const windows = {};
 /** @type {NodeAppWorker} */
 let dashboardWorker;
 
-async function startNode(randomRestartTest = false) {
-    const { NodeAppWorker } = await import('../node/workers/workers-classes.mjs');
-    const nodeApp = isDev ? 'stresstest' : 'dashboard';
-    dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270);
-
-    if (!randomRestartTest) return;
-
+async function randomRestartTest() {
     await new Promise(resolve => setTimeout(resolve, 5000)); // wait for the dashboard to start
     while(isDev) { // -- test restart after 120s to 600s --
         const restartTime = Math.floor(Math.random() * 480000) + 120000;
@@ -59,23 +52,28 @@ async function createWindow(options) {
     const { nodeIntegration, contextIsolation, url_or_file, width, height, startHidden = true, isMainWindow = false } = options;
 
     const window = new BrowserWindow({
+        show: !startHidden,
         width,
         height,
         icon: 'electron-app/img/icon_256.png',
+        //frame: false,
+        //titleBarStyle: 'hidden',
         webPreferences: {
+            preload: isMainWindow ? path.join(__dirname, 'electron-app', 'preload.js') : undefined,
             nodeIntegration,
-            contextIsolation,
-            // preload: isMainWindow ? path.join(__dirname, 'preload.js') : undefined //(not with nodeIntegration: true)
+            contextIsolation
         }
     });
 
     if (isMainWindow) {
         window.on('close', () => { if (!isQuiting) app.quit(); });
-        //const walletExtensionPath = path.resolve(__dirname, '../wallet-plugin');
-        //console.log(walletExtensionPath);
-        //await session.defaultSession.loadExtension(walletExtensionPath);
         const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
         window.webContents.executeJavaScript(`document.getElementById('board-version').innerText = "v${version}";`, true);
+
+        // test of loading an extension
+        //const walletExtensionPath = path.resolve(__dirname, './wallet-plugin');
+        //console.log(walletExtensionPath);
+        //await session.defaultSession.loadExtension(walletExtensionPath);
     } else {
         window.on('close', (e) => { if (!isQuiting) { e.preventDefault(); window.hide() } });
     }
@@ -83,15 +81,13 @@ async function createWindow(options) {
     const isUrl = url_or_file.startsWith('http');
     if (isUrl) { window.loadURL(url_or_file); } else { window.loadFile(url_or_file); }
 
-    if (startHidden) window.hide();
     return window;
 }
 
 autoUpdater.on('update-available', (e) => { console.log(`A new update is available: v${e.version}`); });
-app.on('before-quit', () => { isQuiting = true; globalShortcut.unregisterAll(); if (dashboardWorker) { dashboardWorker.stop(); } });
+app.on('before-quit', () => { isQuiting = true; globalShortcut.unregisterAll(); if (dashboardWorker) dashboardWorker.stop(); });
 app.on('will-quit', async () => { await new Promise(resolve => setTimeout(resolve, 10000)) }); // let time for the node to stop properly
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
-
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     const dialogOpts = {
         type: 'info',
@@ -106,15 +102,34 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
         if (returnValue.response === 0) autoUpdater.quitAndInstall();
     });
 });
+
+
 app.on('ready', async () => {
     if (!isDev) autoUpdater.checkForUpdatesAndNotify();
 
-    startNode();
+    //await startNode();
 
-    windows.logger = await createWindow(windowsOptions.logger);
-    windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard);
-    mainWindow = await createWindow(windowsOptions.mainWindow);
+    windows.mainWindow = await createWindow(windowsOptions.mainWindow);
 
-    setShortcuts(windows, isDev);
-    if (isDev) mainWindow.webContents.toggleDevTools(); // dev tools on start
+    const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
+    dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.mainWindow);
+
+    if (isDev) windows.mainWindow.webContents.toggleDevTools(); // dev tools on start
+
+    ipcMain.on('set-password', async (event, password) => {
+        console.log('setting password...');
+        const { channel, data } = await dashboardWorker.setPasswordAndWaitResult(password);
+        event.reply(channel, data);
+        
+        // randomRestartTest(); // -- test restart each 120s to 600s --
+        windows.logger = await createWindow(windowsOptions.logger);
+        windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard);
+        setShortcuts(windows, isDev);
+    });
+    ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());
+    ipcMain.on('set-private-key-and-start-node', (event, privateKey) => dashboardWorker.setPrivateKeyAndStartNode(privateKey));
+    ipcMain.on('extract-private-key', async (event, password) => {
+        const extracted = await dashboardWorker.extractPrivateKeyAndWaitResult(password);
+        event.reply('assistant-message', extracted);
+    });
 });

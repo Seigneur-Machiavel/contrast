@@ -27,11 +27,11 @@ function targetStorageFolder() {
     const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked'); // path to the storage-manager.mjs file
     if (!filePath.includes('app.asar')) {
         const rootFolder = path.dirname(path.dirname(filePath));
-        storagePath = path.join(path.dirname(rootFolder), 'Contrast-storage');
+        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
     } else {
         isProductionEnv = true; 
         const rootFolder = path.dirname(path.dirname(path.dirname(path.dirname(filePath))));
-        storagePath = path.join(path.dirname(rootFolder), 'Contrast-storage');
+        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
         console.log('-----------------------------');
         console.log('-----------------------------');
         console.log(storagePath);
@@ -122,6 +122,11 @@ export class Storage {
             }
         }
         return false;
+    }
+    static isFileExist(fileNameWithExtension = 'toto.bin', directoryPath) {
+        const directoryPath__ = directoryPath || PATH.STORAGE;
+        const filePath = path.join(directoryPath__, fileNameWithExtension);
+        return fs.existsSync(filePath);
     }
     /** Save data to a JSON file @param {string} fileName - The name of the file */
     static saveJSON(fileName, data) {

@@ -5,7 +5,7 @@
             "request": "launch",
             "name": "Debug Main Process",
             "runtimeExecutable": "electron",
-            "program": "${workspaceFolder}/electron-app/main.js",
+            "program": "${workspaceFolder}/main.js",
             "args": [],
             "cwd": "${workspaceFolder}",
             "env": {},
@@ -51,7 +51,7 @@
             "windows": {
                 "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd"
             },
-            "program": "${workspaceFolder}/electron-app/main.js",
+            "program": "${workspaceFolder}/main.js",
             "args" : ["${workspaceFolder}/dist"],
             "outputCapture": "std",
             "sourceMaps": true

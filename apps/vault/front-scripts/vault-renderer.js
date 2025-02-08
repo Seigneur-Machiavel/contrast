@@ -2,7 +2,7 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const anime = require("./anime.min.js");
 	const bip39 = require("./bip39-3.1.0.js");
 	const { MnemoLinker } = require("./MnemoLinker/MnemoLinker_v1.7.js");
-	const { cryptoLight } = require("./cryptoLight.js");
+	const { CryptoLight } = require("./cryptoLight.js");
 	const { CenterScreenBtn, Mnemonic, UserData,
 		TempData, MnemoBubble, MnemoLinkSVG, GameController,
 		Communication, Sanitizer } = require("./classes.js");
@@ -10,8 +10,8 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion )
 	const { htmlAnimations } = require("./htmlAnimations.js");
 }
 
-//const cryptoLightClass = require("../../../libs/
-const cryptoLight = new cryptoLightClass();
+const { CryptoLight } = require("../../../utils/cryptoLight.js");
+const cryptoLight = new CryptoLight();
 cryptoLight.useArgon2Worker = true;
 console.log('Argon2 worker enabled!');
 //#region - VARIABLES

@@ -1,3 +1,4 @@
+if (false) { const { BrowserWindow } = require('electron'); } // For definition
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 
 /**
@@ -280,11 +281,14 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     /** @type {Worker} */
     worker = null;
     autoRestart = true;
-    constructor (app = "dashboard", nodePort = 27260, dashboardPort = 27271, observerPort = 27270) {
+    /** @type {BrowserWindow} */
+    mainWindow;
+    constructor (app = "dashboard", nodePort = 27260, dashboardPort = 27271, observerPort = 27270, mainWindow = null) {
         this.app = app;
         this.nodePort = nodePort;
         this.dashboardPort = dashboardPort;
         this.observerPort = observerPort;
+        this.mainWindow = mainWindow;
         this.initWorker();
         this.autoRestartLoop();
     }
@@ -304,9 +308,42 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     restart() {
         this.worker.postMessage({ type: 'stop' });
     }
-    setPrivateKey(privateKey = '') {
-        this.worker.postMessage({ type: 'set_private_key', data: privateKey });
-        console.info('set_private_key msg sent to NodeAppWorker');
+    async setPasswordAndWaitResult(password = '') {
+        const promise = new Promise((resolve, reject) => {
+            this.worker.on('message', (message) => {
+                if (message.type === 'set_new_password_result' && message.data) {
+                    return resolve({channel: 'set-new-password-result', data: message.data});
+                }
+                if (message.type === 'set_password_result' && message.data) {
+                    return resolve({channel: 'set-password-result', data: message.data});
+                }
+            }), setTimeout(() => { reject('Timeout'); }, 10000);
+        });
+
+        this.worker.postMessage({ type: 'set_password_and_try_init_node', data: password });
+        console.info('set_password msg sent to NodeAppWorker');
+
+        return promise;
+    }
+    generatePrivateKeyAndStartNode() {
+        this.worker.postMessage({ type: 'generate_private_key_and_start_node' });
+        console.info('msg sent to NodeAppWorker: set_private_key_and_start_node');
+    }
+    setPrivateKeyAndStartNode(privateKey = '') {
+        this.worker.postMessage({ type: 'set_private_key_and_start_node', data: privateKey });
+        console.info('msg sent to NodeAppWorker: set_private_key_and_start_node');
+    }
+    async extractPrivateKeyAndWaitResult(password = '') {
+        const promise = new Promise((resolve, reject) => {
+            this.worker.on('message', (message) => {
+                if (message.type === 'private_key_extracted') return resolve(message.data);
+            }), setTimeout(() => { reject('Timeout'); }, 10000);
+        });
+
+        this.worker.postMessage({ type: 'extract_private_key', data: password });
+        console.info('msg sent to NodeAppWorker: extract_private_key');
+
+        return promise;
     }
     async autoRestartLoop() {
         while (true) {
@@ -324,6 +361,10 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
+    #avoidMainWindowMessage(message, typeStringCheck = true) {
+        if (!this.mainWindow) return true;
+        if (typeStringCheck && typeof message.data !== 'string') return true;
+    }
     async initWorker() {
         const app = this.app;
         const nodePort = this.nodePort;
@@ -337,7 +378,32 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
 
         this.worker.on('exit', (code) => { console.log(`NodeAppWorker stopped with exit code ${code} -> should restart`); });
         this.worker.on('close', () => { console.log('NodeAppWorker closed'); });
-        this.worker.on('message', (message) => { if (message.type === 'stopped') { this.worker.terminate(); } });
+        this.worker.on('message', (message) => {
+            switch (message.type) {
+                case 'set_new_password_result':
+                    break; // Managed by setPasswordAndWaitResult()
+                case 'set_password_result':
+                    break; // Managed by setPasswordAndWaitResult()
+                case 'stopped':
+                    this.worker.terminate();
+                    break;
+                case 'message_to_mainWindow':
+                    if (this.#avoidMainWindowMessage(message)) return;
+                    this.mainWindow.webContents.send(message.data);
+                    break;
+                case 'assistant_message':
+                    if (this.#avoidMainWindowMessage(message)) return;
+                    this.mainWindow.webContents.send('assistant-message', message.data);
+                    break;
+                case 'window_to_front':
+                    if (this.#avoidMainWindowMessage(message)) return;
+                    this.mainWindow.webContents.send('window-to-front', message.data);
+                    break;
+                default:
+                    console.log('Unknown NodeAppWorker message:', message);
+                    break;
+            }
+        });
 
         console.log('NodeAppWorker started');
     }

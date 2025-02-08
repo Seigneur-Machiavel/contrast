@@ -1,6 +1,6 @@
 {
   "name": "contrast",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "All-in-one Contrast application",
   "main": "main.js",
   "scripts": {
@@ -25,6 +25,7 @@
     "electron-updater": "^6.3.9",
     "express": "^4.21.2",
     "libp2p": "^2.3.1",
+    "node-machine-id": "^1.1.12",
     "ntp-client": "^0.5.3",
     "ws": "^8.18.0"
   },

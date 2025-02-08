@@ -1,10 +1,52 @@
 if (false) { // For better completion
 	const anime = require('animejs');
 	const ChatUI = require('../../apps/chat/front-scripts/chat-renderer.js');
+	const { Assistant } = require('../../apps/assistant/board-assistant.mjs');
 }
 
 import { AppConfig, appsConfig } from '../../apps/apps-config.mjs';
-const appsMainClasses = { 'ChatUI': ChatUI }
+//const appsMainClasses = { 'ChatUI': ChatUI };
+//const assistant = new Assistant('board');
+
+/** @type {Assistant} */
+let assistant;
+
+const interactionsListenners = {
+	onNoExistingPassword: () => { assistant.requestNewPassword(); },
+	//onSetNewPasswordResult: async (message) => { assistant.sendMessage(`${message ? 'Password creation successfully' : 'Password creation failed'}`); },
+	onSetNewPasswordResult: async (message) => { if (!message) assistant.sendMessage(`Password creation failed`); },
+
+	onPasswordRequested: () => { appsManager.lock(); assistant.requestPasswordToUnlock(); },
+	onSetPasswordResult: (message) => { if (!message) assistant.sendMessage(`Incorrect password`); },
+	
+	onWaitingForPrivKey: () => {
+		assistant.sendMessage('Would you like to create a new private key or restore an existing wallet?')
+		assistant.requestChoice({
+			'Generate (new user)': () => {
+				assistant.sendMessage('Initializing node... (can take a up to a minute)');
+				window.electronAPI.generatePrivateKeyAndStartNode();
+			},
+			'Restore wallet': () => assistant.requestPrivateKey()
+		});
+	},
+	onNodeStarted: async () => {
+		assistant.sendMessage('We are connected baby!');
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		assistant.idleMenu();
+		await new Promise(resolve => setTimeout(resolve, 2000));
+		appsManager.toggleAppWindow('assistant');
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		appsManager.unlock();
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		appsManager.toggleAppWindow('explorer');
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		appsManager.toggleAppWindow('dashboard');
+	},
+	//onNodeSettingsSaved
+
+	onAssistantMessage: (message) => { assistant.sendMessage(message, 'system'); },
+	onWindowToFront: (appName) => { appsManager.setFrontWindow(appName); },
+}
 
 /** @param {string} tag @param {string[]} classes @param {string} innerHTML @param {HTMLElement} [parent] */
 function newElement(tag, classes, innerHTML, parent) {
@@ -14,10 +56,6 @@ function newElement(tag, classes, innerHTML, parent) {
 	if (innerHTML.includes('.html')) {
 		let url;
 		fetch(innerHTML).then(res => { url = res.url; return res.text() }).then(html => {
-			/*const innerHTMLPath = url.substring(0, url.lastIndexOf('/') + 1);
-			console.log('injecting: innerHTMLPath ->', innerHTMLPath);
-			//html = html.replace(/src="([^"]+)"/g, `src="${innerHTMLPath}$1"`);
-			html = html.replace('="./', `="${innerHTMLPath}`);*/
 			element.innerHTML = html;
 		});
 	} else {
@@ -35,8 +73,9 @@ class ButtonsBar {
 		this.buttonsByAppNames = {};
 	}
 
-	addButton(appName, app) {
+	addButton(appName, app, disabled = true) {
 		const button = newElement('button', ['app-button'], '', this.element);
+		if (disabled) button.classList.add('disabled');
 		button.dataset.appName = appName;
 
 		const img = newElement('img', [], '', button);
@@ -212,6 +251,7 @@ class SubWindow {
 	}
 }
 class AppsManager {
+	state = 'locked';
 	/** @type {Object<string, SubWindow>} */
 	windows = {};
 	draggingWindow = null;
@@ -234,32 +274,36 @@ class AppsManager {
 	}
 	initApps() {
 		this.buttonsBar.element.innerHTML = '';
-		for (const app in this.appsConfig) { this.buttonsBar.addButton(app, this.appsConfig[app]); }
-		for (const app in this.appsConfig) { if (this.appsConfig[app].preload) this.loadApp(app); }
+		for (const app in this.appsConfig) {
+			this.buttonsBar.addButton(app, this.appsConfig[app], this.appsConfig[app].disableOnLock);
+			if (this.appsConfig[app].preload) this.loadApp(app);
+		}
 	}
 	loadApp(appName) {
 		if (!this.appsConfig[appName]) return;
 
 		const origin = this.buttonsBar.getButtonOrigin(appName);
-		this.windows[appName] = new SubWindow(appName, this.appsConfig[appName].title, this.appsConfig[appName].content);
-		this.windows[appName].minSize.width = this.appsConfig[appName].minWidth;
-		this.windows[appName].minSize.height = this.appsConfig[appName].minHeight;
-		this.windows[appName].initialSize.width = this.appsConfig[appName].initialWidth;
-		this.windows[appName].initialSize.height = this.appsConfig[appName].initialHeight;
-		this.windows[appName].position.top = this.appsConfig[appName].initTop || 0;
+		const { title, content } = this.appsConfig[appName];
+		this.windows[appName] = new SubWindow(appName, title, content);
+
+		const { minWidth, minHeight, initialWidth, initialHeight, initTop } = this.appsConfig[appName];
+		this.windows[appName].minSize.width = minWidth;
+		this.windows[appName].minSize.height = minHeight;
+		this.windows[appName].initialSize.width = initialWidth;
+		this.windows[appName].initialSize.height = initialHeight;
+		this.windows[appName].position.top = initTop || 0;
 
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
+		if (this.appsConfig[appName].setGlobal) window[appName] = this.windows[appName];
 
-		const appMainClassName = this.appsConfig[appName].mainClass;
-		const appMainClass = appsMainClasses[appMainClassName];
-		if (appMainClass) {
-			setTimeout(() => { // wait for the element to be rendered
-				const contentDiv = this.windows[appName].element.querySelector('.content');
-				this.windows[appName].mainInstance = new appMainClass(contentDiv);
-				if (!this.appsConfig[appName].setGlobal) { return; }
-				// set the app as global (window)
-				window[appMainClassName] = this.windows[appName].mainInstance;
-			}, 40);
+		const { fullScreen, setFront } = this.appsConfig[appName];
+		if (fullScreen || setFront) {
+			setTimeout(() => {
+				if (fullScreen) this.windows[appName].setFullScreen(this.calculateBoardSize(), 0);
+				if (!setFront) return;
+				this.windows[appName].toggleFold(origin.x, origin.y, 600);
+				this.setFrontWindow(appName);
+			}, 400);
 		}
 	}
 	toggleAppWindow(appName) {
@@ -295,6 +339,19 @@ class AppsManager {
 		}
 		this.windows[appName].element.style.zIndex = 1;
 		this.windows[appName].element.classList.add('front');
+	}
+	lock() {
+		this.state = 'locked';
+		for (const app in this.appsConfig) {
+			if (this.appsConfig[app].disableOnLock === false) continue;
+			this.buttonsBar.buttonsByAppNames[app].classList.add('disabled');
+		}
+	}
+	unlock() {
+		this.state = 'unlocked';
+		for (const app in this.appsConfig) {
+			this.buttonsBar.buttonsByAppNames[app].classList.remove('disabled');
+		}
 	}
 	// HANDLERS
 	clickAppButtonsHandler(e) {
@@ -441,7 +498,12 @@ window.addEventListener('message', function(e) {
 	}
 });
 
-await new Promise(resolve => setTimeout(resolve, 400));
-//appsManager.windows.node.toggleFold();
-appsManager.toggleAppWindow('explorer');
-appsManager.toggleAppWindow('dashboard');
+//await new Promise(resolve => setTimeout(resolve, 400));
+
+//Setup electronAPI listeners
+while(!window.assistant) { await new Promise(resolve => setTimeout(resolve, 20)); }
+assistant = window.assistant; // set exposed assistant to local variable
+
+for (const listener of Object.keys(interactionsListenners)) {
+	window.electronAPI[listener](interactionsListenners[listener]);
+}

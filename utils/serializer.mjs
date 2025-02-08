@@ -5,6 +5,13 @@ import { Transaction } from '../node/src/transaction.mjs';
 /**
 * @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
 */
+/**
+ * @typedef { Object } NodeSetting
+ * @property { string } privateKey
+ * @property { string } validatorRewardAddress
+ * @property { string } minerAddress
+ * @property { number } minerThreads
+ */
 
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 async function msgPackLib() {
@@ -420,6 +427,21 @@ export const serializer = {
             }
 
             return serializedBlockView;
+        },
+        /** @param {NodeSetting} nodeSetting */
+        nodeSetting(nodeSetting) {
+            const privateKey = fastConverter.hexToUint8Array(nodeSetting.privateKey); // 32 bytes
+            const validatorRewardAddress = fastConverter.addressBase58ToUint8Array(nodeSetting.validatorRewardAddress); // 16 bytes
+            const minerAddress = fastConverter.addressBase58ToUint8Array(nodeSetting.minerAddress); // 16 bytes
+            const minerThreads = fastConverter.numberTo1ByteUint8Array(nodeSetting.minerThreads); // 1 byte
+
+            const serializedNodeSetting = new ArrayBuffer(32 + 16 + 16 + 1); // total 65 bytes
+            const serializedNodeSettingView = new Uint8Array(serializedNodeSetting);
+            serializedNodeSettingView.set(privateKey, 0);
+            serializedNodeSettingView.set(validatorRewardAddress, 32);
+            serializedNodeSettingView.set(minerAddress, 48);
+            serializedNodeSettingView.set(minerThreads, 64);
+            return serializedNodeSettingView;
         }
     },
     deserialize: {
@@ -683,6 +705,15 @@ export const serializer = {
             }
 
             return blockData;
+        },
+        /** @param {Uint8Array} serializedNodeSetting */
+        nodeSetting(serializedNodeSetting) {
+            const privateKey = fastConverter.uint8ArrayToHex(serializedNodeSetting.slice(0, 32)); // 32 bytes
+            const validatorRewardAddress = fastConverter.addressUint8ArrayToBase58(serializedNodeSetting.slice(32, 48)); // 16 bytes
+            const minerAddress = fastConverter.addressUint8ArrayToBase58(serializedNodeSetting.slice(48, 64)); // 16 bytes
+            const minerThreads = fastConverter.uint81ByteToNumber(serializedNodeSetting.slice(64, 65)); // 1 byte
+
+            return { privateKey, validatorRewardAddress, minerAddress, minerThreads };
         }
     }
 };

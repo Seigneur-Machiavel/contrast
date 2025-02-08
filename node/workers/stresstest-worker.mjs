@@ -1,17 +1,26 @@
 process.on('uncaughtException', (error) => { console.error('Uncatched exception:', error.stack); });
 process.on('unhandledRejection', (reason, promise) => { console.error('Promise rejected:', promise, 'reason:', reason); });
+
 import { parentPort, workerData } from 'worker_threads';
 import { DashboardWsApp, ObserverWsApp } from '../src/apps.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 import { Wallet, Account } from '../src/wallet.mjs';
-import { Storage } from '../../utils/storage-manager.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { argon2Hash } from '../src/conCrypto.mjs';
+import { CryptoLight } from '../../utils/cryptoLight.mjs'
+import { Storage } from '../../utils/storage-manager.mjs';
+import nodeMachineId from 'node-machine-id';
+
+const fingerPrint = nodeMachineId.machineIdSync();
+let passwordExist = Storage.isFileExist('passHash.bin');
+parentPort.postMessage({ type: 'message_to_mainWindow', data: passwordExist ? 'password-requested' : 'no-existing-password' });
 
 const nodePort = workerData.nodePort || 27260;
 const dashboardPort = workerData.dashboardPort || 27271;
 const observerPort = workerData.observerPort || 27270;
-
-const dashApp = new DashboardWsApp(undefined, nodePort, dashboardPort);
+const cryptoLight = new CryptoLight();
+cryptoLight.argon2Hash = argon2Hash;
+const dashApp = new DashboardWsApp(undefined, cryptoLight, nodePort, dashboardPort, false);
 async function stop() {
     try {
         await dashApp.stop();
@@ -25,17 +34,76 @@ async function stopIfDashAppStoppedLoop() {
     while(dashApp.stopped === false) { await new Promise(resolve => setTimeout(resolve, 1000)); }
     await stop();
 }
+async function initDashAppAndSaveSettings(privateKey = '') {
+    const initialized = await dashApp.init(privateKey);
+    if (!initialized && dashApp.waitingForPrivKey) {
+        parentPort.postMessage({ type: 'message_to_mainWindow', data: 'waiting-for-priv-key' });
+        console.error(`Can't init dashApp, waitingForPrivKey!`);
+    } else if (!initialized) { console.error(`Can't init dashApp, unknown reason!`) }
+
+    if (!initialized) return;
+    
+    parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-started' });
+    dashApp.saveNodeSettingBinary();
+    parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
+}
+async function setPassword(password = 'toto') {
+    const passHash = await cryptoLight.generateArgon2Hash(password, fingerPrint, 64, 'heavy', 16);
+    if (!passHash) { console.error('Argon2 hash failed'); return false; }
+
+    if (!passwordExist) {
+        Storage.saveBinary('passHash', passHash.hashUint8);
+        passwordExist = true;
+        console.info('New password hash saved');
+    } else {
+        const loadedPassBytes = Storage.loadBinary('passHash');
+        if (!loadedPassBytes) { console.error('Can\'t load existing password hash'); return false; }
+        
+        for (let i = 0; i < loadedPassBytes.length; i++) {
+            if (passHash.hashUint8[i] === loadedPassBytes[i]) continue;
+            console.error('Existing password hash not match');
+            return false;
+        }
+        console.info('Existing password hash match');
+    }
+
+    if (cryptoLight.isReady()) return true;
+
+    const concatenated = fingerPrint + password;
+    const fingerPrintUint8 = new Uint8Array(Buffer.from(fingerPrint, 'hex'));
+    cryptoLight.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8)
+    await cryptoLight.generateKey(concatenated);
+    console.info('cryptoLight Key Derived');
+    return true;
+}
 parentPort.on('message', async (message) => {
     switch(message.type) {
         case 'stop':
             await stop();
             break;
-        case 'set_private_key':
+        case 'set_password_and_try_init_node':
+            const passwordCreation = !passwordExist;
+            const setPasswordSuccess = await setPassword(message.data);
+            parentPort.postMessage({ type: passwordCreation ? 'set_new_password_result' : 'set_password_result', data: setPasswordSuccess });
+            if (!setPasswordSuccess) return;
+
+            await initDashAppAndSaveSettings();
+            break;
+        case 'set_private_key_and_start_node':
             console.info('Setting private key');
-            await dashApp.init(message.data);
-            dashApp.nodesSettings[dashApp.node.id].privateKey = message.data;
-            dashApp.saveNodeSettings();
-            console.info('Private key set');
+            await initDashAppAndSaveSettings(message.data);
+            break;
+        case 'generate_private_key_and_start_node':
+            console.info('Generating private key');
+            const rndSeedHex = CryptoLight.generateRndHex(64);
+            await initDashAppAndSaveSettings(rndSeedHex);
+            break;
+        case 'extract_private_key':
+            console.info('Extracting private key');
+            const verified = await setPassword(message.data);
+            if (!verified) { console.error('Password not match'); return; }
+
+            parentPort.postMessage({ type: 'private_key_extracted', data: dashApp.extractNodeSetting().privateKey });
             break;
         default:
             console.error('Unknown message type:', message.type);
@@ -45,7 +113,9 @@ stopIfDashAppStoppedLoop();
 while(!dashApp.node) { await new Promise(resolve => setTimeout(resolve, 1000)); }
 const observApp = new ObserverWsApp(dashApp.node, observerPort);
 
-// STRESS TEST
+// -------------------------------------------------
+// --------------- STRESS TEST ---------------------
+// -------------------------------------------------
 const testMiniLogger = new MiniLogger('stress-test');
 const node = dashApp.node;
 let txsTaskDoneThisBlock = {};
@@ -188,9 +258,10 @@ function refreshAllBalances(accounts) {
 }
 
 async function test() {
-    const nodeSettings = Storage.loadJSON('nodeSettings');
-    if (!nodeSettings || Object.keys(nodeSettings).length === 0) { testMiniLogger.log(`No nodes settings found`, (m) => console.error(m)); return; }
+    while(!dashApp.nodesSettings) { await new Promise(resolve => setTimeout(resolve, 1000)); }
+    console.log('nodesSettings ready -> Starting stress test');
 
+    const nodeSettings = dashApp.nodesSettings;
     const wallet = new Wallet(nodeSettings[node.id].privateKey);
     wallet.loadAccounts();
 

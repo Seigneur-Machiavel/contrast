@@ -1,3 +1,5 @@
+if (false) { const { CryptoLight } = require('../../utils/cryptoLight.mjs'); }
+
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import express from 'express';
 import path from 'path';
@@ -5,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import { Storage } from '../../utils/storage-manager.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
-//import { serializer } from '../../utils/serializer.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { Wallet } from './wallet.mjs';
 import { Node } from './node.mjs';
 import { CallBackManager } from './websocketCallback.mjs';
@@ -16,11 +18,19 @@ import { CallBackManager } from './websocketCallback.mjs';
 * @typedef {import("./block-classes.mjs").BlockUtils} BlockUtils
 */
 
+/**
+ * @typedef { Object } NodeSetting
+ * @property { string } privateKey
+ * @property { string } validatorRewardAddress
+ * @property { string } minerAddress
+ * @property { number } minerThreads
+ */
+
 const APPS_VARS = {
     __filename: fileURLToPath(import.meta.url),
     __dirname: path.dirname( fileURLToPath(import.meta.url) ),
     __nodeDir: path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ),
-    __contrastDir: path.dirname( path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ) ),
+    __contrastDir: path.dirname( path.dirname( path.dirname( fileURLToPath(import.meta.url) ) ) )
 };
 
 /*const APPS_VARS = { __filename: '', __dirname: '', __nodeDir: '', __contrastDir: '' };
@@ -104,15 +114,18 @@ class AppStaticFncs {
 }
 
 export class DashboardWsApp {
-    nodesSettings = {};
+    /** @type {NodeSetting} */
+    #nodeSetting; // new version
     stopping = false;
     stopped = false;
     waitingForPrivKey = false;
-    /** @param {Node} node */
-    constructor(node, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
+    /** @param {Node} node @param {CryptoLight} cryptoLight */
+    constructor(node, cryptoLight, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
         /** @type {Node} */
         this.node = node;
+        /** @type {CryptoLight} */
+        this.cryptoLight = cryptoLight;
         /** @type {CallBackManager} */
         this.callBackManager = null;
         /** @type {express.Application} */
@@ -127,6 +140,28 @@ export class DashboardWsApp {
         this.#stopNodeIfRequestedLoop();
     }
     async init(privateKey) {
+        // NODE CLIENT INIT
+        await this.loadNodeSettingBinary();// UPDATED TO NEW VERSION WITH ENCRYPTION
+
+        if (privateKey) this.waitingForPrivKey = false; // prevent waiting for priv key if provided even if node is not active
+
+        const defaultPrivKey = this.#nodeSetting?.privateKey;
+        const usablePrivKey = privateKey || defaultPrivKey;
+        if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey); }
+        if (!this.node) { // fail to init node with default or provided private key
+            this.waitingForPrivKey = true;
+            console.info("Failed to init node... waiting For PrivKey...");
+            return false;
+        }
+    
+        this.#nodeSetting = this.#nodeSetting || {
+            privateKey: usablePrivKey,
+            validatorRewardAddress: this.node.validatorRewardAddress,
+            minerAddress: this.node.minerAddress,
+            minerThreads: 1 // default value
+        };
+
+        // WEB SERVER INIT
         if (this.app === null) {
             this.app = express();
             this.app.use(express.static(APPS_VARS.__nodeDir));
@@ -149,30 +184,11 @@ export class DashboardWsApp {
         
         this.wss.on('connection', this.#onConnection.bind(this));
         this.wss.on('close', () => { console.log('Server closed'); });
-        
-        this.#loadNodeSettings();
-        const defaultNodeId = Object.keys(this.nodesSettings)[0];
-        const defaultSettings = this.nodesSettings[defaultNodeId];
-        const defaultPrivKey = defaultSettings ? defaultSettings.privateKey : null;
-        const usablePrivKey = privateKey || defaultPrivKey;
-        if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey); }
-        if (!this.node) {
-            this.waitingForPrivKey = true;
-            console.info("Not active Node and No private keys provided, can't auto init node...");
-            return;
-        }
-        
-        const activeNodeAssociatedSettings = this.nodesSettings[this.node.id];
-        if (!activeNodeAssociatedSettings) { // Save the settings for the new node
-            this.nodesSettings[this.node.id] = {
-                privateKey: usablePrivKey,
-                validatorRewardAddress: this.node.validatorRewardAddress,
-                minerAddress: this.node.minerAddress,
-            };
-        }
 
         this.#injectNodeSettings(this.node.account.address);
         this.#injectCallbacks();
+
+        return true;
     }
     async initMultiNode(nodePrivateKey = 'ff') {
         const wallet = new Wallet(nodePrivateKey);
@@ -188,6 +204,11 @@ export class DashboardWsApp {
 
         console.log(`Multi node started, account : ${this.node.account.address}`);
         return this.node;
+    }
+    extractNodeSetting() {
+        /** @type {NodeSetting} */
+        const clone = JSON.parse(JSON.stringify(this.#nodeSetting));
+        return clone;
     }
     async #onConnection(ws, req, localonly = false) {
         const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
@@ -217,22 +238,12 @@ export class DashboardWsApp {
     #injectNodeSettings(nodeId) {
         const node = this.node;
         if (!node) { console.error(`Node ${nodeId} not found`); return; }
+        if (!this.#nodeSetting) { console.error(`NodeSetting not found`); return; }
 
-        const associatedValidatorRewardAddress = this.nodesSettings[nodeId].validatorRewardAddress;
-        if (associatedValidatorRewardAddress) { 
-            node.validatorRewardAddress = associatedValidatorRewardAddress;
-        }
-        
-        const associatedMinerAddress = this.nodesSettings[nodeId].minerAddress;
-        if (associatedMinerAddress) { 
-            node.minerAddress = associatedMinerAddress;
-            node.miner.address = associatedMinerAddress;
-        }
-
-        const associatedMinerThreads = Number(this.nodesSettings[nodeId].minerThreads);
-        if (associatedMinerThreads && !isNaN(associatedMinerThreads)) {
-            node.miner.nbOfWorkers = associatedMinerThreads;
-        }
+        node.validatorRewardAddress = this.#nodeSetting.validatorRewardAddress || node.validatorRewardAddress;
+        node.minerAddress = this.#nodeSetting.minerAddress || node.minerAddress;
+        node.miner.address = this.#nodeSetting.minerAddress || node.miner.address;
+        node.miner.nbOfWorkers = this.#nodeSetting.minerThreads || node.miner.nbOfWorkers;
     }
     #injectCallbacks() {
         const callbacksModes = []; // we will add the modes related to the callbacks we want to init
@@ -262,8 +273,7 @@ export class DashboardWsApp {
                 break;
             case 'set_private_key':
                 await this.init(data);
-                this.nodesSettings[this.node.id].privateKey = data;
-                this.saveNodeSettings();
+                await this.saveNodeSettingBinary();
                 break;
             case 'update_git':
                 this.miniLogger.log(`update_git disabled`, (m) => { console.log(m); });
@@ -275,10 +285,10 @@ export class DashboardWsApp {
                 if (!this.node) { console.error('No active node'); break; }
                 try {
                     addressUtils.conformityCheck(data)
-                    this.nodesSettings[this.node.id].validatorRewardAddress = data;
+                    this.#nodeSetting.validatorRewardAddress = data;
 
                     this.#injectNodeSettings(this.node.id);
-                    this.saveNodeSettings();
+                    await this.saveNodeSettingBinary();
                 } catch (error) {
                     console.error(`Error setting validator address: ${data}, not conform`);
                 }
@@ -288,10 +298,9 @@ export class DashboardWsApp {
                 if (!this.node.miner) { console.error('No miner found'); break; }
                 try {
                     addressUtils.conformityCheck(data)
-                    this.nodesSettings[this.node.id].minerAddress = data;
-
+                    this.#nodeSetting.minerAddress = data;
                     this.#injectNodeSettings(this.node.id);
-                    this.saveNodeSettings();
+                    await this.saveNodeSettingBinary();
                 } catch (error) {
                     console.error(`Error setting miner address: ${data}, not conform`);
                 }
@@ -311,10 +320,9 @@ export class DashboardWsApp {
             case 'set_miner_threads':
                 console.log(`Setting miner threads to ${data}`);
                 if (!this.node) { console.error('No active node'); break; }
-                this.node.miner.nbOfWorkers = data;
-
-                this.nodesSettings[this.node.id].minerThreads = data;
-                this.saveNodeSettings();
+                this.#nodeSetting.minerThreads = data;
+                this.#injectNodeSettings(this.node.id);
+                await this.saveNodeSettingBinary();
                 break;
             case 'new_unsigned_transaction':
                 console.log(`signing transaction ${data.id}`);
@@ -353,19 +361,41 @@ export class DashboardWsApp {
                 break;
         }
     }
-    saveNodeSettings() {
-        Storage.saveJSON('nodeSettings', this.nodesSettings);
-        console.log(`Nodes settings saved: ${Object.keys(this.nodesSettings).length}`);
+    async saveNodeSettingBinary() {
+        // overiding the JSON saving, using encryption. Only one node (not an array) in this version.
+        /** @type {NodeSetting} */
+        const nodeSetting = this.#nodeSetting;
+        if (!this.#isNodeSettingValide(nodeSetting)) { console.error('Invalid nodeSetting'); return; }
+
+        const serialized = serializer.serialize.nodeSetting(nodeSetting);
+        if (!this.cryptoLight.isReady()) { console.error('CryptoLight not ready'); return; }
+
+        /** @type {Uint8Array} */
+        const encrypted = await this.cryptoLight.encryptText(serialized, undefined, false);
+        Storage.saveBinary('nodeSetting', encrypted);
     }
-    #loadNodeSettings() {
-        const nodeSettings = Storage.loadJSON('nodeSettings');
-        if (!nodeSettings || Object.keys(nodeSettings).length === 0) {
-            console.log(`No nodes settings found`);
-            return;
-        }
+    async loadNodeSettingBinary() {
+        // overiding the JSON loading, using encryption. Only one node (not an array) in this version.
+        const encrypted = Storage.loadBinary('nodeSetting');
+        if (!encrypted) { console.log('No nodeSetting found'); return; }
+        if (!this.cryptoLight.isReady()) { console.error('CryptoLight not ready'); return; }
         
-        this.nodesSettings = nodeSettings;
-        console.log(`nodeSettings loaded: ${Object.keys(this.nodesSettings).length}`);
+        const serialized = await this.cryptoLight.decryptText(encrypted, false, true);
+        if (serialized.length !== 65) { console.error('Invalid nodeSetting length'); return; }
+
+        const nodeSetting = serializer.deserialize.nodeSetting(serialized);
+        if (!this.#isNodeSettingValide(nodeSetting)) { console.error('Invalid nodeSetting'); return; }
+
+        this.#nodeSetting = nodeSetting;
+    }
+    /** @param {NodeSetting} nodeSetting */
+    #isNodeSettingValide(nodeSetting) {
+        if (!nodeSetting) { return false; }
+        if (!nodeSetting.privateKey || typeof nodeSetting.privateKey !== 'string') { return false; }
+        if (!nodeSetting.validatorRewardAddress || typeof nodeSetting.validatorRewardAddress !== 'string') { return false; }
+        if (!nodeSetting.minerAddress || typeof nodeSetting.minerAddress !== 'string') { return false; }
+        if (!nodeSetting.minerThreads || typeof nodeSetting.minerThreads !== 'number') { return false; }
+        return true;
     }
     async #stopNodeIfRequestedLoop() {
         while (true) {
@@ -464,7 +494,7 @@ export class ObserverWsApp {
     async #onConnection(ws, req) {
         const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
         if (this.wssClientsIPs[clientIp] && this.wssClientsIPs[clientIp] >= this.maxConnectionsPerIP) {
-            console.log(`[OBSERVER] ${this.readableNow()} Client already connected: ${clientIp}`);
+            console.log(`[OBSERVER] ${this.readableNow()} Client max connection reached: ${clientIp} (${this.wssClientsIPs[clientIp]}/${this.maxConnectionsPerIP})`);
             ws.close(undefined, 'Max connections per IP reached');
             this.wssClientsIPs[clientIp] -= 1;
             return;
@@ -472,7 +502,7 @@ export class ObserverWsApp {
 
         if (!this.wssClientsIPs[clientIp]) { this.wssClientsIPs[clientIp] = 0; }
         this.wssClientsIPs[clientIp] += 1;
-        console.log(`[OBSERVER] ${this.readableNow()} Client connected: ${clientIp} (${this.wssClientsIPs[clientIp]} connections)`);
+        console.log(`[OBSERVER] ${this.readableNow()} Client connected: ${clientIp} (${this.wssClientsIPs[clientIp]}/${this.maxConnectionsPerIP}) connections`);
 
         ws.on('close', () => {
             console.log(`[OBSERVER] Connection closed by client: ${clientIp}`);

@@ -1,21 +1,26 @@
 /**
  * @typedef {Object} AppConfig
- * @property {boolean} preload
+ * @property {boolean} preload - default false
+ * @property {boolean} disableOnLock - default true
  * @property {number} [minWidth]
  * @property {number} [minHeight]
  * @property {number} [initialWidth]
  * @property {number} [initialHeight]
  * @property {number} [initTop]
  * @property {string} icon
+ * @property {string} [iconWidth] - default '50%'
  * @property {string} title
- * @property {string} content // HTML content (not full html document)
+ * @property {string} content - HTML content (not full html document)
  * @property {string} [mainClass]
- * @property {boolean} setGlobal // Set the app as global (window)
+ * @property {boolean} [setGlobal] - Set the app as global (window)
+ * @property {boolean} [fullScreen] - default false
+ * @property {boolean} [setFront] - default false
  */
 
 export const AppConfig = (appName, appConfig) => {
 	return {
 		preload: appConfig.preload || false,
+		disableOnLock: appConfig.disableOnLock === false ? false : true,
 		minWidth: appConfig.minWidth || undefined,
 		minHeight: appConfig.minHeight || undefined,
 		initialWidth: appConfig.initialWidth || undefined,
@@ -26,10 +31,24 @@ export const AppConfig = (appName, appConfig) => {
 		title: appConfig.title || 'App_Title',
 		content: appConfig.content || 'This is a default app.',
 		mainClass: appConfig.mainClass || undefined,
-		setGlobal: appConfig.setGlobal || false
+		setGlobal: appConfig.setGlobal || false,
+		fullScreen: appConfig.fullScreen || false,
+		setFront: appConfig.setFront || false
 	}
 }
 export const appsConfig = {
+	assistant: {
+		preload: true,
+		disableOnLock: false,
+		minWidth: 500,
+		minHeight: 300,
+		initialWidth: 700,
+		iconWidth: '60%',
+		title: '== ASSISTANT ++\\',
+		content: '../../apps/assistant/assistant-content.html',
+		fullScreen: false,
+		setFront: true
+	},
 	/*chat: {
 		preload: false,
 		minWidth: 300,
@@ -39,11 +58,11 @@ export const appsConfig = {
 		mainClass: 'ChatUI',
 		setGlobal: true
 	},*/
-	wallet: {
+	/*wallet: {
 		preload: false,
 		title: 'WALLET',
 		content: '../../wallet-plugin/popup.html',
-	},
+	},*/
 	/*vault: {
 		preload: true,
 		minWidth: 600,
@@ -53,22 +72,22 @@ export const appsConfig = {
 		content: '../../apps/vault/vault-content.html',
 	},*/
 	dashboard: {
-		preload: true,
+		preload: false,
 		minWidth: 350,
 		minHeight: 300,
 		initialHeight: 572,
 		initTop: 195,
 		iconWidth: '69%',
-		title: 'DASHBOARD',
+		title: '~~ DASHBOARD ___\\',
 		content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>',
 	},
 	explorer: {
-		preload: true,
+		preload: false,
 		minWidth: 860,
 		minHeight: 192,
 		initialWidth: 800,
 		iconWidth: '69%',
-		title: 'BLOCKCHAIN EXPLORER',
-		content: '<iframe src="http://pinkparrot.science:27270" style="width: 100%; height: 100%; border: none;"></iframe>',
+		title: '°`° BLOCKCHAIN EXPLORER -}==-',
+		content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>',
 	},
 };

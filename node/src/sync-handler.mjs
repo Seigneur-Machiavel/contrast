@@ -124,6 +124,8 @@ export class SyncHandler {
         
         try {
             const data = await P2PNetwork.streamRead(stream);
+            if (data.byteLength === 0) { throw new Error('Empty stream data'); }
+
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }

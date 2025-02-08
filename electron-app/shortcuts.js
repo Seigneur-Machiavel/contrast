@@ -1,5 +1,5 @@
 const { BrowserWindow } = require('electron');
-const { ipcMain, globalShortcut } = require('electron');
+const { app, ipcMain, globalShortcut } = require('electron');
 const { MiniLogger } = require('../miniLogger/mini-logger.js');
 const shortcutsLogger = new MiniLogger('shortcuts');
 
@@ -28,8 +28,11 @@ function setShortcuts(windows, dev = true) {
     // RELOAD
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {
         shortcutsLogger.log(`Reload shortcut pressed (${shortcutsKeys.reload.key})`, (m) => { console.log(m); });
-        if (!BrowserWindow.getFocusedWindow()) return;
-        BrowserWindow.getFocusedWindow().reload();
+
+        const focusedWindow = BrowserWindow.getFocusedWindow();
+        if (!focusedWindow) return;
+        // if main window is focused, restart the app
+        if (focusedWindow === windows.mainWindow) { app.relaunch(); app.exit() } else focusedWindow.reload();
     });
     // TOGGLE LOGGER SETTINGS MENU
     if (shortcutsKeys.toggleLoggerSettingsMenu.enabled) globalShortcut.register(shortcutsKeys.toggleLoggerSettingsMenu.key, () => {
