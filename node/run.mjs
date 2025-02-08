@@ -19,9 +19,11 @@ const password = args.includes('-pw') ? nextArg('-pw') : fingerPrint.slice(0, 30
 const dashboardWorker = new NodeAppWorker(nodeApp, nodePort, dashboardPort, observerPort);
 const result = await dashboardWorker.setPasswordAndWaitResult(password); // (will try init node if password is correct)
 const started = result.data;
+console.log('Node started:', started);
 if (started) while(true) await new Promise(resolve => setTimeout(resolve, 1000)); // keep node running
 
 if (privateKey) {
+    console.log('Starting node with private key from arg...');
     await new Promise(resolve => setTimeout(resolve, 1000)); 
     dashboardWorker.setPrivateKeyAndStartNode(privateKey);
     while(true) await new Promise(resolve => setTimeout(resolve, 1000)); // keep node running
