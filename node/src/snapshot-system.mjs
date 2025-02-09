@@ -38,8 +38,9 @@ export class SnapshotSystem {
 
 		return heightPath;
 	}
-	#controlSnapshotQuality(dirName = '') {
-		const dirPath = path.join(PATH.SNAPSHOTS, dirName);
+	
+	// SNAPSHOTS
+	#controlSnapshotQuality(dirPath = '') {
 		const files = fs.readdirSync(dirPath);
 		if (!files.includes('memPool.bin')) { return "memPool.bin missing"; }
 		if (!files.includes('utxoCache.bin')) { return "utxoCache.bin missing"; }
@@ -47,8 +48,6 @@ export class SnapshotSystem {
 
 		return "ok";
 	}
-
-	// SNAPSHOTS
 	/** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
 	getSnapshotsHeights(dirPath = PATH.SNAPSHOTS) {
 		try {
@@ -57,7 +56,7 @@ export class SnapshotSystem {
 
 			const snapshotsHeights = [];
 			for (const dirName of dirs) {
-				const control = this.#controlSnapshotQuality(dirName);
+				const control = this.#controlSnapshotQuality(path.join(PATH.SNAPSHOTS, dirName));
 				if (control === "ok") { snapshotsHeights.push(Number(dirName)); continue; }
 
 				console.error(`Snapshot #${dirName} is corrupted: ${control}`);
