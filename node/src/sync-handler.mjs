@@ -194,6 +194,7 @@ export class SyncHandler {
 
             if (msg.type === 'getCheckpoint' && typeof msg.checkpointHash === 'string') {
                 response.checkpointArchive = this.node.snapshotSystem.loadCheckpointZipArchive(msg.checkpointHash);
+                if (!response.checkpointArchive) { throw new Error('Checkpoint archive not found'); }
             }
 
             const serialized = serializer.serialize.rawData(response);
@@ -263,7 +264,7 @@ export class SyncHandler {
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
             if (!peerStatus.checkpointInfo) { continue; }
-            
+
             const {height, hash} = peerStatus.checkpointInfo;
             if (height === 0) { continue; }
 
