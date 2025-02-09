@@ -88,7 +88,7 @@ export class SyncHandler {
 
         // try to sync by checkpoint at first
         let activeCheckpointHeight = this.node.snapshotSystem.activeCheckpointHeight;
-        const tryToSyncCheckpoint = this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height;
+        const tryToSyncCheckpoint = consensus.checkpointInfo ? this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height : false;
 
         if (activeCheckpointHeight === false && tryToSyncCheckpoint) {
             this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`); // can be long...
