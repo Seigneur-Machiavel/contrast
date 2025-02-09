@@ -303,8 +303,8 @@ export class Node {
 
         const startTime = performance.now();
         const result = await this.snapshotSystem.newCheckpoint(finalizedBlock.index);
-        this.miniLogger.log(`Checkpoint saved: ${finalizedBlock.index} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
-        this.miniLogger.log(`Checkpoint saved result: ${result}`, (m) => { console.info(m); });
+        const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
+        this.miniLogger.log(`${logText} ${finalizedBlock.index} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
     }
 
     // FINALIZED BLOCK HANDLING ----------------------------------------------------------
@@ -436,7 +436,7 @@ export class Node {
         this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
 
-        this.#saveCheckpoint(finalizedBlock);
+        await this.#saveCheckpoint(finalizedBlock);
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate) { return; }

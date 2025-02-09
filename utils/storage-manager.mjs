@@ -6,7 +6,7 @@ import { FastConverter } from "./converters.mjs";
 import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 //import archiver from 'archiver';
-import * as AdmZip from 'adm-zip';
+import AdmZip from 'adm-zip';
 import * as crypto from 'crypto';
 
 /**

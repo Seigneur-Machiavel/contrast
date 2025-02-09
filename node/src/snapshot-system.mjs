@@ -256,7 +256,7 @@ export class SnapshotSystem {
 		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return; }
 
 		this.lastCheckpointInfo = { height, hash };
-		return result;
+		return true;
 	}
 	loadCheckpointZipArchive(archiveHash) {
 		const checkpointsInfos = this.getCheckpointsInfos();
