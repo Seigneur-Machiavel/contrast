@@ -262,6 +262,8 @@ export class SyncHandler {
         const checkpointConsensus = { peers: 0, checkpointInfo: { height: 0, hash: '' } };
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
+            if (!peerStatus.checkpointInfo) { continue; }
+            
             const {height, hash} = peerStatus.checkpointInfo;
             if (height === 0) { continue; }
 
