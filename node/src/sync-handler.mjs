@@ -308,7 +308,7 @@ export class SyncHandler {
         this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         
         let peerHeight = peerCurrentHeight;
-        let desiredBlock = (checkpointMode ? this.node.snapshotSystem.activeCheckpointHeight : blockchain.currentHeight) + 1;
+        let desiredBlock = (checkpointMode ? this.node.snapshotSystem.activeCheckpointHeight : this.node.blockchain.currentHeight) + 1;
         while (desiredBlock <= peerHeight) {
             let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
             if (checkpointMode) { endIndex = Math.min(endIndex, this.node.snapshotSystem.activeCheckpointLastSnapshotHeight); }

@@ -155,7 +155,7 @@ export class Storage {
     }
     static archiveCheckpoint(checkpointHeight = 0) {
         try {
-            const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight);
+            const heightPath = path.join(PATH.CHECKPOINTS, String(checkpointHeight));
             if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
 
             const zip = new AdmZip();
