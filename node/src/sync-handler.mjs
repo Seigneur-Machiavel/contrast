@@ -49,7 +49,7 @@ import ReputationManager from './peers-reputation.mjs';
  * @property {number} peers
  * @property {string} blockHash
  * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
- * @property {CheckpointInfo} checkpointInfo
+ * @property {CheckpointInfo | false} checkpointInfo
  */
 
 export class SyncHandler {
@@ -273,8 +273,10 @@ export class SyncHandler {
             checkpointConsensus.peers = checkpointConsensuses[height][hash];
             checkpointConsensus.checkpointInfo = peerStatus.checkpointInfo;
         }
-
+        
         consensus.knownPubKeysInfo = pubKeysConsensus.knownPubKeysAddressesSnapInfo;
+        consensus.checkpointInfo = checkpointConsensus.height > 0 ? checkpointConsensus.checkpointInfo : false;
+        
         return consensus;
     }
     /** @param {string} peerIdStr @param {string} pubKeysHash */
