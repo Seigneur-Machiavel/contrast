@@ -93,7 +93,7 @@ export class CryptoLight {
             const concatSaltA = this.uint8ArrayToBase64(this.concatUint8(salt1, iv1));
             const iv2 = await this.generateArgon2DeterministicUint8(passwordStr + "iv2", concatSaltA, 16);
             this.#iv = this.concatUint8(iv1, iv2); // should be 32 bytes
-            console.log('#iv', this.#iv);
+            //console.log('#iv', this.#iv);
             
             const concatSaltB = this.uint8ArrayToBase64(this.concatUint8(salt1, this.#iv));
             const salt2 = await this.generateArgon2DeterministicUint8(passwordStr + "salt2", concatSaltB, 16);

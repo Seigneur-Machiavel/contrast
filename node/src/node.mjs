@@ -323,7 +323,7 @@ export class Node {
     
         timer.startPhase('height-timestamp-hash');
         BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight);
-        const lastBlockHash = lastBlock ? lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
+        const lastBlockHash = this.blockchain.lastBlock ? this.blockchain.lastBlock : '0000000000000000000000000000000000000000000000000000000000000000';
         BlockValidation.validateBlockPrevHash(finalizedBlock, lastBlockHash);
         BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime());
         timer.endPhase('height-timestamp-hash');
