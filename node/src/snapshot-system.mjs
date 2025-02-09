@@ -227,7 +227,7 @@ export class SnapshotSystem {
 			if (files.length !== 1) { console.error(`---! Checkpoint #${height} is corrupted !---`); continue; }
 
 			result.checkpointsHeights.push(height);
-			result.checkpointsHashes[height] = hash;
+			result.checkpointsHashes[height] = files[0].split('.')[0];
 		}
 
 		result.checkpointsHeights.sort((a, b) => a - b);
