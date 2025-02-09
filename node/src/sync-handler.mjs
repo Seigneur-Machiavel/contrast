@@ -17,9 +17,14 @@ import ReputationManager from './peers-reputation.mjs';
  * @property {number} height
  * @property {string} hash
  * 
+ * @typedef {Object} CheckpointInfo
+ * @property {number} height
+ * @property {string} hash
+ * 
  * @typedef {Object} SyncRequest
- * @property {string} type - 'getStatus' | 'getBlocks' | 'getPubKeysAddresses'
- * @property {string?} pubKeysHash - Only for 'getPubKeysAddresses' -> 
+ * @property {string} type - 'getStatus' | 'getBlocks' | 'getPubKeysAddresses' | 'getCheckpoint'
+ * @property {string?} pubKeysHash - Only for 'getPubKeysAddresses' -> hash of the knownPubKeysAddresses
+ * @property {string?} checkpointHash - Only for 'getCheckpoint' -> hash of the checkpoint zip archive
  * @property {number?} startIndex
  * @property {number?} endIndex
  * 
@@ -27,20 +32,24 @@ import ReputationManager from './peers-reputation.mjs';
  * @property {number} currentHeight
  * @property {string} latestBlockHash
  * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
+ * @property {CheckpointInfo?} checkpointInfo
  * @property {Uint8Array[]?} blocks
  * @property {Uint8Array?} knownPubKeysAddresses
+ * @property {Uint8Array?} checkpointArchive
  * 
  * @typedef {Object} PeerStatus
  * @property {string} peerIdStr
  * @property {number} currentHeight
  * @property {string} latestBlockHash
  * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
+ * @property {CheckpointInfo} checkpointInfo
  * 
  * @typedef {Object} Consensus
  * @property {number} height
  * @property {number} peers
  * @property {string} blockHash
  * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
+ * @property {CheckpointInfo} checkpointInfo
  */
 
 export class SyncHandler {
@@ -77,11 +86,42 @@ export class SyncHandler {
         
         this.miniLogger.log(`consensusHeight #${consensus.height}, current #${this.node.blockchain.currentHeight} -> getblocks from ${peersStatus.length} peers`, (m) => { console.info(m); });
 
-        // try to sync the pubKeysAddresses if possible
+        // try to sync by checkpoint at first
+        let activeCheckpointHeight = this.node.snapshotSystem.activeCheckpointHeight;
+        const tryToSyncCheckpoint = this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height;
+
+        if (activeCheckpointHeight === false && tryToSyncCheckpoint) {
+            this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`); // can be long...
+            for (const peerStatus of peersStatus) {
+                const { peerIdStr, checkpointInfo } = peerStatus;
+                if (checkpointInfo.height !== consensus.checkpointInfo.height) { continue; }
+                if (checkpointInfo.hash !== consensus.checkpointInfo.hash) { continue; }
+
+                this.miniLogger.log(`Attempting to sync checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+                const message = { type: 'getCheckpoint', checkpointHash: consensus.checkpointInfo.hash };
+                const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
+                if (!response || !response.checkpointArchive) {
+                    this.miniLogger.log(`Failed to get checkpoint archive`, (m) => { console.error(m); });
+                    continue;
+                }
+
+                const checkpointArchive = response.checkpointArchive;
+                const extractionResult = this.node.snapshotSystem.extractBufferAsActiveCheckpoint(checkpointArchive);
+                if (!extractionResult) { continue; }
+
+                this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+                break;
+            }
+        }
+
+        const activeCheckpoint = this.node.snapshotSystem.activeCheckpointHeight !== false;
+
+        // try to sync the pubKeysAddresses if possible (DEPRECATED -> use checkpoints)
         const myKnownPubKeysInfo = this.node.snapshotSystem.knownPubKeysAddressesSnapInfo;
         let syncPubKeysAddresses = true;
         if (myKnownPubKeysInfo.height > consensus.knownPubKeysInfo.height) { syncPubKeysAddresses = false; }
         if (myKnownPubKeysInfo.hash === consensus.knownPubKeysInfo.hash) { syncPubKeysAddresses = false; }
+        if (activeCheckpoint) { syncPubKeysAddresses = false; }
         if (syncPubKeysAddresses) {
             for (const peerStatus of peersStatus) {
                 const { peerIdStr, knownPubKeysInfo } = peerStatus;
@@ -103,8 +143,10 @@ export class SyncHandler {
             if (latestBlockHash !== consensus.blockHash) { continue; } // Skip peers with different hash than consensus
 
             this.miniLogger.log(`Attempting to sync blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-            const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight);
+            const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight, activeCheckpoint);
             if (!synchronized) { continue; }
+
+            if (synchronized === 'Checkpoint deployed') { return synchronized; }
             
             this.miniLogger.log(`Successfully synced blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             return 'Verifying consensus';
@@ -137,6 +179,7 @@ export class SyncHandler {
                 /** @type {string} */
                 latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
                 knownPubKeysInfo: this.node.snapshotSystem.knownPubKeysAddressesSnapInfo,
+                checkpointInfo: this.node.snapshotSystem.getLastCheckpointInfo()
             };
 
             if (msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number') {
@@ -147,6 +190,10 @@ export class SyncHandler {
                 const snapPath = path.join(PATH.SNAPSHOTS, String(this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.height));
                 const trashPath = path.join(PATH.TRASH, String(this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.height));
                 response.knownPubKeysAddresses = Storage.loadBinary('memPool', snapPath) || Storage.loadBinary('memPool', trashPath);
+            }
+
+            if (msg.type === 'getCheckpoint' && typeof msg.checkpointHash === 'string') {
+                response.checkpointArchive = this.node.snapshotSystem.loadCheckpointZipArchive(msg.checkpointHash);
             }
 
             const serialized = serializer.serialize.rawData(response);
@@ -173,8 +220,8 @@ export class SyncHandler {
             const response = await promises.shift();
             if (!response || typeof response.currentHeight !== 'number') { continue; }
 
-            const { currentHeight, latestBlockHash, knownPubKeysInfo } = response;
-            peersStatus.push({ peerIdStr, currentHeight, latestBlockHash, knownPubKeysInfo });
+            const { currentHeight, latestBlockHash, knownPubKeysInfo, checkpointInfo } = response;
+            peersStatus.push({ peerIdStr, currentHeight, latestBlockHash, knownPubKeysInfo, checkpointInfo });
             this.peersHeights[peerIdStr] = currentHeight;
         }
 
@@ -212,11 +259,26 @@ export class SyncHandler {
             pubKeysConsensus.knownPubKeysAddressesSnapInfo = peerStatus.knownPubKeysInfo;
         }
 
+        const checkpointConsensus = { peers: 0, checkpointInfo: { height: 0, hash: '' } };
+        const checkpointConsensuses = {};
+        for (const peerStatus of peersStatus) {
+            const {height, hash} = peerStatus.checkpointInfo;
+            if (height === 0) { continue; }
+
+            if (!checkpointConsensuses[height]) { checkpointConsensuses[height] = {}; }
+            checkpointConsensuses[height][hash] = checkpointConsensuses[height][hash] ? checkpointConsensuses[height][hash] + 1 : 1;
+
+            if (checkpointConsensuses[height][hash] <= checkpointConsensus.peers) { continue; }
+
+            checkpointConsensus.peers = checkpointConsensuses[height][hash];
+            checkpointConsensus.checkpointInfo = peerStatus.checkpointInfo;
+        }
+
         consensus.knownPubKeysInfo = pubKeysConsensus.knownPubKeysAddressesSnapInfo;
         return consensus;
     }
     /** @param {string} peerIdStr @param {string} pubKeysHash */
-    async #getPubKeysAddresses(peerIdStr, pubKeysHash) {
+    async #getPubKeysAddresses(peerIdStr, pubKeysHash) { // DEPRECATED
         const message = { type: 'getPubKeysAddresses', pubKeysHash };
         const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
 
@@ -241,14 +303,15 @@ export class SyncHandler {
         return true;
     }
     /** @param {string} peerIdStr @param {number} peerCurrentHeight*/
-    async #getMissingBlocks(peerIdStr, peerCurrentHeight) {
+    async #getMissingBlocks(peerIdStr, peerCurrentHeight, checkpointMode = false) {
         this.node.blockchainStats.state = `syncing with peer ${readableId(peerIdStr)}`;
         this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         
         let peerHeight = peerCurrentHeight;
-        let desiredBlock = this.node.blockchain.currentHeight + 1;
+        let desiredBlock = (checkpointMode ? this.node.snapshotSystem.activeCheckpointHeight : blockchain.currentHeight) + 1;
         while (desiredBlock <= peerHeight) {
-            const endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
+            let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
+            if (checkpointMode) { endIndex = Math.min(endIndex, this.node.snapshotSystem.activeCheckpointLastSnapshotHeight); }
             const message = { type: 'getBlocks', startIndex: desiredBlock, endIndex };
             const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
             if (!response || typeof response.currentHeight !== 'number' || !Array.isArray(response.blocks)) {
@@ -264,7 +327,18 @@ export class SyncHandler {
                 try {
                     const byteLength = serializedBlock.byteLength;
                     const block = serializer.deserialize.block_finalized(serializedBlock);
-                    await this.node.digestFinalizedBlock(block, { broadcastNewCandidate: false, isSync: true }, byteLength);
+                    if (checkpointMode) {
+                        await this.node.snapshotSystem.fillActiveCheckpointWithBlock(block, serializedBlock); // throws if failure
+                    } else {
+                        await this.node.digestFinalizedBlock(block, { broadcastNewCandidate: false, isSync: true }, byteLength); // throws if failure
+                    }
+
+                    if (this.node.snapshotSystem.activeCheckpointLastSnapshotHeight === block.index) {
+                        this.node.updateState(`Deploying checkpoint #${this.node.snapshotSystem.activeCheckpointHeight}...`); // can be long...
+                        this.node.snapshotSystem.deployCheckpoint(); // throws if failure
+                        return 'Checkpoint deployed';
+                    }
+
                     desiredBlock++;
                 } catch (blockError) {
                     this.miniLogger.log(`Sync Error while processing block #${desiredBlock}`, (m) => { console.error(m); });

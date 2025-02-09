@@ -320,7 +320,7 @@ export class DashboardWsApp {
             case 'set_miner_threads':
                 console.log(`Setting miner threads to ${data}`);
                 if (!this.node) { console.error('No active node'); break; }
-                this.#nodeSetting.minerThreads = data;
+                this.#nodeSetting.minerThreads = Number(data);
                 this.#injectNodeSettings(this.node.id);
                 await this.saveNodeSettingBinary();
                 break;

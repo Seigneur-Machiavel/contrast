@@ -181,6 +181,7 @@ export class Blockchain {
     }
     /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
     persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
+        const startTime = performance.now();
         indexStart = Math.max(0, indexStart);
         if (indexStart > indexEnd) { return; }
 
@@ -205,26 +206,33 @@ export class Blockchain {
             }
         }
 
+        let duplicateCountTime = 0;
+        let totalRefs = 0;
         let totalDuplicates = 0;
         for (const address of Object.keys(actualizedAddressesTxsRefs)) {
             const actualizedAddressTxsRefs = actualizedAddressesTxsRefs[address];
+            const cleanedTxsRefs = [];
 
+            const duplicateStart = performance.now();
             const txsRefsDupiCounter = {};
             let duplicate = 0;
             for (let i = 0; i < actualizedAddressTxsRefs.length; i++) {
+                totalRefs++;
                 const txRef = actualizedAddressTxsRefs[i];
-                if (txsRefsDupiCounter[txRef]) { duplicate++; }
+                if (txsRefsDupiCounter[txRef]) { duplicate++; } else { cleanedTxsRefs.push(txRef); }
 
                 txsRefsDupiCounter[txRef] = true;
             }
-            if (duplicate > 0) { totalDuplicates += duplicate; };
+            totalDuplicates += duplicate;
+            duplicateCountTime += (performance.now() - duplicateStart);
 
-            this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, actualizedAddressTxsRefs);
+            this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
         }
 
         this.addressesTxsRefsStorage.save(indexEnd);
-            
-        this.miniLogger.log(`Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included)`, (m) => { console.info(m); });
+        
+        const logText = `Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included) - Duplicates: ${totalDuplicates}/${totalRefs} - Time: ${(performance.now() - startTime).toFixed(2)}ms (duplicates: ${duplicateCountTime.toFixed(2)}ms)`;
+        this.miniLogger.log(logText, (m) => { console.info(m); });
     }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */
     getTxsReferencesOfAddress(memPool, address, from = 0, to = this.currentHeight) {

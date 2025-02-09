@@ -5,6 +5,7 @@ window.explorerPORT = "27270";
 window.explorerROLES = ['blockExplorer'];
 window.explorerMagnetImgPath = 'dist(do-not-modify)/node/front/img/C_magnet.png';
 window.explorerNB_OF_CONFIRMED_BLOCKS = 3;
+//window.explorerNB_OF_UNCONFIRMED_BLOCKS = 2; // default: 2
 console.log('EXPLORER SETTINGS INJECTED!');
 
 // MODULES LOADER
@@ -25,8 +26,8 @@ if (!window.Transaction) window.Transaction = Transaction;
 if (!window.Transaction_Builder) window.Transaction_Builder = Transaction_Builder;
 if (!window.utxoExtraction) window.utxoExtraction = utxoExtraction;
 
-import { cryptoLight } from '../dist(do-not-modify)/utils/cryptoLight.js';
-window.cryptoLight = window.cryptoLight || cryptoLight;
+import { CryptoLight } from '../dist(do-not-modify)/utils/cryptoLight.js';
+if (!window.cryptoLight) window.cryptoLight = new CryptoLight();
 
 async function loadScriptAsText(url) {
     const response = await fetch(url);

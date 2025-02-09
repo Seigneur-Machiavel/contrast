@@ -96,6 +96,9 @@ h1, h2 {
 #cbe-contrastBlocksWidget.focused {
 
 }
+#cbe-blockExplorerWrap {
+    justify-content: left !important;
+}
 #explorerBtn .icon {
     pointer-events: none;
     /*width: 32px;

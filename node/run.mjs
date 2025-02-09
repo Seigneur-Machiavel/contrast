@@ -21,8 +21,9 @@ const result = await dashboardWorker.setPasswordAndWaitResult(password); // (wil
 console.log('passwordCorrect:', result.data);
 
 await new Promise(resolve => setTimeout(resolve, 10000));
+if (dashboardWorker.nodeStarted) while(true) await new Promise(resolve => setTimeout(resolve, 1000)); // keep node running
 
-if (privateKey && !dashboardWorker.nodeStarted) {
+if (privateKey) {
     console.log('Starting node with private key from arg...');
     dashboardWorker.setPrivateKeyAndStartNode(privateKey);
     while(true) await new Promise(resolve => setTimeout(resolve, 1000)); // keep node running

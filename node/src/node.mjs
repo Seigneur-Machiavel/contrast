@@ -95,7 +95,7 @@ export class Node {
     }
 
     // STARTUP -----------------------------------------------------------------------
-    #updateState(newState, onlyFrom) {
+    updateState(newState, onlyFrom) {
         const state = this.blockchainStats.state;
         if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) { return; }
         this.blockchainStats.state = newState;
@@ -121,7 +121,7 @@ export class Node {
         this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
     }
     async start(startFromScratch = false) {
-        this.#updateState("starting");
+        this.updateState("starting");
 
         this.#loadBootstrapNodesList();
         Storage.saveJSON('bootstrapNodes', this.bootstrapNodes);
@@ -134,13 +134,14 @@ export class Node {
         this.miner = new Miner(this.minerAddress || this.account.address, this);
         this.miner.useDevArgon2 = this.useDevArgon2;
 
-        if (!startFromScratch) {
-            this.#updateState("Loading blockchain");
+        const activeCheckpoint = this.snapshotSystem.checkForActiveCheckpoint();
+        if (!activeCheckpoint && !startFromScratch) {
+            this.updateState("Loading blockchain");
             const startHeight = await this.blockchain.load(this.snapshotSystem);
             this.loadSnapshot(startHeight);
         }
 
-        this.#updateState("Initializing P2P network");
+        this.updateState("Initializing P2P network");
         const uniqueHash = await this.account.getUniqueHash(64);
         await this.p2pNetwork.start(uniqueHash);
         this.syncHandler = new SyncHandler(this);
@@ -159,7 +160,7 @@ export class Node {
         this.miniLogger.log('P2P network is ready - we are connected baby', (m) => { console.info(m); });
         if (!this.roles.includes('validator')) { return; }
 
-        this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
+        if (!activeCheckpoint) { this.opStack.pushFirst('createBlockCandidateAndBroadcast', null); }
         this.opStack.pushFirst('syncWithPeers', null);
     }
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 30, delay = 1000) {
@@ -231,22 +232,22 @@ export class Node {
 
         setTimeout(async () => {
             if (startHeight !== this.blockchain.currentHeight) { return false; } // to late
-            this.#updateState(`creating block candidate #${this.blockchain.lastBlock ? this.blockchain.lastBlock.index + 1 : 0}`);
+            this.updateState(`creating block candidate #${this.blockchain.lastBlock ? this.blockchain.lastBlock.index + 1 : 0}`);
             if (!this.roles.includes('validator')) { return false; }
     
             this.blockCandidate = await this.#createBlockCandidate();
-            if (this.blockCandidate === null) { this.#updateState("idle", "creating block candidate"); return false; }
+            if (this.blockCandidate === null) { this.updateState("idle", "creating block candidate"); return false; }
             
             if (this.roles.includes('miner')) {
                 const updated = this.miner.updateBestCandidate(this.blockCandidate);
-                if (!updated) { this.#updateState("idle", "creating block candidate"); return false; }
+                if (!updated) { this.updateState("idle", "creating block candidate"); return false; }
             }
             
-            this.#updateState(`broadcasting block candidate #${this.blockCandidate.index}`, "creating block candidate");
+            this.updateState(`broadcasting block candidate #${this.blockCandidate.index}`, "creating block candidate");
 
             try {
                 await this.p2pBroadcast('new_block_candidate', this.blockCandidate);
-                setTimeout(() => { this.#updateState("idle", "broadcasting block candidate"); }, 2000); // let time to read
+                setTimeout(() => { this.updateState("idle", "broadcasting block candidate"); }, 2000); // let time to read
 
                 const callback = this.wsCallbacks.onBroadcastNewCandidate;
                 if (callback) callback.execute(BlockUtils.getBlockHeader(this.blockCandidate));
@@ -296,6 +297,15 @@ export class Node {
         }
         this.snapshotSystem.restoreLoadedSnapshot();
     }
+    async #saveCheckpoint(finalizedBlock) {
+        if (finalizedBlock.index === 0) { return; }
+        if (finalizedBlock.index % this.snapshotSystem.checkpointHeightModulo !== 0) { return; }
+
+        const startTime = performance.now();
+        const result = await this.snapshotSystem.newCheckpoint(finalizedBlock.index);
+        this.miniLogger.log(`Checkpoint saved: ${finalizedBlock.index} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
+        this.miniLogger.log(`Checkpoint saved result: ${result}`, (m) => { console.info(m); });
+    }
 
     // FINALIZED BLOCK HANDLING ----------------------------------------------------------
     /** @param {BlockData} finalizedBlock */
@@ -313,7 +323,8 @@ export class Node {
     
         timer.startPhase('height-timestamp-hash');
         BlockValidation.validateBlockIndex(finalizedBlock, this.blockchain.currentHeight);
-        BlockValidation.validateBlockPrevHash(finalizedBlock, this.blockchain.lastBlock);
+        const lastBlockHash = lastBlock ? lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
+        BlockValidation.validateBlockPrevHash(finalizedBlock, lastBlockHash);
         BlockValidation.validateTimestamps(finalizedBlock, this.blockchain.lastBlock, this.timeSynchronizer.getCurrentTime());
         timer.endPhase('height-timestamp-hash');
         
@@ -343,7 +354,6 @@ export class Node {
     
         timer.startPhase('full-txs-validation');
         const allDiscoveredPubKeysAddresses = await BlockValidation.fullBlockTxsValidation(finalizedBlock, this.utxoCache, this.memPool, this.workers, this.useDevArgon2);
-        this.memPool.addNewKnownPubKeysAddresses(allDiscoveredPubKeysAddresses);
         timer.endPhase('full-txs-validation');
     
         timer.endPhase('total-validation');
@@ -363,7 +373,7 @@ export class Node {
         
         const timer = new BlockDigestionTimer();
         const statePrefix = options.isSync ? '(syncing) ' : '';
-        this.#updateState(`${statePrefix}finalized block #${finalizedBlock.index}`);
+        this.updateState(`${statePrefix}finalized block #${finalizedBlock.index}`);
     
         timer.startPhase('initialization');
         // SUPPLEMENTARY TEST (INITIAL === DESERIALIZE)
@@ -387,13 +397,15 @@ export class Node {
         let validationResult;
         let totalFees;
         timer.startPhase('block-validation');
-        this.#updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
+        this.updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
         validationResult = await this.#validateBlockProposal(finalizedBlock, blockBytes);
         hashConfInfo = validationResult.hashConfInfo;
         if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
         timer.endPhase('block-validation');
+
+        this.updateState(`${statePrefix}applying finalized block #${finalizedBlock.index}`);
+        this.memPool.addNewKnownPubKeysAddresses(validationResult.allDiscoveredPubKeysAddresses);
         
-        this.#updateState(`${statePrefix}applying finalized block #${finalizedBlock.index}`);
         timer.startPhase('add-confirmed-block');
         const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
         timer.endPhase('add-confirmed-block');
@@ -423,8 +435,10 @@ export class Node {
         timer.startPhase('saveSnapshot');
         this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
+
+        this.#saveCheckpoint(finalizedBlock);
         
-        this.#updateState("idle", "applying finalized block");
+        this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate) { return; }
         return Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)); // delay before sending a new candidate
     }

@@ -408,9 +408,11 @@ export class BlockValidation {
             throw new Error(`!store! Rejected: #${block.index} <= #${currentHeight}(outdated)`);
         }
     }
-    /** @param {BlockData} block @param {BlockData} lastBlock */
-    static validateBlockPrevHash(block, lastBlock) {
-        const lastBlockHash = lastBlock ? lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
+    /** @param {BlockData} block @param {string} lastBlockHash */
+    static validateBlockPrevHash(block, lastBlockHash) {
+        if (typeof block.prevHash !== 'string') { throw new Error('Invalid prevHash'); }
+        if (typeof lastBlockHash !== 'string') { throw new Error('Invalid lastBlockHash'); }
+
         if (lastBlockHash === block.prevHash) { return; }
         throw new Error(`!store! !reorg! #${block.index} Rejected -> invalid prevHash: ${block.prevHash.slice(0, 10)} - expected: ${lastBlockHash.slice(0, 10)}`);
     }

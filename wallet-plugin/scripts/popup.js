@@ -17,7 +17,14 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)-
 * @typedef {import("../../node/front/explorerScript.mjs").BlockExplorerWidget} BlockExplorerWidget
 */
 
-const cryptoLight = new CryptoLight();
+/** @type {CryptoLight} */
+let cryptoLight;
+(async () => {
+    while (!window.cryptoLight) { await new Promise(resolve => setTimeout(resolve, 100)); }
+    cryptoLight = window.cryptoLight;
+    console.log('cryptoLight READY!');
+})();
+
 /** @type {BlockExplorerWidget} */
 let blockExplorerWidget;
 
@@ -963,7 +970,7 @@ eHTML.loginForm.addEventListener('submit', async function(e) {
 
     if (!hash || !salt1Base64 || !iv1Base64) { infoAndWrongAnim('Password not set'); busy.splice(busy.indexOf('loginForm'), 1); return; }
     if (typeof hash !== 'string' || typeof salt1Base64 !== 'string' || typeof iv1Base64 !== 'string') { console.error('Password data corrupted'); busy.splice(busy.indexOf('loginForm'), 1); return; }
-    cryptoLight.cryptoStrength = 'heavy';
+    //cryptoLight.cryptoStrength = 'heavy';
 
     const res = await cryptoLight.generateKey(password, salt1Base64, iv1Base64, hash);
     button.innerHTML = 'UNLOCK';

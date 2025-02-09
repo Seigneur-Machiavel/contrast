@@ -19,7 +19,7 @@
     "@libp2p/mdns": "^11.0.13",
     "@libp2p/tcp": "^10.0.13",
     "@multiformats/multiaddr": "^12.3.3",
-    "archiver": "^7.0.1",
+    "adm-zip": "^0.5.16",
     "argon2": "^0.41.1",
     "electron-log": "^5.2.4",
     "electron-updater": "^6.3.9",

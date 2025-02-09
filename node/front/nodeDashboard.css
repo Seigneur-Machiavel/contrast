@@ -192,6 +192,9 @@ h3 {
     font-size: large;
     font-weight: 600;
 }
+.incrementalInput button.disabled {
+    opacity: .5;
+}
 
 .adminPanelContainer {
     display: flex;

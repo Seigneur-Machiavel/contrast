@@ -186,6 +186,11 @@ export class OpStack {
                         case 'Verifying consensus':
                             this.pushFirst('syncWithPeers', null);
                             break;
+                        case 'Checkpoint deployed':
+                            this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] Checkpoint deployed, restarting node...`, (m) => console.warn(m));
+                            this.node.restartRequested = 'OpStack.syncWithPeers() -> Checkpoint deployed';
+                            this.terminate();
+                            break;
                         default:
                             this.healthInfo.lastReorgCheckTime = Date.now();
                             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('syncWithPeers failed');

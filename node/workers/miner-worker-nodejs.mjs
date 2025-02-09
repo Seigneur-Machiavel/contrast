@@ -13,6 +13,7 @@ async function mineBlock(blockCandidate, signatureHex, nonce, useDevArgon2) {
 	try {
 		//console.log('useDevArgon2', useDevArgon2);
 		const argon2Fnc = useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
+
 		const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
 		if (!blockHash) { throw new Error('Invalid block hash'); }
 
@@ -22,7 +23,44 @@ async function mineBlock(blockCandidate, signatureHex, nonce, useDevArgon2) {
 		throw err;
 	}
 }
+class hashrateCalculator {
+	constructor(parentPort) {
+		this.parentPort = parentPort;
+		this.periodStart = Date.now();
+	
+		this.hashCount = 0;
+		this.hashTimes = [];
+		this.calculateAndSendEvery = 10; // in hashes
+	}
+	newHash(hashTime) {
+		this.hashCount++;
+		//this.hashTimes.push(hashTime); // dev
+		//this.#logHashTimeIfNecessary(); // dev
+		this.#sendHashRateIfNecessary();
+	}
+	#sendHashRateIfNecessary() {
+		if (this.hashCount === 0) { return; }
+		if (this.hashCount % this.calculateAndSendEvery !== 0) { return; }
+
+		const hashRate = this.hashCount / ((Date.now() - this.periodStart) / 1000);
+		this.parentPort.postMessage({ hashRate });
+		//console.log(`Hash rate: ${hashRate.toFixed(2)} H/s - ${this.hashCount}/${(Date.now() - this.periodStart).toFixed(2)}ms`);
+		
+		// for faster updates we reset the counter and time
+		this.hashCount = 0;
+		this.periodStart = Date.now();
+	}
+	#logHashTimeIfNecessary() { // dev
+		if (this.hashCount === 0) { return; }
+		if (this.hashCount % this.calculateAndSendEvery !== 0) { return; }
+
+		const avgTime = this.hashTimes.reduce((a, b) => a + b, 0) / this.hashTimes.length;
+		console.log('Average hash time:', avgTime.toFixed(2), 'ms');
+		this.hashTimes = [];
+	}
+}
 async function mineBlockUntilValid() {
+	const hashRateCalculator = new hashrateCalculator(parentPort);
 	while (true) {
 		if (minerVars.exiting) { return { error: 'Exiting' }; }
 		if (minerVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
@@ -31,17 +69,14 @@ async function mineBlockUntilValid() {
 		await new Promise((resolve) => setTimeout(resolve, minerVars.testMiningSpeedPenality));
 
 		try {
+			const startTime = performance.now();
 			const { signatureHex, nonce, clonedCandidate } = await prepareBlockCandidateBeforeMining();
 			const mined = await mineBlock(clonedCandidate, signatureHex, nonce, false);
 			if (!mined) { throw new Error('Invalid block hash'); }
 	
 			minerVars.hashCount++;
-			if (minerVars.hashCount % minerVars.sendUpdateHashEvery === 0) {
-				//console.log('hashCount', minerVars.hashCount);
-				parentPort.postMessage({ hashCount: minerVars.hashCount });
-				minerVars.hashCount = 0;
-			}
-
+			hashRateCalculator.newHash(performance.now() - startTime);
+			
 			const { conform } = mining.verifyBlockHashConformToDifficulty(mined.bitsArrayAsString, mined.finalizedBlock);
 			if (!conform) { continue; }
 
@@ -96,9 +131,7 @@ const minerVars = {
 	timeOffset: 0,
 	paused: false,
 
-	sendUpdateHashEvery: 10,
-	hashCount: 0,
-	testMiningSpeedPenality: 0 // TODO: set to 0 after testing
+	testMiningSpeedPenality: 0, // TODO: set to 0 after testing
 };
 parentPort.on('message', async (task) => {
 	//console.log('miner-worker-nodejs', task);

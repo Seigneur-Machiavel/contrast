@@ -7,12 +7,10 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 
 const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
 function newWorker(scriptPath, workerCode, workerData = {}) {
-    if (isNode) {
-        return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
-    } else {
-        const blob = new Blob([workerCode], { type: 'application/javascript' });
-        return new Worker(URL.createObjectURL(blob));
-    }
+    if (isNode) return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
+    
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    return new Worker(URL.createObjectURL(blob));
 }
 
 // CLASS FOR EASY USAGE OF THE WORKER
@@ -81,20 +79,12 @@ export class MinerWorker {
         this.result = null;
         this.isWorking = false;
         this.hashRate = 0;
-        //this.totalHashCount = 0;
-        this.startTime = Date.now();
 
         /** @type {Worker} worker */
         this.worker = newWorker('./miner-worker-nodejs.mjs');
         this.worker.on('close', () => { console.log('MinerWorker closed'); });
         this.worker.on('message', (message) => {
-            if (message.hashCount) {
-                const upTime = Date.now() - this.startTime;
-                const hashRate = message.hashCount / upTime * 1000;
-                this.hashRate = hashRate;
-                this.startTime = Date.now();
-                return;
-            }
+            if (message.hashRate) { this.hashRate = message.hashRate; return; }
 
             if (message.result.error) { console.error(message.result.error); }
             if (!message.result.error) { this.result = message.result; }
@@ -284,6 +274,7 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     nodeStarted = false;
     /** @type {BrowserWindow} */
     mainWindow;
+    #password;
     constructor (app = "dashboard", nodePort = 27260, dashboardPort = 27271, observerPort = 27270, mainWindow = null) {
         this.app = app;
         this.nodePort = nodePort;
@@ -321,6 +312,7 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
             }), setTimeout(() => { reject('Timeout'); }, 10000);
         });
 
+        this.#password = password;
         this.worker.postMessage({ type: 'set_password_and_try_init_node', data: password });
         console.info('set_password msg sent to NodeAppWorker');
 
@@ -357,7 +349,9 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
             console.log('-----------------------------------------------');
 
             await new Promise(resolve => setTimeout(resolve, 1000));
-            this.initWorker();
+            await this.initWorker();
+            //this.worker.postMessage({ type: 'set_password_and_try_init_node', data: '' });
+            await this.setPasswordAndWaitResult(this.#password);
 
             await new Promise(resolve => setTimeout(resolve, 5000));
         }

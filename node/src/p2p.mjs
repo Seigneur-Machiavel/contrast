@@ -32,9 +32,14 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {number} height
  * @property {string} hash
  * 
+ * @typedef {Object} CheckpointInfo
+ * @property {number} height
+ * @property {string} hash
+ * 
  * @typedef {Object} SyncRequest
  * @property {string} type - 'getStatus' | 'getBlocks' | 'getPubKeysAddresses'
- * @property {string?} pubKeysHash - Only for 'getPubKeysAddresses' -> 
+ * @property {string?} pubKeysHash - Only for 'getPubKeysAddresses' -> hash of the known pubKeysAddresses
+ * @property {string?} checkpointHash - Only for 'getCheckpoint' -> hash of the checkpoint zip archive
  * @property {number?} startIndex
  * @property {number?} endIndex
  * 
@@ -42,8 +47,10 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {number} currentHeight
  * @property {string} latestBlockHash
  * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
+ * @property {CheckpointInfo?} checkpointInfo
  * @property {Uint8Array[]?} blocks
  * @property {Uint8Array?} knownPubKeysAddresses
+ * @property {Uint8Array?} checkpointArchive
  */
 
 class P2PNetwork extends EventEmitter {

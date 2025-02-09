@@ -194,6 +194,7 @@ const eHTML = {
         status: document.getElementById('disabledSyncStatus')
     }
 }
+window.eHTML = eHTML;
 
 function displayNodeInfo(data) {
     /** @type {StakeReference[]} */
@@ -220,6 +221,7 @@ function displayNodeInfo(data) {
     eHTML.minerLegitimacy.textContent = data.bestCandidateLegitimacy || 0;
     eHTML.hashRate.textContent = data.minerHashRate ? data.minerHashRate.toFixed(2) : 0;
     eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 1;
+    updateMinerThreadsDisabledButtons();
 
     // Update Global Information
     eHTML.peersConnected.textContent = data.peersConnected ? data.peersConnected : 0;
@@ -555,14 +557,9 @@ document.addEventListener('focusout', async (event) => {
         event.target.value = formatedValue;
     }
 });
-document.addEventListener('change', async (event) => {
-    const target = event.target;
-    switch (target) {
-        case eHTML.minerThreads.input:
-            console.log('set_miner_threads', eHTML.minerThreads.input.value);
-            ws.send(JSON.stringify({ type: 'set_miner_threads', data: eHTML.minerThreads.input.value }));
-            break;
-    }
+eHTML.minerThreads.input.addEventListener('change', async (event) => {
+    console.log('set_miner_threads', eHTML.minerThreads.input.value);
+    ws.send(JSON.stringify({ type: 'set_miner_threads', data: eHTML.minerThreads.input.value }));
 });
 document.addEventListener('click', async (event) => {
     if (window.parent && window !== window.parent) window.parent.postMessage({ type: 'iframeClick' }, 'file://');
@@ -584,9 +581,11 @@ document.addEventListener('click', async (event) => {
             break;
         case eHTML.minerThreads.decrementBtn:
             adjustInputValue(eHTML.minerThreads.input, -1);
+            updateMinerThreadsDisabledButtons();
             break;
         case eHTML.minerThreads.incrementBtn:
             adjustInputValue(eHTML.minerThreads.input, 1);
+            updateMinerThreadsDisabledButtons();
             break;
         case eHTML.minerAddressEditBtn:
             console.log('minerAddressEditBtn clicked');
@@ -673,13 +672,16 @@ function adjustInputValue(targetInput, delta, min = 1, max = 4) {
     if (isNaN(currentValue)) {
         targetInput.value = min;
     } else {
-        if (delta < 0) {
-            targetInput.value = Math.max(currentValue + delta, min);
-        } else {
-            targetInput.value = Math.min(currentValue + delta, max);
-        }
+        targetInput.value = delta < 0 ? Math.max(currentValue + delta, min) : Math.min(currentValue + delta, max);
     }
+
     targetInput.dispatchEvent(new Event('change'));
+}
+function updateMinerThreadsDisabledButtons(min = 1, max = 4) {
+    eHTML.minerThreads.decrementBtn.classList.remove('disabled');
+    eHTML.minerThreads.incrementBtn.classList.remove('disabled');
+    if (parseInt(eHTML.minerThreads.input.value) <= min) { eHTML.minerThreads.decrementBtn.classList.add('disabled'); }
+    if (parseInt(eHTML.minerThreads.input.value) >= max) { eHTML.minerThreads.incrementBtn.classList.add('disabled'); }
 }
 
 /*let resizingTimeout;

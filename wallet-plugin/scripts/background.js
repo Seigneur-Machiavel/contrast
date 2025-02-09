@@ -292,7 +292,7 @@ async function initCryptoLightFromAuthInfo(password) {
     if (!authInfoResult || !authInfoResult.authInfo) { console.info('No auth info found!'); return; }
 
     const { authID, authToken, hash, salt1Base64, iv1Base64 } = sanitize(authInfoResult.authInfo);
-    cryptoLight.cryptoStrength = 'heavy';
+    //cryptoLight.cryptoStrength = 'heavy'; // this is the default value
 
     const res = await cryptoLight.generateKey(password, salt1Base64, iv1Base64, hash);
     if (!res) { console.info('Error generating key!'); return; }
