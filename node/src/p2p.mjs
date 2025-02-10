@@ -297,10 +297,10 @@ class P2PNetwork extends EventEmitter {
             
             const { data, nbChunks } = peerResponse;
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
-            //await stream.close();
-
             /** @type {SyncResponse} */
             const response = serializer.deserialize.rawData(data);
+            
+            //await stream.close();
             return response;
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
