@@ -11,6 +11,10 @@ import { CryptoLight } from '../../utils/cryptoLight.mjs'
 import { Storage } from '../../utils/storage-manager.mjs';
 import nodeMachineId from 'node-machine-id';
 
+/**
+ * @typedef {import('../src/node.mjs').Node} Node
+ */
+
 const fingerPrint = nodeMachineId.machineIdSync();
 let passwordExist = Storage.isFileExist('passHash.bin');
 parentPort.postMessage({ type: 'message_to_mainWindow', data: passwordExist ? 'password-requested' : 'no-existing-password' });
@@ -117,7 +121,6 @@ const observApp = new ObserverWsApp(dashApp.node, observerPort);
 // --------------- STRESS TEST ---------------------
 // -------------------------------------------------
 const testMiniLogger = new MiniLogger('stress-test');
-const node = dashApp.node;
 let txsTaskDoneThisBlock = {};
 const testParams = {
     unsafeSpamMode: false,
@@ -244,8 +247,8 @@ async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 
     if (broadcasted === 0) { return; }
     testMiniLogger.log(`[TEST-USIV] staked ${amountToStake} in VSS | ${stakingAddress} | Broadcasted: ${broadcasted}`, (m) => console.info(m));
 }
-/** @param {Account[]} accounts */
-function refreshAllBalances(accounts) {
+/** @param {Node} node @param {Account[]} accounts */
+function refreshAllBalances(node, accounts) {
     for (let i = 0; i < accounts.length; i++) {
         const { spendableBalance, balance, UTXOs } = node.getAddressUtxos(accounts[i].address);
         const spendableUtxos = [];
@@ -258,11 +261,13 @@ function refreshAllBalances(accounts) {
 }
 
 async function test() {
-    while(!dashApp.nodesSettings) { await new Promise(resolve => setTimeout(resolve, 1000)); }
-    console.log('nodesSettings ready -> Starting stress test');
+    while(!dashApp.extractNodeSetting()) { await new Promise(resolve => setTimeout(resolve, 1000)); }
+    console.log('nodeSetting ready -> Starting stress test');
 
-    const nodeSettings = dashApp.nodesSettings;
-    const wallet = new Wallet(nodeSettings[node.id].privateKey);
+    const nodeSetting = dashApp.extractNodeSetting();
+    if (!nodeSetting || !nodeSetting.privateKey) { testMiniLogger.log(`Failed to extract nodeSetting.`, (m) => console.error(m)); return; }
+
+    const wallet = new Wallet(nodeSetting.privateKey);
     wallet.loadAccounts();
 
     const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(testParams.nbOfAccounts, testParams.addressType);
@@ -273,8 +278,8 @@ async function test() {
 
     const accounts = derivedAccounts;
     const account0Address = derivedAccounts[0].address;
-    refreshAllBalances(accounts);
-    refreshAllBalances([mainAccount]);
+    refreshAllBalances(dashApp.node, accounts);
+    refreshAllBalances(dashApp.node, [mainAccount]);
     
     // INFO MESSAGE
     testMiniLogger.log(`--------------------------------------------
@@ -286,6 +291,7 @@ async function test() {
     for (let i = 0; i < 1_000_000; i++) {
         await new Promise(resolve => setTimeout(resolve, 100));
 
+        const node = dashApp.node;
         const currentHeight = node.blockchain.currentHeight;
         if (!node.syncAndReady) { continue; }
         if (node.syncHandler.isSyncing) { continue; }
@@ -298,8 +304,8 @@ async function test() {
             }
         }
 
-        refreshAllBalances(accounts);
-        refreshAllBalances([mainAccount]);
+        refreshAllBalances(dashApp.node, accounts);
+        refreshAllBalances(dashApp.node, [mainAccount]);
 
         // user send to all others
         if (testParams.txsSeqs.userSendToAllOthers.active && currentHeight >= testParams.txsSeqs.userSendToAllOthers.start && (currentHeight - 1) % testParams.txsSeqs.userSendToAllOthers.interval === 0 && txsTaskDoneThisBlock['userSendToAllOthers'] === undefined) {

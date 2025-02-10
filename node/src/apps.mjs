@@ -206,6 +206,8 @@ export class DashboardWsApp {
         return this.node;
     }
     extractNodeSetting() {
+        if (!this.#nodeSetting) { return false; }
+
         /** @type {NodeSetting} */
         const clone = JSON.parse(JSON.stringify(this.#nodeSetting));
         return clone;
