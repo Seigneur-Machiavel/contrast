@@ -201,7 +201,12 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 addresses: { listen: [this.options.listenAddress] },
                 transports: [tcp()],
-                streamMuxers: [yamux()],
+                streamMuxers: [yamux({
+                    maxStreamWindows: 128,  // 128 streams
+                    maxInboundStreams: 1024, // 1024 streams
+                    maxOutboundStreams: 1024, // 1024 streams
+                    connectionTimeout: 30000  // 30s
+                })], // [yamux()],
                 connectionEncrypters: [noise()],
                 services: { identify: identify(), pubsub: gossipsub() },
                 peerDiscovery
@@ -289,7 +294,11 @@ class P2PNetwork extends EventEmitter {
             
             //const stream = this.openStreams[peerIdStr];
             // Negotiate fully on possibly big messages, prevent backpressure
-            const options = message.type === 'getStatus' ? {} : { negotiateFully: true };
+            const options = message.type === 'getStatus' ? {} : { 
+                negotiateFully: true,
+                maxWriteBufferSize: 1024 * 1024,
+                writeTimeout: 30000
+            };
             const stream = await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], options);
             const serialized = serializer.serialize.rawData(message);
 
