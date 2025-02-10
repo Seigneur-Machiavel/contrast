@@ -290,8 +290,8 @@ export class CheckpointSystem {
 		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) { throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`); }
 
 		const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
-        if (finalizedBlock.hash !== hex) { throw new Error('(Checkpoint fill) Block hash mismatch'); }
-		if (hex !== this.activeCheckpointHash) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${hex} !== ${this.activeCheckpointHash}`); }
+        if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
+		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { throw new Error(`(Checkpoint fill) Block prevHash mismatch: ${finalizedBlock.prevHash} !== ${this.activeCheckpointHash}`); }
 
 		const checkpointBlocksPath = path.join(this.activeCheckpointPath, 'blocks');
 		const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
