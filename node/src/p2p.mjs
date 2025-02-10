@@ -53,16 +53,6 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {Uint8Array?} checkpointArchive
  */
 
-async function* generateChunks(serializedMessage, maxChunkSize) {
-    const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
-    for (let i = 0; i < totalChunks; i++) {
-        const start = i * maxChunkSize;
-        const end = start + maxChunkSize;
-        const chunk = serializedMessage.slice(start, end);
-        yield chunk;
-    }
-}
-
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 1024 * 1024; // 1MB
     myAddr;
@@ -298,7 +288,9 @@ class P2PNetwork extends EventEmitter {
             //this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
             
             //const stream = this.openStreams[peerIdStr];
-            const stream = await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
+            // Negotiate fully on possibly big messages, prevent backpressure
+            const options = message.type === 'getStatus' ? {} : { negotiateFully: true };
+            const stream = await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], options);
             const serialized = serializer.serialize.rawData(message);
 
             await P2PNetwork.streamWrite(stream, serialized);
@@ -317,7 +309,17 @@ class P2PNetwork extends EventEmitter {
         }
     }
     
-    static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
+    /*static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
+        async function* generateChunks(serializedMessage, maxChunkSize) {
+            const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * maxChunkSize;
+                const end = start + maxChunkSize;
+                const chunk = serializedMessage.slice(start, end);
+                yield chunk;
+            }
+        }
+
         try {
             const chunkGenerator = generateChunks(serializedMessage, maxChunkSize);
             await stream.sink(chunkGenerator);
@@ -325,22 +327,12 @@ class P2PNetwork extends EventEmitter {
         } catch (error) {
             console.error(error);
         }
-    }
+    }*/
     /** @param {Stream} stream @param {Uint8Array} serializedMessage */
-    static async streamWriteOLD(stream, serializedMessage) { // DEPRECATED
+    static async streamWrite(stream, serializedMessage) {
         if (serializedMessage.length === 0) { return false; }
 
-        // New version split the data in chunks, managing backpressure.
-        const max = P2PNetwork.maxChunkSize;
-        const chunksNeeded = Math.ceil(serializedMessage.length / max);
-
-        const chunks = [];
-        for (let i = 0; i < chunksNeeded; i++) {
-            const start = i * max;
-            const end = Math.min((i + 1) * max, serializedMessage.length);
-            chunks.push(serializedMessage.subarray(start, end));
-        }
-        await stream.sink(chunks);
+        await stream.sink([serializedMessage]);
         //await stream.closeWrite();
 
         return true;
