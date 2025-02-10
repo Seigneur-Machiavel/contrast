@@ -294,12 +294,7 @@ class P2PNetwork extends EventEmitter {
             
             //const stream = this.openStreams[peerIdStr];
             // Negotiate fully on possibly big messages, prevent backpressure
-            const options = message.type === 'getStatus' ? {} : { 
-                negotiateFully: true,
-                maxWriteBufferSize: 1024 * 1024,
-                writeTimeout: 30000
-            };
-            //const options = message.type === 'getStatus' ? {} : { negotiateFully: true };
+            const options = message.type === 'getStatus' ? {} : { negotiateFully: true };
             const stream = await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], options);
             const serialized = serializer.serialize.rawData(message);
 

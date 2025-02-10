@@ -138,13 +138,14 @@ export class SyncHandler {
     
         const peersStatus = await this.#getAllPeersStatus();
         if (!peersStatus || peersStatus.length === 0) { return 'No peers available' }
-
         
         const consensus = this.#findConsensus(peersStatus);
         if (!consensus) { return await this.#handleSyncFailure(`Unable to get consensus -> sync failure`); }
         if (consensus.height <= myCurrentHeight) { return 'Already at the consensus height'; }
         
         this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height}`, (m) => { console.info(m); });
+        // wait a bit before starting the sync, time for previous connections to be closed
+        await new Promise((resolve) => setTimeout(resolve, 5000));
 
         // try to sync by checkpoint at first
         const activeCheckpoint = this.node.checkpointSystem.activeCheckpointHeight !== false;
