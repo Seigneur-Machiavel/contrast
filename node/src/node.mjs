@@ -274,7 +274,7 @@ export class Node {
         if (!eraseHigher) { return; }
 
         // place snapshot to trash folder, we can restaure it if needed
-        this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
+        //this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1); //TODO: activate again !
     }
     /** @param {BlockData} finalizedBlock */
     #saveSnapshot(finalizedBlock) {

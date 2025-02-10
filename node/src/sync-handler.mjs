@@ -249,13 +249,16 @@ export class SyncHandler {
         const pubKeysConsensus = { peers: 0, knownPubKeysAddressesSnapInfo: { height: 0, hash: '' } };
         const pubKeysConsensuses = {};
         for (const peerStatus of peersStatus) {
-            const {height, hash} = peerStatus.knownPubKeysInfo;
+            if (!peerStatus.knownPubKeysInfo) { continue; }
+            const { height, hash } = peerStatus.knownPubKeysInfo;
+
             if (!pubKeysConsensuses[height]) { pubKeysConsensuses[height] = {}; }
-            pubKeysConsensuses[height][hash] = pubKeysConsensuses[height][hash] ? pubKeysConsensuses[height][hash] + 1 : 1;
+            const pubKeysPeers = (pubKeysConsensuses[height][hash] || 0) + 1;
+            pubKeysConsensuses[height][hash] = pubKeysPeers;
 
-            if (pubKeysConsensuses[height][hash] <= pubKeysConsensus.peers) { continue; }
+            if (pubKeysPeers <= pubKeysConsensus.peers) { continue; }
 
-            pubKeysConsensus.peers = pubKeysConsensuses[height][hash];
+            pubKeysConsensus.peers = pubKeysPeers;
             pubKeysConsensus.knownPubKeysAddressesSnapInfo = peerStatus.knownPubKeysInfo;
         }
 
@@ -263,17 +266,18 @@ export class SyncHandler {
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
             if (!peerStatus.checkpointInfo) { continue; }
-
-            const {height, hash} = peerStatus.checkpointInfo;
+            const { height, hash } = peerStatus.checkpointInfo;
+            this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} has checkpoint #${height}`, (m) => { console.info(m); });
             if (height === 0) { continue; }
 
             if (!checkpointConsensuses[height]) { checkpointConsensuses[height] = {}; }
-            checkpointConsensuses[height][hash] = checkpointConsensuses[height][hash] ? checkpointConsensuses[height][hash] + 1 : 1;
+            const checkpointPeers = (checkpointConsensuses[height][hash] || 0) + 1;
+            checkpointConsensuses[height][hash] = checkpointPeers;
 
-            if (checkpointConsensuses[height][hash] <= checkpointConsensus.peers) { continue; }
+            if (checkpointPeers <= checkpointConsensus.peers) { continue; }
 
-            checkpointConsensus.peers = checkpointConsensuses[height][hash];
-            checkpointConsensus.checkpointInfo = peerStatus.checkpointInfo;
+            checkpointConsensus.peers = checkpointPeers;
+            checkpointConsensus.checkpointInfo = { height, hash };
         }
         
         consensus.knownPubKeysInfo = pubKeysConsensus.knownPubKeysAddressesSnapInfo;
