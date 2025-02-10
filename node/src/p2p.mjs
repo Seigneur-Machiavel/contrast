@@ -53,6 +53,16 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {Uint8Array?} checkpointArchive
  */
 
+async function* generateChunks(serializedMessage, maxChunkSize) {
+    const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
+    for (let i = 0; i < totalChunks; i++) {
+        const start = i * maxChunkSize;
+        const end = start + maxChunkSize;
+        const chunk = serializedMessage.slice(start, end);
+        yield chunk;
+    }
+}
+
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 1024 * 1024; // 1MB
     myAddr;
@@ -306,15 +316,24 @@ class P2PNetwork extends EventEmitter {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
     }
+    
+    async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
+        try {
+            const chunkGenerator = generateChunks(serializedMessage, maxChunkSize);
+            for await (const chunk of chunkGenerator) { await stream.sink([chunk]); }
+            await stream.closeWrite();
+        } catch (error) {
+            this.miniLogger.log(error, (m) => { console.error(m); });
+        }
+    }
     /** @param {Stream} stream @param {Uint8Array} serializedMessage */
-    static async streamWrite(stream, serializedMessage) {
+    static async streamWriteOLD(stream, serializedMessage) { // DEPRECATED
         if (serializedMessage.length === 0) { return false; }
 
         // New version split the data in chunks, managing backpressure.
         const max = P2PNetwork.maxChunkSize;
         const chunksNeeded = Math.ceil(serializedMessage.length / max);
 
-        /*
         const chunks = [];
         for (let i = 0; i < chunksNeeded; i++) {
             const start = i * max;
@@ -322,44 +341,12 @@ class P2PNetwork extends EventEmitter {
             chunks.push(serializedMessage.subarray(start, end));
         }
         await stream.sink(chunks);
-        */
-
-        let i = 0;
-        /*const itr = {
-            [Symbol.asyncIterator]: () => ({
-                next: async () => {
-                    const end = Math.min((i + 1) * max, serializedMessage.length);
-                    const chunk = serializedMessage.slice(i * max, end);
-                    i++;
-                    return { done: i >= chunksNeeded, value: chunk };
-                }
-            })
-        };
-        await stream.sink(itr);
-        */
-
-
-        // Trying somethign like that: 
-        /*async function* run() {
-            for (let i = 0; i < 10; i++) {
-                yield uint8ArrayFromString(`Iteration ${i}`);
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-        }*/
-        async function* run() {
-            for (let i = 0; i < chunksNeeded; i++) {
-                const end = Math.min((i + 1) * max, serializedMessage.length);
-                yield serializedMessage.slice(i * max, end);
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-        }
-        await stream.sink(run());
         //await stream.closeWrite();
 
         return true;
     }
     /** @param {Stream} stream */
-    static async streamRead(stream) {
+    static async streamReadOLD(stream) {
         // New version split the data in chunks, managing backpressure.
         const dataChunks = [];
         let expectedLength = 0;
@@ -369,23 +356,6 @@ class P2PNetwork extends EventEmitter {
         }
 
         //await stream.closeRead();
-
-        const dataBuffer = Buffer.concat(dataChunks);
-        const data = new Uint8Array(dataBuffer);
-        if (data.byteLength === 0) { return false; }
-        if (data.byteLength === expectedLength) { return { data, nbChunks: dataChunks.length }; }
-        
-        this.miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
-        return false;
-    }
-    /** @param {Stream} stream */
-    static async streamReadOLD(stream) { // DEPRECATED
-        const dataChunks = [];
-        let expectedLength = 0;
-        for await (const chunk of stream.source) {
-            expectedLength += chunk.byteLength;
-            dataChunks.push(chunk.subarray());
-        }
 
         const dataBuffer = Buffer.concat(dataChunks);
         const data = new Uint8Array(dataBuffer);
