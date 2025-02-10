@@ -11,10 +11,6 @@ import { CryptoLight } from '../../utils/cryptoLight.mjs'
 import { Storage } from '../../utils/storage-manager.mjs';
 import nodeMachineId from 'node-machine-id';
 
-/**
- * @typedef {import('../src/node.mjs').Node} Node
- */
-
 const fingerPrint = nodeMachineId.machineIdSync();
 let passwordExist = Storage.isFileExist('passHash.bin');
 parentPort.postMessage({ type: 'message_to_mainWindow', data: passwordExist ? 'password-requested' : 'no-existing-password' });
@@ -143,7 +139,7 @@ async function userSendToUser(senderAccount, receiverAddress, amount = 1_000_000
     const { signedTx, error } = await Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress);
     if (signedTx) {
         testMiniLogger.log(`[TEST-USTU] SEND: ${senderAccount.address} -> ${amount} -> ${receiverAddress} | txID: ${signedTx.id}`, (m) => console.log(m));
-        const result = await node.pushTransaction(signedTx);
+        const result = await dashApp.node.pushTransaction(signedTx);
         if (result.broadcasted) { broadcasted++; }
     } else { testMiniLogger.log(error, (m) => console.error(m)); return; }
 
@@ -171,7 +167,7 @@ async function userSendToNextUser(accounts) {
         const { signedTx, error } = await promise;
         if (error.message === 'No UTXO to spend') { errorIsMissingUtxos = true;}
         if (error) { continue; }
-        pushPromises.push(node.pushTransaction(signedTx));
+        pushPromises.push(dashApp.node.pushTransaction(signedTx));
     }
 
     const timeToCreateAndSignAllTxs = Date.now() - startTime;
@@ -212,7 +208,7 @@ async function userSendToAllOthers(accounts, senderAccountIndex = 0) {
         if (signedTx) {
             testMiniLogger.log(`[TEST-USTAO] SEND: ${senderAccount.address} -> rnd() -> ${transfers.length} users | txID: ${signedTx.id}`, (m) => console.log(m));
             testMiniLogger.log(`[TEST-USTAO] Pushing transaction: ${signedTx.id} to mempool.`, (m) => console.log(m));
-            const result = await node.pushTransaction(signedTx);
+            const result = await dashApp.node.pushTransaction(signedTx);
             if (!result.broadcasted) throw new Error(`Transaction not broadcasted`);
         } else { testMiniLogger.log(`[TEST-USTAO] Can't sign transaction`, (m) => console.error(m)); }
     } catch (error) {
@@ -236,7 +232,7 @@ async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 
         if (signedTx) {
             testMiniLogger.log(`[TEST-USIV] STAKE: ${senderAccount.address} -> ${amountToStake} | txID: ${signedTx.id}`, (m) => console.log(m));
             testMiniLogger.log(`[TEST-USIV] Pushing transaction: ${signedTx.id} to mempool.`, (m) => console.log(m));
-            const result = await node.pushTransaction(signedTx);
+            const result = await dashApp.node.pushTransaction(signedTx);
             if (result.broadcasted) { broadcasted++; }
         } else { testMiniLogger.log(`[TEST-USIV] Can't sign transaction`, (m) => console.error(m)); }
     } catch (error) {
@@ -247,13 +243,13 @@ async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 
     if (broadcasted === 0) { return; }
     testMiniLogger.log(`[TEST-USIV] staked ${amountToStake} in VSS | ${stakingAddress} | Broadcasted: ${broadcasted}`, (m) => console.info(m));
 }
-/** @param {Node} node @param {Account[]} accounts */
-function refreshAllBalances(node, accounts) {
+/** @param {Account[]} accounts */
+function refreshAllBalances(accounts) {
     for (let i = 0; i < accounts.length; i++) {
-        const { spendableBalance, balance, UTXOs } = node.getAddressUtxos(accounts[i].address);
+        const { spendableBalance, balance, UTXOs } = dashApp.node.getAddressUtxos(accounts[i].address);
         const spendableUtxos = [];
         for (const utxo of UTXOs) {
-            if (node.memPool.transactionByAnchor[utxo.anchor] !== undefined) { continue; }
+            if (dashApp.node.memPool.transactionByAnchor[utxo.anchor] !== undefined) { continue; }
             spendableUtxos.push(utxo);
         }
         accounts[i].setBalanceAndUTXOs(balance, spendableUtxos);
@@ -278,8 +274,8 @@ async function test() {
 
     const accounts = derivedAccounts;
     const account0Address = derivedAccounts[0].address;
-    refreshAllBalances(dashApp.node, accounts);
-    refreshAllBalances(dashApp.node, [mainAccount]);
+    refreshAllBalances(accounts);
+    refreshAllBalances([mainAccount]);
     
     // INFO MESSAGE
     testMiniLogger.log(`--------------------------------------------
@@ -291,10 +287,9 @@ async function test() {
     for (let i = 0; i < 1_000_000; i++) {
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        const node = dashApp.node;
-        const currentHeight = node.blockchain.currentHeight;
-        if (!node.syncAndReady) { continue; }
-        if (node.syncHandler.isSyncing) { continue; }
+        const currentHeight = dashApp.node.blockchain.currentHeight;
+        if (!dashApp?.node?.syncAndReady) { continue; }
+        if (dashApp.node.syncHandler.isSyncing) { continue; }
 
         if (currentHeight > lastBlockIndexAndTime.index) { // on new block only
             lastBlockIndexAndTime.index = currentHeight;
@@ -304,8 +299,8 @@ async function test() {
             }
         }
 
-        refreshAllBalances(dashApp.node, accounts);
-        refreshAllBalances(dashApp.node, [mainAccount]);
+        refreshAllBalances(accounts);
+        refreshAllBalances([mainAccount]);
 
         // user send to all others
         if (testParams.txsSeqs.userSendToAllOthers.active && currentHeight >= testParams.txsSeqs.userSendToAllOthers.start && (currentHeight - 1) % testParams.txsSeqs.userSendToAllOthers.interval === 0 && txsTaskDoneThisBlock['userSendToAllOthers'] === undefined) {
