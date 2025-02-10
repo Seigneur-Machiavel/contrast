@@ -160,9 +160,12 @@ export class SyncHandler {
                     continue;
                 }
 
-                Storage.unarchiveCheckpointBuffer(response.checkpointArchive, hashToVerify);
+                Storage.unarchiveCheckpointBuffer(response.checkpointArchive, consensus.checkpointInfo.hash);
                 const checkpointDetected = this.node.checkpointSystem.checkForActiveCheckpoint();
-                if (!checkpointDetected) { this.miniLogger.log(`Failed to process checkpoint archive`, (m) => { console.error(m); }); continue; }
+                if (!checkpointDetected) {
+                    this.miniLogger.log(`Failed to process checkpoint archive`, (m) => { console.error(m); });
+                    continue;
+                }
                 
                 this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
                 activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
@@ -236,13 +239,15 @@ export class SyncHandler {
         for (const peerStatus of peersStatus) {
             const height = peerStatus.currentHeight;
             const blockHash = peerStatus.latestBlockHash;
-            if (!consensuses[height]) { consensuses[height] = {}; }
-            consensuses[height][blockHash] = consensuses[height][blockHash] ? consensuses[height][blockHash] + 1 : 1;
 
-            if (consensuses[height][blockHash] <= consensus.peers) { continue; }
+            if (!consensuses[height]) { consensuses[height] = {}; }
+            const heightPeers = (consensuses[height][blockHash] || 0) + 1;
+            consensuses[height][blockHash] = heightPeers;
+
+            if (heightPeers <= consensus.peers) { continue; }
 
             consensus.height = height;
-            consensus.peers = consensuses[height][blockHash];
+            consensus.peers = heightPeers;
             consensus.blockHash = blockHash;
         }
 

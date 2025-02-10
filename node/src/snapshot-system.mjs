@@ -221,12 +221,12 @@ export class CheckpointSystem {
 	}
 	readCheckpointZipArchive(archiveHash) {
 		const checkpointsHashes = this.#getCheckpointsInfos().hashes;
-		for (const h of Object.keys(checkpointsHashes)) {
-			if (checkpointsHashes[h] !== archiveHash) { continue; }
+		for (const height of Object.keys(checkpointsHashes)) {
+			if (checkpointsHashes[height] !== archiveHash) { continue; }
 
 			try {
-				return fs.readFileSync( path.join(heightPath, h, `${archiveHash}.zip`) );
-			} catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
+				return fs.readFileSync( path.join(PATH.CHECKPOINTS, height, `${archiveHash}.zip`) );
+			} catch (error) { console.error(error.stack); }
 			return false;
 		}
 	}
