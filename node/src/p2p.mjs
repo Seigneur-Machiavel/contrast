@@ -291,10 +291,11 @@ class P2PNetwork extends EventEmitter {
             await stream.sink([serialized]);
             this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
             
-            const data = await P2PNetwork.streamRead(stream);
-            if (!data) { throw new Error('Failed to read data from stream'); }
+            const peerResponse = await P2PNetwork.streamRead(stream);
+            if (!peerResponse) { throw new Error('Failed to read data from stream'); }
             
-            this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${dataChunks.length} chunks)`, (m) => { console.info(m); });
+            const { data, nbChunks } = peerResponse;
+            this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
             await stream.close();
 
             /** @type {SyncResponse} */
@@ -316,7 +317,7 @@ class P2PNetwork extends EventEmitter {
         const dataBuffer = Buffer.concat(dataChunks);
         const data = new Uint8Array(dataBuffer);
         if (data.byteLength === 0) { return false; }
-        if (data.byteLength === expectedLength) { return data; }
+        if (data.byteLength === expectedLength) { return { data, nbChunks: dataChunks.length }; }
         
         this.miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
         return false;

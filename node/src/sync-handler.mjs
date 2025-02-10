@@ -82,13 +82,15 @@ export class SyncHandler {
         this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
-            const data = await P2PNetwork.streamRead(stream);
-            if (!data) { throw new Error('Failed to read data from stream'); }
+            const peerRequest = await P2PNetwork.streamRead(stream);
+            if (!peerRequest) { throw new Error('Failed to read data from stream'); }
+            
+            const { data, nbChunks } = peerRequest;
 
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${data.length} bytes) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${data.length} bytes, ${nbChunks} chunks) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             
             /** @type {SyncResponse} */
             const response = {
