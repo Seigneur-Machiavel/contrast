@@ -160,6 +160,7 @@ export class SyncHandler {
                     continue;
                 }
 
+                await new Promise(resolve => setTimeout(resolve, 200));
                 Storage.unarchiveCheckpointBuffer(response.checkpointArchive, consensus.checkpointInfo.hash);
                 const checkpointDetected = this.node.checkpointSystem.checkForActiveCheckpoint();
                 if (!checkpointDetected) {
@@ -167,8 +168,8 @@ export class SyncHandler {
                     continue;
                 }
                 
-                this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
                 activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
+                this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}, getting blocks from #${activeCheckpointHeight}`, (m) => { console.info(m); });
                 break;
             }
         }
@@ -200,7 +201,7 @@ export class SyncHandler {
             if (latestBlockHash !== consensus.blockHash) { continue; } // Skip peers with different hash than consensus
 
             this.miniLogger.log(`Attempting to sync blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-            const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight, activeCheckpointHeight !== false);
+            const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight);
             if (!synchronized) { continue; }
 
             if (synchronized === 'Checkpoint deployed') { return synchronized; }
@@ -314,21 +315,20 @@ export class SyncHandler {
 
         return true;
     }
-    /** @param {string} peerIdStr @param {number} peerCurrentHeight @param {number} [activeCheckpointHeight] */
-    async #getMissingBlocks(peerIdStr, peerCurrentHeight, activeCheckpointHeight) {
-        this.node.blockchainStats.state = `syncing with peer ${readableId(peerIdStr)}`;
-        this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-        
+    /** @param {string} peerIdStr @param {number} peerCurrentHeight */
+    async #getMissingBlocks(peerIdStr, peerCurrentHeight) {
+        const activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
         const activeCheckpointTargetHeight = this.node.checkpointSystem.activeCheckpointLastSnapshotHeight;
-        let peerHeight = peerCurrentHeight;
-        let desiredBlock = this.node.blockchain.currentHeight + 1;
-        if (activeCheckpointHeight !== false && activeCheckpointTargetHeight !== false) {
-            desiredBlock = activeCheckpointHeight + 1;
-        }
+        const checkpointMode = activeCheckpointHeight !== false && activeCheckpointTargetHeight !== false;
 
+        this.node.blockchainStats.state = `syncing with peer ${readableId(peerIdStr)}${checkpointMode ? " (checkpointMode)" : ""}`;
+        this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}${checkpointMode ? " (checkpointMode)" : ""}`, (m) => { console.info(m); });
+
+        let peerHeight = peerCurrentHeight;
+        let desiredBlock = checkpointMode ? activeCheckpointHeight + 1 : this.node.blockchain.currentHeight + 1;
         while (desiredBlock <= peerHeight) {
             let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
-            if (activeCheckpointHeight !== false) { endIndex = Math.min(endIndex, activeCheckpointTargetHeight); }
+            if (checkpointMode) { endIndex = Math.min(endIndex, activeCheckpointTargetHeight); }
 
             this.node.updateState(`Downloading blocks #${desiredBlock} to #${endIndex}...`);
             const message = { type: 'getBlocks', startIndex: desiredBlock, endIndex };
@@ -346,7 +346,7 @@ export class SyncHandler {
                 try {
                     const byteLength = serializedBlock.byteLength;
                     const block = serializer.deserialize.block_finalized(serializedBlock);
-                    if (activeCheckpointHeight !== false) {
+                    if (checkpointMode) {
                         this.node.updateState(`Fill checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`);
                         await this.node.checkpointSystem.fillActiveCheckpointWithBlock(block, serializedBlock); // throws if failure
                     } else {
