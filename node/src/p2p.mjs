@@ -325,19 +325,9 @@ class P2PNetwork extends EventEmitter {
         */
 
         let i = 0;
-        const itr = {
+        /*const itr = {
             [Symbol.asyncIterator]: () => ({
                 next: async () => {
-                    /*if (i >= chunksNeeded) { return { done: true }; }
-                    const start = i * max;
-                    const end = Math.min((i + 1) * max, serializedMessage.length);
-                    const chunk = serializedMessage.subarray(start, end);
-                    i++;
-
-                    return { done: false, value: chunk };*/
-
-                    // New version split the data in chunks, managing backpressure.
-
                     const end = Math.min((i + 1) * max, serializedMessage.length);
                     const chunk = serializedMessage.slice(i * max, end);
                     i++;
@@ -346,6 +336,24 @@ class P2PNetwork extends EventEmitter {
             })
         };
         await stream.sink(itr);
+        */
+
+
+        // Trying somethign like that: 
+        /*async function* run() {
+            for (let i = 0; i < 10; i++) {
+                yield uint8ArrayFromString(`Iteration ${i}`);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }*/
+        async function* run() {
+            for (let i = 0; i < chunksNeeded; i++) {
+                const end = Math.min((i + 1) * max, serializedMessage.length);
+                yield serializedMessage.slice(i * max, end);
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        await stream.sink(run());
         //await stream.closeWrite();
 
         return true;
