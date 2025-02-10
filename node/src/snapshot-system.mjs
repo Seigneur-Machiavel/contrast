@@ -183,7 +183,7 @@ export class CheckpointSystem {
 	checkpointHeightModulo = 100;
 	checkpointToConserve = 10;
 	lastCheckpointInfo = { height: 0, hash: '' };
-	rndControlDiceFaces = 12;
+	rndControlDiceFaces = 120; //12;
 
 	// MY CHECKPOINTS
 	#getCheckpointsInfos() {
@@ -298,7 +298,7 @@ export class CheckpointSystem {
 			const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
         	if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
 		}
-		
+
 		const checkpointBlocksPath = path.join(this.activeCheckpointPath, 'blocks');
 		const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
 		const batchFolderPath = path.join(checkpointBlocksPath, batchFolderName);
