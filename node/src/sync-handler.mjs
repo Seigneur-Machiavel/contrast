@@ -84,7 +84,6 @@ export class SyncHandler {
         try {
             const peerRequest = await P2PNetwork.streamRead(stream);
             if (!peerRequest) { throw new Error('Failed to read data from stream'); }
-            await stream.closeRead();
             
             const { data, nbChunks } = peerRequest;
 
@@ -119,8 +118,7 @@ export class SyncHandler {
             }
 
             const serialized = serializer.serialize.rawData(response);
-            await stream.sink([serialized]);
-            await stream.closeWrite();
+            await P2PNetwork.streamWrite(stream, serialized);
 
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
@@ -129,9 +127,6 @@ export class SyncHandler {
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
-
-        // No need to close the stream immediately, let the peer read the response...
-        await new Promise((resolve) => setTimeout(resolve, 30000));
     }
     async syncWithPeers() {
         if (this.syncDisabled) { return 'Already at the consensus height'; }

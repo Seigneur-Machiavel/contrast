@@ -54,6 +54,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
+    static maxChunkSize = 1024 * 1024 * 2; // 2MB
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
@@ -289,13 +290,12 @@ class P2PNetwork extends EventEmitter {
             //const stream = this.openStreams[peerIdStr];
             const stream = await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
             const serialized = serializer.serialize.rawData(message);
-            await stream.sink([serialized]);
-            await stream.closeWrite();
+
+            await P2PNetwork.streamWrite(stream, serialized);
             this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             const peerResponse = await P2PNetwork.streamRead(stream);
             if (!peerResponse) { throw new Error('Failed to read data from stream'); }
-            await stream.closeRead();
             
             const { data, nbChunks } = peerResponse;
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
@@ -306,8 +306,45 @@ class P2PNetwork extends EventEmitter {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
     }
+    /** @param {Stream} stream @param {SyncRequest} serializedMessage */
+    static async streamWrite(stream, serializedMessage) {
+        // New version split the data in chunks, managing backpressure.
+        const max = P2PNetwork.maxChunkSize;
+        const chunks = Math.ceil(serializedMessage.length / max);
+
+        for (let i = 0; i < chunks; i++) {
+            const start = i * max;
+            const end = Math.min((i + 1) * max, serializedMessage.length);
+            const chunk = serializedMessage.subarray(start, end);
+            await stream.sink([chunk]);
+        }
+
+        await stream.closeWrite();
+
+        return true;
+    }
     /** @param {Stream} stream */
     static async streamRead(stream) {
+        // New version split the data in chunks, managing backpressure.
+        const dataChunks = [];
+        let expectedLength = 0;
+        for await (const chunk of stream.source) {
+            expectedLength += chunk.byteLength;
+            dataChunks.push(chunk.subarray());
+        }
+
+        await stream.closeRead();
+
+        const dataBuffer = Buffer.concat(dataChunks);
+        const data = new Uint8Array(dataBuffer);
+        if (data.byteLength === 0) { return false; }
+        if (data.byteLength === expectedLength) { return { data, nbChunks: dataChunks.length }; }
+        
+        this.miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
+        return false;
+    }
+    /** @param {Stream} stream */
+    static async streamReadOLD(stream) { // DEPRECATED
         const dataChunks = [];
         let expectedLength = 0;
         for await (const chunk of stream.source) {
