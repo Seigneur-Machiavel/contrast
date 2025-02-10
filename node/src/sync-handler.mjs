@@ -125,6 +125,9 @@ export class SyncHandler {
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
             if (msg.type === 'getPubKeysAddresses') logComplement = `: ${msg.pubKeysHash}`;
             this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (type: ${msg.type}${logComplement}} | ${serialized.length} bytes)`, (m) => { console.info(m); });
+        
+            // No need to close the stream immediately, let the peer read the response...
+            await new Promise((resolve) => setTimeout(resolve, 30000));
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
