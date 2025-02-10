@@ -18,7 +18,8 @@ export class ProgressLogger {
         this.stepTime = Date.now();
         logCallBack(`${this.msgPrefix} : ${progress.toFixed(1)}% (${current}/${this.total}) - step: ${timeDiff}ms`);
 
-        if (current === this.total - 1) {
+        //if (current === this.total - 1) { //? stupid boy!?
+        if (current === this.total) {
             const totalTime = Date.now() - this.startTime;
             const avgTime = totalTime / this.total;
             logCallBack(`[TASK COMPLETED] - Total time: ${totalTime}ms - Average time per step: ${avgTime.toFixed(2)}ms`);
