@@ -54,7 +54,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
-    static maxChunkSize = 1024 * 1024; // 1MB
+    static maxChunkSize = 64 * 1024; // 64KB
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
@@ -309,7 +309,7 @@ class P2PNetwork extends EventEmitter {
         }
     }
     
-    /*static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
+    static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
         async function* generateChunks(serializedMessage, maxChunkSize) {
             const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
             for (let i = 0; i < totalChunks; i++) {
@@ -327,19 +327,18 @@ class P2PNetwork extends EventEmitter {
         } catch (error) {
             console.error(error);
         }
-    }*/
+    }
     /** @param {Stream} stream @param {Uint8Array} serializedMessage */
-    static async streamWrite(stream, serializedMessage) {
+    /*static async streamWrite(stream, serializedMessage) {
         if (serializedMessage.length === 0) { return false; }
 
         await stream.sink([serializedMessage]);
         //await stream.closeWrite();
 
         return true;
-    }
+    }*/
     /** @param {Stream} stream */
     static async streamRead(stream) {
-        // New version split the data in chunks, managing backpressure.
         const dataChunks = [];
         let expectedLength = 0;
         for await (const chunk of stream.source) {
