@@ -306,19 +306,26 @@ class P2PNetwork extends EventEmitter {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
     }
-    /** @param {Stream} stream @param {SyncRequest} serializedMessage */
+    /** @param {Stream} stream @param {Uint8Array} serializedMessage */
     static async streamWrite(stream, serializedMessage) {
         // New version split the data in chunks, managing backpressure.
         const max = P2PNetwork.maxChunkSize;
-        const chunks = Math.ceil(serializedMessage.length / max);
+        const chunksNeeded = Math.ceil(serializedMessage.length / max);
 
-        for (let i = 0; i < chunks; i++) {
+        /*for (let i = 0; i < chunks; i++) {
             const start = i * max;
             const end = Math.min((i + 1) * max, serializedMessage.length);
             const chunk = serializedMessage.subarray(start, end);
             await stream.sink([chunk]);
+        }*/
+        const chunks = [];
+        for (let i = 0; i < chunksNeeded; i++) {
+            const start = i * max;
+            const end = Math.min((i + 1) * max, serializedMessage.length);
+            chunks.push(serializedMessage.subarray(start, end));
         }
 
+        await stream.sink(chunks);
         await stream.closeWrite();
 
         return true;
