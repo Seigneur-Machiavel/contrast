@@ -183,7 +183,7 @@ export class CheckpointSystem {
 	checkpointHeightModulo = 100;
 	checkpointToConserve = 10;
 	lastCheckpointInfo = { height: 0, hash: '' };
-	rndControlDiceFaces = 120; //12;
+	rndControlDiceFaces = 12;
 
 	// MY CHECKPOINTS
 	#getCheckpointsInfos() {
