@@ -183,6 +183,7 @@ export class CheckpointSystem {
 	checkpointHeightModulo = 100;
 	checkpointToConserve = 10;
 	lastCheckpointInfo = { height: 0, hash: '' };
+	rndControlDiceFaces = 12;
 
 	// MY CHECKPOINTS
 	#getCheckpointsInfos() {
@@ -284,6 +285,7 @@ export class CheckpointSystem {
 
 		return true; // need to sync missing blocks
 	}
+	#randomDiceRoll(diceFaces = 6) { return Math.floor(Math.random() * diceFaces) + 1 === 1; }
 	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock */
 	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock) {
 		if (this.activeCheckpointHeight === false) { throw new Error('(Checkpoint fill) Active checkpoint not set'); }
@@ -291,19 +293,22 @@ export class CheckpointSystem {
 		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { throw new Error(`(Checkpoint fill) Block prevHash mismatch: ${finalizedBlock.prevHash} !== ${this.activeCheckpointHash}`); }
 
 		// Hash verification, argon2 based, cost CPU time (~500ms)
-		const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
-        if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
-
+		const verify = this.#randomDiceRoll(this.rndControlDiceFaces);
+		if (verify) {
+			const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
+        	if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
+		}
+		
 		const checkpointBlocksPath = path.join(this.activeCheckpointPath, 'blocks');
 		const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
 		const batchFolderPath = path.join(checkpointBlocksPath, batchFolderName);
 		if (!fs.existsSync(batchFolderPath)) { fs.mkdirSync(batchFolderPath, { recursive: true }); }
 
-		const blockFileName = `${finalizedBlock.index}-${hex}`;
+		const blockFileName = `${finalizedBlock.index}-${finalizedBlock.hash}`;
 		if (!Storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) { throw new Error('(Checkpoint fill) Block file save failed'); }
 
 		this.activeCheckpointHeight = finalizedBlock.index;
-		this.activeCheckpointHash = hex;
+		this.activeCheckpointHash = finalizedBlock.hash;
 
 		return true;
 	}
