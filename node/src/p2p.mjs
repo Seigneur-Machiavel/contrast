@@ -309,7 +309,17 @@ class P2PNetwork extends EventEmitter {
         }
     }
     
-    static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
+    /** @param {Stream} stream @param {Uint8Array} serializedMessage */
+    static async streamWrite(stream, serializedMessage) {
+        const writer = stream.sink();
+        const chunkSize = P2PNetwork.maxChunkSize;
+
+        for (let i = 0; i < serializedMessage.length; i += chunkSize) {
+            const chunk = serializedMessage.subarray(i, i + chunkSize);
+            await writer.write(chunk);
+        }
+    }
+    /*static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
         async function* generateChunks(serializedMessage, maxChunkSize) {
             const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
             for (let i = 0; i < totalChunks; i++) {
@@ -327,7 +337,7 @@ class P2PNetwork extends EventEmitter {
         } catch (error) {
             console.error(error);
         }
-    }
+    }*/
     /** @param {Stream} stream @param {Uint8Array} serializedMessage */
     /*static async streamWrite(stream, serializedMessage) {
         if (serializedMessage.length === 0) { return false; }
