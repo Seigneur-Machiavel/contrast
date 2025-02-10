@@ -288,10 +288,11 @@ export class CheckpointSystem {
 	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock) {
 		if (this.activeCheckpointHeight === false) { throw new Error('(Checkpoint fill) Active checkpoint not set'); }
 		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) { throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`); }
+		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { throw new Error(`(Checkpoint fill) Block prevHash mismatch: ${finalizedBlock.prevHash} !== ${this.activeCheckpointHash}`); }
 
+		// Hash verification, argon2 based, cost CPU time (~500ms)
 		const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
         if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
-		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { throw new Error(`(Checkpoint fill) Block prevHash mismatch: ${finalizedBlock.prevHash} !== ${this.activeCheckpointHash}`); }
 
 		const checkpointBlocksPath = path.join(this.activeCheckpointPath, 'blocks');
 		const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
