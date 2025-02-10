@@ -293,7 +293,7 @@ class P2PNetwork extends EventEmitter {
             
             //const data = await P2PNetwork.streamRead(stream); //? backpressure issue
             let dataChunks = [];
-            for await (const chunk of stream.source) { dataChunks.push(chunk); }
+            for await (const chunk of stream.source) { dataChunks.push(Buffer.from(chunk)); }
             const data = Buffer.concat(dataChunks);
             if (data.byteLength === 0) { return false; }
             
