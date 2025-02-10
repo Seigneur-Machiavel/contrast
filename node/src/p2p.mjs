@@ -286,14 +286,16 @@ class P2PNetwork extends EventEmitter {
             if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
             this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
             
+            const stream = this.openStreams[peerIdStr];
             const serialized = serializer.serialize.rawData(message);
-            await this.openStreams[peerIdStr].sink([serialized]);
+            await stream.sink([serialized]);
             this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             const data = await P2PNetwork.streamRead(stream);
+            if (!data) { throw new Error('Failed to read data from stream'); }
             
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${dataChunks.length} chunks)`, (m) => { console.info(m); });
-            await this.openStreams[peerIdStr].close();
+            await stream.close();
 
             /** @type {SyncResponse} */
             const response = serializer.deserialize.rawData(data);
@@ -318,22 +320,6 @@ class P2PNetwork extends EventEmitter {
         
         this.miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
         return false;
-
-        /*const msgParts = []; // OLD CODE
-        let totalSize = 0;
-        for await (const chunk of stream.source) {
-            msgParts.push(new Uint8Array(chunk.subarray()));
-            totalSize += chunk.length;
-        }
-        
-        const data = new Uint8Array(totalSize);
-        let offset = 0;
-        for (const part of msgParts) {
-            data.set(part, offset);
-            offset += part.length;
-        }
-
-        return data;*/
     }
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {

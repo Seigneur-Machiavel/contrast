@@ -83,7 +83,7 @@ export class SyncHandler {
         
         try {
             const data = await P2PNetwork.streamRead(stream);
-            if (data.byteLength === 0) { throw new Error('Empty stream data'); }
+            if (!data) { throw new Error('Failed to read data from stream'); }
 
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(data);
