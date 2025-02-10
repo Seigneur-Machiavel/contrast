@@ -41,8 +41,8 @@ import ReputationManager from './peers-reputation.mjs';
  * @property {string} peerIdStr
  * @property {number} currentHeight
  * @property {string} latestBlockHash
- * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
- * @property {CheckpointInfo} checkpointInfo
+ * @property {KnownPubKeysAddressesSnapInfo | null} knownPubKeysInfo
+ * @property {CheckpointInfo | null} checkpointInfo
  * 
  * @typedef {Object} Consensus
  * @property {number} height
@@ -140,11 +140,11 @@ export class SyncHandler {
         if (consensus.height <= this.node.blockchain.currentHeight) { return 'Already at the consensus height'; }
         
         this.miniLogger.log(`consensusHeight #${consensus.height}, current #${this.node.blockchain.currentHeight} -> getblocks from ${peersStatus.length} peers`, (m) => { console.info(m); });
-        this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo ? consensus.checkpointInfo.height : 'none'}`, (m) => { console.info(m); });
+        this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height}`, (m) => { console.info(m); });
 
         // try to sync by checkpoint at first
         let activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
-        const tryToSyncCheckpoint = consensus.checkpointInfo ? this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height : false;
+        const tryToSyncCheckpoint = this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height;
         if (activeCheckpointHeight === false && tryToSyncCheckpoint) {
             this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`); // can be long...
             for (const peerStatus of peersStatus) {
@@ -261,13 +261,14 @@ export class SyncHandler {
             pubKeysConsensus.peers = pubKeysPeers;
             pubKeysConsensus.knownPubKeysAddressesSnapInfo = peerStatus.knownPubKeysInfo;
         }
+        consensus.knownPubKeysInfo = pubKeysConsensus.knownPubKeysAddressesSnapInfo;
 
         const checkpointConsensus = { peers: 0, checkpointInfo: { height: 0, hash: '' } };
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
+            this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} checkpointInfo #${peerStatus.checkpointInfo}`, (m) => { console.info(m); });
             if (!peerStatus.checkpointInfo) { continue; }
             const { height, hash } = peerStatus.checkpointInfo;
-            this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} has checkpoint #${height}`, (m) => { console.info(m); });
             if (height === 0) { continue; }
 
             if (!checkpointConsensuses[height]) { checkpointConsensuses[height] = {}; }
@@ -279,9 +280,7 @@ export class SyncHandler {
             checkpointConsensus.peers = checkpointPeers;
             checkpointConsensus.checkpointInfo = { height, hash };
         }
-        
-        consensus.knownPubKeysInfo = pubKeysConsensus.knownPubKeysAddressesSnapInfo;
-        consensus.checkpointInfo = checkpointConsensus.height > 0 ? checkpointConsensus.checkpointInfo : false;
+        consensus.checkpointInfo = checkpointConsensus.checkpointInfo;
         
         return consensus;
     }
