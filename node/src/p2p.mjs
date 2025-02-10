@@ -308,25 +308,37 @@ class P2PNetwork extends EventEmitter {
     }
     /** @param {Stream} stream @param {Uint8Array} serializedMessage */
     static async streamWrite(stream, serializedMessage) {
+        if (serializedMessage.length === 0) { return false; }
+
         // New version split the data in chunks, managing backpressure.
         const max = P2PNetwork.maxChunkSize;
         const chunksNeeded = Math.ceil(serializedMessage.length / max);
 
-        /*for (let i = 0; i < chunks; i++) {
-            const start = i * max;
-            const end = Math.min((i + 1) * max, serializedMessage.length);
-            const chunk = serializedMessage.subarray(start, end);
-            await stream.sink([chunk]);
-        }*/
+        /*
         const chunks = [];
         for (let i = 0; i < chunksNeeded; i++) {
             const start = i * max;
             const end = Math.min((i + 1) * max, serializedMessage.length);
             chunks.push(serializedMessage.subarray(start, end));
         }
-
         await stream.sink(chunks);
-        await stream.closeWrite();
+        */
+
+        let i = 0;
+        const itr = {
+            [Symbol.asyncIterator]: () => ({
+                next: async () => {
+                    if (i >= chunksNeeded) { return { done: true }; }
+                    const start = i * max;
+                    const end = Math.min((i + 1) * max, serializedMessage.length);
+                    const chunk = serializedMessage.subarray(start, end);
+                    i++;
+                    return { done: false, value: chunk };
+                }
+            })
+        };
+        await stream.sink(itr);
+        //await stream.closeWrite();
 
         return true;
     }
@@ -340,7 +352,7 @@ class P2PNetwork extends EventEmitter {
             dataChunks.push(chunk.subarray());
         }
 
-        await stream.closeRead();
+        //await stream.closeRead();
 
         const dataBuffer = Buffer.concat(dataChunks);
         const data = new Uint8Array(dataBuffer);
