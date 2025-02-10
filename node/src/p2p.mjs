@@ -292,12 +292,23 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
             
             //const data = await P2PNetwork.streamRead(stream); //? backpressure issue
-            let dataChunks = [];
-            for await (const chunk of stream.source) { dataChunks.push(Buffer.from(chunk)); }
+            const dataChunks = [];
+            let expectedLength = 0;
+            //for await (const chunk of stream.source) { dataChunks.push(Buffer.from(chunk)); }
+            for await (const chunk of stream.source) {
+                expectedLength += chunk.byteLength;
+                const chunkBuffers = chunk.bufs;
+                const dataChunk = Buffer.concat(chunkBuffers);
+                dataChunks.push(dataChunk);
+            }
             const data = Buffer.concat(dataChunks);
             if (data.byteLength === 0) { return false; }
+            if (data.byteLength !== expectedLength) {
+                miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
+                return false;
+            }
             
-            this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes)`, (m) => { console.info(m); });
+            this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${dataChunks.length} chunks)`, (m) => { console.info(m); });
             await stream.close();
 
             /** @type {SyncResponse} */
