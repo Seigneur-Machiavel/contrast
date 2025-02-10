@@ -328,12 +328,20 @@ class P2PNetwork extends EventEmitter {
         const itr = {
             [Symbol.asyncIterator]: () => ({
                 next: async () => {
-                    if (i >= chunksNeeded) { return { done: true }; }
+                    /*if (i >= chunksNeeded) { return { done: true }; }
                     const start = i * max;
                     const end = Math.min((i + 1) * max, serializedMessage.length);
                     const chunk = serializedMessage.subarray(start, end);
                     i++;
-                    return { done: false, value: chunk };
+
+                    return { done: false, value: chunk };*/
+
+                    // New version split the data in chunks, managing backpressure.
+                    
+                    const end = Math.min((i + 1) * max, serializedMessage.length);
+                    const chunk = serializedMessage.subarray(i * max, end);
+                    i++;
+                    return { done: i >= chunksNeeded, value: chunk };
                 }
             })
         };
