@@ -15,7 +15,7 @@ import { serializer } from '../../utils/serializer.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { Blockchain } from './blockchain.mjs';
 import { SyncHandler } from './sync-handler.mjs';
-import { SnapshotSystem } from './snapshot-system.mjs';
+import { SnapshotSystem, CheckpointSystem } from './snapshot-system.mjs';
 import { performance, PerformanceObserver } from 'perf_hooks';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
 import { TimeSynchronizer } from '../../utils/time.mjs';
@@ -45,6 +45,7 @@ export class Node {
     miniLogger = new MiniLogger('node');
     timeSynchronizer = new TimeSynchronizer();
     snapshotSystem = new SnapshotSystem();
+    checkpointSystem = new CheckpointSystem();
     blockchain;
     reorganizator;
     utxoCache;
@@ -134,7 +135,7 @@ export class Node {
         this.miner = new Miner(this.minerAddress || this.account.address, this);
         this.miner.useDevArgon2 = this.useDevArgon2;
 
-        const activeCheckpoint = this.snapshotSystem.checkForActiveCheckpoint();
+        const activeCheckpoint = this.checkpointSystem.checkForActiveCheckpoint();
         if (!activeCheckpoint && !startFromScratch) {
             this.updateState("Loading blockchain");
             const startHeight = await this.blockchain.load(this.snapshotSystem);
@@ -261,19 +262,19 @@ export class Node {
     loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
         if (snapshotIndex < 0) { return; }
 
-        this.miniLogger.log(`Last known snapshot index: ${snapshotIndex}`, (m) => { console.warn(m); });
+        this.miniLogger.log(`Last known snapshot index: ${snapshotIndex}`, (m) => { console.info(m); });
         this.blockchain.currentHeight = snapshotIndex;
         this.blockCandidate = null;
         this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
-        this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.warn(m); });
+        this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.info(m); });
         if (snapshotIndex < 1) { this.blockchain.reset(); }
 
         this.blockchain.lastBlock = this.blockchain.getBlock(snapshotIndex);
         if (!eraseHigher) { return; }
 
         // place snapshot to trash folder, we can restaure it if needed
-        this.snapshotSystem.eraseSnapshotsHigherThan(snapshotIndex - 1);
+        this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
     }
     /** @param {BlockData} finalizedBlock */
     #saveSnapshot(finalizedBlock) {
@@ -289,7 +290,7 @@ export class Node {
         }
 
         this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool);
-        this.snapshotSystem.eraseSnapshotsLowerThan(finalizedBlock.index - eraseUnder);
+        this.snapshotSystem.moveSnapshotsLowerThanHeightToTrash(finalizedBlock.index - eraseUnder);
         // avoid gap between the loaded snapshot and the new one
         // at this stage we know that the loaded snapshot is consistent with the blockchain
         if (this.snapshotSystem.loadedSnapshotHeight < finalizedBlock.index - (eraseUnder*2)) {
@@ -299,10 +300,11 @@ export class Node {
     }
     async #saveCheckpoint(finalizedBlock) {
         if (finalizedBlock.index === 0) { return; }
-        if (finalizedBlock.index % this.snapshotSystem.checkpointHeightModulo !== 0) { return; }
+        if (finalizedBlock.index % this.checkpointSystem.checkpointHeightModulo !== 0) { return; }
 
         const startTime = performance.now();
-        const result = await this.snapshotSystem.newCheckpoint(finalizedBlock.index);
+        this.checkpointSystem.pruneCheckpoints(finalizedBlock.index);
+        const result = this.checkpointSystem.newCheckpoint(finalizedBlock.index);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
         this.miniLogger.log(`${logText} ${finalizedBlock.index} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
     }

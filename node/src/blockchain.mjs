@@ -100,9 +100,9 @@ export class Blockchain {
     /** @param {SnapshotSystem} snapshotSystem */
     async load(snapshotSystem) {
         // Ensure consistency between the blockchain and the snapshot system
-        snapshotSystem.eraseSnapshotsHigherThan(this.currentHeight);
+        snapshotSystem.moveSnapshotsHigherThanHeightToTrash(this.currentHeight);
 
-        const snapshotsHeights = snapshotSystem.getSnapshotsHeights();
+        const snapshotsHeights = snapshotSystem.mySnapshotsHeights();
         const olderSnapshotHeight = snapshotsHeights[0] ? snapshotsHeights[0] : 0;
         const youngerSnapshotHeight = snapshotsHeights[snapshotsHeights.length - 1];
         const startHeight = isNaN(youngerSnapshotHeight) ? -1 : youngerSnapshotHeight;

@@ -64,11 +64,11 @@ export const PATH = {
     BASE_FILE: basePath.filePath, // path to the storage-manager.mjs file
     STORAGE: basePath.storagePath, // path to the storage folder (out of the root directory)
     TRASH: path.join(basePath.storagePath, 'trash'),
-    SNAPSHOTS: path.join(basePath.storagePath, 'snapshots'),
+    TXS_REFS: path.join(basePath.storagePath, 'addresses-txs-refs'),
     BLOCKS: path.join(basePath.storagePath, 'blocks'),
     JSON_BLOCKS: path.join(basePath.storagePath, 'json-blocks'),
     BLOCKS_INFO: path.join(basePath.storagePath, 'blocks-info'),
-    TXS_REFS: path.join(basePath.storagePath, 'addresses-txs-refs'),
+    SNAPSHOTS: path.join(basePath.storagePath, 'snapshots'),
     CHECKPOINTS: path.join(basePath.storagePath, 'checkpoints'),
     TEST_STORAGE: path.join(basePath.storagePath, 'test')
 }

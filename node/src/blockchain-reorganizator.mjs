@@ -41,7 +41,7 @@ export class Reorganizator {
         // if two chains have the same length:
         // the most legitimate chain is the one with the lowest mining final difficulty
         // mining final difficulty affected by: posTimestamp
-        const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
+        const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
         if (snapshotsHeights.length < 2) { return legitimateReorg; }
 
         const usableSnapshots = {
@@ -161,7 +161,7 @@ export class Reorganizator {
         console.info(`[REORGANIZATOR] Banned block #${index} | hash:${hash.slice(0, 10)}...`);
     }
     pruneCache() {
-        const snapshotsHeights = this.node.snapshotSystem.getSnapshotsHeights();
+        const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
         const preLastSnapshot = snapshotsHeights[snapshotsHeights.length - 2];
         if (preLastSnapshot === undefined) { return; }
 
