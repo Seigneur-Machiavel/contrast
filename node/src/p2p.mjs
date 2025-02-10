@@ -337,9 +337,9 @@ class P2PNetwork extends EventEmitter {
                     return { done: false, value: chunk };*/
 
                     // New version split the data in chunks, managing backpressure.
-                    
+
                     const end = Math.min((i + 1) * max, serializedMessage.length);
-                    const chunk = serializedMessage.subarray(i * max, end);
+                    const chunk = serializedMessage.slice(i * max, end);
                     i++;
                     return { done: i >= chunksNeeded, value: chunk };
                 }
