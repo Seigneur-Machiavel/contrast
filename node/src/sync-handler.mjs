@@ -84,6 +84,7 @@ export class SyncHandler {
         try {
             const peerRequest = await P2PNetwork.streamRead(stream);
             if (!peerRequest) { throw new Error('Failed to read data from stream'); }
+            await stream.closeRead();
             
             const { data, nbChunks } = peerRequest;
 
@@ -119,7 +120,7 @@ export class SyncHandler {
 
             const serialized = serializer.serialize.rawData(response);
             await stream.sink([serialized]);
-            //await stream.close();
+            await stream.close();
 
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
