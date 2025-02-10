@@ -87,20 +87,22 @@ class P2PNetwork extends EventEmitter {
         },
     };
     connectedBootstrapNodes = {};
+    options = {
+        bootstrapNodes: [],
+        maxPeers: 12,
+        logLevel: 'info',
+        logging: true,
+        listenAddress: '/ip4/0.0.0.0/tcp/27260',
+        dialTimeout: 3000,
+        reputationOptions: {}, // Options for ReputationManager
+    };
     
     /** @param {TimeSynchronizer} timeSynchronizer */
     constructor(timeSynchronizer, listenAddress = '/ip4/0.0.0.0/tcp/27260') {
         super();
         this.timeSynchronizer = timeSynchronizer;
-        this.options = {
-            bootstrapNodes: [],
-            maxPeers: 12,
-            logLevel: 'info',
-            logging: true,
-            listenAddress: listenAddress,
-            dialTimeout: 3000,
-            reputationOptions: {}, // Options for ReputationManager
-        };
+        this.options.listenAddress = listenAddress;
+
         this.reputationManager = new ReputationManager(this.options.reputationOptions);
         this.reputationManager.on('identifierBanned', ({ identifier }) => {
             //this.disconnectPeer(identifier);
@@ -284,15 +286,19 @@ class P2PNetwork extends EventEmitter {
             if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
             this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
             
+            const stream = this.openStreams[peerIdStr];
             const serialized = serializer.serialize.rawData(message);
-            await this.openStreams[peerIdStr].sink([serialized]);
+            await stream.sink([serialized]);
             this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
             
-            const data = await P2PNetwork.streamRead(this.openStreams[peerIdStr]);
+            //const data = await P2PNetwork.streamRead(stream); //? backpressure issue
+            let dataChunks = [];
+            for await (const chunk of stream.source) { dataChunks.push(chunk); }
+            const data = Buffer.concat(dataChunks);
             if (data.byteLength === 0) { return false; }
             
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes)`, (m) => { console.info(m); });
-            await this.openStreams[peerIdStr].close();
+            await stream.close();
 
             /** @type {SyncResponse} */
             const response = serializer.deserialize.rawData(data);
