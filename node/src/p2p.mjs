@@ -307,6 +307,8 @@ class P2PNetwork extends EventEmitter {
             
             const peerResponse = await P2PNetwork.streamRead(stream);
             if (!peerResponse) { throw new Error('Failed to read data from stream'); }
+
+            await stream.close();
             
             const { data, nbChunks } = peerResponse;
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
@@ -318,16 +320,6 @@ class P2PNetwork extends EventEmitter {
         }
     }
     
-    /** @param {Stream} stream @param {Uint8Array} serializedMessage */
-    static async streamWrite(stream, serializedMessage) {
-        const writer = stream.sink();
-        const chunkSize = P2PNetwork.maxChunkSize;
-
-        for (let i = 0; i < serializedMessage.length; i += chunkSize) {
-            const chunk = serializedMessage.subarray(i, i + chunkSize);
-            await writer.write(chunk);
-        }
-    }
     /*static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
         async function* generateChunks(serializedMessage, maxChunkSize) {
             const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
@@ -348,14 +340,14 @@ class P2PNetwork extends EventEmitter {
         }
     }*/
     /** @param {Stream} stream @param {Uint8Array} serializedMessage */
-    /*static async streamWrite(stream, serializedMessage) {
+    static async streamWrite(stream, serializedMessage) {
         if (serializedMessage.length === 0) { return false; }
 
         await stream.sink([serializedMessage]);
-        //await stream.closeWrite();
+        await stream.closeWrite();
 
         return true;
-    }*/
+    }
     /** @param {Stream} stream */
     static async streamRead(stream) {
         const dataChunks = [];
@@ -365,7 +357,7 @@ class P2PNetwork extends EventEmitter {
             dataChunks.push(chunk.subarray());
         }
 
-        //await stream.closeRead();
+        await stream.closeRead();
 
         const dataBuffer = Buffer.concat(dataChunks);
         const data = new Uint8Array(dataBuffer);
