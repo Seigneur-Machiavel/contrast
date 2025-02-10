@@ -1,3 +1,7 @@
+if (false) {
+    const MessagePack = require('../libs/msgpack.min.js').default;
+}
+
 import { FastConverter } from './converters.mjs';
 import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
 import { Transaction } from '../node/src/transaction.mjs';

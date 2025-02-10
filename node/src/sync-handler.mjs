@@ -272,7 +272,7 @@ export class SyncHandler {
         const checkpointConsensus = { peers: 0, checkpointInfo: { height: 0, hash: '' } };
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
-            this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} checkpointInfo #${peerStatus.checkpointInfo}`, (m) => { console.info(m); });
+            //this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} checkpointInfo #${peerStatus.checkpointInfo}`, (m) => { console.info(m); });
             if (!peerStatus.checkpointInfo) { continue; }
             const { height, hash } = peerStatus.checkpointInfo;
             if (height === 0) { continue; }

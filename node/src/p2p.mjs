@@ -300,7 +300,8 @@ class P2PNetwork extends EventEmitter {
                 const dataChunk = chunk.subarray();
                 dataChunks.push(dataChunk);
             }
-            const data = Buffer.concat(dataChunks);
+            const dataBuffer = Buffer.concat(dataChunks);
+            const data = new Uint8Array(dataBuffer);
             if (data.byteLength === 0) { return false; }
             if (data.byteLength !== expectedLength) {
                 miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
