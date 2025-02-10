@@ -119,7 +119,7 @@ export class SyncHandler {
 
             const serialized = serializer.serialize.rawData(response);
             await stream.sink([serialized]);
-            await stream.close();
+            //await stream.close();
 
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;

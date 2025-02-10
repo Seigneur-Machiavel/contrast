@@ -283,10 +283,11 @@ class P2PNetwork extends EventEmitter {
         if (!peer || !peer.dialable) { return false; }
 
         try {
-            if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
-            this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
+            //if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
+            //this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
             
-            const stream = this.openStreams[peerIdStr];
+            //const stream = this.openStreams[peerIdStr];
+            const stream = await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
             const serialized = serializer.serialize.rawData(message);
             await stream.sink([serialized]);
             this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
@@ -296,7 +297,7 @@ class P2PNetwork extends EventEmitter {
             
             const { data, nbChunks } = peerResponse;
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
-            await stream.close();
+            //await stream.close();
 
             /** @type {SyncResponse} */
             const response = serializer.deserialize.rawData(data);
