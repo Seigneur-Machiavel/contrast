@@ -346,7 +346,7 @@ class P2PNetwork extends EventEmitter {
         return true;
     }
     /** @param {Stream} stream */
-    static async streamReadOLD(stream) {
+    static async streamRead(stream) {
         // New version split the data in chunks, managing backpressure.
         const dataChunks = [];
         let expectedLength = 0;
