@@ -321,7 +321,7 @@ class P2PNetwork extends EventEmitter {
         try {
             const chunkGenerator = generateChunks(serializedMessage, maxChunkSize);
             await stream.sink(chunkGenerator);
-            await stream.closeWrite();
+            //await stream.closeWrite();
         } catch (error) {
             console.error(error);
         }
