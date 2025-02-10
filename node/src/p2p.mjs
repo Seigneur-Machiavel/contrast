@@ -297,8 +297,7 @@ class P2PNetwork extends EventEmitter {
             //for await (const chunk of stream.source) { dataChunks.push(Buffer.from(chunk)); }
             for await (const chunk of stream.source) {
                 expectedLength += chunk.byteLength;
-                const chunkBuffers = chunk.bufs;
-                const dataChunk = Buffer.concat(chunkBuffers);
+                const dataChunk = chunk.subarray();
                 dataChunks.push(dataChunk);
             }
             const data = Buffer.concat(dataChunks);
