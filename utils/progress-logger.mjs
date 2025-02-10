@@ -9,7 +9,8 @@ export class ProgressLogger {
     }
 
     logProgress(current, logCallBack = (m) => { console.log(m); }) {
-        const progress = current === this.total - 1 ? 100 : (current / this.total) * 100;
+        //const progress = current === this.total - 1 ? 100 : (current / this.total) * 100;
+        const progress = current === this.total ? 100 : (current / this.total) * 100;
         const currentStep = Math.floor(progress / this.stepSizePercent);
         if (currentStep <= this.lastLoggedStep) { return; }
 

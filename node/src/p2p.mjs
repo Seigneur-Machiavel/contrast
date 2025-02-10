@@ -54,7 +54,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  */
 
 class P2PNetwork extends EventEmitter {
-    static maxChunkSize = 1024 * 1024 * 2; // 2MB
+    static maxChunkSize = 1024 * 1024; // 1MB
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
