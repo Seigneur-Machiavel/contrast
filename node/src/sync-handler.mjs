@@ -140,6 +140,7 @@ export class SyncHandler {
         if (consensus.height <= this.node.blockchain.currentHeight) { return 'Already at the consensus height'; }
         
         this.miniLogger.log(`consensusHeight #${consensus.height}, current #${this.node.blockchain.currentHeight} -> getblocks from ${peersStatus.length} peers`, (m) => { console.info(m); });
+        this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo ? consensus.checkpointInfo.height : 'none'}`, (m) => { console.info(m); });
 
         // try to sync by checkpoint at first
         let activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
