@@ -143,8 +143,7 @@ export class SyncHandler {
 
         // try to sync by checkpoint at first
         let activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
-        //const tryToSyncCheckpoint = consensus.checkpointInfo ? this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height : false;
-
+        const tryToSyncCheckpoint = consensus.checkpointInfo ? this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height : false;
         if (activeCheckpointHeight === false && tryToSyncCheckpoint) {
             this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`); // can be long...
             for (const peerStatus of peersStatus) {
@@ -311,15 +310,18 @@ export class SyncHandler {
         this.node.blockchainStats.state = `syncing with peer ${readableId(peerIdStr)}`;
         this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         
+        const activeCheckpointTargetHeight = this.node.checkpointSystem.activeCheckpointLastSnapshotHeight;
         let peerHeight = peerCurrentHeight;
-        let desiredBlock = (activeCheckpointHeight | this.node.blockchain.currentHeight) + 1;
+        let desiredBlock = this.node.blockchain.currentHeight + 1;
+        if (activeCheckpointHeight !== false && activeCheckpointTargetHeight !== false) {
+            desiredBlock = activeCheckpointHeight + 1;
+        }
+
         while (desiredBlock <= peerHeight) {
             let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
-            if (activeCheckpointHeight !== false) {
-                const activeCheckpointLastSnapshotHeight = this.node.checkpointSystem.activeCheckpointLastSnapshotHeight;
-                endIndex = Math.min(endIndex, activeCheckpointLastSnapshotHeight);
-            }
+            if (activeCheckpointHeight !== false) { endIndex = Math.min(endIndex, activeCheckpointTargetHeight); }
 
+            this.node.updateState(`Downloading blocks #${desiredBlock} to #${endIndex}...`);
             const message = { type: 'getBlocks', startIndex: desiredBlock, endIndex };
             const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
             if (!response || typeof response.currentHeight !== 'number' || !Array.isArray(response.blocks)) {
@@ -336,12 +338,13 @@ export class SyncHandler {
                     const byteLength = serializedBlock.byteLength;
                     const block = serializer.deserialize.block_finalized(serializedBlock);
                     if (activeCheckpointHeight !== false) {
+                        this.node.updateState(`Fill checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`);
                         await this.node.checkpointSystem.fillActiveCheckpointWithBlock(block, serializedBlock); // throws if failure
                     } else {
                         await this.node.digestFinalizedBlock(block, { broadcastNewCandidate: false, isSync: true }, byteLength); // throws if failure
                     }
 
-                    if (this.node.checkpointSystem.activeCheckpointLastSnapshotHeight === block.index) {
+                    if (activeCheckpointTargetHeight === block.index) {
                         this.node.updateState(`Deploying checkpoint #${this.node.checkpointSystem.activeCheckpointHeight}...`); // can be long...
                         this.node.checkpointSystem.deployActiveCheckpoint(); // throws if failure
                         return 'Checkpoint deployed';

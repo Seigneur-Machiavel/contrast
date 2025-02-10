@@ -177,12 +177,9 @@ export class Storage {
         try { 
             const buffer = Buffer.from(checkpointBuffer);
             const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-            if (hash !== hashToVerify) {
-                storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); });
-                return false;
-            }
+            if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
     
-            const destPath = path.join(PATH.STORAGE, 'CHECKPOINT');
+            const destPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
             if (fs.existsSync(destPath)) { fs.rmSync(destPath, { recursive: true }); }
             fs.mkdirSync(destPath, { recursive: true });
     
@@ -194,41 +191,6 @@ export class Storage {
 
         return false;
     }
-    /*static archiveCheckpoint(checkpointHeight = 0) { // DEPRECATED, archiver replaced by adm-zip
-        return new Promise((resolve, reject) => {
-            const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight);
-            if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
-
-            const archivePath = path.join(heightPath, `checkpoint.zip`);
-            const archive = archiver('zip', { zlib: { level: 9 } });
-            const output = fs.createWriteStream(archivePath);
-            const hash = crypto.createHash('sha256');
-            
-            archive.pipe(output);
-            archive.on('data', function(data) { hash.update(data); });
-            
-            archive.directory(PATH.TXS_REFS, 'addresses-txs-refs');
-            archive.file(path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json'), { name: 'AddressesTxsRefsStorage_config.json' });
-            archive.directory(PATH.SNAPSHOTS, 'snapshots');
-            
-            output.on('close', () => {
-                const archiveHash = hash.digest('hex');
-                storageMiniLogger.log(`Checkpoint archived at height ${checkpointHeight}`, (m) => { console.log(m); });
-                
-                const archivePathIncludingHash = path.join(heightPath, `${archiveHash}.zip`);
-                fs.renameSync(archivePath, archivePathIncludingHash);
-                
-                resolve({ archivePath, archiveHash });
-            });
-
-            archive.on('error', (err) => {
-                storageMiniLogger.log(err.stack, (m) => { console.error(m); });
-                reject(err);
-            });
-
-            archive.finalize();
-        });
-    }*/
 }
 
 /** Transactions references are stored in binary format, folder architecture is optimized for fast access */

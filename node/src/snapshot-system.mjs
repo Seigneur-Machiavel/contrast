@@ -178,7 +178,7 @@ export class CheckpointSystem {
 	/** @type {boolean | number} */
 	activeCheckpointLastSnapshotHeight = false;
 	activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // hash of block -1
-	activeCheckpointPath = path.join(PATH.STORAGE, 'CHECKPOINT');
+	activeCheckpointPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
 
 	checkpointHeightModulo = 100;
 	checkpointToConserve = 10;
