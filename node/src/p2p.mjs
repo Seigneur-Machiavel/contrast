@@ -295,7 +295,7 @@ class P2PNetwork extends EventEmitter {
             
             const peerResponse = await P2PNetwork.streamRead(stream);
             if (!peerResponse) { throw new Error('Failed to read data from stream'); }
-            await stream.close();
+            await stream.closeRead();
             
             const { data, nbChunks } = peerResponse;
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
