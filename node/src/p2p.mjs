@@ -286,30 +286,14 @@ class P2PNetwork extends EventEmitter {
             if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
             this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
             
-            const stream = this.openStreams[peerIdStr];
             const serialized = serializer.serialize.rawData(message);
-            await stream.sink([serialized]);
+            await this.openStreams[peerIdStr].sink([serialized]);
             this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
             
-            //const data = await P2PNetwork.streamRead(stream); //? backpressure issue
-            const dataChunks = [];
-            let expectedLength = 0;
-            //for await (const chunk of stream.source) { dataChunks.push(Buffer.from(chunk)); }
-            for await (const chunk of stream.source) {
-                expectedLength += chunk.byteLength;
-                const dataChunk = chunk.subarray();
-                dataChunks.push(dataChunk);
-            }
-            const dataBuffer = Buffer.concat(dataChunks);
-            const data = new Uint8Array(dataBuffer);
-            if (data.byteLength === 0) { return false; }
-            if (data.byteLength !== expectedLength) {
-                miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
-                return false;
-            }
+            const data = await P2PNetwork.streamRead(stream);
             
             this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${dataChunks.length} chunks)`, (m) => { console.info(m); });
-            await stream.close();
+            await this.openStreams[peerIdStr].close();
 
             /** @type {SyncResponse} */
             const response = serializer.deserialize.rawData(data);
@@ -320,8 +304,22 @@ class P2PNetwork extends EventEmitter {
     }
     /** @param {Stream} stream */
     static async streamRead(stream) {
-        /** @type {Uint8Array[]} */
-        const msgParts = [];
+        const dataChunks = [];
+        let expectedLength = 0;
+        for await (const chunk of stream.source) {
+            expectedLength += chunk.byteLength;
+            dataChunks.push(chunk.subarray());
+        }
+
+        const dataBuffer = Buffer.concat(dataChunks);
+        const data = new Uint8Array(dataBuffer);
+        if (data.byteLength === 0) { return false; }
+        if (data.byteLength === expectedLength) { return data; }
+        
+        this.miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
+        return false;
+
+        /*const msgParts = []; // OLD CODE
         let totalSize = 0;
         for await (const chunk of stream.source) {
             msgParts.push(new Uint8Array(chunk.subarray()));
@@ -335,7 +333,7 @@ class P2PNetwork extends EventEmitter {
             offset += part.length;
         }
 
-        return data;
+        return data;*/
     }
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {

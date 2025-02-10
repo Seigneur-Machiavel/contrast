@@ -183,6 +183,12 @@ export class OpStack {
                             this.healthInfo.lastSyncTime = Date.now();
                             this.pushFirst('createBlockCandidateAndBroadcast', 0);
                             break;
+                        case 'Checkpoint downloaded':
+                            this.pushFirst('syncWithPeers', null);
+                            break;
+                        case 'PubKeysAddresses downloaded':
+                            this.pushFirst('syncWithPeers', null);
+                            break;
                         case 'Verifying consensus':
                             this.pushFirst('syncWithPeers', null);
                             break;

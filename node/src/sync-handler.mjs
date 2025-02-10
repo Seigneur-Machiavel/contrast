@@ -143,9 +143,9 @@ export class SyncHandler {
         this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height}`, (m) => { console.info(m); });
 
         // try to sync by checkpoint at first
-        let activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
+        const activeCheckpoint = this.node.checkpointSystem.activeCheckpointHeight !== false;
         const tryToSyncCheckpoint = this.node.blockchain.currentHeight - 720 < consensus.checkpointInfo.height;
-        if (activeCheckpointHeight === false && tryToSyncCheckpoint) {
+        if (!activeCheckpoint && tryToSyncCheckpoint) {
             this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`); // can be long...
             for (const peerStatus of peersStatus) {
                 const { peerIdStr, checkpointInfo } = peerStatus;
@@ -153,34 +153,20 @@ export class SyncHandler {
                 if (checkpointInfo.hash !== consensus.checkpointInfo.hash) { continue; }
 
                 this.miniLogger.log(`Attempting to sync checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-                const message = { type: 'getCheckpoint', checkpointHash: consensus.checkpointInfo.hash };
-                const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
-                if (!response || !response.checkpointArchive) {
-                    this.miniLogger.log(`Failed to get/read checkpoint archive`, (m) => { console.error(m); });
-                    continue;
-                }
-
-                await new Promise(resolve => setTimeout(resolve, 200));
-                Storage.unarchiveCheckpointBuffer(response.checkpointArchive, consensus.checkpointInfo.hash);
-                const checkpointDetected = this.node.checkpointSystem.checkForActiveCheckpoint();
-                if (!checkpointDetected) {
-                    this.miniLogger.log(`Failed to process checkpoint archive`, (m) => { console.error(m); });
-                    continue;
-                }
+                const success = await this.#getCheckpoint(peerIdStr, consensus.checkpointInfo.hash);
+                if (!success) { continue; }
                 
-                activeCheckpointHeight = this.node.checkpointSystem.activeCheckpointHeight;
-                this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}, getting blocks from #${activeCheckpointHeight}`, (m) => { console.info(m); });
-                break;
+                this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+                return 'Checkpoint downloaded';
             }
         }
 
         // try to sync the pubKeysAddresses if possible (DEPRECATED -> use checkpoints)
-        const myKnownPubKeysInfo = this.node.snapshotSystem.knownPubKeysAddressesSnapInfo;
         let syncPubKeysAddresses = true;
+        const myKnownPubKeysInfo = this.node.snapshotSystem.knownPubKeysAddressesSnapInfo;
         if (myKnownPubKeysInfo.height > consensus.knownPubKeysInfo.height) { syncPubKeysAddresses = false; }
         if (myKnownPubKeysInfo.hash === consensus.knownPubKeysInfo.hash) { syncPubKeysAddresses = false; }
-        if (activeCheckpointHeight !== false) { syncPubKeysAddresses = false; }
-        if (syncPubKeysAddresses) {
+        if (!activeCheckpoint && syncPubKeysAddresses) {
             for (const peerStatus of peersStatus) {
                 const { peerIdStr, knownPubKeysInfo } = peerStatus;
                 if (knownPubKeysInfo.height !== consensus.knownPubKeysInfo.height) { continue; }
@@ -191,7 +177,7 @@ export class SyncHandler {
                 if (!synchronized) { continue; }
 
                 this.miniLogger.log(`Successfully synced PubKeysAddresses with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-                break;
+                return 'PubKeysAddresses downloaded';
             }
         }
 
@@ -289,6 +275,24 @@ export class SyncHandler {
         consensus.checkpointInfo = checkpointConsensus.checkpointInfo;
         
         return consensus;
+    }
+    /** @param {string} peerIdStr @param {string} checkpointHash */
+    async #getCheckpoint(peerIdStr, checkpointHash) {
+        const message = { type: 'getCheckpoint', checkpointHash };
+        const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
+        if (!response || !response.checkpointArchive) {
+            this.miniLogger.log(`Failed to get/read checkpoint archive`, (m) => { console.error(m); });
+            return false;
+        }
+
+        Storage.unarchiveCheckpointBuffer(response.checkpointArchive, consensus.checkpointInfo.hash);
+        const checkpointDetected = this.node.checkpointSystem.checkForActiveCheckpoint();
+        if (!checkpointDetected) {
+            this.miniLogger.log(`Failed to process checkpoint archive`, (m) => { console.error(m); });
+            return false;
+        }
+
+        return true;
     }
     /** @param {string} peerIdStr @param {string} pubKeysHash */
     async #getPubKeysAddresses(peerIdStr, pubKeysHash) {
