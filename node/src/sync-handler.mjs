@@ -139,7 +139,7 @@ export class SyncHandler {
 
                 const readResult = await P2PNetwork.streamRead(stream);
                 if (!readResult) { throw new Error('Failed to read data from stream'); }
-                if (!readResult.data.byteLength < serializer.syncResponseMinLen) throw new Error('Invalid response format');
+                if (readResult.data.byteLength < serializer.syncResponseMinLen) throw new Error('Invalid response format');
                 dataBytes.lastNbChunks = readResult.nbChunks;
                 
                 const syncResponse = serializer.deserialize.syncResponse(readResult.data);
@@ -165,7 +165,7 @@ export class SyncHandler {
                //this.node.updateState(`${msg.type }
                 if (msg.type === 'getBlocks') { this.node.updateState(`Downloading blocks #${msg.startIndex}-${msg.endIndex}, ${dataBytes.percentage}%...`); }
                 if (msg.type === 'getCheckpoint') { this.node.updateState(`Downloading checkpoint ${msg.checkpointHash.slice(0,10)}, ${dataBytes.percentage}%...`); }
-                this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected}Bytes acquired (+${dataBytes.lastNbChunks} chunks - ${dataBytes.percentage}%`, (m) => { console.info(m); });
+                this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired (+${dataBytes.lastNbChunks} chunks) ${dataBytes.percentage}%`, (m) => { console.info(m); });
                 if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
                 failures.successive++; failures.total++;
                 if (failures.successive >= maxSuccessiveFailures) { return false; }
