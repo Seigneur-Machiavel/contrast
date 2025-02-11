@@ -226,6 +226,7 @@ export class SyncHandler {
     /** @param {PeerStatus[]} peersStatus */
     #findConsensus(peersStatus) {
         if (!peersStatus || peersStatus.length === 0) { return false }
+        
         /** @type {Consensus} */
         const consensus = { height: 0, peers: 0, blockHash: '' };
         const consensuses = {};
