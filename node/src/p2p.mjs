@@ -94,7 +94,7 @@ class P2PNetwork extends EventEmitter {
         logLevel: 'info',
         logging: true,
         listenAddress: '/ip4/0.0.0.0/tcp/27260',
-        dialTimeout: 3000,
+        dialTimeout: 30000,
         reputationOptions: {}, // Options for ReputationManager
     };
     
@@ -201,12 +201,13 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 addresses: { listen: [this.options.listenAddress] },
                 transports: [tcp()],
-                streamMuxers: [yamux({
+                streamMuxers: [yamux()],
+                /*streamMuxers: [yamux({
                     maxStreamWindows: 128,  // 128 streams
                     maxInboundStreams: 1024, // 1024 streams
                     maxOutboundStreams: 1024, // 1024 streams
                     connectionTimeout: 30000  // 30s
-                })], // [yamux()],
+                })],*/
                 connectionEncrypters: [noise()],
                 services: { identify: identify(), pubsub: gossipsub() },
                 peerDiscovery

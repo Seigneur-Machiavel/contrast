@@ -145,7 +145,7 @@ export class SyncHandler {
         
         this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height}`, (m) => { console.info(m); });
         // wait a bit before starting the sync, time for previous connections to be closed
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        //?await new Promise((resolve) => setTimeout(resolve, 5000));
 
         // try to sync by checkpoint at first
         const activeCheckpoint = this.node.checkpointSystem.activeCheckpointHeight !== false;
