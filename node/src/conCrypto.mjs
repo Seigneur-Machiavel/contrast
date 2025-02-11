@@ -3,6 +3,7 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 import { convert, FastConverter } from '../../utils/converters.mjs';
 import ed25519 from '../../libs/noble-ed25519-03-2024.mjs';
 import { xxHash32 } from '../../libs/xxhash32.mjs';
+import * as crypto from 'crypto';
 
 async function getArgon2Lib() {
     if (isNode) {
