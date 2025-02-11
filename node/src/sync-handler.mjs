@@ -76,11 +76,11 @@ export class SyncHandler {
         
         try {
             const readResult = await P2PNetwork.streamRead(stream, this.fastConverter);
-            if (!readResult) { throw new Error('Failed to read data from stream'); }
+            if (!readResult) { throw new Error('(#handleIncomingStream) Failed to read data from stream'); }
 
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(readResult.data);
-            if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
+            if (!msg || typeof msg.type !== 'string') { throw new Error('(#handleIncomingStream) Invalid message format'); }
             this.miniLogger.log(`Received message (${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''}) [bytesStart: ${msg.bytesStart}] from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             
             /** @type {SyncStatus} */
@@ -94,14 +94,14 @@ export class SyncHandler {
             if (msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number') {
                 /** @type {Uint8Array[]} */
                 const serializedBlocksArray = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false);
-                if (!serializedBlocksArray) { throw new Error('Failed to get serialized blocks'); }
+                if (!serializedBlocksArray) { throw new Error('(#handleIncomingStream) Failed to get serialized blocks'); }
             
                 data = serializer.serialize.rawData(serializedBlocksArray);
             }
 
             if (msg.type === 'getCheckpoint' && typeof msg.checkpointHash === 'string') {
                 data = this.node.checkpointSystem.readCheckpointZipArchive(msg.checkpointHash);
-                if (!data) { throw new Error('Checkpoint archive not found'); }
+                if (!data) { throw new Error('(#handleIncomingStream) Checkpoint archive not found'); }
             }
 
             if (msg.bytesStart > 0) {
@@ -111,7 +111,8 @@ export class SyncHandler {
             // crop data and add the length of the serialized data at the beginning of the response
             data = msg.bytesStart > 0 ? data.slice(msg.bytesStart) : data;
             const serializedResponse = serializer.serialize.syncResponse(mySyncStatus, data);
-            await P2PNetwork.streamWrite(stream, serializedResponse);
+            const sent = await P2PNetwork.streamWrite(stream, serializedResponse);
+            if (!sent) { throw new Error('(#handleIncomingStream) Failed to write data to stream'); }
 
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
@@ -140,11 +141,12 @@ export class SyncHandler {
             try { // try to get the remaining data
                 msg.bytesStart = dataBytes.acquired;
                 stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], { negotiateFully: true });
-                await P2PNetwork.streamWrite(stream, serializer.serialize.rawData(msg));
+                const sent = await P2PNetwork.streamWrite(stream, serializer.serialize.rawData(msg));
+                if (!sent) { throw new Error('(sendSyncRequest) Failed to write data to stream'); }
 
                 const readResult = await P2PNetwork.streamRead(stream);
-                if (!readResult) { throw new Error('Failed to read data from stream'); }
-                if (readResult.data.byteLength < serializer.syncResponseMinLen) throw new Error('Invalid response format');
+                if (!readResult) { throw new Error('(sendSyncRequest)  Failed to read data from stream'); }
+                if (readResult.data.byteLength < serializer.syncResponseMinLen) throw new Error('(sendSyncRequest) Invalid response format');
                 dataBytes.lastNbChunks = readResult.nbChunks;
                 
                 const syncResponse = serializer.deserialize.syncResponse(readResult.data);
@@ -154,7 +156,7 @@ export class SyncHandler {
 
                 if (!dataBytes.expected) { // initializing the data
                     if (syncResponse.dataLength > P2PNetwork.maxStreamBytes) {
-                        this.miniLogger.log(`Received data is too big (${syncResponse.dataLength} bytes)`, (m) => { console.error(m); });
+                        this.miniLogger.log(`(sendSyncRequest) Received data is too big (${syncResponse.dataLength} bytes)`, (m) => { console.error(m); });
                         return false;
                     }
                     dataBytes.expected = syncResponse.dataLength;
@@ -198,7 +200,8 @@ export class SyncHandler {
             const stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], options);
             const serialized = serializer.serialize.rawData(msg);
 
-            await P2PNetwork.streamWrite(stream, serialized);
+            const sent = await P2PNetwork.streamWrite(stream, serialized);
+            if (!sent) { throw new Error('Failed to write data to stream'); }
             
             this.miniLogger.log(`Message written to stream, topic: ${msg.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
             

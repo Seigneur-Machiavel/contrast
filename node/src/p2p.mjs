@@ -257,7 +257,9 @@ class P2PNetwork extends EventEmitter {
                 const end = start + maxChunkSize;
                 const chunk = serializedMessage.slice(start, end);
                 yield chunk;
-                await new Promise(resolve => setTimeout(resolve, 1));
+                // limit the speed of sending chunks, at 64 KB/chunk, 1 GB would take:
+                // 1 GB / 64 KB = 16384 chunks => 16384 * 2 ms = 32.768 more seconds
+                await new Promise(resolve => setTimeout(resolve, 2));
             }
         }
 
@@ -265,9 +267,8 @@ class P2PNetwork extends EventEmitter {
             const chunkGenerator = generateChunks(serializedMessage, maxChunkSize);
             await stream.sink(chunkGenerator);
             //await stream.closeWrite();
-        } catch (error) {
-            console.error(error);
-        }
+        } catch (error) { console.error(error); return false; }
+        return true;
     }
     /** @param {Stream} stream @param {Uint8Array} serializedMessage */
     static async streamWriteSimple(stream, serializedMessage) { // Deprecated
