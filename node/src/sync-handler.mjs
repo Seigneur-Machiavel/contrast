@@ -83,7 +83,7 @@ export class SyncHandler {
             
             /** @type {SyncStatus} */
             const mySyncStatus = {
-                currentHeight: this.node.blockchain.currentHeight,
+                currentHeight: this.node.blockchain.currentHeight === -1 ? 0 : this.node.blockchain.currentHeight,
                 latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
                 checkpointInfo: this.node.checkpointSystem.myLastCheckpointInfo()
             }
@@ -194,7 +194,7 @@ export class SyncHandler {
         
         const consensus = this.#findConsensus(peersStatus);
         if (!consensus) { return await this.#handleSyncFailure(`Unable to get consensus -> sync failure`); }
-        if (consensus.height <= myCurrentHeight) { return 'Already at the consensus height'; }
+        if (consensus.height === 0 || consensus.height <= myCurrentHeight) { return 'Already at the consensus height'; }
         
         this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height}`, (m) => { console.info(m); });
         // wait a bit before starting the sync, time for previous connections to be closed
