@@ -63,6 +63,7 @@ class P2PNetwork extends EventEmitter {
         },
     };
     connectedBootstrapNodes = {};
+    targetBootstrapNodes = 5;
     options = {
         bootstrapNodes: [],
         maxPeers: 12,
@@ -205,6 +206,7 @@ class P2PNetwork extends EventEmitter {
     async #connectionMaintainerLoop() {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 10000));
+            if (Object.keys(this.connectedBootstrapNodes).length >= this.targetBootstrapNodes) { continue; }
             await this.connectToBootstrapNodes();
         }
     }
@@ -221,6 +223,7 @@ class P2PNetwork extends EventEmitter {
     }
     async connectToBootstrapNodes() {
         let iAmBootstrap = false;
+        
         const promises = [];
         for (const addr of this.options.bootstrapNodes) {
             if (this.myAddr === addr) { iAmBootstrap = true; continue; } // Skip if recognize as myself

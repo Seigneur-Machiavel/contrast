@@ -156,9 +156,12 @@ export class Storage {
     static archiveCheckpoint(checkpointHeight = 0, fromPath) {
         try {
             const zip = new AdmZip();
-            zip.addLocalFolder(fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS, 'addresses-txs-refs');
-            zip.addLocalFolder(fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS, 'snapshots');
-            zip.addLocalFile(path.join(fromPath | PATH.STORAGE, 'AddressesTxsRefsStorage_config.json'));
+            const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
+            const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
+            const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
+            zip.addLocalFolder(addTxsRefsPath, 'addresses-txs-refs');
+            zip.addLocalFolder(snapshotsPath, 'snapshots');
+            zip.addLocalFile(addTxsRefsConfigPath);
 
             const buffer = zip.toBuffer();
             const hash = crypto.createHash('sha256').update(buffer).digest('hex');
