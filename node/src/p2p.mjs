@@ -240,14 +240,17 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`P2P network ${this.p2pNode.peerId.toString()} stopped`, (m) => { console.info(m); });
         await this.reputationManager.shutdown();
     }
+    #isBootstrapNodeAlreadyConnected(addr) {
+        for (const peerIdStr in this.connectedBootstrapNodes) {
+            if (this.connectedBootstrapNodes[peerIdStr] === addr) { return true; }
+        }
+        return false;
+    }
     async connectToBootstrapNodes() {
         const promises = [];
         for (const addr of this.options.bootstrapNodes) {
             if (this.myAddr === addr) { continue; } // Skip if recognize as myself
-            // Check if already connected to this bootstrap node
-            for (const peerIdStr in this.connectedBootstrapNodes) {
-                if (this.connectedBootstrapNodes[peerIdStr] === addr) { continue; }
-            }
+            if (this.#isBootstrapNodeAlreadyConnected(addr)) { continue; } // Skip if already connected
 
             const ma = multiaddr(addr);
             const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
