@@ -153,15 +153,15 @@ export class Storage {
             return false;
         }
     }
-    static archiveCheckpoint(checkpointHeight = 0) {
+    static archiveCheckpoint(checkpointHeight = 0, fromPath) {
         try {
             const heightPath = path.join(PATH.CHECKPOINTS, String(checkpointHeight));
             if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
 
             const zip = new AdmZip();
-            zip.addLocalFolder(PATH.TXS_REFS, 'addresses-txs-refs');
-            zip.addLocalFolder(PATH.SNAPSHOTS, 'snapshots');
-            zip.addLocalFile(path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json'));
+            zip.addLocalFolder(fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS, 'addresses-txs-refs');
+            zip.addLocalFolder(fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS, 'snapshots');
+            zip.addLocalFile(path.join(fromPath | PATH.STORAGE, 'AddressesTxsRefsStorage_config.json'));
 
             const buffer = zip.toBuffer();
             const hash = crypto.createHash('sha256').update(buffer).digest('hex');

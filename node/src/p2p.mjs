@@ -248,45 +248,31 @@ class P2PNetwork extends EventEmitter {
         let totalBootstraps = iAmBootstrap ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length;
         this.miniLogger.log(`Connected to ${connectedBootstraps}/${totalBootstraps} bootstrap nodes`, (m) => { console.info(m); });
     }
-    // DEPRECATED STREAM WRITING
     static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
-        async function* generateChunks(serializedMessage, maxChunkSize) {
+        // limit the speed of sending chunks, at 64 KB/chunk, 1 GB would take:
+        // 1 GB / 64 KB = 16384 chunks => 16384 * 2 ms = 32.768 more seconds
+        async function* generateChunks(serializedMessage, maxChunkSize, delay = 2) {
             const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
             for (let i = 0; i < totalChunks; i++) {
                 const start = i * maxChunkSize;
-                const end = start + maxChunkSize;
-                const chunk = serializedMessage.slice(start, end);
-                yield chunk;
-                // limit the speed of sending chunks, at 64 KB/chunk, 1 GB would take:
-                // 1 GB / 64 KB = 16384 chunks => 16384 * 2 ms = 32.768 more seconds
-                await new Promise(resolve => setTimeout(resolve, 2));
+                yield serializedMessage.slice(start, start + maxChunkSize); // send chunk
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
 
-        try {
-            const chunkGenerator = generateChunks(serializedMessage, maxChunkSize);
-            await stream.sink(chunkGenerator);
-            //await stream.closeWrite();
+        try { await stream.sink( generateChunks(serializedMessage, maxChunkSize) );
         } catch (error) { console.error(error); return false; }
-        return true;
-    }
-    /** @param {Stream} stream @param {Uint8Array} serializedMessage */
-    static async streamWriteSimple(stream, serializedMessage) { // Deprecated
-        if (serializedMessage.length === 0) { return false; }
-        await stream.sink([serializedMessage]);
         return true;
     }
     /** @param {Stream} stream */
     static async streamRead(stream) {
         const dataChunks = [];
         for await (const chunk of stream.source) { dataChunks.push(chunk.subarray()); }
-        //await stream.closeRead();
 
-        const dataBuffer = Buffer.concat(dataChunks);
-        const data = new Uint8Array(dataBuffer);
+        const data = new Uint8Array(Buffer.concat(dataBuffer));
         return { data, nbChunks: dataChunks.length };
     }
-
+    
     // PUBSUB
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {

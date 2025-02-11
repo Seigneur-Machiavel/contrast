@@ -1,9 +1,7 @@
-import path from 'path';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { Storage, PATH } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { HashFunctions } from './conCrypto.mjs';
 import { P2PNetwork, readableId } from './p2p.mjs';
 import ReputationManager from './peers-reputation.mjs';
 
@@ -104,10 +102,6 @@ export class SyncHandler {
                 if (!data) { throw new Error('(#handleIncomingStream) Checkpoint archive not found'); }
             }
 
-            if (msg.bytesStart > 0) {
-                console.log('toto')
-            }
-
             // crop data and add the length of the serialized data at the beginning of the response
             data = msg.bytesStart > 0 ? data.slice(msg.bytesStart) : data;
             const serializedResponse = serializer.serialize.syncResponse(mySyncStatus, data);
@@ -173,7 +167,6 @@ export class SyncHandler {
                 if (dataBytes.acquired === dataBytes.expected) { break; } // all data acquired
                 failures.successive = 0;
             } catch (err) {
-               //this.node.updateState(`${msg.type }
                 if (msg.type === 'getBlocks') { this.node.updateState(`Downloading blocks #${msg.startIndex}-${msg.endIndex}, ${dataBytes.percentage}%...`); }
                 if (msg.type === 'getCheckpoint') { this.node.updateState(`Downloading checkpoint ${msg.checkpointHash.slice(0,10)}, ${dataBytes.percentage}%...`); }
                 this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired (+${dataBytes.lastNbChunks} chunks) ${dataBytes.percentage}%`, (m) => { console.info(m); });
@@ -186,37 +179,8 @@ export class SyncHandler {
             await new Promise((resolve) => setTimeout(resolve, 2000)); // then try again
         }
 
-        if (!msg.type === 'getStatus') { this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired after ${failures.total} failures`, (m) => { console.info(m); }); }
+        if (msg.type !== 'getStatus') { this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired after ${failures.total} failures`, (m) => { console.info(m); }); }
         return syncRes;
-    }
-    /** @param {string} peerIdStr @param {SyncRequest} msg */
-    async #sendSyncRequestOLD(peerIdStr, msg) { // DEPRECATED
-        const peer = this.p2pNet.peers[peerIdStr];
-        if (!peer || !peer.dialable) { return false; }
-
-        try {
-            // Negotiate fully on possibly big messages, prevent backpressure
-            const options = msg.type === 'getStatus' ? {} : { negotiateFully: true };
-            const stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], options);
-            const serialized = serializer.serialize.rawData(msg);
-
-            const sent = await P2PNetwork.streamWrite(stream, serialized);
-            if (!sent) { throw new Error('Failed to write data to stream'); }
-            
-            this.miniLogger.log(`Message written to stream, topic: ${msg.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
-            
-            const peerResponse = await P2PNetwork.streamRead(stream);
-            if (!peerResponse) { throw new Error('Failed to read data from stream'); }
-            
-            const { data, nbChunks } = peerResponse;
-            this.miniLogger.log(`Message read from stream, topic: ${msg.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
-            
-            /** @type {SyncResponse} */
-            const response = serializer.deserialize.rawData(data);
-            return response;
-        } catch (err) {
-            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
-        }
     }
     async syncWithPeers() {
         if (this.syncDisabled) { return 'Already at the consensus height'; }

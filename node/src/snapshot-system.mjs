@@ -214,8 +214,8 @@ export class CheckpointSystem {
 			fs.rmSync(path.join(PATH.CHECKPOINTS, h), { recursive: true, force: true });
 		}
 	}
-	newCheckpoint(height = 1000) {
-		const hash = Storage.archiveCheckpoint(height); // save new checkpoint archive (.zip)
+	newCheckpoint(height = 1000, fromPath) {
+		const hash = Storage.archiveCheckpoint(height, fromPath); // save new checkpoint archive (.zip)
 		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return false; }
 
 		this.lastCheckpointInfo = { height, hash };
@@ -313,9 +313,11 @@ export class CheckpointSystem {
 
 		return true;
 	}
-	deployActiveCheckpoint() {
+	deployActiveCheckpoint(saveZipArchive = true) {
 		if (this.activeCheckpointHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint not set`); }
 		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
+
+		if (saveZipArchive) this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
 		if (fs.existsSync(txsRefsConfigDest)) { fs.rmSync(txsRefsConfigDest, { force: true }); }
