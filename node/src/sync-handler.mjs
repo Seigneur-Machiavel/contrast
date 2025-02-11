@@ -111,8 +111,8 @@ export class SyncHandler {
 
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
-            if (msg.type === 'getCheckpoint') logComplement = `: ${msg.checkpointHash}`;
-            this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (type: ${msg.type}${logComplement}} | ${serializedResponse.length} bytes)`, (m) => { console.info(m); });
+            if (msg.type === 'getCheckpoint') logComplement = `: ${msg.checkpointHash.slice(0,10)}`;
+            this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (${msg.type}${logComplement}} | ${serializedResponse.length} bytes)`, (m) => { console.info(m); });
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
@@ -174,6 +174,7 @@ export class SyncHandler {
             await new Promise((resolve) => setTimeout(resolve, 1000)); // then try again
         }
 
+        if (!msg.type === 'getStatus') { this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired after ${failures.total} failures`, (m) => { console.info(m); }); }
         return syncRes;
     }
     /** @param {string} peerIdStr @param {SyncRequest} msg */
@@ -247,7 +248,6 @@ export class SyncHandler {
             const { peerIdStr, currentHeight, latestBlockHash } = peerStatus;
             if (latestBlockHash !== consensus.blockHash) { continue; } // Skip peers with different hash than consensus
 
-            this.miniLogger.log(`Attempting to sync blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight);
             if (!synchronized) { continue; }
 
