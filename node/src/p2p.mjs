@@ -31,6 +31,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 64 * 1024; // 64 KB (unused)
+    static maxStreamBytes = 1024 * 1024 * 1024; // 1 GB
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
@@ -68,7 +69,7 @@ class P2PNetwork extends EventEmitter {
         logLevel: 'info',
         logging: true,
         listenAddress: '/ip4/0.0.0.0/tcp/27260',
-        dialTimeout: 30000,
+        dialTimeout: 3000,
         reputationOptions: {}, // Options for ReputationManager
     };
     

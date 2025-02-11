@@ -123,12 +123,12 @@ export class SyncHandler {
     }
     /** @param {string} peerIdStr @param {SyncRequest} msg */
     async #sendSyncRequest(peerIdStr, msg, maxSuccessiveFailures = 5) {
-        let peer = this.p2pNet.peers[peerIdStr];
         const syncRes = { currentHeight: 0, latestBlockHash: '', checkpointInfo: null, data: new Uint8Array(0) };
         const failures = { successive: 0, total: 0 };
         const dataBytes = { acquired: 0, expected: 0, percentage: 0, lastNbChunks: 0 };
-
+        
         while (true) { // Wait peer to be dialable at first...
+            let peer = this.p2pNet.peers[peerIdStr];
             let waitingCount = 100;
             while (!peer || !peer.dialable) { // unreachable peer, timeout (100 * 100ms = 10s)
                 peer = this.p2pNet.peers[peerIdStr];
@@ -152,6 +152,10 @@ export class SyncHandler {
                 syncRes.checkpointInfo = syncResponse.checkpointInfo;
 
                 if (!dataBytes.expected) { // initializing the data
+                    if (P2PNetwork.maxStreamBytes > syncResponse.dataLength) {
+                        this.miniLogger.log(`Received data is too big (${syncResponse.dataLength} bytes)`, (m) => { console.error(m); });
+                        return false;
+                    }
                     dataBytes.expected = syncResponse.dataLength;
                     syncRes.data = new Uint8Array(dataBytes.expected);
                 }
@@ -175,7 +179,7 @@ export class SyncHandler {
                 if (failures.successive >= maxSuccessiveFailures) { return false; }
             }
 
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // then try again
+            await new Promise((resolve) => setTimeout(resolve, 2000)); // then try again
         }
 
         if (!msg.type === 'getStatus') { this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired after ${failures.total} failures`, (m) => { console.info(m); }); }
