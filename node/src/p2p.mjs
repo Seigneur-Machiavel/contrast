@@ -272,7 +272,7 @@ class P2PNetwork extends EventEmitter {
         if (serializedMessage.length === 0) { return false; }
 
         await stream.sink([serializedMessage]);
-        await stream.closeWrite();
+        //await stream.closeWrite();
 
         return true;
     }
@@ -280,7 +280,7 @@ class P2PNetwork extends EventEmitter {
     static async streamRead(stream) {
         const dataChunks = [];
         for await (const chunk of stream.source) { dataChunks.push(chunk.subarray()); }
-        await stream.closeRead();
+        //await stream.closeRead();
 
         const dataBuffer = Buffer.concat(dataChunks);
         const data = new Uint8Array(dataBuffer);

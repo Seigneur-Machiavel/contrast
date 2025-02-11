@@ -104,6 +104,10 @@ export class SyncHandler {
                 if (!data) { throw new Error('Checkpoint archive not found'); }
             }
 
+            if (msg.bytesStart > 0) {
+                console.log('toto')
+            }
+
             // crop data and add the length of the serialized data at the beginning of the response
             data = data.slice(msg.bytesStart || 0);
             const serializedResponse = serializer.serialize.syncResponse(mySyncStatus, data);
