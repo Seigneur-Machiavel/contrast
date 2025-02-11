@@ -81,7 +81,7 @@ export class SyncHandler {
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(readResult.data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} [bytesStart: ${msg.bytesStart}] from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Received message (${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''}) [bytesStart: ${msg.bytesStart}] from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             
             /** @type {SyncStatus} */
             const mySyncStatus = {
@@ -109,7 +109,7 @@ export class SyncHandler {
             }
 
             // crop data and add the length of the serialized data at the beginning of the response
-            data = data.slice(msg.bytesStart || 0);
+            data = msg.bytesStart > 0 ? data.slice(msg.bytesStart) : data;
             const serializedResponse = serializer.serialize.syncResponse(mySyncStatus, data);
             await P2PNetwork.streamWrite(stream, serializedResponse);
 
