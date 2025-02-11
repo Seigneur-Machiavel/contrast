@@ -152,7 +152,7 @@ export class SyncHandler {
                 syncRes.checkpointInfo = syncResponse.checkpointInfo;
 
                 if (!dataBytes.expected) { // initializing the data
-                    if (P2PNetwork.maxStreamBytes > syncResponse.dataLength) {
+                    if (syncResponse.dataLength > P2PNetwork.maxStreamBytes) {
                         this.miniLogger.log(`Received data is too big (${syncResponse.dataLength} bytes)`, (m) => { console.error(m); });
                         return false;
                     }
