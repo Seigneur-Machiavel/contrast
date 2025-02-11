@@ -219,9 +219,10 @@ class P2PNetwork extends EventEmitter {
         return false;
     }
     async connectToBootstrapNodes() {
+        const iAmBootstrap = this.options.bootstrapNodes.includes(this.myAddr);
         const promises = [];
         for (const addr of this.options.bootstrapNodes) {
-            if (this.myAddr === addr) { continue; } // Skip if recognize as myself
+            if (this.myAddr === addr) { iAmBootstrap = true; continue; } // Skip if recognize as myself
             if (this.#isBootstrapNodeAlreadyConnected(addr)) { continue; } // Skip if already connected
 
             const ma = multiaddr(addr);
@@ -241,8 +242,10 @@ class P2PNetwork extends EventEmitter {
         }
 
         await Promise.allSettled(promises);
-        const connectedBootstraps = Object.keys(this.connectedBootstrapNodes).length + (this.myAddr ? 1 : 0);
-        this.miniLogger.log(`Connected to ${connectedBootstraps}/${this.options.bootstrapNodes.length} bootstrap nodes`, (m) => { console.info(m); });
+
+        const connectedBootstraps = Object.keys(this.connectedBootstrapNodes).length;
+        let totalBootstraps = iAmBootstrap ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length;
+        this.miniLogger.log(`Connected to ${connectedBootstraps}/${totalBootstraps} bootstrap nodes`, (m) => { console.info(m); });
     }
     // DEPRECATED STREAM WRITING
     /*static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
