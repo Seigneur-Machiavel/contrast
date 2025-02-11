@@ -317,7 +317,10 @@ export class CheckpointSystem {
 		if (this.activeCheckpointHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint not set`); }
 		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
 
-		if (saveZipArchive) this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
+		if (saveZipArchive) {
+			const checkpointSavedf = this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
+			if (!checkpointSavedf) { throw new Error(`(Checkpoint deploy) Checkpoint save failed`); }
+		}
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
 		if (fs.existsSync(txsRefsConfigDest)) { fs.rmSync(txsRefsConfigDest, { force: true }); }
