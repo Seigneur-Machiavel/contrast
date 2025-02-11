@@ -152,7 +152,7 @@ export class SyncHandler {
                     syncRes.data = new Uint8Array(dataBytes.expected);
                 }
                 
-                if (result.data) { // filling the data
+                if (syncResponse.data) { // filling the data
                     syncRes.data.set(syncResponse.data, dataBytes.acquired);
                     dataBytes.acquired += syncResponse.data.length;
                     dataBytes.percentage = (dataBytes.acquired / dataBytes.expected * 100).toFixed(2);
