@@ -269,10 +269,9 @@ class P2PNetwork extends EventEmitter {
         const dataChunks = [];
         for await (const chunk of stream.source) { dataChunks.push(chunk.subarray()); }
 
-        const data = new Uint8Array(Buffer.concat(dataBuffer));
+        const data = new Uint8Array(Buffer.concat(dataChunks));
         return { data, nbChunks: dataChunks.length };
     }
-    
     // PUBSUB
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {
