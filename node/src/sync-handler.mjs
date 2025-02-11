@@ -215,9 +215,12 @@ export class SyncHandler {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
     }
+    toto = 0;
     async syncWithPeers() {
         if (this.syncDisabled) { return 'Already at the consensus height'; }
 
+        this.toto++;
+        console.info(`TOTO: ${this.toto}`);
         const myCurrentHeight = this.node.blockchain.currentHeight;
         this.miniLogger.log(`syncWithPeers started at #${myCurrentHeight}`, (m) => { console.info(m); });
         this.node.blockchainStats.state = "syncing";
