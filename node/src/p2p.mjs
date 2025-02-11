@@ -219,7 +219,7 @@ class P2PNetwork extends EventEmitter {
         return false;
     }
     async connectToBootstrapNodes() {
-        const iAmBootstrap = this.options.bootstrapNodes.includes(this.myAddr);
+        let iAmBootstrap = false;
         const promises = [];
         for (const addr of this.options.bootstrapNodes) {
             if (this.myAddr === addr) { iAmBootstrap = true; continue; } // Skip if recognize as myself
@@ -235,7 +235,7 @@ class P2PNetwork extends EventEmitter {
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                 })
                 .catch(err => {
-                    if (err.message === 'Can not dial self') { this.myAddr = addr; }
+                    if (err.message === 'Can not dial self') { this.myAddr = addr; iAmBootstrap = true; }
                     //this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                 })
             );

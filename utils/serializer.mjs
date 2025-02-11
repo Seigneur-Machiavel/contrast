@@ -444,35 +444,25 @@ export const serializer = {
         },
         /** @param {NodeSetting} nodeSetting */
         nodeSetting(nodeSetting) {
-            const privateKey = fastConverter.hexToUint8Array(nodeSetting.privateKey); // 32 bytes
-            const validatorRewardAddress = fastConverter.addressBase58ToUint8Array(nodeSetting.validatorRewardAddress); // 16 bytes
-            const minerAddress = fastConverter.addressBase58ToUint8Array(nodeSetting.minerAddress); // 16 bytes
-            const minerThreads = fastConverter.numberTo1ByteUint8Array(nodeSetting.minerThreads); // 1 byte
-
             const serializedNodeSetting = new ArrayBuffer(32 + 16 + 16 + 1); // total 65 bytes
             const serializedNodeSettingView = new Uint8Array(serializedNodeSetting);
-            serializedNodeSettingView.set(privateKey, 0);
-            serializedNodeSettingView.set(validatorRewardAddress, 32);
-            serializedNodeSettingView.set(minerAddress, 48);
-            serializedNodeSettingView.set(minerThreads, 64);
+            serializedNodeSettingView.set(fastConverter.hexToUint8Array(nodeSetting.privateKey), 0); // 32 bytes
+            serializedNodeSettingView.set(fastConverter.addressBase58ToUint8Array(nodeSetting.validatorRewardAddress), 32); // 16 bytes
+            serializedNodeSettingView.set(fastConverter.addressBase58ToUint8Array(nodeSetting.minerAddress), 48); // 16 bytes
+            serializedNodeSettingView.set(fastConverter.numberTo1ByteUint8Array(nodeSetting.minerThreads), 64); // 1 byte
             return serializedNodeSettingView;
         },
         /** @param {SyncStatus} syncStatus @param {Uint8Array} data */
         syncResponse(syncStatus, data) {
-            const dataLength = fastConverter.numberTo4BytesUint8Array(data.length); // 4 bytes
-            const currentHeight = fastConverter.numberTo4BytesUint8Array(syncStatus.currentHeight); // 4 bytes
-            const checkpointHeight = fastConverter.numberTo4BytesUint8Array(syncStatus.checkpointInfo.height); // 4 bytes
-            const latestBlockHash = fastConverter.hexToUint8Array(syncStatus.latestBlockHash); // 32 bytes
-            const checkpointHash = fastConverter.hexToUint8Array(syncStatus.checkpointInfo.hash); // 32 bytes
-
             const serializedSyncStatus = new ArrayBuffer(4 + 4 + 4 + 32 + 32 + data.length); // total 76 + data.length bytes
             const serializedSyncStatusView = new Uint8Array(serializedSyncStatus);
-            serializedSyncStatusView.set(dataLength, 0);
-            serializedSyncStatusView.set(currentHeight, 4);
-            serializedSyncStatusView.set(checkpointHeight, 8);
-            serializedSyncStatusView.set(latestBlockHash, 12);
-            serializedSyncStatusView.set(checkpointHash, 44);
+            serializedSyncStatusView.set(fastConverter.numberTo4BytesUint8Array(data.length), 0);
+            serializedSyncStatusView.set(fastConverter.numberTo4BytesUint8Array(syncStatus.currentHeight), 4);
+            serializedSyncStatusView.set(fastConverter.numberTo4BytesUint8Array(syncStatus.checkpointInfo.height), 8);
+            serializedSyncStatusView.set(fastConverter.hexToUint8Array(syncStatus.latestBlockHash), 12);
+            serializedSyncStatusView.set(fastConverter.hexToUint8Array(syncStatus.checkpointInfo.hash), 44);
             if (data.length > 0) serializedSyncStatusView.set(data, 76);
+
             return serializedSyncStatusView;
         }
     },
@@ -488,8 +478,6 @@ export const serializer = {
             const data = dataLength > 0 ? serializedSyncResponse.slice(76) : new Uint8Array(0);
             return { dataLength, currentHeight, latestBlockHash, checkpointInfo: { height: checkpointHeight, hash: checkpointHash }, data };
         },
-
-
         rawData(encodedData) {
             return msgpack.decode(encodedData);
         },
