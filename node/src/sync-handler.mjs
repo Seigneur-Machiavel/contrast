@@ -123,10 +123,11 @@ export class SyncHandler {
     }
     /** @param {string} peerIdStr @param {SyncRequest} msg */
     async #sendSyncRequest(peerIdStr, msg, maxSuccessiveFailures = 5) {
+        /** @type {Stream} */
+        let stream;
         const syncRes = { currentHeight: 0, latestBlockHash: '', checkpointInfo: null, data: new Uint8Array(0) };
         const failures = { successive: 0, total: 0 };
         const dataBytes = { acquired: 0, expected: 0, percentage: 0, lastNbChunks: 0 };
-        
         while (true) { // Wait peer to be dialable at first...
             let peer = this.p2pNet.peers[peerIdStr];
             let waitingCount = 100;
@@ -138,7 +139,7 @@ export class SyncHandler {
             
             try { // try to get the remaining data
                 msg.bytesStart = dataBytes.acquired;
-                const stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], { negotiateFully: true });
+                stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], { negotiateFully: true });
                 await P2PNetwork.streamWrite(stream, serializer.serialize.rawData(msg));
 
                 const readResult = await P2PNetwork.streamRead(stream);
@@ -179,6 +180,7 @@ export class SyncHandler {
                 if (failures.successive >= maxSuccessiveFailures) { return false; }
             }
 
+            if (stream) { await stream.close(); }
             await new Promise((resolve) => setTimeout(resolve, 2000)); // then try again
         }
 
