@@ -27,34 +27,10 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {PeerId} id
  * @property {boolean} dialable
  * @property {number} lastSeen
- * 
- * @typedef {Object} KnownPubKeysAddressesSnapInfo
- * @property {number} height
- * @property {string} hash
- * 
- * @typedef {Object} CheckpointInfo
- * @property {number} height
- * @property {string} hash
- * 
- * @typedef {Object} SyncRequest
- * @property {string} type - 'getStatus' | 'getBlocks' | 'getPubKeysAddresses'
- * @property {string?} pubKeysHash - Only for 'getPubKeysAddresses' -> hash of the known pubKeysAddresses
- * @property {string?} checkpointHash - Only for 'getCheckpoint' -> hash of the checkpoint zip archive
- * @property {number?} startIndex
- * @property {number?} endIndex
- * 
- * @typedef {Object} SyncResponse
- * @property {number} currentHeight
- * @property {string} latestBlockHash
- * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
- * @property {CheckpointInfo?} checkpointInfo
- * @property {Uint8Array[]?} blocks
- * @property {Uint8Array?} knownPubKeysAddresses
- * @property {Uint8Array?} checkpointArchive
  */
 
 class P2PNetwork extends EventEmitter {
-    static maxChunkSize = 64 * 1024; // 64KB
+    static maxChunkSize = 64 * 1024; // 64 KB (unused)
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
@@ -66,8 +42,6 @@ class P2PNetwork extends EventEmitter {
     p2pNode;
     /** @type {Object<string, Peer>} */
     peers = {};
-    /** @type {Object<string, Stream>} */
-    openStreams = {};
     subscriptions = new Set();
     miniLogger = new MiniLogger('P2PNetwork');
     topicsTreatment = {
@@ -146,8 +120,6 @@ class P2PNetwork extends EventEmitter {
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
         this.miniLogger.log(`--------> Peer ${readableId(peerIdStr)} disconnected`, (m) => { console.debug(m); });
-        if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status === 'open') { await this.openStreams[peerIdStr].close(); }
-        if (this.openStreams[peerIdStr]) { delete this.openStreams[peerIdStr]; }
         if (this.peers[peerIdStr]) { delete this.peers[peerIdStr]; }
         if (this.connectedBootstrapNodes[peerIdStr]) { delete this.connectedBootstrapNodes[peerIdStr]; }
     };
@@ -272,54 +244,7 @@ class P2PNetwork extends EventEmitter {
         const connectedBootstraps = Object.keys(this.connectedBootstrapNodes).length + (this.myAddr ? 1 : 0);
         this.miniLogger.log(`Connected to ${connectedBootstraps}/${this.options.bootstrapNodes.length} bootstrap nodes`, (m) => { console.info(m); });
     }
-    /** @param {string} topic */
-    async broadcast(topic, message) {
-        //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
-        if (Object.keys(this.peers).length === 0) { return; }
-        
-        const serializationFnc = this.topicsTreatment[topic].serialize || serializer.serialize.rawData;
-        try {
-            const serialized = serializationFnc(message);
-            await this.p2pNode.services.pubsub.publish(topic, serialized);
-        } catch (error) {
-            if (error.message === "PublishError.NoPeersSubscribedToTopic") { return error; }
-            this.miniLogger.log(`Broadcast error on topic **${topic}**`, (m) => { console.error(m); });
-            this.miniLogger.log(error, (m) => { console.error(m); });
-        }
-    }
-    /** @param {string} peerIdStr @param {SyncRequest} message */
-    async sendSyncRequest(peerIdStr, message) {
-        const peer = this.peers[peerIdStr];
-        if (!peer || !peer.dialable) { return false; }
-
-        try {
-            //if (this.openStreams[peerIdStr] && this.openStreams[peerIdStr].status !== 'open') { delete this.openStreams[peerIdStr]; }
-            //this.openStreams[peerIdStr] = this.openStreams[peerIdStr] || await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL]);
-            
-            //const stream = this.openStreams[peerIdStr];
-            // Negotiate fully on possibly big messages, prevent backpressure
-            const options = message.type === 'getStatus' ? {} : { negotiateFully: true };
-            const stream = await this.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], options);
-            const serialized = serializer.serialize.rawData(message);
-
-            await P2PNetwork.streamWrite(stream, serialized);
-            this.miniLogger.log(`Message written to stream, topic: ${message.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
-            
-            const peerResponse = await P2PNetwork.streamRead(stream);
-            if (!peerResponse) { throw new Error('Failed to read data from stream'); }
-
-            //await stream.close();
-            
-            const { data, nbChunks } = peerResponse;
-            this.miniLogger.log(`Message read from stream, topic: ${message.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
-            /** @type {SyncResponse} */
-            const response = serializer.deserialize.rawData(data);
-            return response;
-        } catch (err) {
-            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
-        }
-    }
-    
+    // DEPRECATED STREAM WRITING
     /*static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
         async function* generateChunks(serializedMessage, maxChunkSize) {
             const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
@@ -351,22 +276,15 @@ class P2PNetwork extends EventEmitter {
     /** @param {Stream} stream */
     static async streamRead(stream) {
         const dataChunks = [];
-        let expectedLength = 0;
-        for await (const chunk of stream.source) {
-            expectedLength += chunk.byteLength;
-            dataChunks.push(chunk.subarray());
-        }
-
+        for await (const chunk of stream.source) { dataChunks.push(chunk.subarray()); }
         await stream.closeRead();
 
         const dataBuffer = Buffer.concat(dataChunks);
         const data = new Uint8Array(dataBuffer);
-        if (data.byteLength === 0) { return false; }
-        if (data.byteLength === expectedLength) { return { data, nbChunks: dataChunks.length }; }
-        
-        this.miniLogger.log(`Data length mismatch, expected: ${expectedLength}, received: ${data.byteLength}`, (m) => { console.error(m); });
-        return false;
+        return { data, nbChunks: dataChunks.length };
     }
+
+    // PUBSUB
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {
         if (this.subscriptions.has(topic)) { return; }
@@ -384,6 +302,21 @@ class P2PNetwork extends EventEmitter {
         this.p2pNode.services.pubsub.topics.delete(topic);
         this.subscriptions.delete(topic);
         this.miniLogger.log(`Unsubscribed from topic ${topic}`, (m) => { console.debug(m); });
+    }
+    /** @param {string} topic */
+    async broadcast(topic, message) {
+        //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
+        if (Object.keys(this.peers).length === 0) { return; }
+        
+        const serializationFnc = this.topicsTreatment[topic].serialize || serializer.serialize.rawData;
+        try {
+            const serialized = serializationFnc(message);
+            await this.p2pNode.services.pubsub.publish(topic, serialized);
+        } catch (error) {
+            if (error.message === "PublishError.NoPeersSubscribedToTopic") { return error; }
+            this.miniLogger.log(`Broadcast error on topic **${topic}**`, (m) => { console.error(m); });
+            this.miniLogger.log(error, (m) => { console.error(m); });
+        }
     }
     /** @param {string} peerIdStr @param {Object} data @param {string} [reason] */
     #updatePeer(peerIdStr, data, reason) {

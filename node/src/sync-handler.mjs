@@ -12,47 +12,39 @@ import ReputationManager from './peers-reputation.mjs';
  * @typedef {import("@libp2p/interface").PeerId} PeerId
  * @typedef {import("@libp2p/interface").Stream} Stream
  * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
- *
- * @typedef {Object} KnownPubKeysAddressesSnapInfo
- * @property {number} height
- * @property {string} hash
+ * 
+ * @typedef {Object} SyncRequest
+ * @property {string} type - 'getStatus' | 'getBlocks' | 'getCheckpoint'
+ * @property {number?} startIndex - Only for 'getBlocks'
+ * @property {number?} endIndex - Only for 'getBlocks'
+ * @property {string?} checkpointHash - Only for 'getCheckpoint' -> hash of the checkpoint zip archive
+ * @property {number?} bytesStart - start byte of the serialized data to continue uploading
  * 
  * @typedef {Object} CheckpointInfo
  * @property {number} height
  * @property {string} hash
  * 
- * @typedef {Object} SyncRequest
- * @property {string} type - 'getStatus' | 'getBlocks' | 'getPubKeysAddresses' | 'getCheckpoint'
- * @property {string?} pubKeysHash - Only for 'getPubKeysAddresses' -> hash of the knownPubKeysAddresses
- * @property {string?} checkpointHash - Only for 'getCheckpoint' -> hash of the checkpoint zip archive
- * @property {number?} startIndex
- * @property {number?} endIndex
- * 
- * @typedef {Object} SyncResponse
+ * @typedef {Object} SyncStatus
  * @property {number} currentHeight
  * @property {string} latestBlockHash
- * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
- * @property {CheckpointInfo?} checkpointInfo
- * @property {Uint8Array[]?} blocks
- * @property {Uint8Array?} knownPubKeysAddresses
- * @property {Uint8Array?} checkpointArchive
+ * @property {CheckpointInfo} checkpointInfo
  * 
  * @typedef {Object} PeerStatus
  * @property {string} peerIdStr
  * @property {number} currentHeight
  * @property {string} latestBlockHash
- * @property {KnownPubKeysAddressesSnapInfo | null} knownPubKeysInfo
  * @property {CheckpointInfo | null} checkpointInfo
  * 
  * @typedef {Object} Consensus
  * @property {number} height
  * @property {number} peers
  * @property {string} blockHash
- * @property {KnownPubKeysAddressesSnapInfo} knownPubKeysInfo
  * @property {CheckpointInfo | false} checkpointInfo
  */
 
 export class SyncHandler {
+    /** @type {P2PNetwork} */
+    p2pNet;
     fastConverter = new FastConverter();
     isSyncing = false;
     syncDisabled = false;
@@ -66,8 +58,9 @@ export class SyncHandler {
 
     /** @param {Node} node */
     constructor(node) {
+        node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
         this.node = node;
-        this.node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
+        this.p2pNet = node.p2pNetwork;
         this.miniLogger.log('SyncHandler setup', (m) => { console.info(m); });
     }
 
@@ -78,53 +71,134 @@ export class SyncHandler {
         if (!stream) { return; }
         
         const peerIdStr = lstream.connection.remotePeer.toString();
+        this.p2pNet.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         //this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-        this.node.p2pNetwork.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         
         try {
-            const peerRequest = await P2PNetwork.streamRead(stream);
-            if (!peerRequest) { throw new Error('Failed to read data from stream'); }
-            
-            const { data, nbChunks } = peerRequest;
+            const readResult = await P2PNetwork.streamRead(stream, this.fastConverter);
+            if (!readResult) { throw new Error('Failed to read data from stream'); }
 
             /** @type {SyncRequest} */
-            const msg = serializer.deserialize.rawData(data);
+            const msg = serializer.deserialize.rawData(readResult.data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${data.length} bytes, ${nbChunks} chunks) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${result.data.length} bytes, ${result.nbChunks} chunks) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             
-            /** @type {SyncResponse} */
-            const response = {
+            /** @type {SyncStatus} */
+            const mySyncStatus = {
                 currentHeight: this.node.blockchain.currentHeight,
-                /** @type {string} */
                 latestBlockHash: this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : "0000000000000000000000000000000000000000000000000000000000000000",
-                // knownPubKeysInfo: this.node.snapshotSystem.knownPubKeysAddressesSnapInfo, //? DISABLED -> use checkpoints
-                knownPubKeysInfo: { height: 0, hash: '' },
                 checkpointInfo: this.node.checkpointSystem.myLastCheckpointInfo()
-            };
-
-            if (msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number') {
-                response.blocks = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false);
             }
+
+            let data = new Uint8Array(0);
+            if (msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number') {
+                /** @type {Uint8Array[]} */
+                const serializedBlocksArray = this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false);
+                if (!serializedBlocksArray) { throw new Error('Failed to get serialized blocks'); }
             
-            if (msg.type === 'getPubKeysAddresses' && typeof msg.pubKeysHash === 'string' && msg.pubKeysHash === this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.hash) {
-                const snapPath = path.join(PATH.SNAPSHOTS, String(this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.height));
-                const trashPath = path.join(PATH.TRASH, String(this.node.snapshotSystem.knownPubKeysAddressesSnapInfo.height));
-                response.knownPubKeysAddresses = Storage.loadBinary('memPool', snapPath) || Storage.loadBinary('memPool', trashPath);
+                data = serializer.serialize.rawData(serializedBlocksArray);
             }
 
             if (msg.type === 'getCheckpoint' && typeof msg.checkpointHash === 'string') {
-                response.checkpointArchive = this.node.checkpointSystem.readCheckpointZipArchive(msg.checkpointHash);
-                if (!response.checkpointArchive) { throw new Error('Checkpoint archive not found'); }
+                data = this.node.checkpointSystem.readCheckpointZipArchive(msg.checkpointHash);
+                if (!data) { throw new Error('Checkpoint archive not found'); }
             }
 
-            const serialized = serializer.serialize.rawData(response);
-            await P2PNetwork.streamWrite(stream, serialized);
-            //await stream.close();
+            // crop data and add the length of the serialized data at the beginning of the response
+            data = data.slice(msg.bytesStart || 0);
+            const serializedResponse = serializer.serialize.syncResponse(mySyncStatus, data);
+            await P2PNetwork.streamWrite(stream, serializedResponse);
 
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
-            if (msg.type === 'getPubKeysAddresses') logComplement = `: ${msg.pubKeysHash}`;
-            this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (type: ${msg.type}${logComplement}} | ${serialized.length} bytes)`, (m) => { console.info(m); });
+            if (msg.type === 'getCheckpoint') logComplement = `: ${msg.checkpointHash}`;
+            this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (type: ${msg.type}${logComplement}} | ${serializedResponse.length} bytes)`, (m) => { console.info(m); });
+        } catch (err) {
+            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+        }
+    }
+    /** @param {string} peerIdStr @param {SyncRequest} msg */
+    async #sendSyncRequest(peerIdStr, msg, maxSuccessiveFailures = 5) {
+        let peer = this.p2pNet.peers[peerIdStr];
+        const syncRes = { currentHeight: 0, latestBlockHash: '', checkpointInfo: null, data: new Uint8Array(0) };
+        const failures = { successive: 0, total: 0 };
+        const dataBytes = { acquired: 0, expected: 0, percentage: 0 };
+
+        while (true) { // Wait peer to be dialable at first...
+            let waitingCount = 100;
+            while (!peer || !peer.dialable) { // unreachable peer, timeout (100 * 100ms = 10s)
+                peer = this.p2pNet.peers[peerIdStr];
+                if (waitingCount <= 0) { return false; } else { waitingCount-- }
+                await new Promise((resolve) => setTimeout(resolve, 100));
+            }
+            
+            try { // try to get the remaining data
+                msg.bytesStart = dataBytes.acquired;
+                const stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], { negotiateFully: true });
+                await P2PNetwork.streamWrite(stream, serializer.serialize.rawData(msg));
+
+                const readResult = await P2PNetwork.streamRead(stream);
+                if (!readResult) { throw new Error('Failed to read data from stream'); }
+                if (!readResult.data.byteLength < serializer.syncResponseMinLen) throw new Error('Invalid response format');
+                
+                const syncResponse = serializer.deserialize.syncResponse(readResult.data);
+                syncRes.currentHeight = syncResponse.currentHeight;
+                syncRes.latestBlockHash = syncResponse.latestBlockHash;
+                syncRes.checkpointInfo = syncResponse.checkpointInfo;
+
+                if (!dataBytes.expected) { // initializing the data
+                    dataBytes.expected = syncResponse.dataLength;
+                    syncRes.data = new Uint8Array(dataBytes.expected);
+                }
+                
+                if (result.data) { // filling the data
+                    syncRes.data.set(syncResponse.data, dataBytes.acquired);
+                    dataBytes.acquired += syncResponse.data.length;
+                    dataBytes.percentage = (dataBytes.acquired / dataBytes.expected * 100).toFixed(2);
+                }
+
+                if (dataBytes.acquired > dataBytes.expected) throw new Error('Received more data than expected');
+                if (dataBytes.acquired === dataBytes.expected) { break; } // all data acquired
+                failures.successive = 0;
+            } catch (err) {
+               //this.node.updateState(`${msg.type }
+                if (msg.type === 'getBlocks') { this.node.updateState(`Downloading blocks #${msg.startIndex}-${msg.endIndex}, ${dataBytes.percentage}%...`); }
+                if (msg.type === 'getCheckpoint') { this.node.updateState(`Downloading checkpoint ${msg.checkpointHash.slice(0,10)}, ${dataBytes.percentage}%...`); }
+                this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected}Bytes acquired (+${nbChunks} chunks - ${dataBytes.percentage}%`, (m) => { console.info(m); });
+                if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+                failures.successive++; failures.total++;
+                if (failures.successive >= maxSuccessiveFailures) { return false; }
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // then try again
+        }
+
+        return syncRes;
+    }
+    /** @param {string} peerIdStr @param {SyncRequest} msg */
+    async #sendSyncRequestOLD(peerIdStr, msg) { // DEPRECATED
+        const peer = this.p2pNet.peers[peerIdStr];
+        if (!peer || !peer.dialable) { return false; }
+
+        try {
+            // Negotiate fully on possibly big messages, prevent backpressure
+            const options = msg.type === 'getStatus' ? {} : { negotiateFully: true };
+            const stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], options);
+            const serialized = serializer.serialize.rawData(msg);
+
+            await P2PNetwork.streamWrite(stream, serialized);
+            
+            this.miniLogger.log(`Message written to stream, topic: ${msg.type} (${serialized.length} bytes)`, (m) => { console.info(m); });
+            
+            const peerResponse = await P2PNetwork.streamRead(stream);
+            if (!peerResponse) { throw new Error('Failed to read data from stream'); }
+            
+            const { data, nbChunks } = peerResponse;
+            this.miniLogger.log(`Message read from stream, topic: ${msg.type} (${data.length} bytes, ${nbChunks} chunks)`, (m) => { console.info(m); });
+            
+            /** @type {SyncResponse} */
+            const response = serializer.deserialize.rawData(data);
+            return response;
         } catch (err) {
             if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
         }
@@ -166,26 +240,6 @@ export class SyncHandler {
             }
         }
 
-        // try to sync the pubKeysAddresses if possible (DEPRECATED -> use checkpoints)
-        /*let syncPubKeysAddresses = true; //? DISABLED -> use checkpoints
-        const myKnownPubKeysInfo = this.node.snapshotSystem.knownPubKeysAddressesSnapInfo;
-        if (myKnownPubKeysInfo.height > consensus.knownPubKeysInfo.height) { syncPubKeysAddresses = false; }
-        if (myKnownPubKeysInfo.hash === consensus.knownPubKeysInfo.hash) { syncPubKeysAddresses = false; }
-        if (!activeCheckpoint && syncPubKeysAddresses) {
-            for (const peerStatus of peersStatus) {
-                const { peerIdStr, knownPubKeysInfo } = peerStatus;
-                if (knownPubKeysInfo.height !== consensus.knownPubKeysInfo.height) { continue; }
-                if (knownPubKeysInfo.hash !== consensus.knownPubKeysInfo.hash) { continue; }                
-                
-                this.miniLogger.log(`Attempting to sync PubKeysAddresses with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-                const synchronized = await this.#getPubKeysAddresses(peerIdStr, knownPubKeysInfo.hash);
-                if (!synchronized) { continue; }
-
-                this.miniLogger.log(`Successfully synced PubKeysAddresses with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-                return 'PubKeysAddresses downloaded';
-            }
-        }*/
-
         // sync the blocks
         this.miniLogger.log(`consensusHeight #${consensus.height}, current #${myCurrentHeight} -> getblocks from ${peersStatus.length} peers`, (m) => { console.info(m); });
         for (const peerStatus of peersStatus) {
@@ -205,10 +259,14 @@ export class SyncHandler {
         return await this.#handleSyncFailure('Unable to sync with any peer');
     }
     async #getAllPeersStatus() {
-        const peersToSync = Object.keys(this.node.p2pNetwork.peers);
-        const message = { type: 'getStatus' };
+        const peersToSync = Object.keys(this.p2pNet.peers);
+        const msg = { type: 'getStatus' };
         const promises = [];
-        for (const peerIdStr of peersToSync) { promises.push(this.node.p2pNetwork.sendSyncRequest(peerIdStr, message)); }
+        for (const peerIdStr of peersToSync) {
+            const peer = this.p2pNet.peers[peerIdStr];
+            if (!peer || !peer.dialable) { return false; } // only try to sync status with dialable peers
+            promises.push(this.#sendSyncRequest(peerIdStr, msg, 1));
+        }
 
         /** @type {PeerStatus[]} */
         const peersStatus = [];
@@ -216,8 +274,8 @@ export class SyncHandler {
             const response = await promises.shift();
             if (!response || typeof response.currentHeight !== 'number') { continue; }
 
-            const { currentHeight, latestBlockHash, knownPubKeysInfo, checkpointInfo } = response;
-            peersStatus.push({ peerIdStr, currentHeight, latestBlockHash, knownPubKeysInfo, checkpointInfo });
+            const { currentHeight, latestBlockHash, checkpointInfo } = response;
+            peersStatus.push({ peerIdStr, currentHeight, latestBlockHash, checkpointInfo });
             this.peersHeights[peerIdStr] = currentHeight;
         }
 
@@ -245,23 +303,6 @@ export class SyncHandler {
             consensus.blockHash = blockHash;
         }
 
-        const pubKeysConsensus = { peers: 0, knownPubKeysAddressesSnapInfo: { height: 0, hash: '' } };
-        const pubKeysConsensuses = {};
-        for (const peerStatus of peersStatus) {
-            if (!peerStatus.knownPubKeysInfo) { continue; }
-            const { height, hash } = peerStatus.knownPubKeysInfo;
-
-            if (!pubKeysConsensuses[height]) { pubKeysConsensuses[height] = {}; }
-            const pubKeysPeers = (pubKeysConsensuses[height][hash] || 0) + 1;
-            pubKeysConsensuses[height][hash] = pubKeysPeers;
-
-            if (pubKeysPeers <= pubKeysConsensus.peers) { continue; }
-
-            pubKeysConsensus.peers = pubKeysPeers;
-            pubKeysConsensus.knownPubKeysAddressesSnapInfo = peerStatus.knownPubKeysInfo;
-        }
-        consensus.knownPubKeysInfo = pubKeysConsensus.knownPubKeysAddressesSnapInfo;
-
         const checkpointConsensus = { peers: 0, checkpointInfo: { height: 0, hash: '' } };
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
@@ -286,41 +327,16 @@ export class SyncHandler {
     /** @param {string} peerIdStr @param {string} checkpointHash */
     async #getCheckpoint(peerIdStr, checkpointHash) {
         const message = { type: 'getCheckpoint', checkpointHash };
-        const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
-        if (!response || !response.checkpointArchive) {
+        const response = await this.#sendSyncRequest(peerIdStr, message);
+        if (!response || response.data.byteLength === 0) {
             this.miniLogger.log(`Failed to get/read checkpoint archive`, (m) => { console.error(m); });
             return false;
         }
 
-        Storage.unarchiveCheckpointBuffer(response.checkpointArchive, checkpointHash);
+        Storage.unarchiveCheckpointBuffer(response.data, checkpointHash);
         const checkpointDetected = this.node.checkpointSystem.checkForActiveCheckpoint();
         if (!checkpointDetected) {
             this.miniLogger.log(`Failed to process checkpoint archive`, (m) => { console.error(m); });
-            return false;
-        }
-
-        return true;
-    }
-    /** @param {string} peerIdStr @param {string} pubKeysHash */
-    async #getPubKeysAddresses(peerIdStr, pubKeysHash) { //? DEPRECATED -> use checkpoints
-        const message = { type: 'getPubKeysAddresses', pubKeysHash };
-        const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
-
-        try {
-            if (!response || !response.knownPubKeysInfo) { throw new Error('knownPubKeysInfo is not defined'); }
-            if (typeof response.knownPubKeysInfo.height !== 'number') { throw new Error('knownPubKeysInfo.height is not a number'); }
-            if (typeof response.knownPubKeysInfo.hash !== 'string') { throw new Error('knownPubKeysInfo.hash is not a string'); }
-            if (!response.knownPubKeysAddresses) { throw new Error('knownPubKeysAddresses is missing'); }
-            
-            const hash = HashFunctions.xxHash32(response.knownPubKeysAddresses);
-            if (pubKeysHash !== hash) { throw new Error('knownPubKeysAddresses hash mismatch'); }
-
-            const knownPubKeysAddresses = serializer.deserialize.pubkeyAddressesObj(response.knownPubKeysAddresses);
-            this.node.snapshotSystem.knownPubKeysAddressesSnapInfo = { height: response.knownPubKeysInfo.height, hash };
-            this.node.memPool.knownPubKeysAddresses = knownPubKeysAddresses;
-        } catch (error) {
-            this.miniLogger.log(`Failed to process knownPubKeysAddresses`, (m) => { console.error(m); });
-            this.miniLogger.log(error, (m) => { console.error(m); });
             return false;
         }
 
@@ -337,24 +353,25 @@ export class SyncHandler {
 
         let peerHeight = peerCurrentHeight;
         let desiredBlock = (checkpointMode ? activeCheckpointHeight : this.node.blockchain.currentHeight) + 1;
-        while (desiredBlock <= peerHeight) {
-            let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
-            if (checkpointMode) { endIndex = Math.min(endIndex, activeCheckpointTargetHeight); }
-
-            this.node.updateState(`Downloading blocks #${desiredBlock} to #${endIndex}...`);
-            const message = { type: 'getBlocks', startIndex: desiredBlock, endIndex };
-            const response = await this.node.p2pNetwork.sendSyncRequest(peerIdStr, message);
-            if (!response || typeof response.currentHeight !== 'number' || !Array.isArray(response.blocks)) {
-                this.miniLogger.log(`'getBlocks ${desiredBlock}-${endIndex}' request failed`, (m) => { console.error(m); });
-                break;
-            }
-
-            const serializedBlocks = response.blocks;
-            if (!serializedBlocks) { this.miniLogger.log(`Failed to get serialized blocks`, (m) => { console.error(m); }); break; }
-            if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks received`, (m) => { console.error(m); }); break; }
-            
-            for (const serializedBlock of serializedBlocks) {
-                try {
+        try {
+            while (desiredBlock <= peerHeight) {
+                let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
+                if (checkpointMode) { endIndex = Math.min(endIndex, activeCheckpointTargetHeight); }
+    
+                this.node.updateState(`Downloading blocks #${desiredBlock} to #${endIndex}...`);
+                const message = { type: 'getBlocks', startIndex: desiredBlock, endIndex };
+                const syncRes = await this.#sendSyncRequest(peerIdStr, message);
+                if (!syncRes || syncRes.data.byteLength === 0) {
+                    this.miniLogger.log(`'getBlocks ${desiredBlock}-${endIndex}' request failed`, (m) => { console.error(m); });
+                    break;
+                }
+    
+                const serializedBlocks = serializer.deserialize.rawData(syncRes.data);
+                if (!serializedBlocks) { this.miniLogger.log(`Failed to get serialized blocks`, (m) => { console.error(m); }); break; }
+                if (!Array.isArray(serializedBlocks)) { this.miniLogger.log(`Invalid serialized blocks format`, (m) => { console.error(m); }); break; }
+                if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks received`, (m) => { console.error(m); }); break; }
+                
+                for (const serializedBlock of serializedBlocks) {
                     const byteLength = serializedBlock.byteLength;
                     const block = serializer.deserialize.block_finalized(serializedBlock);
                     if (checkpointMode) {
@@ -372,14 +389,13 @@ export class SyncHandler {
                     }
 
                     desiredBlock++;
-                } catch (blockError) {
-                    this.miniLogger.log(`Sync Error while processing block #${desiredBlock}`, (m) => { console.error(m); });
-                    this.miniLogger.log(blockError.message, (m) => { console.error(m); });
-                    return false;
                 }
+    
+                peerHeight = syncRes.currentHeight;
             }
-
-            peerHeight = response.currentHeight;
+        } catch (error) {
+            this.miniLogger.log(`#getMissingBlocks() error occurred`, (m) => { console.error(m); });
+            this.miniLogger.log(error, (m) => { console.error(m); });
         }
 
         return peerHeight === this.node.blockchain.currentHeight;

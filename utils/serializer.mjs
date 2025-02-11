@@ -15,6 +15,15 @@ import { Transaction } from '../node/src/transaction.mjs';
  * @property { string } validatorRewardAddress
  * @property { string } minerAddress
  * @property { number } minerThreads
+ * 
+ * @typedef {Object} CheckpointInfo
+ * @property {number} height
+ * @property {string} hash
+ * 
+ * @typedef {Object} SyncStatus
+ * @property {number} currentHeight
+ * @property {string} latestBlockHash
+ * @property {CheckpointInfo} checkpointInfo
  */
 
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
@@ -35,6 +44,7 @@ const fastConverter = new FastConverter();
  * - Make sure to validate the data before using these functions.
  */
 export const serializer = {
+    syncResponseMinLen: 76,
     serialize: {
         rawData(rawData) {
             /** @type {Uint8Array} */
@@ -446,9 +456,40 @@ export const serializer = {
             serializedNodeSettingView.set(minerAddress, 48);
             serializedNodeSettingView.set(minerThreads, 64);
             return serializedNodeSettingView;
+        },
+        /** @param {SyncStatus} syncStatus @param {Uint8Array} data */
+        syncResponse(syncStatus, data) {
+            const dataLength = fastConverter.numberTo4BytesUint8Array(data.length); // 4 bytes
+            const currentHeight = fastConverter.numberTo4BytesUint8Array(syncStatus.currentHeight); // 4 bytes
+            const checkpointHeight = fastConverter.numberTo4BytesUint8Array(syncStatus.checkpointInfo.height); // 4 bytes
+            const latestBlockHash = fastConverter.hexToUint8Array(syncStatus.latestBlockHash); // 32 bytes
+            const checkpointHash = fastConverter.hexToUint8Array(syncStatus.checkpointInfo.hash); // 32 bytes
+
+            const serializedSyncStatus = new ArrayBuffer(4 + 4 + 4 + 32 + 32 + data.length); // total 76 + data.length bytes
+            const serializedSyncStatusView = new Uint8Array(serializedSyncStatus);
+            serializedSyncStatusView.set(dataLength, 0);
+            serializedSyncStatusView.set(currentHeight, 4);
+            serializedSyncStatusView.set(checkpointHeight, 8);
+            serializedSyncStatusView.set(latestBlockHash, 12);
+            serializedSyncStatusView.set(checkpointHash, 44);
+            if (data.length > 0) serializedSyncStatusView.set(data, 76);
+            return serializedSyncStatusView;
         }
     },
     deserialize: {
+        /** @param {Uint8Array} serializedSyncResponse */
+        syncResponse(serializedSyncResponse) {
+            const dataLength = fastConverter.uint84BytesToNumber(serializedSyncResponse.slice(0, 4));
+            const currentHeight = fastConverter.uint84BytesToNumber(serializedSyncResponse.slice(4, 8));
+            const checkpointHeight = fastConverter.uint84BytesToNumber(serializedSyncResponse.slice(8, 12));
+            const latestBlockHash = fastConverter.uint8ArrayToHex(serializedSyncResponse.slice(12, 44));
+            const checkpointHash = fastConverter.uint8ArrayToHex(serializedSyncResponse.slice(44, 76));
+            // fill data even if partial
+            const data = dataLength > 0 ? serializedSyncResponse.slice(76) : new Uint8Array(0);
+            return { dataLength, currentHeight, latestBlockHash, checkpointInfo: { height: checkpointHeight, hash: checkpointHash }, data };
+        },
+
+
         rawData(encodedData) {
             return msgpack.decode(encodedData);
         },

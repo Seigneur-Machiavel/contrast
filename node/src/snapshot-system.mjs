@@ -183,7 +183,7 @@ export class CheckpointSystem {
 	minGapTryCheckpoint = 720; // 24h
 	checkpointHeightModulo = 100;
 	checkpointToConserve = 10;
-	lastCheckpointInfo = { height: 0, hash: '' };
+	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	rndControlDiceFaces = 12;
 
 	// MY CHECKPOINTS
@@ -237,7 +237,7 @@ export class CheckpointSystem {
 		if (!this.lastCheckpointInfo.height) {
 			const checkpointsInfos = this.#getCheckpointsInfos();
 			if (checkpointsInfos.heights.length === 0) {
-				this.lastCheckpointInfo = { height: 0, hash: '' };
+				this.lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 			} else {
 				const lastHeight = checkpointsInfos.heights[checkpointsInfos.heights.length - 1];
 				this.lastCheckpointInfo = { height: lastHeight, hash: checkpointsInfos.hashes[lastHeight] };
