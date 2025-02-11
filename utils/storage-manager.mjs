@@ -155,9 +155,6 @@ export class Storage {
     }
     static archiveCheckpoint(checkpointHeight = 0, fromPath) {
         try {
-            const heightPath = path.join(PATH.CHECKPOINTS, String(checkpointHeight));
-            if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
-
             const zip = new AdmZip();
             zip.addLocalFolder(fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS, 'addresses-txs-refs');
             zip.addLocalFolder(fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS, 'snapshots');
@@ -166,6 +163,8 @@ export class Storage {
             const buffer = zip.toBuffer();
             const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
+            const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight.toString());
+            if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
             fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
             return hash;
         } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
