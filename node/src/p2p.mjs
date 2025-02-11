@@ -68,7 +68,7 @@ class P2PNetwork extends EventEmitter {
         logLevel: 'info',
         logging: true,
         listenAddress: '/ip4/0.0.0.0/tcp/27260',
-        dialTimeout: 3000,
+        dialTimeout: 30000,
         reputationOptions: {}, // Options for ReputationManager
     };
     

@@ -81,7 +81,7 @@ export class SyncHandler {
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(readResult.data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('Invalid message format'); }
-            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} | ${readResult.data.length} bytes, ${readResult.nbChunks} chunks) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Received message (type: ${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''} [bytesStart: ${msg.bytesStart}] from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             
             /** @type {SyncStatus} */
             const mySyncStatus = {
