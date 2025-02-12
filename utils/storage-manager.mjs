@@ -76,9 +76,10 @@ if (isProductionEnv) { delete PATH.TEST_STORAGE; delete PATH.JSON_BLOCKS; }
 // create the storage folder if it doesn't exist, and any other subfolder
 for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
 
-// Old storage to migrate
 const oldStoragePath = path.join(path.dirname(path.dirname(url.fileURLToPath(import.meta.url))), 'node', 'storage');
-if (fs.existsSync(oldStoragePath)) {
+if (fs.existsSync(oldStoragePath)) { fs.rmSync(oldStoragePath, { recursive: true }); }
+// Migrate old storage to migrate - DEPRECATED
+/*if (fs.existsSync(oldStoragePath)) {
     copyFolderRecursiveSync(path.join(oldStoragePath, 'accounts'), path.join(PATH.STORAGE, 'accounts'));
     copyFolderRecursiveSync(path.join(oldStoragePath, 'snapshots'), PATH.SNAPSHOTS);
     copyFolderRecursiveSync(path.join(oldStoragePath, 'blocks'), PATH.BLOCKS);
@@ -88,13 +89,15 @@ if (fs.existsSync(oldStoragePath)) {
     fs.copyFileSync(path.join(oldStoragePath, 'nodeSettings.json'), path.join(PATH.STORAGE, 'nodeSettings.json'));
     fs.rmSync(oldStoragePath, { recursive: true });
     console.log('--- OLD STORAGE MIGRATED ---');
-}
+}*/
 
+// DEPRECATED
 // copy the clear.js and clear-storage.bat files to the storage folder (usefull for manual cleaning)
-const clearJsPath = path.join(basePath.storagePath, 'clear.js');
-const clearBatPath = path.join(basePath.storagePath, 'clear-storage.bat');
-if (!fs.existsSync(clearJsPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear.js'), clearJsPath); }
-if (!fs.existsSync(clearBatPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear-storage.bat'), clearBatPath); }
+//const clearJsPath = path.join(basePath.storagePath, 'clear.js');
+//const clearBatPath = path.join(basePath.storagePath, 'clear-storage.bat');
+//if (!fs.existsSync(clearJsPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear.js'), clearJsPath); }
+//if (!fs.existsSync(clearBatPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear-storage.bat'), clearBatPath); }
+// END DEPRECATED
 
 export class Storage {
     /** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
@@ -288,7 +291,7 @@ export class AddressesTxsRefsStorage {
 
         const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1);
         if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
-        
+
         const filePath = path.join(dirPath, `${address}.bin`);
         fs.writeFileSync(filePath, serialized, 'binary');
     }
