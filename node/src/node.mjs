@@ -303,15 +303,15 @@ export class Node {
     }
     /** @param {BlockData} finalizedBlock */
     #saveCheckpoint(finalizedBlock) {
-        if (finalizedBlock.index === 0) { return; }
-        if (finalizedBlock.index % this.checkpointSystem.checkpointHeightModulo !== 0) { return; }
+        const height = finalizedBlock.index;
+        if (height === 0) { return; }
+        if (height % this.checkpointSystem.checkpointHeightModulo !== 0) { return; }
 
         const startTime = performance.now();
-        //this.checkpointSystem.pruneCheckpoints(finalizedBlock.index);
-        const checkpointHeight = finalizedBlock.index - this.checkpointSystem.checkpointHeightModulo; // ex: 100 - 50 = 50
-        const result = this.checkpointSystem.newCheckpoint(checkpointHeight);
+        const oldestSnapHeight = height - (this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve);
+        const result = this.checkpointSystem.newCheckpoint(oldestSnapHeight);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
-        this.miniLogger.log(`${logText} ${checkpointHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
+        this.miniLogger.log(`${logText} ${oldestSnapHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
     }
 
     // FINALIZED BLOCK HANDLING ----------------------------------------------------------

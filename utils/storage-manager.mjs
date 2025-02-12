@@ -170,9 +170,8 @@ export class CheckpointsStorage {
                 zip.addLocalFolder(snapshotsPath, 'snapshots');
             } else {
                 // we only need the corresponding snapshot for the checkpoint
-                // he should be in trash folder at this point
                 //! important to have valid AddressesTransactionsReferences in the archive
-                const snapshotPath = path.join(PATH.TRASH, checkpointHeight.toString());
+                const snapshotPath = path.join(PATH.SNAPSHOTS, checkpointHeight.toString());
                 if (!fs.existsSync(snapshotPath)) { throw new Error(`Snapshot ${checkpointHeight.toString()} not found at ${snapshotPath}`); }
                 zip.addLocalFolder(snapshotPath, `snapshots/${checkpointHeight.toString()}`);
             }
