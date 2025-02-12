@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Contrast Wallet (self custody)",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Native wallet of the Contrast blockchain",
   "action": {
     "default_popup": "popup.html",

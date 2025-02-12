@@ -96,15 +96,15 @@ async function onMessage(event) {
     const data = message.data;
     
     const lastBlockInfoIndex = blockExplorerWidget.lastBlockInfoIndex;
-    let remainingAttempts = 10;
     switch (message.type) {
         case 'current_height':
             if (lastBlockInfoIndex === -1) { return; }
+            if (data === lastBlockInfoIndex) { return; }
             if (data === lastBlockInfoIndex + 1) { // need the new block
                 try { ws.send(JSON.stringify({ type: 'get_new_block_confirmed', data: data })) } catch (error) {};
             }
 
-            if (!data === lastBlockInfoIndex) {
+            if (data !== lastBlockInfoIndex) {
                 console.info(`current_height #${data} !== lastBlockIndex #${lastBlockInfoIndex} || lastBlockIndex+1 #${lastBlockInfoIndex+1} -> ws.close()`);
                 try { ws.close() } catch (error) {};
                 return;

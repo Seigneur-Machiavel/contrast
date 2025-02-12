@@ -550,6 +550,7 @@ export class ObserverWsApp {
                 case 'get_height':
                     ws.send(JSON.stringify({ type: 'current_height', data: this.node.blockchain.currentHeight }));
                     break;
+                case 'get_update_info':
                 case 'get_node_info':
                     const nodeInfo = AppStaticFncs.extractPrivateNodeInfo(this.node);
                     ws.send(JSON.stringify({ type: 'node_info', data: nodeInfo }));

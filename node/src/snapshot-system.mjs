@@ -218,6 +218,7 @@ export class CheckpointSystem {
 		// We prefer to not overwrite existing checkpoints, but it's possible to force it
 		//! The danger is to overwrite a valid checkpoint with a corrupted one:
 		//! The "addresses-txs-refs" can be different and includes unexisting txs
+		const heightPath = path.join(PATH.CHECKPOINTS, height.toString());
 		if (fs.existsSync(heightPath)) { console.error(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`); return false; }
 		if (fs.existsSync(heightPath) && !overwrite) { return false; }
 

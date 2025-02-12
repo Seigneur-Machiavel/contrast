@@ -57,7 +57,7 @@ export class CallBackManager {
                 //utxoCache: [`onBalanceUpdated:${this.node.miner.address}`],
             },
             observer: {
-                node: ['onBroadcastNewCandidate:all', 'onBlockConfirmed:all']
+                node: ['onBroadcastNewCandidate:all'], //, 'onBlockConfirmed:all']
             },
         }
     }
