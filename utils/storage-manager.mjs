@@ -107,7 +107,7 @@ export class Storage {
             if (!fs.existsSync(directoryPath__)) { fs.mkdirSync(directoryPath__); }
             
             const filePath = path.join(directoryPath__, `${fileName}.bin`);
-            fs.writeFileSync(filePath, serializedData, 'binary');
+            fs.writeFileSync(filePath, serializedData);
             return true;
         } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
 
@@ -141,7 +141,7 @@ export class Storage {
             const filePath = path.join(PATH.STORAGE, `${fileName}.json`);
             const subFolder = path.dirname(filePath);
             if (!fs.existsSync(subFolder)) { fs.mkdirSync(subFolder); }
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
         } catch (error) {
             storageMiniLogger.log(error.stack, (m) => { console.error(m); });
             return false;
@@ -151,7 +151,7 @@ export class Storage {
     static loadJSON(fileName) {
         try {
             const filePath = path.join(PATH.STORAGE, `${fileName}.json`);
-            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            return JSON.parse(fs.readFileSync(filePath));
         } catch (error) {
             return false;
         }
@@ -238,7 +238,7 @@ export class AddressesTxsRefsStorage {
 
         try {
             /** @type {number} */
-            const config = JSON.parse(fs.readFileSync(this.configPath, 'utf8'));
+            const config = JSON.parse(fs.readFileSync(this.configPath));
             this.snapHeight = config.snapHeight;
             this.architecture = config.architecture;
 
@@ -248,7 +248,7 @@ export class AddressesTxsRefsStorage {
     save(indexEnd) {
         this.snapHeight = indexEnd;
         const config = { snapHeight: indexEnd, architecture: this.architecture };
-        fs.writeFileSync(this.configPath, JSON.stringify(config), 'utf8');
+        fs.writeFileSync(this.configPath, JSON.stringify(config));
     }
     #dirPathOfAddress(address = '') {
         const lvl0 = address.slice(0, 2);
@@ -279,7 +279,7 @@ export class AddressesTxsRefsStorage {
             return [];
         }
 
-        const serialized = fs.readFileSync(filePath, 'binary');
+        const serialized = fs.readFileSync(filePath);
         /** @type {Array<string>} */
         const txsRefs = serializer.deserialize.txsReferencesArray(serialized);
         return txsRefs;
@@ -293,7 +293,7 @@ export class AddressesTxsRefsStorage {
         if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
 
         const filePath = path.join(dirPath, `${address}.bin`);
-        fs.writeFileSync(filePath, serialized, 'binary');
+        fs.writeFileSync(filePath, serialized);
     }
     reset() {
         if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true }); }
@@ -368,7 +368,7 @@ export class BlockchainStorage {
             }
 
             const filePath = path.join(batchFolderPath, `${blockData.index.toString()}-${blockData.hash}.bin`);
-            fs.writeFileSync(filePath, binary, 'binary');
+            fs.writeFileSync(filePath, binary);
         } catch (error) {
             storageMiniLogger.log(error.stack, (m) => { console.error(m); });
         }
@@ -376,13 +376,13 @@ export class BlockchainStorage {
     /** @param {BlockData} blockData @param {string} dirPath */
     #saveBlockDataJSON(blockData, dirPath) {
         const blockFilePath = path.join(dirPath, `${blockData.index}.json`);
-        fs.writeFileSync(blockFilePath, JSON.stringify(blockData, (key, value) => { return value; }), 'utf8');
+        fs.writeFileSync(blockFilePath, JSON.stringify(blockData, (key, value) => { return value; }));
     }
     #getBlock(blockIndex = 0, blockHash = '', deserialize = true) {
         const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
 
         /** @type {Uint8Array} */
-        const serialized = fs.readFileSync(blockFilePath, 'binary');
+        const serialized = fs.readFileSync(blockFilePath);
         if (!deserialize) { return serialized; }
 
         /** @type {BlockData} */
@@ -392,7 +392,7 @@ export class BlockchainStorage {
     #loadBlockDataJSON(blockIndex = 0, dirPath = '') {
         const blockFileName = `${blockIndex.toString()}.json`;
         const filePath = path.join(dirPath, blockFileName);
-        const blockContent = fs.readFileSync(filePath, 'utf8');
+        const blockContent = fs.readFileSync(filePath);
         const blockData = BlockUtils.blockDataFromJSON(blockContent);
         return blockData;
     }
@@ -421,7 +421,7 @@ export class BlockchainStorage {
 
         const binary = serializer.serialize.rawData(blockInfo);
         const filePath = path.join(batchFolderPath, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
-        fs.writeFileSync(filePath, binary, 'binary');
+        fs.writeFileSync(filePath, binary);
     }
     #blockHashIndexFormHeightOrHash(heightOrHash) {
         const blockHash = typeof heightOrHash === 'number' ? this.hashByIndex[heightOrHash] : heightOrHash;
@@ -442,15 +442,16 @@ export class BlockchainStorage {
     getBlockInfoByIndex(blockIndex = 0) {
         const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockIndex).name;
         const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
+        const blockHash = this.hashByIndex[blockIndex];
 
         try {
-            const blockHash = this.hashByIndex[blockIndex];
             const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
-            const buffer = fs.readFileSync(blockInfoFilePath, 'binary');
+            const buffer = fs.readFileSync(blockInfoFilePath);
             /** @type {BlockInfo} */
             const blockInfo = serializer.deserialize.rawData(buffer);
             return blockInfo;
         } catch (error) {
+            storageMiniLogger.log(`BlockInfo not found ${blockIndex.toString()}-${blockHash}.bin`, (m) => { console.error(m); });
             storageMiniLogger.log(error.stack, (m) => { console.error(m); });
             return null;
         }
