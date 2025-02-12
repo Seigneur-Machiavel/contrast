@@ -118,7 +118,7 @@ export class MiniLogger {
         if (!fs.existsSync(this.filePath)) { return []; }
         
         try {
-            const loadedHistory = JSON.parse(fs.readFileSync(this.filePath));
+            const loadedHistory = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
             if (!Array.isArray(loadedHistory)) { return []; }
 
             return loadedHistory.concat(this.history);
@@ -132,7 +132,7 @@ export class MiniLogger {
             await new Promise(resolve => setTimeout(resolve, 100));
             if (!this.saveRequested) { continue; }
 
-            fs.writeFileSync(this.filePath, JSON.stringify(this.history));
+            fs.writeFileSync(this.filePath, JSON.stringify(this.history), 'utf8');
             this.saveRequested = false;
         }
     }

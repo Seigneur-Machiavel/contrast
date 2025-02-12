@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Storage, BlockchainStorage, PATH, copyFolderRecursiveSync } from '../../utils/storage-manager.mjs';
+import { Storage, BlockchainStorage, CheckpointsStorage, PATH, copyFolderRecursiveSync } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockData, BlockUtils } from './block-classes.mjs';
@@ -177,7 +177,7 @@ export class CheckpointSystem {
 	activeCheckpointHeight = false;
 	/** @type {boolean | number} */
 	activeCheckpointLastSnapshotHeight = false;
-	activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // hash of block -1
+	activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // fake hash
 	activeCheckpointPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
 
 	minGapTryCheckpoint = 720; // 24h
@@ -205,7 +205,7 @@ export class CheckpointSystem {
 		result.heights.sort((a, b) => a - b);
 		return result;
 	}
-	pruneCheckpoints(height = 1000) {
+	pruneCheckpoints(height = 1000) { // dangerous to prune checkpoints, use with caution
 		let preservedCheckpoints = 0;
 		for (const h of Object.keys(this.#getCheckpointsInfos().hashes)) {
 			const maxCheckpointsReached = preservedCheckpoints >= this.checkpointToConserve;
@@ -214,8 +214,14 @@ export class CheckpointSystem {
 			fs.rmSync(path.join(PATH.CHECKPOINTS, h), { recursive: true, force: true });
 		}
 	}
-	newCheckpoint(height = 1000, fromPath) {
-		const hash = Storage.archiveCheckpoint(height, fromPath); // save new checkpoint archive (.zip)
+	newCheckpoint(height = 1000, fromPath, overwrite = false) {
+		// We prefer to not overwrite existing checkpoints, but it's possible to force it
+		//! The danger is to overwrite a valid checkpoint with a corrupted one:
+		//! The "addresses-txs-refs" can be different and includes unexisting txs
+		if (fs.existsSync(heightPath)) { console.error(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`); return false; }
+		if (fs.existsSync(heightPath) && !overwrite) { return false; }
+
+		const hash = CheckpointsStorage.archiveCheckpoint(height, fromPath); // save new checkpoint archive (.zip)
 		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return false; }
 
 		this.lastCheckpointInfo = { height, hash };
@@ -338,5 +344,18 @@ export class CheckpointSystem {
 		this.activeCheckpointHeight = false;
 		this.activeCheckpointLastSnapshotHeight = false;
 		this.activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // hash of block -1
+	}
+	resetCheckpoints() {
+		CheckpointsStorage.reset();
+		this.lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
+	}
+	resetActiveCheckpoint() {
+		if (this.activeCheckpointHeight === false) { return false; }
+		fs.rmSync(this.activeCheckpointPath, { recursive: true, force: true });
+		this.activeCheckpointHeight = false;
+		this.activeCheckpointLastSnapshotHeight = false;
+		this.activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // fake hash
+
+		return true;
 	}
 }

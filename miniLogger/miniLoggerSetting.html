@@ -114,8 +114,8 @@
                 }
 
                 const newConfig = { maxHistory, allActive, activeCategories };
-                fs.writeFileSync('./miniLogger/mini-logger-config-custom.json', JSON.stringify(newConfig, null, 4));
-                fs.writeFileSync('./miniLogger/mini-logger-config.json', JSON.stringify(defaultConfig, null, 4));
+                fs.writeFileSync('./miniLogger/mini-logger-config-custom.json', JSON.stringify(newConfig, null, 4), 'utf8');
+                fs.writeFileSync('./miniLogger/mini-logger-config.json', JSON.stringify(defaultConfig, null, 4), 'utf8');
 
                 window.close();
             };

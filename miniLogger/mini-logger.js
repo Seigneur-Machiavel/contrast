@@ -81,7 +81,7 @@ class MiniLogger {
         if (!fs.existsSync(this.filePath)) { return []; }
         
         try {
-            const history = JSON.parse(fs.readFileSync(this.filePath));
+            const history = JSON.parse(fs.readFileSync(this.filePath, 'utf8'));
             return history;
         } catch (error) {
             console.error('Error while loading history:', error);
@@ -89,7 +89,7 @@ class MiniLogger {
         }
     }
     #saveHistory() {
-        fs.writeFileSync(this.filePath, JSON.stringify(this.history));
+        fs.writeFileSync(this.filePath, JSON.stringify(this.history), 'utf8');
     }
     #saveLog(type, message) {
         const historicalLog = HistoricalLog(type, message);

@@ -268,13 +268,16 @@ export class Node {
         this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.info(m); });
-        if (snapshotIndex < 1) { this.blockchain.reset(); }
+        if (snapshotIndex < 1) {
+            this.blockchain.reset();
+            this.checkpointSystem.resetCheckpoints(); // not reset Active Checkpoint.
+        }
 
         this.blockchain.lastBlock = this.blockchain.getBlock(snapshotIndex);
         if (!eraseHigher) { return; }
 
         // place snapshot to trash folder, we can restaure it if needed
-        //this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1); //TODO: activate again !
+        this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
     }
     /** @param {BlockData} finalizedBlock */
     #saveSnapshot(finalizedBlock) {
@@ -298,12 +301,13 @@ export class Node {
         }
         this.snapshotSystem.restoreLoadedSnapshot();
     }
-    async #saveCheckpoint(finalizedBlock) {
+    /** @param {BlockData} finalizedBlock */
+    #saveCheckpoint(finalizedBlock) {
         if (finalizedBlock.index === 0) { return; }
         if (finalizedBlock.index % this.checkpointSystem.checkpointHeightModulo !== 0) { return; }
 
         const startTime = performance.now();
-        this.checkpointSystem.pruneCheckpoints(finalizedBlock.index);
+        //this.checkpointSystem.pruneCheckpoints(finalizedBlock.index);
         const result = this.checkpointSystem.newCheckpoint(finalizedBlock.index);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
         this.miniLogger.log(`${logText} ${finalizedBlock.index} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
@@ -415,6 +419,7 @@ export class Node {
         timer.startPhase('apply-blocks'),
         this.blockchain.applyBlock(this.utxoCache, this.vss, finalizedBlock, this.roles.includes('observer')),
         timer.endPhase('apply-blocks'),
+
         timer.startPhase('mempool-cleanup'),
         this.memPool.removeFinalizedBlocksTransactions(finalizedBlock),
         timer.endPhase('mempool-cleanup');
@@ -433,12 +438,12 @@ export class Node {
         const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
     
         if (!isSync) { this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); }); }
-    
+
         timer.startPhase('saveSnapshot');
         this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
 
-        await this.#saveCheckpoint(finalizedBlock);
+        this.#saveCheckpoint(finalizedBlock);
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate) { return; }

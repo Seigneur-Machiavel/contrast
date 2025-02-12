@@ -153,14 +153,35 @@ export class Storage {
             return false;
         }
     }
+}
+
+export class CheckpointsStorage {
+    /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
     static archiveCheckpoint(checkpointHeight = 0, fromPath) {
         try {
             const zip = new AdmZip();
+
+            if (fromPath) {
+                const snapshotsPath = path.join(fromPath, 'snapshots');
+                if (!fs.existsSync(snapshotsPath)) { throw new Error(`Snapshots folder not found at ${snapshotsPath}`); }
+                zip.addLocalFolder(snapshotsPath, 'snapshots');
+            } else {
+                // we only need the corresponding snapshot for the checkpoint
+                // he should be in trash folder at this point
+                //! important to have valid AddressesTransactionsReferences in the archive
+                const snapshotPath = path.join(PATH.TRASH, checkpointHeight.toString());
+                if (!fs.existsSync(snapshotPath)) { throw new Error(`Snapshot ${checkpointHeight.toString()} not found at ${snapshotPath}`); }
+                zip.addLocalFolder(snapshotPath, `snapshots/${checkpointHeight.toString()}`);
+            }
+            //! old method avoided because of inconsistency with the snapshots:
+            //! we only can save snapshot that can't be modified in the checkpoint.
+            //const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
+            //zip.addLocalFolder(snapshotsPath, 'snapshots');
+
             const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
-            const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
-            const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
             zip.addLocalFolder(addTxsRefsPath, 'addresses-txs-refs');
-            zip.addLocalFolder(snapshotsPath, 'snapshots');
+            
+            const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
             zip.addLocalFile(addTxsRefsConfigPath);
 
             const buffer = zip.toBuffer();
@@ -192,6 +213,9 @@ export class Storage {
         } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
 
         return false;
+    }
+    static reset() {
+        if (fs.existsSync(PATH.CHECKPOINTS)) { fs.rmSync(PATH.CHECKPOINTS, { recursive: true }); }
     }
 }
 
@@ -245,9 +269,14 @@ export class AddressesTxsRefsStorage {
         if (!this.architecture[lvl0][lvl1][address]) { return []; }
 
         const filePath = path.join(PATH.TXS_REFS, lvl0, lvl1, `${address}.bin`);
-        if (!fs.existsSync(filePath)) { delete this.architecture[lvl0][lvl1][address]; return []; }
+        if (!fs.existsSync(filePath)) { // Clean the architecture if the file is missing
+            delete this.architecture[lvl0][lvl1][address];
+            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) { delete this.architecture[lvl0][lvl1]; }
+            if (Object.keys(this.architecture[lvl0]).length === 0) { delete this.architecture[lvl0]; }
+            return [];
+        }
 
-        const serialized = fs.readFileSync(filePath);
+        const serialized = fs.readFileSync(filePath, 'binary');
         /** @type {Array<string>} */
         const txsRefs = serializer.deserialize.txsReferencesArray(serialized);
         return txsRefs;
@@ -257,8 +286,11 @@ export class AddressesTxsRefsStorage {
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         this.architecture[lvl0][lvl1][address] = true;
 
-        const filePath = path.join(PATH.TXS_REFS, lvl0, lvl1, `${address}.bin`);
-        fs.writeFileSync(filePath, serialized, 'utf8');
+        const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1);
+        if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
+        
+        const filePath = path.join(dirPath, `${address}.bin`);
+        fs.writeFileSync(filePath, serialized, 'binary');
     }
     reset() {
         if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true }); }
@@ -333,7 +365,7 @@ export class BlockchainStorage {
             }
 
             const filePath = path.join(batchFolderPath, `${blockData.index.toString()}-${blockData.hash}.bin`);
-            fs.writeFileSync(filePath, binary);
+            fs.writeFileSync(filePath, binary, 'binary');
         } catch (error) {
             storageMiniLogger.log(error.stack, (m) => { console.error(m); });
         }
@@ -347,7 +379,7 @@ export class BlockchainStorage {
         const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
 
         /** @type {Uint8Array} */
-        const serialized = fs.readFileSync(blockFilePath);
+        const serialized = fs.readFileSync(blockFilePath, 'binary');
         if (!deserialize) { return serialized; }
 
         /** @type {BlockData} */
@@ -386,7 +418,7 @@ export class BlockchainStorage {
 
         const binary = serializer.serialize.rawData(blockInfo);
         const filePath = path.join(batchFolderPath, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
-        fs.writeFileSync(filePath, binary);
+        fs.writeFileSync(filePath, binary, 'binary');
     }
     #blockHashIndexFormHeightOrHash(heightOrHash) {
         const blockHash = typeof heightOrHash === 'number' ? this.hashByIndex[heightOrHash] : heightOrHash;
@@ -411,7 +443,7 @@ export class BlockchainStorage {
         try {
             const blockHash = this.hashByIndex[blockIndex];
             const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
-            const buffer = fs.readFileSync(blockInfoFilePath);
+            const buffer = fs.readFileSync(blockInfoFilePath, 'binary');
             /** @type {BlockInfo} */
             const blockInfo = serializer.deserialize.rawData(buffer);
             return blockInfo;
