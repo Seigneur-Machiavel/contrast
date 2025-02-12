@@ -308,9 +308,10 @@ export class Node {
 
         const startTime = performance.now();
         //this.checkpointSystem.pruneCheckpoints(finalizedBlock.index);
-        const result = this.checkpointSystem.newCheckpoint(finalizedBlock.index);
+        const checkpointHeight = finalizedBlock.index - this.checkpointSystem.checkpointHeightModulo; // ex: 100 - 50 = 50
+        const result = this.checkpointSystem.newCheckpoint(checkpointHeight);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
-        this.miniLogger.log(`${logText} ${finalizedBlock.index} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
+        this.miniLogger.log(`${logText} ${checkpointHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
     }
 
     // FINALIZED BLOCK HANDLING ----------------------------------------------------------

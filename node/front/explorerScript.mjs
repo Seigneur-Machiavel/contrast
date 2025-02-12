@@ -101,7 +101,8 @@ async function onMessage(event) {
             if (lastBlockInfoIndex === -1) { return; }
             if (data === lastBlockInfoIndex) { return; }
             if (data === lastBlockInfoIndex + 1) { // need the new block
-                try { ws.send(JSON.stringify({ type: 'get_new_block_confirmed', data: data })) } catch (error) {};
+                if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'get_new_block_confirmed', data: data }))
+                return;
             }
 
             if (data !== lastBlockInfoIndex) {
