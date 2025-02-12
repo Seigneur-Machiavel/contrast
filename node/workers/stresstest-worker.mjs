@@ -136,13 +136,22 @@ async function userSendToUser(senderAccount, receiverAddress, amount = 1_000_000
     txsTaskDoneThisBlock['userSendToUser'] = true;
 
     let broadcasted = 0;
-    const { signedTx, error } = await Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress);
-    if (signedTx) {
-        testMiniLogger.log(`[TEST-USTU] SEND: ${senderAccount.address} -> ${amount} -> ${receiverAddress} | txID: ${signedTx.id}`, (m) => console.log(m));
-        const result = await dashApp.node.pushTransaction(signedTx);
-        if (result.broadcasted) { broadcasted++; }
-    } else { testMiniLogger.log(error, (m) => console.error(m)); return; }
+    try {
+        const { signedTx, error } = await Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress);
+        if (signedTx) {
+            testMiniLogger.log(`[TEST-USTU] SEND: ${senderAccount.address} -> ${amount} -> ${receiverAddress} | txID: ${signedTx.id}`, (m) => console.log(m));
+            const result = await dashApp.node.pushTransaction(signedTx);
+            if (result.broadcasted) { broadcasted++; }
+        } else { throw new Error(error); }
+    } catch (error) {
+        if (error.message === 'No UTXO to spend') {
+            testMiniLogger.log(`[TEST-USTU] No UTXO to spend`, (m) => console.info(m));
+        } else {
+            testMiniLogger.log(`[TEST-USTU] Can't send to user: ${error.message}`, (m) => console.error(m));
+        }
+    }
 
+    if (broadcasted === 0) { return; }
     testMiniLogger.log(`[TEST-USTU] sent ${amount} to ${receiverAddress} | Broadcasted: ${broadcasted}`, (m) => console.info(m));
 }
 /** All users send to the next user @param {Account[]} accounts */
@@ -236,8 +245,11 @@ async function userStakeInVSS(accounts, senderAccountIndex = 0, amountToStake = 
             if (result.broadcasted) { broadcasted++; }
         } else { testMiniLogger.log(`[TEST-USIV] Can't sign transaction`, (m) => console.error(m)); }
     } catch (error) {
-        testMiniLogger.log(`[TEST-USIV] Can't stake in VSS: ${error.message}`, (m) => console.error(m));
-        return;
+        if (error.message === 'No UTXO to spend') {
+            testMiniLogger.log(`[TEST-USIV] No UTXO to spend`, (m) => console.info(m));
+        } else {
+            testMiniLogger.log(`[TEST-USIV] Can't stake in VSS: ${error.message}`, (m) => console.error(m));
+        }
     }
     
     if (broadcasted === 0) { return; }
