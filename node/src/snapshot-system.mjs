@@ -138,6 +138,7 @@ export class SnapshotSystem {
 	#moveSnapshotToTrash(height) {
 		const targetPath = path.join(PATH.SNAPSHOTS, `${height}`);
 		const trashTargetPath = path.join(PATH.TRASH, `${height}`);
+		if (fs.existsSync(trashTargetPath)) fs.rmSync(trashTargetPath, { recursive: true, force: true });
 		fs.renameSync(targetPath, trashTargetPath);
 		
 		console.info(`Snapshot #${height} moved to trash`);
