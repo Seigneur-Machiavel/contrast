@@ -156,7 +156,7 @@ export class SnapshotSystem {
 		}
 	}
 	/** Restore a snapshot from the trash */
-	restoreLoadedSnapshot() {
+	restoreLoadedSnapshot(overwrite = false) {
 		if (this.loadedSnapshotHeight === 0) { return false; }
 
 		const targetPath = path.join(PATH.SNAPSHOTS, `${this.loadedSnapshotHeight}`);
