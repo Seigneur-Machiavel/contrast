@@ -27,15 +27,16 @@ export const addressUtils = {
         M: { name: 'MultiSig', description: 'Multi-signature address', zeroBits: 0 }
     },*/
     // BLOCK PROCESSING ARE TO LONG ON LOW CONFIG WITH PREVIOUS PARAMS, NEED TO LOWER THE MEMORY
+    // 16 zeroBits is the maximum, NEVER BYPASS THIS VALUE!!!
     params: {
-        argon2DerivationMemory: 2 ** 14, // 2**16 should be great
+        argon2DerivationMemory: 2 ** 14,
         addressDerivationBytes: 16, // the hex return will be double this value -> 32 bytes
         addressBase58Length: 20, // -> 16 bytes using serializer
     },
     glossary: {
         W: { name: 'Weak', description: 'No condition', zeroBits: 0 },
-        C: { name: 'Contrast', description: '256 times harder to generate', zeroBits: 8 }, // The standard
-        P: { name: 'Pro', description: '4096 times harder to generate', zeroBits: 12 },
+        C: { name: 'Contrast', description: '64 times harder to generate', zeroBits: 6 }, // The standard
+        P: { name: 'Pro', description: '1024 times harder to generate', zeroBits: 10 },
         U: { name: 'Ultimate', description: '65536 times harder to generate', zeroBits: 16 },
         M: { name: 'MultiSig', description: 'Multi-signature address', zeroBits: 0 }
     },
