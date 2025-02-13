@@ -14,6 +14,8 @@ const electronAPI = {
     onPasswordRequested: (func) => { ipcRenderer.on('password-requested', (event, ...args) => func(...args)); },
     onSetPasswordResult: (func) => { ipcRenderer.on('set-password-result', (event, ...args) => func(...args)); },
 
+    onNoPasswordRequired: (func) => { ipcRenderer.on('no-password-required', (event, ...args) => func(...args)); },
+
     onWaitingForPrivKey: (func) => { ipcRenderer.on('waiting-for-priv-key', (event, ...args) => func(...args)); },
     onNodeStarted: (func) => { ipcRenderer.on('node-started', (event, ...args) => func(...args)); },
     onNodeSettingsSaved: (func) => { ipcRenderer.on('node-settings-saved', (event, ...args) => func(...args)); },

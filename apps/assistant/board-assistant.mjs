@@ -89,14 +89,20 @@ export class Assistant {
     }
 
     requestNewPassword(failureMsg = false) {
-        if (failureMsg === false) this.sendMessage('Welcome to Contrast, the setup process will only take a few minutes...');
+        if (failureMsg === false) this.sendMessage('Welcome to Contrast, setup process take a few minutes...');
         setTimeout(() => {
             this.onResponse = this.#verifyNewPassword;
-            this.sendMessage(`(1) ${failureMsg || 'Please enter a new password'}`);
+            this.sendMessage(`(1) ${failureMsg || 'Please enter a new password or press enter to skip (less secure)'}:`);
             this.#setActiveInput('password', 'Your new password...', true);
         }, failureMsg ? 0 : 600);
     }
     #verifyNewPassword(password = 'toto') {
+        if (password === '') {
+            window.electronAPI.setPassword('fingerPrint'); // less secure: use the finger print as password
+            this.#setActiveInput('idle');
+            return;
+        }
+
         const isValid = typeof password === 'string' && password.length > 5 && password.length < 30;
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; } // re ask confirmation (2)
 

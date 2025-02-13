@@ -205,23 +205,13 @@ class P2PNetwork extends EventEmitter {
     }
     async #connectionMaintainerLoop() {
         while(true) {
+            if (Object.keys(this.connectedBootstrapNodes).length < this.targetBootstrapNodes) {
+                await this.#connectToBootstrapNodes();
+            }
             await new Promise(resolve => setTimeout(resolve, 10000));
-            if (Object.keys(this.connectedBootstrapNodes).length >= this.targetBootstrapNodes) { continue; }
-            await this.connectToBootstrapNodes();
         }
     }
-    async stop() {
-        if (this.p2pNode) { await this.p2pNode.stop(); }
-        this.miniLogger.log(`P2P network ${this.p2pNode.peerId.toString()} stopped`, (m) => { console.info(m); });
-        await this.reputationManager.shutdown();
-    }
-    #isBootstrapNodeAlreadyConnected(addr) {
-        for (const peerIdStr in this.connectedBootstrapNodes) {
-            if (this.connectedBootstrapNodes[peerIdStr] === addr) { return true; }
-        }
-        return false;
-    }
-    async connectToBootstrapNodes() {
+    async #connectToBootstrapNodes() {
         let iAmBootstrap = false;
         
         const promises = [];
@@ -250,6 +240,17 @@ class P2PNetwork extends EventEmitter {
         const connectedBootstraps = Object.keys(this.connectedBootstrapNodes).length;
         let totalBootstraps = iAmBootstrap ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length;
         this.miniLogger.log(`Connected to ${connectedBootstraps}/${totalBootstraps} bootstrap nodes`, (m) => { console.info(m); });
+    }
+    async stop() {
+        if (this.p2pNode) { await this.p2pNode.stop(); }
+        this.miniLogger.log(`P2P network ${this.p2pNode.peerId.toString()} stopped`, (m) => { console.info(m); });
+        await this.reputationManager.shutdown();
+    }
+    #isBootstrapNodeAlreadyConnected(addr) {
+        for (const peerIdStr in this.connectedBootstrapNodes) {
+            if (this.connectedBootstrapNodes[peerIdStr] === addr) { return true; }
+        }
+        return false;
     }
     static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
         // limit the speed of sending chunks, at 64 KB/chunk, 1 GB would take:

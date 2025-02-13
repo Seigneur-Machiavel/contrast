@@ -51,6 +51,7 @@ export class SyncHandler {
     miniLogger = new MiniLogger('sync');
     /** @type {Object<string, number>} */
     peersHeights = {};
+    consensusHeight = -1;
     syncFailureCount = 0;
     node;
 
@@ -194,6 +195,7 @@ export class SyncHandler {
         
         const consensus = this.#findConsensus(peersStatus);
         if (!consensus) { return await this.#handleSyncFailure(`Unable to get consensus -> sync failure`); }
+        this.consensusHeight = Math.max(this.consensusHeight, consensus.height);
         if (consensus.height === 0 || consensus.height <= myCurrentHeight) { return 'Already at the consensus height'; }
         
         this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height}`, (m) => { console.info(m); });

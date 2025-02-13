@@ -17,6 +17,8 @@ const interactionsListenners = {
 
 	onPasswordRequested: () => { appsManager.lock(); assistant.requestPasswordToUnlock(); },
 	onSetPasswordResult: (message) => { if (!message) assistant.requestPasswordToUnlock(true); },
+
+	onNoPasswordRequired: () => { assistant.sendMessage('No password required, initializing node...'); window.electronAPI.setPassword('fingerPrint'); },
 	
 	onWaitingForPrivKey: () => {
 		assistant.sendMessage('Would you like to create a new private key or restore an existing wallet?')

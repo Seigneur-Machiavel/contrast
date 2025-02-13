@@ -161,6 +161,7 @@ export class Node {
         this.miniLogger.log('P2P network is ready - we are connected baby', (m) => { console.info(m); });
         if (!this.roles.includes('validator')) { return; }
 
+        await new Promise(resolve => setTimeout(resolve, 3000)); // ~maxTime to connect nodes
         if (!activeCheckpoint) { this.opStack.pushFirst('createBlockCandidateAndBroadcast', null); }
         this.opStack.pushFirst('syncWithPeers', null);
     }

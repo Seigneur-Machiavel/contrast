@@ -173,7 +173,7 @@ export class OpStack {
                     const syncResult = await this.node.syncHandler.syncWithPeers();
                     this.node.syncHandler.isSyncing = false;
                     this.syncRequested = false;
-                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers result: ${syncResult}, lastBlock: #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
+                    this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers result: ${syncResult}, consensus: #${this.node.syncHandler.consensusHeight} | myHeight: #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
                     
                     switch (syncResult) {
                         case 'Already at the consensus height':

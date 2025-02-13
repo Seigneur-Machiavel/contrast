@@ -8,10 +8,6 @@ import { CryptoLight } from '../../utils/cryptoLight.mjs'
 import { Storage } from '../../utils/storage-manager.mjs';
 import nodeMachineId from 'node-machine-id';
 
-const fingerPrint = nodeMachineId.machineIdSync();
-let passwordExist = Storage.isFileExist('passHash.bin');
-parentPort.postMessage({ type: 'message_to_mainWindow', data: passwordExist ? 'password-requested' : 'no-existing-password' });
-
 const nodePort = workerData.nodePort || 27260;
 const dashboardPort = workerData.dashboardPort || 27271;
 const observerPort = workerData.observerPort || 27270;
@@ -20,6 +16,18 @@ cryptoLight.argon2Hash = argon2Hash;
 const dashApp = new DashboardWsApp(undefined, cryptoLight, nodePort, dashboardPort, false);
 /** @type {ObserverWsApp} */
 let observApp;
+
+// START
+const fingerPrint = nodeMachineId.machineIdSync();
+let passwordExist = Storage.isFileExist('passHash.bin');
+if (passwordExist) {
+    const noPassRequired = await setPassword('fingerPrint');
+    parentPort.postMessage({ type: 'message_to_mainWindow', data: noPassRequired ? 'no-password-required' : 'password-requested' });
+} else {
+    parentPort.postMessage({ type: 'message_to_mainWindow', data: 'no-existing-password' });
+}
+
+// FUNCTIONS
 async function stop() {
     try {
         await dashApp.stop();
@@ -76,6 +84,8 @@ async function setPassword(password = 'toto') {
     console.info('cryptoLight Key Derived');
     return true;
 }
+
+// MESSAGE HANDLING
 parentPort.on('message', async (message) => {
     switch(message.type) {
         case 'stop':
