@@ -48,7 +48,7 @@ export class CallBackManager {
         
         this.#CALLBACKS_RELATED_TO_MODE = { // HERE ARE THE GENERIC CALLBACKS - THOSE THAT SPEND EVENT TO ALL CLIENTS
             validatorDashboard: {
-                node: ['onBroadcastNewCandidate:all'],
+                node: ['onBroadcastNewCandidate:all', 'onStateUpdate:all'],
                 memPool: ['pushTransaction:all', 'uxtoSpent:all'],
                 //utxoCache: [`onBalanceUpdated:${this.node.account.address}`],
             },
@@ -161,6 +161,9 @@ const CALLBACKS_FUNCTIONS = {
          */
         onBroadcastNewCandidate: (block, wsClients = [], trigger = '') => {
             sendToClients({ type: 'broadcast_new_candidate', data: block, trigger }, wsClients);
+        },
+        onStateUpdate: (newState = 'toto', wsClients = [], trigger = '') => {
+            sendToClients({ type: 'state_updated', data: newState, trigger }, wsClients);
         },
         /** send the confirmed block header (without Txs) when the local node validate it
          * @param {BlockInfo} blockInfo

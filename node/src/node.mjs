@@ -100,6 +100,9 @@ export class Node {
         const state = this.blockchainStats.state;
         if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) { return; }
         this.blockchainStats.state = newState;
+
+        const callback = this.wsCallbacks.onStateUpdate;
+        if (callback) callback.execute(newState);
     }
     #subscribeTopicsRelatedToRoles(roles = []) {
         const rolesTopics = {

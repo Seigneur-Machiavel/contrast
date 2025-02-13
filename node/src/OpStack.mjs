@@ -194,7 +194,7 @@ export class OpStack {
                             break;
                         case 'Checkpoint deployed':
                             this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] Checkpoint deployed, restarting node...`, (m) => console.warn(m));
-                            this.node.restartRequested = 'OpStack.syncWithPeers() -> Checkpoint deployed';
+                            this.node.restartRequested = 'Checkpoint deployed';
                             this.terminate();
                             break;
                         default:

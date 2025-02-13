@@ -406,6 +406,8 @@ export class DashboardWsApp {
 
             this.miniLogger.log('#stopNodeIfRequestedLoop() -->', (m) => { console.log(m); });
             this.miniLogger.log(`Node ${this.node.id} restart requested by ${this.node.restartRequested}`, (m) => { console.log(m); });
+            this.node.updateState(`${this.node.restartRequested}, Restarting...`);
+            await new Promise(resolve => setTimeout(resolve, 100)); // (time to send state update message)
 
             this.miniLogger.log(`||----->>> Node ${this.node.id} exiting dashboard app ...`, (m) => { console.log(m); });
             await this.stop();

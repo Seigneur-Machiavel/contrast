@@ -76,6 +76,10 @@ function connectWS() {
                 minerUTXOs = data.minerUTXOs;
                 
                 break;
+            case 'state_updated':
+                if (typeof data !== 'string') { console.error('state_update: data is not a string'); return; }
+                eHTML.nodeState.textContent = data;
+                break;
             case 'node_restarting':
                 console.log('node_restarting', data);
                 break;
