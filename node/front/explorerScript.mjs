@@ -194,7 +194,7 @@ async function connectWSLoop() {
     connectWS();
     while (true) {
         await new Promise((resolve) => { setTimeout(() => { resolve(); }, SETTINGS.RECONNECT_INTERVAL); });
-        if (ws && ws.readyState === 1) { continue; }
+        if (ws && ws.readyState === 1) { continue; } // already connected
         // if connecting, wait... 
         while(ws && ws.readyState === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
 

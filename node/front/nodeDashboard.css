@@ -136,7 +136,8 @@ h3 {
     margin: 24px 0 6px 0;
 }
 .container .spacedText h3:not(:first-child), .container .spacedText div h3 {
-    opacity: .6;
+    /*opacity: .6;*/
+    color: var(--color2_3);
 }
 
 .spacedText {

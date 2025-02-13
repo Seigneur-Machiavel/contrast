@@ -3,18 +3,15 @@ process.on('uncaughtException', (error) => { console.error('Uncatched exception:
 process.on('unhandledRejection', (reason, promise) => { console.error('Promise rejected:', promise, 'reason:', reason); });
 
 import { NodeAppWorker } from './workers/workers-classes.mjs';
-import nodeMachineId from 'node-machine-id';
 
-const fingerPrint = nodeMachineId.machineIdSync();
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
-
 const args = process.argv.slice(2); // digest the start args
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const observerPort = args.includes('-op') ? parseInt(nextArg('-op')) : 27270;
 const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
 const nodeApp = args.includes('-na') ? nextArg('-na') : 'dashboard'; // dashboard, stresstest
 const privateKey = args.includes('-pk') ? nextArg('-pk') : null;
-const password = args.includes('-pw') ? nextArg('-pw') : fingerPrint.slice(0, 30)
+const password = args.includes('-pw') ? nextArg('-pw') : 'fingerPrint'; //fingerPrint.slice(0, 30)
 
 const dashboardWorker = new NodeAppWorker(nodeApp, nodePort, dashboardPort, observerPort);
 const result = await dashboardWorker.setPasswordAndWaitResult(password); // (will try init node if password is correct)

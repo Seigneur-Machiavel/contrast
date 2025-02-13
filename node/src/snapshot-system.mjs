@@ -206,13 +206,14 @@ export class CheckpointSystem {
 		result.heights.sort((a, b) => a - b);
 		return result;
 	}
-	pruneCheckpoints(height = 1000) { // dangerous to prune checkpoints, use with caution
+	pruneCheckpointsLowerThanHeight(height = 1000) { // dangerous to prune checkpoints, use with caution
 		let preservedCheckpoints = 0;
-		for (const h of Object.keys(this.#getCheckpointsInfos().hashes)) {
+		const descendingHeights = this.#getCheckpointsInfos().heights.reverse();
+		for (const h of descendingHeights) {
 			const maxCheckpointsReached = preservedCheckpoints >= this.checkpointToConserve;
-			if (Number(h) < height && !maxCheckpointsReached) { preservedCheckpoints++; continue; }
+			if (h < height && !maxCheckpointsReached) { preservedCheckpoints++; continue; }
 
-			fs.rmSync(path.join(PATH.CHECKPOINTS, h), { recursive: true, force: true });
+			fs.rmSync(path.join(PATH.CHECKPOINTS, h.toString), { recursive: true, force: true });
 		}
 	}
 	newCheckpoint(height = 1000, fromPath, overwrite = false) {

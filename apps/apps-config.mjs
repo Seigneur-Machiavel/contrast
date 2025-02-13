@@ -44,7 +44,7 @@ export const appsConfig = {
 		minHeight: 300,
 		initialWidth: 700,
 		iconWidth: '60%',
-		title: '== ASSISTANT ++\\',
+		title: '❖ ASSISTANT ` ` \\_',
 		content: '../../apps/assistant/assistant-content.html',
 		fullScreen: false,
 		setFront: true
@@ -87,7 +87,7 @@ export const appsConfig = {
 		minHeight: 192,
 		initialWidth: 800,
 		iconWidth: '69%',
-		title: '°`° BLOCKCHAIN EXPLORER -}==-',
+		title: '°`° BLOCKCHAIN EXPLORER - }== -',
 		content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>',
 	},
 };

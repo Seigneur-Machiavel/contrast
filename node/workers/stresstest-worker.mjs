@@ -6,7 +6,7 @@ import { DashboardWsApp, ObserverWsApp } from '../src/apps.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 import { Wallet, Account } from '../src/wallet.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { argon2Hash } from '../src/conCrypto.mjs';
+import { argon2Hash, HashFunctions } from '../src/conCrypto.mjs';
 import { CryptoLight } from '../../utils/cryptoLight.mjs'
 import { Storage } from '../../utils/storage-manager.mjs';
 import nodeMachineId from 'node-machine-id';
@@ -48,7 +48,9 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
 }
 async function setPassword(password = 'toto') {
-    const passHash = await cryptoLight.generateArgon2Hash(password, fingerPrint, 64, 'heavy', 16);
+    // HashFunctions.xxHash32(password); useless!
+    const passwordStr = password === 'fingerPrint' ? fingerPrint : password;
+    const passHash = await cryptoLight.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
     if (!passHash) { console.error('Argon2 hash failed'); return false; }
 
     if (!passwordExist) {
@@ -69,7 +71,7 @@ async function setPassword(password = 'toto') {
 
     if (cryptoLight.isReady()) return true;
 
-    const concatenated = fingerPrint + password;
+    const concatenated = fingerPrint + passwordStr;
     const fingerPrintUint8 = new Uint8Array(Buffer.from(fingerPrint, 'hex'));
     cryptoLight.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8)
     await cryptoLight.generateKey(concatenated);

@@ -47,7 +47,8 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
 }
 async function setPassword(password = 'toto') {
-    const passHash = await cryptoLight.generateArgon2Hash(password, fingerPrint, 64, 'heavy', 16);
+    const passwordStr = password === 'fingerPrint' ? fingerPrint : password;
+    const passHash = await cryptoLight.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
     if (!passHash) { console.error('Argon2 hash failed'); return false; }
 
     if (!passwordExist) {
@@ -68,7 +69,7 @@ async function setPassword(password = 'toto') {
 
     if (cryptoLight.isReady()) return true;
 
-    const concatenated = fingerPrint + password;
+    const concatenated = fingerPrint + passwordStr;
     const fingerPrintUint8 = new Uint8Array(Buffer.from(fingerPrint, 'hex'));
     cryptoLight.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8)
     await cryptoLight.generateKey(concatenated);
@@ -82,9 +83,9 @@ parentPort.on('message', async (message) => {
             break;
         case 'set_password_and_try_init_node':
             const passwordCreation = !passwordExist;
-            const result = await setPassword(message.data);
-            parentPort.postMessage({ type: passwordCreation ? 'set_new_password_result' : 'set_password_result', data: result });
-            if (!result) return;
+            const setPasswordSuccess = await setPassword(message.data);
+            parentPort.postMessage({ type: passwordCreation ? 'set_new_password_result' : 'set_password_result', data: setPasswordSuccess });
+            if (!setPasswordSuccess) return;
 
             await initDashAppAndSaveSettings();
             break;
