@@ -18,6 +18,7 @@ Menu.setApplicationMenu(null); // remove the window top menu
 const { autoUpdater } = require('electron-updater');
 const setShortcuts = require('./electron-app/shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
+const AutoLaunch = require('auto-launch');
 /*const log = require('electron-log');
 log.transports.file.level = 'info';
 log.info('--- Test log ---');
@@ -30,6 +31,7 @@ const windowsOptions = {
     mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
 }
 const mainLogger = new MiniLogger('main');
+const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });
 const isDev = !app.isPackaged;
 const nodeApp = isDev ? 'stresstest' : 'dashboard';
 let isQuiting = false;
@@ -131,5 +133,14 @@ app.on('ready', async () => {
     ipcMain.on('extract-private-key', async (event, password) => {
         const extracted = await dashboardWorker.extractPrivateKeyAndWaitResult(password);
         event.reply('assistant-message', extracted);
+    });
+    ipcMain.on('set-auto-launch', async (event, value) => {
+        const isEnabled = await myAppAutoLauncher.isEnabled();
+        if (value && !isEnabled) myAppAutoLauncher.enable();
+        if (!value && isEnabled) myAppAutoLauncher.disable();
+
+        const isNowEnabled = await myAppAutoLauncher.isEnabled();
+        console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);
+        event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
     });
 });

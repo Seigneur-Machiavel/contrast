@@ -182,7 +182,12 @@ export class Assistant {
     idleMenu() {
         this.requestChoice({
 			'Extract my private key': () => this.requestPasswordToExtract(),
-			'Launch at startup': () => { this.sendMessage('Not implemented yet'); this.idleMenu(); },
+			'Launch at startup': () => {
+                this.requestChoice({
+                    'Yes': () => { window.electronAPI.setAutoLaunch(true), this.idleMenu(); },
+                    'No': () => { window.electronAPI.setAutoLaunch(false), this.idleMenu(); }
+                });
+            },
 		});
     }
 

@@ -6,6 +6,7 @@ const electronAPI = {
     generatePrivateKeyAndStartNode: () => ipcRenderer.send('generate-private-key-and-start-node'),
     setPrivateKeyAndStartNode: (privateKey) => ipcRenderer.send('set-private-key-and-start-node', privateKey),
     extractPrivateKey: (password) => ipcRenderer.send('extract-private-key', password),
+    setAutoLaunch: (value) => ipcRenderer.send('set-auto-launch', value),
 
     // Listeners
     onNoExistingPassword: (func) => { ipcRenderer.on('no-existing-password', (event, ...args) => func(...args)); },
