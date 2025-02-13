@@ -99,7 +99,7 @@ export class SyncHandler {
                 /** @type {GetBlocksAnwser} */
                 const getBlocksAnwser = {
                     blocks: this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false),
-                    blocksInfo: getBlocksAnwser.blocksInfo ? this.node.blockchain.getRangeOfBlocksInfoByHeight(msg.startIndex, msg.endIndex, false) : []
+                    blocksInfo: msg.includesBlockInfo ? this.node.blockchain.getRangeOfBlocksInfoByHeight(msg.startIndex, msg.endIndex, false) : []
                 };
 
                 if (!getBlocksAnwser.blocks) { throw new Error('(#handleIncomingStream) Failed to get serialized blocks'); }
