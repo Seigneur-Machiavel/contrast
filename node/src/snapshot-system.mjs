@@ -70,14 +70,7 @@ export class SnapshotSystem {
 		performance.mark('endSaveMemPool');
 
 		performance.mark('startSaveUtxoCache'); // SAVE UTXO CACHE
-		const totalOfBalancesSerialized = this.fastConverter.numberTo6BytesUint8Array(utxoCache.totalOfBalances);
-		const totalSupplySerialized = this.fastConverter.numberTo6BytesUint8Array(utxoCache.totalSupply);
-		const miniUTXOsSerialized = serializer.serialize.miniUTXOsObj(utxoCache.unspentMiniUtxos);
-
-		const utxoCacheDataSerialized = new Uint8Array(6 + 6 + miniUTXOsSerialized.length);
-		utxoCacheDataSerialized.set(totalOfBalancesSerialized);
-		utxoCacheDataSerialized.set(totalSupplySerialized, 6);
-		utxoCacheDataSerialized.set(miniUTXOsSerialized, 12);
+		const utxoCacheDataSerialized = serializer.serialize.utxoCacheData(utxoCache);
 		Storage.saveBinary('utxoCache', utxoCacheDataSerialized, heightPath);
 		performance.mark('endSaveUtxoCache');
 
@@ -257,6 +250,7 @@ export class CheckpointSystem {
 	}
 
 	// ACTIVE CHECKPOINT
+	#randomDiceRoll(diceFaces = 6) { return Math.floor(Math.random() * diceFaces) + 1 === 1; }
 	checkForActiveCheckpoint() {
 		if (!fs.existsSync(this.activeCheckpointPath)) { return false; }
 
@@ -295,9 +289,24 @@ export class CheckpointSystem {
 
 		return true; // need to sync missing blocks
 	}
-	#randomDiceRoll(diceFaces = 6) { return Math.floor(Math.random() * diceFaces) + 1 === 1; }
-	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock */
-	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock) {
+	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
+	#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo) {
+		const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
+		const batchFolderPath = path.join(this.activeCheckpointPath, 'blocks', batchFolderName);
+		const infoBatchFolderPath = path.join(this.activeCheckpointPath, 'blocks-info', batchFolderName);
+		const blockFileName = `${finalizedBlock.index}-${finalizedBlock.hash}`;
+		
+		if (fs.existsSync(path.join(batchFolderPath, `${blockFileName}.bin`))) fs.rmSync(path.join(batchFolderPath, `${blockFileName}.bin`), { force: true });
+		if (fs.existsSync(path.join(infoBatchFolderPath, `${blockFileName}.bin`))) fs.rmSync(path.join(infoBatchFolderPath, `${blockFileName}.bin`), { force: true });
+		
+		if (!fs.existsSync(batchFolderPath)) fs.mkdirSync(batchFolderPath, { recursive: true });
+		if (!fs.existsSync(infoBatchFolderPath)) fs.mkdirSync(infoBatchFolderPath, { recursive: true });
+
+		if (!Storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) { throw new Error('(Checkpoint fill) Block file save failed'); }
+		if (!Storage.saveBinary(blockFileName, serializedBlockInfo, infoBatchFolderPath)) { throw new Error('(Checkpoint fill) Block info file save failed'); }
+	}
+	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
+	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock, serializedBlockInfo) {
 		if (this.activeCheckpointHeight === false) { throw new Error('(Checkpoint fill) Active checkpoint not set'); }
 		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) { throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`); }
 		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { throw new Error(`(Checkpoint fill) Block prevHash mismatch: ${finalizedBlock.prevHash} !== ${this.activeCheckpointHash}`); }
@@ -309,13 +318,7 @@ export class CheckpointSystem {
         	if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
 		}
 
-		const checkpointBlocksPath = path.join(this.activeCheckpointPath, 'blocks');
-		const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
-		const batchFolderPath = path.join(checkpointBlocksPath, batchFolderName);
-		if (!fs.existsSync(batchFolderPath)) { fs.mkdirSync(batchFolderPath, { recursive: true }); }
-
-		const blockFileName = `${finalizedBlock.index}-${finalizedBlock.hash}`;
-		if (!Storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) { throw new Error('(Checkpoint fill) Block file save failed'); }
+		this.#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo);
 
 		this.activeCheckpointHeight = finalizedBlock.index;
 		this.activeCheckpointHash = finalizedBlock.hash;
@@ -332,13 +335,15 @@ export class CheckpointSystem {
 		}
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
-		if (fs.existsSync(txsRefsConfigDest)) { fs.rmSync(txsRefsConfigDest, { force: true }); }
-		if (fs.existsSync(PATH.BLOCKS)) { fs.rmSync(PATH.BLOCKS, { recursive: true, force: true }); }
-		if (fs.existsSync(PATH.SNAPSHOTS)) { fs.rmSync(PATH.SNAPSHOTS, { recursive: true, force: true }); }
-		if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true, force: true }); }
-		if (fs.existsSync(PATH.TRASH)) { fs.rmSync(PATH.TRASH, { recursive: true, force: true }); }
+		if (fs.existsSync(txsRefsConfigDest)) fs.rmSync(txsRefsConfigDest, { force: true });
+		if (fs.existsSync(PATH.BLOCKS)) fs.rmSync(PATH.BLOCKS, { recursive: true, force: true });
+		if (fs.existsSync(PATH.SNAPSHOTS)) fs.rmSync(PATH.SNAPSHOTS, { recursive: true, force: true });
+		if (fs.existsSync(PATH.TXS_REFS)) fs.rmSync(PATH.TXS_REFS, { recursive: true, force: true });
+		if (fs.existsSync(PATH.TRASH)) fs.rmSync(PATH.TRASH, { recursive: true, force: true });
+		if (fs.existsSync(PATH.BLOCKS_INFO)) fs.rmSync(PATH.BLOCKS_INFO, { recursive: true, force: true });
 
 		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks'), PATH.BLOCKS);
+		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks-info'), PATH.BLOCKS_INFO);
 		fs.renameSync(path.join(this.activeCheckpointPath, 'snapshots'), PATH.SNAPSHOTS);
 		fs.renameSync(path.join(this.activeCheckpointPath, 'addresses-txs-refs'), PATH.TXS_REFS);
 		fs.renameSync(path.join(this.activeCheckpointPath, 'AddressesTxsRefsStorage_config.json'), txsRefsConfigDest);

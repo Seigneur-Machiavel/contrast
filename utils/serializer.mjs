@@ -8,6 +8,7 @@ import { Transaction } from '../node/src/transaction.mjs';
 
 /**
 * @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
+* @typedef {import("../node/src/utxoCache.mjs").UtxoCache} UtxoCache
 */
 /**
  * @typedef { Object } NodeSetting
@@ -451,6 +452,19 @@ export const serializer = {
             serializedNodeSettingView.set(fastConverter.addressBase58ToUint8Array(nodeSetting.minerAddress), 48); // 16 bytes
             serializedNodeSettingView.set(fastConverter.numberTo1ByteUint8Array(nodeSetting.minerThreads), 64); // 1 byte
             return serializedNodeSettingView;
+        },
+        /** @param {UtxoCache} utxoCache */
+        utxoCacheData(utxoCache) {
+            const totalOfBalancesSerialized = fastConverter.numberTo6BytesUint8Array(utxoCache.totalOfBalances);
+            const totalSupplySerialized = fastConverter.numberTo6BytesUint8Array(utxoCache.totalSupply);
+            const miniUTXOsSerialized = serializer.serialize.miniUTXOsObj(utxoCache.unspentMiniUtxos);
+    
+            const utxoCacheDataSerialized = new Uint8Array(6 + 6 + miniUTXOsSerialized.length);
+            utxoCacheDataSerialized.set(totalOfBalancesSerialized);
+            utxoCacheDataSerialized.set(totalSupplySerialized, 6);
+            utxoCacheDataSerialized.set(miniUTXOsSerialized, 12);
+
+            return utxoCacheDataSerialized;
         },
         /** @param {SyncStatus} syncStatus @param {Uint8Array} data */
         syncResponse(syncStatus, data) {

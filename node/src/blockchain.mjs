@@ -147,7 +147,7 @@ export class Blockchain {
             
             if (persistToDisk) this.blockStorage.addBlock(block);
             if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
-
+            this.blockStorage.getBlockInfoByIndex(block.index);
             this.cache.addBlock(block);
             this.lastBlock = block;
             this.currentHeight = block.index;
@@ -305,6 +305,18 @@ export class Blockchain {
             blocksData.push(blockData);
         }
         return blocksData;
+    }
+    getRangeOfBlocksInfoByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
+        if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') { throw new Error('Invalid block range: not numbers'); }
+        if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
+
+        const blocksInfo = [];
+        for (let i = fromHeight; i <= toHeight; i++) {
+            const blockInfo = this.blockStorage.getBlockInfoByIndex(i, deserialize);
+            if (!blockInfo) { break; }
+            blocksInfo.push(blockInfo);
+        }
+        return blocksInfo;
     }
     /** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
     getBlock(heightOrHash, deserialize = true) {

@@ -199,7 +199,7 @@ export class CheckpointsStorage {
     }
     /** @param {Buffer} buffer @param {string} hashToVerify */
     static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify) {
-        try { 
+        try {
             const buffer = Buffer.from(checkpointBuffer);
             const hash = crypto.createHash('sha256').update(buffer).digest('hex');
             if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
@@ -438,7 +438,7 @@ export class BlockchainStorage {
         const block = this.#getBlock(blockIndex, blockHash, deserialize);
         return block;
     }
-    getBlockInfoByIndex(blockIndex = 0) {
+    getBlockInfoByIndex(blockIndex = 0, deserialize = true) {
         const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockIndex).name;
         const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
         const blockHash = this.hashByIndex[blockIndex];
@@ -446,6 +446,8 @@ export class BlockchainStorage {
         try {
             const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
             const buffer = fs.readFileSync(blockInfoFilePath);
+            if (!deserialize) { return new Uint8Array(buffer); }
+
             /** @type {BlockInfo} */
             const blockInfo = serializer.deserialize.rawData(buffer);
             return blockInfo;

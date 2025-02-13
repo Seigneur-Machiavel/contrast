@@ -41,13 +41,21 @@ async function stopIfDashAppStoppedLoop() {
     while(dashApp.stopped === false) { await new Promise(resolve => setTimeout(resolve, 1000)); }
     await stop();
 }
+let initializingNode = false;
+let nodeInitialized = false;
 async function initDashAppAndSaveSettings(privateKey = '') {
+    while(initializingNode) { await new Promise(resolve => setTimeout(resolve, 100)); }
+    if (nodeInitialized) return; // avoid double init
+
+    initializingNode = true;
     const initialized = await dashApp.init(privateKey);
     if (!initialized && dashApp.waitingForPrivKey) {
         parentPort.postMessage({ type: 'message_to_mainWindow', data: 'waiting-for-priv-key' });
         console.error(`Can't init dashApp, waitingForPrivKey!`);
     } else if (!initialized) { console.error(`Can't init dashApp, unknown reason!`) }
 
+    initializingNode = false;
+    nodeInitialized = initialized;
     if (!initialized) return;
     
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-started' });
