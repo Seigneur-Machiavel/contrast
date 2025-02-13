@@ -32,7 +32,7 @@ function setShortcuts(windows, dev = true) {
         const focusedWindow = BrowserWindow.getFocusedWindow();
         if (!focusedWindow) return;
         // if main window is focused, restart the app
-        if (focusedWindow === windows.mainWindow) { app.relaunch(); app.exit() } else focusedWindow.reload();
+        if (app.isPackaged && focusedWindow === windows.mainWindow) { app.relaunch(); app.exit() } else focusedWindow.reload();
     });
     // TOGGLE LOGGER SETTINGS MENU
     if (shortcutsKeys.toggleLoggerSettingsMenu.enabled) globalShortcut.register(shortcutsKeys.toggleLoggerSettingsMenu.key, () => {

@@ -1,10 +1,13 @@
 import fs from 'fs';
 import path from 'path';
-import { compressFiles, copyFiles } from '../utils/compressor.mjs';
+import AdmZip from 'adm-zip';
 
 const __dirname = path.resolve();
 const DESTINATION = path.resolve(__dirname, 'dist(do-not-modify)'); // destination folder of contrast files
-if (!fs.existsSync(DESTINATION)) fs.mkdirSync(DESTINATION);
+
+// erase at first
+if (fs.existsSync(DESTINATION)) { fs.rmSync(DESTINATION, { recursive: true }); }
+fs.mkdirSync(DESTINATION, { recursive: true });
 
 // extract version in manifest.json
 const version = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'manifest.json')).toString()).version;
@@ -33,6 +36,8 @@ const COPY_OPERATIONS = [
     ['../libs/msgpack.min.js', 'libs'],
     ['../libs/noble-ed25519-03-2024.mjs', 'libs'],
     ['../libs/argon2-ES6.min.mjs', 'libs'],
+
+    ['../miniLogger/mini-logger.mjs', 'miniLogger'],
     
     ['../utils/addressUtils.mjs', 'utils'],
     ['../utils/blockchain-settings.mjs', 'utils'],
@@ -46,7 +51,7 @@ const COPY_OPERATIONS = [
     ['../utils/progress-logger.mjs', 'utils'],
 
     //['../miniLogger/mini-logger.mjs', 'miniLogger'],
-    ['../fonts/vertopal.com_Contrast V0.89.ttf', 'fonts'],
+    ['../styles/fonts/vertopal.com_Contrast V0.89.ttf', 'styles/fonts'],
 ];
 
 // list of files/folder to ignore in the compression process
@@ -56,6 +61,13 @@ const IGNORED = [
     'contrast-wallet.zip',
     'mjiipclahahbedeiifgpfoagmncdcnoj.crx'
 ];
+
+function copyFiles(outputPath, files, directories) {
+    if (!fs.existsSync(outputPath)) fs.mkdirSync(outputPath, { recursive: true });
+
+    files.forEach(file => { fs.copyFileSync(file.path, `${outputPath}/${file.name}`); });
+    directories.forEach(directory => { fs.mkdirSync(`${outputPath}/${directory.name}`, { recursive: true }); });
+}
 
 function copyFolderRecursive(src, dest) {
     const destFolder = path.resolve(dest, path.basename(src));
@@ -79,7 +91,7 @@ for (const operation of COPY_OPERATIONS) {
     if (operation.length) { // create subfolders if needed
         for (const folder of operation) {
             dest = path.resolve(dest, folder);
-            if (!fs.existsSync(dest)) fs.mkdirSync(dest);
+            if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
         }
     }
 
@@ -108,5 +120,14 @@ for (const file of fs.readdirSync(__dirname)) {
 console.log(files)
 console.log(folders)
 
-compressFiles(path.resolve(__dirname, 'builds', version, 'contrast-wallet.zip'), files, folders);
-copyFiles(path.resolve(__dirname, 'builds', version, 'contrast-wallet'), files, folders);
+const buildDest = path.resolve(__dirname, 'builds', version);
+if (fs.existsSync(buildDest)) { fs.rmSync(buildDest, { recursive: true, force: true }); }
+fs.mkdirSync(buildDest, { recursive: true });
+
+copyFiles(path.resolve(buildDest, 'contrast-wallet'), files, folders);
+
+const zip = new AdmZip();
+zip.addLocalFolder(path.resolve(buildDest, 'contrast-wallet'));
+zip.writeZip(path.resolve(buildDest, 'contrast-wallet.zip'));
+
+console.log(`Build done, archive size: ${fs.statSync(path.resolve(buildDest, 'contrast-wallet.zip')).size} bytes, version: ${version}`);

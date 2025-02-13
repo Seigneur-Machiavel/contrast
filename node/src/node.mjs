@@ -303,12 +303,16 @@ export class Node {
     }
     /** @param {BlockData} finalizedBlock */
     #saveCheckpoint(finalizedBlock) {
-        const height = finalizedBlock.index;
-        if (height === 0) { return; }
-        if (height % this.checkpointSystem.checkpointHeightModulo !== 0) { return; }
+        if (finalizedBlock.index < 100) { return; }
 
         const startTime = performance.now();
-        const oldestSnapHeight = height - (this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve);
+        const snapshotGap = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve; // 5 * 10 = 50
+        // trigger example: #1050 - (5 * 10) % 100 === 0;
+        const trigger = (finalizedBlock.index - snapshotGap) % this.checkpointSystem.checkpointHeightModulo === 0;
+        if (!trigger) { return; }
+
+        // oldest example: #1050 - (5 * 10) = 1000
+        const oldestSnapHeight = finalizedBlock.index - snapshotGap;
         const result = this.checkpointSystem.newCheckpoint(oldestSnapHeight);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
         this.miniLogger.log(`${logText} ${oldestSnapHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });

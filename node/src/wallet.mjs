@@ -86,11 +86,11 @@ export class Wallet {
         this.miniLogger = new MiniLogger('wallet');
         /** @type {string} */
         this.#masterHex = masterHex; // 30 bytes - 60 chars
+        console.log(`[---- WALLET ----] masterHex: ${this.#masterHex}`);
         /** @type {Object<string, Account[]>} */
         this.accounts = { // max accounts per type = 65 536
             W: [],
             C: [],
-            S: [],
             P: [],
             U: []
         };
@@ -98,7 +98,6 @@ export class Wallet {
         this.accountsGenerated = {
             W: [],
             C: [],
-            S: [],
             P: [],
             U: []
         };
@@ -127,7 +126,7 @@ export class Wallet {
         //const nbOfExistingAccounts = this.accounts[addressPrefix].length;
         const nbOfExistingAccounts = this.accountsGenerated[addressPrefix].length;
         const accountToGenerate = nbOfAccounts - nbOfExistingAccounts < 0 ? 0 : nbOfAccounts - nbOfExistingAccounts;
-        this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`, (m) => { console.info(m); });
+        this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix} | nbWorkers: ${this.nbOfWorkers}`, (m) => { console.info(m); });
         //console.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`);
 
         const progressLogger = new ProgressLogger(accountToGenerate, '[WALLET] deriving accounts');
@@ -150,6 +149,7 @@ export class Wallet {
             if (this.accounts[addressPrefix][i]) { continue; } // already derived account (should not append here)
             let derivationResult;
             if (this.nbOfWorkers === 0) {
+                // USUALLY UNUSED
                 derivationResult = await this.tryDerivationUntilValidAccount(i, addressPrefix);
             } else {
                 for (let i = this.workers.length; i < this.nbOfWorkers; i++) {
@@ -244,6 +244,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`);
         if (addressTypeInfo === undefined) { throw new Error(`Invalid desiredPrefix: ${desiredPrefix}`); }
 
         // To be sure we have enough iterations, but avoid infinite loop
+        console.log(`[WALLET] tryDerivationUntilValidAccount: ai: ${accountIndex} | prefix: ${desiredPrefix} | zeroBits: ${addressTypeInfo.zeroBits}`);
         const maxIterations = 65_536 * (2 ** addressTypeInfo.zeroBits); // max with zeroBits(16): 65 536 * (2^16) => 4 294 967 296
         const seedModifierStart = accountIndex * maxIterations; // max with accountIndex: 65 535 * 4 294 967 296 => 281 470 681 743 360 
         for (let i = 0; i < maxIterations; i++) {

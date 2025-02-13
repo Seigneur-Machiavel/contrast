@@ -23,7 +23,7 @@
 
 @font-face {
     font-family: 'Contrast'; /* Nom que vous donnez à votre police */
-    src: url('./dist(do-not-modify)/fonts/vertopal.com_Contrast\ V0.89.ttf') format('truetype'); /* Chemin relatif ou absolu vers le fichier de police */
+    src: url('./dist(do-not-modify)/styles/fonts/vertopal.com_Contrast\ V0.89.ttf') format('truetype'); /* Chemin relatif ou absolu vers le fichier de police */
 }
 
 ::-webkit-scrollbar {

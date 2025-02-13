@@ -98,9 +98,11 @@ async function onMessage(event) {
     const lastBlockInfoIndex = blockExplorerWidget.lastBlockInfoIndex;
     switch (message.type) {
         case 'current_height':
+            //console.info(`current_height #${data} | lastBlockIndex #${lastBlockInfoIndex} -> `);
             if (lastBlockInfoIndex === -1) { return; }
             if (data === lastBlockInfoIndex) { return; }
             if (data === lastBlockInfoIndex + 1) { // need the new block
+                console.info(`get_new_block_confirmed #${data} sent`);
                 if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'get_new_block_confirmed', data: data }))
                 return;
             }
@@ -199,8 +201,8 @@ async function connectWSLoop() {
         console.info('--- reseting blockExplorerWidget >>>');
 
         const clonedData = blockExplorerWidget.getCloneBeforeReset();
-        blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget');
-        //blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
+        //blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget');
+        blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
         if (clonedData.modalContainer) { blockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer); }
 
         connectWS();
