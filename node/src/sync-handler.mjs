@@ -276,7 +276,8 @@ export class SyncHandler {
             const heightPeers = (consensuses[height][blockHash] || 0) + 1;
             consensuses[height][blockHash] = heightPeers;
 
-            if (heightPeers <= consensus.peers) { continue; }
+            if (heightPeers < consensus.peers) { continue; }
+            if (heightPeers === consensus.peers && consensus.height > height) { continue; }
 
             consensus.height = height;
             consensus.peers = heightPeers;
@@ -295,7 +296,8 @@ export class SyncHandler {
             const checkpointPeers = (checkpointConsensuses[height][hash] || 0) + 1;
             checkpointConsensuses[height][hash] = checkpointPeers;
 
-            if (checkpointPeers <= checkpointConsensus.peers) { continue; }
+            if (checkpointPeers < checkpointConsensus.peers) { continue; }
+            if (checkpointPeers === checkpointConsensus.peers && checkpointConsensus.checkpointInfo.height > height) { continue; }
 
             checkpointConsensus.peers = checkpointPeers;
             checkpointConsensus.checkpointInfo = { height, hash };

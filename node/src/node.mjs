@@ -122,6 +122,7 @@ export class Node {
         this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
     }
     async start(startFromScratch = false) {
+        const startTime = performance.now();
         this.updateState("starting");
 
         this.#loadBootstrapNodesList();
@@ -161,7 +162,8 @@ export class Node {
         this.miniLogger.log('P2P network is ready - we are connected baby', (m) => { console.info(m); });
         if (!this.roles.includes('validator')) { return; }
 
-        await new Promise(resolve => setTimeout(resolve, 3000)); // ~maxTime to connect nodes
+        const elapsed = performance.now() - startTime;
+        await new Promise(resolve => setTimeout(resolve, Math.max(3000 - elapsed, 0))); // ~maxTime to connect nodes
         if (!activeCheckpoint) { this.opStack.pushFirst('createBlockCandidateAndBroadcast', null); }
         this.opStack.pushFirst('syncWithPeers', null);
     }
