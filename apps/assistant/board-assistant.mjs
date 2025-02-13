@@ -88,26 +88,26 @@ export class Assistant {
         this.onResponse(message);
     }
 
-    requestNewPassword() {
-        this.sendMessage('Welcome to Contrast, the setup process will only take a few minutes...');
+    requestNewPassword(failureMsg = false) {
+        if (failureMsg === false) this.sendMessage('Welcome to Contrast, the setup process will only take a few minutes...');
         setTimeout(() => {
             this.onResponse = this.#verifyNewPassword;
-            this.sendMessage('Please enter a new password');
+            this.sendMessage(`(1) ${failureMsg || 'Please enter a new password'}`);
             this.#setActiveInput('password', 'Your new password...', true);
-        }, 600);
+        }, failureMsg ? 0 : 600);
     }
     #verifyNewPassword(password = 'toto') {
         const isValid = typeof password === 'string' && password.length > 5 && password.length < 30;
-        if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
+        if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; } // re ask confirmation (2)
 
         this.#userResponse = password;
         this.onResponse = this.#confirmNewPassword;
-        this.sendMessage('Confirm your password');
+        this.sendMessage('(2) Confirm your password');
         this.#setActiveInput('password', 'Confirm your password...', true);
     }
     #confirmNewPassword(password = 'toto') {
-        if (typeof password !== 'string') { this.sendMessage('What the hell are you doing?'); return; }
-        if (password !== this.#userResponse) { this.sendMessage('Passwords do not match.'); return; }
+        if (typeof password !== 'string') { this.sendMessage('What the hell are you typing?'); return; }
+        if (password !== this.#userResponse) { this.requestNewPassword('Passwords do not match.'); return; } // Retry at step (1)
 
         window.electronAPI.setPassword(password);
         this.#setActiveInput('idle');
@@ -128,8 +128,8 @@ export class Assistant {
         this.#setActiveInput('idle');
     }
 
-    requestPasswordToUnlock() {
-        this.sendMessage('Please enter your password to unlock');
+    requestPasswordToUnlock(failed = false) {
+        this.sendMessage(failed ? 'Wrong password, try again' : 'Please enter your password to unlock');
         this.#setActiveInput('password', 'Your password...', true);
         this.onResponse = this.#verifyPasswordAndUnlock;
     }

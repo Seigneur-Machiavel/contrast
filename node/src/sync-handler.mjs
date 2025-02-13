@@ -380,12 +380,12 @@ export class SyncHandler {
     }
     async #handleSyncFailure(message = '') {
         this.syncFailureCount++;
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 5000));
 
         // METHOD 1: try to sync from snapshots
         // if syncFailureCount is a multiple of 10, try to sync from snapshots
         const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
-        if (this.syncFailureCount % 10 === 0 && snapshotsHeights.length > 0) {
+        if (this.syncFailureCount % 7 === 0 && snapshotsHeights.length > 0) {
             const modulo = (this.syncFailureCount / 10) % snapshotsHeights.length;
             const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
             this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
@@ -399,6 +399,11 @@ export class SyncHandler {
             return message;
         }
 
+        // IN WORDS:
+        // 7 failures -> try to sync from (n-1) snapshots
+        // 14 failures -> try to sync from (n-2) snapshots
+        // 21 failures -> try to sync from (n-3) snapshots
+        // 25 failures -> restart the node (n-1) snapshot loaded and placed in trash
         //this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
         return message;
     }

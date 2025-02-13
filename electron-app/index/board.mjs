@@ -13,11 +13,10 @@ let assistant;
 
 const interactionsListenners = {
 	onNoExistingPassword: () => { assistant.requestNewPassword(); },
-	//onSetNewPasswordResult: async (message) => { assistant.sendMessage(`${message ? 'Password creation successfully' : 'Password creation failed'}`); },
-	onSetNewPasswordResult: async (message) => { if (!message) assistant.sendMessage(`Password creation failed`); },
+	onSetNewPasswordResult: async (message) => { if (!message) assistant.requestNewPassword('Password creation failed, try again'); },
 
 	onPasswordRequested: () => { appsManager.lock(); assistant.requestPasswordToUnlock(); },
-	onSetPasswordResult: (message) => { if (!message) assistant.sendMessage(`Incorrect password`); },
+	onSetPasswordResult: (message) => { if (!message) assistant.requestPasswordToUnlock(true); },
 	
 	onWaitingForPrivKey: () => {
 		assistant.sendMessage('Would you like to create a new private key or restore an existing wallet?')
