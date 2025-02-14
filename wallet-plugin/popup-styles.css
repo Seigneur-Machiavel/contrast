@@ -16,9 +16,9 @@
     --cbe-color3: #4f4f4f;
 
     --cbe-widget-padding: 22.6px 10px;
-    --inner-height: 140px;
-    --wrap-border-radius: 0px;
-    /*--search-menu-width: calc(370px - 12px);*/
+    --cbe-inner-height: 140px;
+    --cbe-wrap-border-radius: 0px;
+    /*--cbe-search-menu-width: calc(370px - 12px);*/
 }
 
 @font-face {

@@ -69,14 +69,18 @@
 :root {
     --dark-mode-boolean: 0;
     --color1: white;
+    --color1_rgb: 255, 255, 255;
     --color1_1: #f0f0f0;
     --color1_2: #e0e0e0;
     --color1_3: #d0d0d0;
 
     --color2: black;
+    --color2_rgb: 0, 0, 0;
     --color2_1: #161616;
     --color2_2: #323232;
     --color2_3: #484848;
+
+    --color3: #7b7b7b;
 
     --buttons-bar-height: 70px;
     --windows-animation-duration: 400ms;

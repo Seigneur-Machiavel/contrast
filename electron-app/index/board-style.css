@@ -2,6 +2,67 @@ body {
     overflow: hidden;
 }
 
+.titlebar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 30px;
+    background-color: var(--color1_1);
+    color: var(--color2_3);
+    box-shadow: -7px 1px 0px -6px var(--color1_2);
+    padding: 0 0px 0 6px;
+    /*app-region: drag;*/
+    -webkit-app-region: drag;
+}
+.titlebar .window-controls {
+    display: flex;
+    position: absolute;
+    right: 0;
+    top: 0;
+    padding: 0 0 0 6px;
+    box-shadow: -7px 1px 0px -6px var(--color1_2);
+}
+.titlebar .window-controls button {
+    -webkit-app-region: no-drag;
+    padding: 0;
+    width: 36px;
+    height: 30px;
+    background-color: var(--color1_1);
+    color: var(--color2_3);
+    border: none;
+    border-radius: 0;
+    display: flex;
+    font-family: 'IBM Plex Mono';
+    font-size: large;
+    justify-content: center;
+    align-items: baseline;
+    gap: 2px;
+    cursor: pointer;
+}
+#minimize-btn {
+    padding-top: 1px;
+}
+#maximize-btn, #minimize-btn {
+    align-items: center;
+    font-weight: 900;
+}
+#maximize-btn:hover, #minimize-btn:hover {
+    background-color: var(--color1_3);
+}
+#close-btn {
+    font-size: 1.3em;
+}
+#close-btn:hover {
+    cursor: pointer;
+    background-color: red;
+}
+
+#board-windows-wrap {
+    position: relative;
+    overflow: hidden;
+    height: calc(100vh - 30px);
+    width: 100%;
+}
 #board-bottom-buttons-bar {
     pointer-events: none;
     position: fixed;

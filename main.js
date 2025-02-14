@@ -28,7 +28,8 @@ autoUpdater.logger = log;*/
 const windowsOptions = {
     logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
     nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
-    mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
+    //mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
+    mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', startHidden: false, isMainWindow: true }
 }
 const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });
@@ -51,20 +52,32 @@ async function randomRestartTest() {
 }
 /** @param {WindowOptions} options */
 async function createWindow(options) {
-    const { nodeIntegration, contextIsolation, url_or_file, width, height, startHidden = true, isMainWindow = false } = options;
+    const {
+        nodeIntegration,
+        contextIsolation,
+        url_or_file,
+        width,
+        height,
+        startHidden = true,
+        isMainWindow = false
+    } = options;
 
     const window = new BrowserWindow({
         show: !startHidden,
         width,
         height,
         icon: 'electron-app/img/icon_256.png',
-        //frame: false,
-        //titleBarStyle: 'hidden',
+        titleBarStyle: isMainWindow ? 'hidden' : 'default',
+        //titleBarStyle: isMainWindow ? 'hiddenInset' : 'default',
+        
+        /*titleBarOverlay: isMainWindow ? { color: '#000', symbolColor: '#fff' } : undefined,*/
+        //titleBarOverlay: isMainWindow && process.platform !== 'darwin' ? true : undefined,
         webPreferences: {
             preload: isMainWindow ? path.join(__dirname, 'electron-app', 'preload.js') : undefined,
             nodeIntegration,
             contextIsolation
-        }
+        },
+        //...(process.platform !== 'darwin' ? { titleBarOverlay: true } : {})
     });
 
     if (isMainWindow) {
@@ -141,4 +154,8 @@ app.on('ready', async () => {
         console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);
         event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
     });
+
+    ipcMain.on('minimize-btn-click', () => windows.mainWindow.minimize());
+    ipcMain.on('maximize-btn-click', () => windows.mainWindow.isMaximized() ? windows.mainWindow.unmaximize() : windows.mainWindow.maximize());
+    ipcMain.on('close-btn-click', () => windows.mainWindow.close());
 });

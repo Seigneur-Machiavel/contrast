@@ -2,6 +2,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const electronAPI = {
     // Methods
+    onMinimizeBtnClick: () => ipcRenderer.send('minimize-btn-click'),
+    onMaximizeBtnClick: () => ipcRenderer.send('maximize-btn-click'),
+    onCloseBtnClick: () => ipcRenderer.send('close-btn-click'),
+
     setPassword: (password) => ipcRenderer.send('set-password', password),
     generatePrivateKeyAndStartNode: () => ipcRenderer.send('generate-private-key-and-start-node'),
     setPrivateKeyAndStartNode: (privateKey) => ipcRenderer.send('set-private-key-and-start-node', privateKey),

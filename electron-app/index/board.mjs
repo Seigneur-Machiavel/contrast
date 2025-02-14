@@ -152,6 +152,14 @@ class SubWindow {
 					this.element.style.left = (fromY - this.element.offsetHeight) + 'px';
 				}
 			});
+
+			// Set dark mode to the iframe according to the board body class
+			setTimeout(() => {
+				const iframe = this.contentElement.querySelector('iframe');
+				if (!iframe) return;
+				const darkModeState = document.body.classList.contains('dark-mode');
+				iframe.contentWindow.postMessage({ type: 'darkMode', value: darkModeState }, this.origin);
+			}, 800);
 		}
 	}
 	#newTitleBar(title) {
@@ -459,7 +467,21 @@ appsManager.initApps();
 window.appsManager = appsManager;
 
 // better implementation with less event listeners
-window.addEventListener('click', (e) => { appsManager.clickAppButtonsHandler(e); appsManager.clickWindowHandler(e); });
+function clickTitleBarButtonsHandler(e) {
+	const button = e.target.closest('button');
+	if (!button) return;
+
+	switch(button.id) {
+		case 'minimize-btn': window.electronAPI.onMinimizeBtnClick(); break;
+		case 'maximize-btn': window.electronAPI.onMaximizeBtnClick(); break;
+		case 'close-btn': window.electronAPI.onCloseBtnClick(); break;
+	}
+}
+window.addEventListener('click', (e) => {
+	clickTitleBarButtonsHandler(e);
+	appsManager.clickAppButtonsHandler(e);
+	appsManager.clickWindowHandler(e);
+});
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
 document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
 document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });

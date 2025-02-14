@@ -477,6 +477,7 @@ export class ObserverWsApp {
         this.app.use(express.static(APPS_VARS.__dirname));
         //this.app.use(express.static(APPS_VARS.__nodeDir));
         
+        this.app.use('/styles', express.static(path.join(APPS_VARS.__contrastDir, 'styles')));
         this.app.use('/front', express.static(path.join(APPS_VARS.__nodeDir, 'front')));
         this.app.use('/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
         this.app.use('/node/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));

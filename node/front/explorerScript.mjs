@@ -190,6 +190,7 @@ function connectWS() {
     ws.onerror = (error) => { onError(error); };
     ws.onmessage = (event) => { onMessage(event); };
 }
+
 async function connectWSLoop() {
     connectWS();
     while (true) {

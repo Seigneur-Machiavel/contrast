@@ -9,121 +9,7 @@
     <script crossorigin src="https://unpkg.com/@msgpack/msgpack"></script>
     <script src="/libs/anime.min.js"></script>
     <script src="/front/explorerScript.mjs" type="module"></script>
-    <style>
-        :root {
-            /*--cbe-color1: #c5c8d0;
-            --cbe-color2: #787878;
-            --cbe-color3: #4f4f4f;
-            --cbe-color4: #e5e9f4;
-            --cbe-color5: #f1f3f8;
-            --inner-height: 140px;*/
-
-            /*
-            --cbe-color1-default: white;
-            --cbe-color2-default: black;
-
-            --cbe-widget-margin-default: 2% 10%;
-            --cbe-color4-default: #787878;
-            --cbe-color3-default: #4f4f4f;
-
-            --inner-height-default: 140px;
-            --wrap-border-radius-default: 20px;
-            --search-menu-width-default: calc(420px - 12px);*/
-            --wrap-border-radius: 20px;
-        }
-        /*@font-face { // DISABLED FOR NOW
-            font-family: "IBM Plex Mono";
-            src: url("../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Regular.woff") format("woff");
-        }
-        @font-face {
-            font-family: "IBM Plex Mono";
-            src: url("../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-Medium.woff") format("woff");
-            font-weight: 500;
-        }
-        @font-face {
-            font-family: "IBM Plex Mono";
-            src: url("../fonts/IBM_Plex_Mono_Woff/IBMPlexMono-SemiBold.woff") format("woff");
-            font-weight: 600;
-        }*/
-        input::-webkit-outer-spin-button,
-        input::-webkit-inner-spin-button {
-            -webkit-appearance: none;
-            margin: 0;
-        }
-        body {
-            font-family: "IBM Plex Mono", monospace;
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            background-color: var(--cbe-color4);
-            color: var(--cbe-color3);
-        }
-        button {
-            font-family: 'IBM Plex Mono';
-            font-weight: 500;
-            background: var(--cbe-color4);
-            border-radius: 6px;
-            color: white;
-            padding: 5px;
-        }
-        #cbe-contrastChainExplorer {
-            display: flex;
-            justify-content: center;
-        }
-        .cbe-container {
-            width: 80%;
-            max-width: 1000px;
-            background-color: var(--cbe-color4);
-            padding: 0 20px;
-            border-radius: 20px;
-        }
-        .cbe-spacedText {
-            display: flex;
-            justify-content: space-between;
-        }
-        .cbe-spacedText.cbe-textColorLight {
-            color: var(--cbe-color2);
-        }
-        .cbe-spacedText:not(:last-child) {
-            border-bottom: solid 1px var(--cbe-color5);
-        }
-        .cbe-heightText {
-            height: fit-content;
-            padding: 10px;
-            border-radius: 10px;
-            background: none;
-            box-shadow: inset 0px 0px 4px -2px var(--cbe-color2, var(--cbe-color2-default));
-            opacity: .6;
-        }
-        .cbe-incrementalInput {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .cbe-incrementalInput input {
-            background: var(--cbe-color3);
-            color: white;
-            border-radius: 10px;
-            text-align: center;
-            margin: 0 10px;
-            border: solid 1px #ff000000;
-            font-size: large;
-        }
-        .cbe-incrementalInput button:first-child {
-            color: white;
-            background: var(--cbe-color3);
-            border-radius: 10px 0px 0px 10px;
-            font-size: large;
-            font-weight: 600;
-        }
-        .cbe-incrementalInput button:last-child {
-            color: white;
-            background: var(--cbe-color3);
-            border-radius: 0px 10px 10px 0px;
-            font-size: large;
-            font-weight: 600;
-        }
-    </style>
+    <link rel="stylesheet" href="/styles/contrast-style.css">
     <link rel="stylesheet" href="/front/explorerWidget.css">
 </head>
 
@@ -149,7 +35,7 @@
                 <h3>Target blockTime:</h3>
                 <h3 id="cbe-targetBlocktime">120</h3>
             </div>
-            
+
             <div class="cbe-spacedText">
                 <h3>Circulating supply:</h3>
                 <h3 id="cbe-circulatingSupply">0.000000</h3>
