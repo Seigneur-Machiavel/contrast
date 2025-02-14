@@ -28,8 +28,7 @@ autoUpdater.logger = log;*/
 const windowsOptions = {
     logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
     nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
-    //mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 768, startHidden: false, isMainWindow: true }
-    mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', startHidden: false, isMainWindow: true }
+    mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 800, startHidden: false, isMainWindow: true }
 }
 const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });

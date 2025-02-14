@@ -439,6 +439,7 @@ class AppsManager {
 		const subWindow = this.draggingWindow;
 		if (!subWindow) return;
 
+		
 		subWindow.element.style.left = e.clientX - subWindow.dragStart.x + 'px';
 		subWindow.element.style.top = e.clientY - subWindow.dragStart.y + 'px';
 	}
@@ -492,10 +493,6 @@ document.addEventListener('change', (event) => {
     		document.body.classList.toggle('dark-mode');
 			const darkModeState = document.body.classList.contains('dark-mode');
 			for (const app in appsManager.windows) {
-				//window.parent.postMessage({ type: '' }, 'file://');
-				//appsManager.windows[app].element.classList.toggle('dark-mode');
-				// send message to the iframe
-				//appsManager.windows[app].contentElement.contentWindow.postMessage({ type: 'darkMode', value: true
 				const iframe = appsManager.windows[app].contentElement.querySelector('iframe');
 				if (!iframe) continue;
 

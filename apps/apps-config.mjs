@@ -73,7 +73,7 @@ export const appsConfig = {
 	},*/
 	dashboard: {
 		preload: false,
-		minWidth: 350,
+		minWidth: 420,
 		minHeight: 300,
 		initialHeight: 572,
 		initTop: 195,
