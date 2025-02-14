@@ -276,7 +276,7 @@ export class Node {
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.info(m); });
         if (snapshotIndex < 1) {
             this.blockchain.reset();
-            this.checkpointSystem.resetCheckpoints(); // not reset Active Checkpoint.
+            this.checkpointSystem.resetCheckpoints(); // reset (:not: active) Checkpoints.
         }
 
         this.blockchain.lastBlock = this.blockchain.getBlock(snapshotIndex);

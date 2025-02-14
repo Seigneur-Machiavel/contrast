@@ -58,6 +58,7 @@ export class SyncHandler {
     peersHeights = {};
     consensusHeight = -1;
     syncFailureCount = 0;
+    syncFailureModulos = { loadSnapshot: 7, restart: 25 };
     node;
 
     /** @param {Node} node */
@@ -411,16 +412,17 @@ export class SyncHandler {
         // METHOD 1: try to sync from snapshots
         // if syncFailureCount is a multiple of 10, try to sync from snapshots
         const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
-        if (this.syncFailureCount % 7 === 0 && snapshotsHeights.length > 0) {
-            const modulo = (this.syncFailureCount / 10) % snapshotsHeights.length;
+        if (this.syncFailureCount % this.syncFailureModulos.loadSnapshot === 0 && snapshotsHeights.length > 0) {
+            const modulo = (this.syncFailureCount / this.syncFailureModulos.loadSnapshot) % snapshotsHeights.length;
             const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
+            this.miniLogger.log(`(M1)--> Trying to sync from snapshot #${previousSnapHeight}`, (m) => { console.info(m); });
             this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
         }
 
         // METHOD 2: restart the node
         // if syncFailureCount is a multiple of 25, restart the node
-        if (this.syncFailureCount % 25 === 0) {
-            this.miniLogger.log(`Restarting the node after ${this.syncFailureCount} sync failures`, (m) => { console.error(m); });
+        if (this.syncFailureCount % this.syncFailureModulos.restart === 0) {
+            this.miniLogger.log(`(M2)--> Restarting the node after ${this.syncFailureCount} sync failures`, (m) => { console.error(m); });
             this.node.restartRequested = 'syncFailure (this.syncFailureCount % 25)';
             return message;
         }

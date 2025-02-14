@@ -60,6 +60,13 @@ export function copyFolderRecursiveSync(src, dest) {
 }
 
 const basePath = targetStorageFolder();
+// CLEANUP v0.0.4
+const oldStoragePath1 = path.join(path.dirname(path.dirname(url.fileURLToPath(import.meta.url))), 'node', 'storage');
+if (fs.existsSync(oldStoragePath1)) { fs.rmSync(oldStoragePath1, { recursive: true }); }
+if (fs.existsSync(path.join(basePath.storagePath, 'nodeSetting.json'))) fs.rmSync(path.join(basePath.storagePath, 'nodeSetting.json'));
+if (fs.existsSync(path.join(basePath.storagePath, 'nodesSettings.json'))) fs.rmSync(path.join(basePath.storagePath, 'nodesSettings.json'));
+if (fs.existsSync(path.join(basePath.storagePath, 'nodeSettings.json'))) fs.rmSync(path.join(basePath.storagePath, 'nodeSettings.json'));
+
 export const PATH = {
     BASE_FILE: basePath.filePath, // path to the storage-manager.mjs file
     STORAGE: basePath.storagePath, // path to the storage folder (out of the root directory)
@@ -75,29 +82,6 @@ export const PATH = {
 if (isProductionEnv) { delete PATH.TEST_STORAGE; delete PATH.JSON_BLOCKS; }
 // create the storage folder if it doesn't exist, and any other subfolder
 for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
-
-const oldStoragePath = path.join(path.dirname(path.dirname(url.fileURLToPath(import.meta.url))), 'node', 'storage');
-if (fs.existsSync(oldStoragePath)) { fs.rmSync(oldStoragePath, { recursive: true }); }
-// Migrate old storage to migrate - DEPRECATED
-/*if (fs.existsSync(oldStoragePath)) {
-    copyFolderRecursiveSync(path.join(oldStoragePath, 'accounts'), path.join(PATH.STORAGE, 'accounts'));
-    copyFolderRecursiveSync(path.join(oldStoragePath, 'snapshots'), PATH.SNAPSHOTS);
-    copyFolderRecursiveSync(path.join(oldStoragePath, 'blocks'), PATH.BLOCKS);
-    copyFolderRecursiveSync(path.join(oldStoragePath, 'blocks-info'), PATH.BLOCKS_INFO);
-    copyFolderRecursiveSync(path.join(oldStoragePath, 'addresses-txs-refs'), PATH.TXS_REFS);
-    fs.copyFileSync(path.join(oldStoragePath, 'AddressesTxsRefsStorage_config.json'), path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json'));
-    fs.copyFileSync(path.join(oldStoragePath, 'nodeSettings.json'), path.join(PATH.STORAGE, 'nodeSettings.json'));
-    fs.rmSync(oldStoragePath, { recursive: true });
-    console.log('--- OLD STORAGE MIGRATED ---');
-}*/
-
-// DEPRECATED
-// copy the clear.js and clear-storage.bat files to the storage folder (usefull for manual cleaning)
-//const clearJsPath = path.join(basePath.storagePath, 'clear.js');
-//const clearBatPath = path.join(basePath.storagePath, 'clear-storage.bat');
-//if (!fs.existsSync(clearJsPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear.js'), clearJsPath); }
-//if (!fs.existsSync(clearBatPath)) { fs.copyFileSync(path.join(path.dirname(PATH.BASE_FILE), 'clear-storage.bat'), clearBatPath); }
-// END DEPRECATED
 
 export class Storage {
     /** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */

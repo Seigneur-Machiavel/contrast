@@ -109,8 +109,6 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
 app.on('ready', async () => {
     if (!isDev) autoUpdater.checkForUpdatesAndNotify();
 
-    //await startNode();
-
     windows.mainWindow = await createWindow(windowsOptions.mainWindow);
 
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
@@ -136,8 +134,8 @@ app.on('ready', async () => {
     });
     ipcMain.on('set-auto-launch', async (event, value) => {
         const isEnabled = await myAppAutoLauncher.isEnabled();
-        if (value && !isEnabled) myAppAutoLauncher.enable();
-        if (!value && isEnabled) myAppAutoLauncher.disable();
+        if (value && !isEnabled) await myAppAutoLauncher.enable();
+        if (!value && isEnabled) await myAppAutoLauncher.disable();
 
         const isNowEnabled = await myAppAutoLauncher.isEnabled();
         console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);

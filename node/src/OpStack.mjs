@@ -210,6 +210,7 @@ export class OpStack {
                     this.node.createBlockCandidateAndBroadcast((content || 0) + BLOCKCHAIN_SETTINGS.targetBlockTime / 2);
                     break;
                 case 'rollBackTo':
+                    this.miniLogger.log(`[OpStack] Rollback to #${content}`, (m) => console.info(m));
                     this.node.loadSnapshot(content, false);
                     break;
                 case 'reorg_start':

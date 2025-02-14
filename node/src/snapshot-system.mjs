@@ -88,6 +88,8 @@ export class SnapshotSystem {
 	 * @param {Vss} vss 
 	 * @param {MemPool} memPool */
 	rollBackTo(height, utxoCache, vss, memPool) {
+		if (height === 0) return false;
+		
 		const logPerf = true;
 		const heightPath = path.join(PATH.SNAPSHOTS, `${height}`);
 
