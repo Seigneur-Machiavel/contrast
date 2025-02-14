@@ -232,7 +232,7 @@ class SubWindow {
 			easing: 'easeOutQuad',
 			complete: () => {
 				this.element.style.width = '100%';
-				this.element.style.height = 'calc(100% - var(--buttons-bar-height))';
+				this.element.style.height = '100%';
 			}
 		});
 	}
@@ -335,7 +335,7 @@ class AppsManager {
 		setTimeout(() => { this.setFrontWindow(appToFocus); }, delay);
 	}
 	calculateBoardSize() {
-		return { width: window.innerWidth, height: window.innerHeight - this.buttonsBar.element.offsetHeight };
+		return { width: this.windowsWrap.offsetWidth, height: this.windowsWrap.offsetHeight };
 	}
 	setFrontWindow(appName) {
 		if (!this.windows[appName]) return;

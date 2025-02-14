@@ -581,7 +581,7 @@ document.addEventListener('click', async (event) => {
             const transaction = await Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amountToStake);
 
             ws.send(JSON.stringify({ type: 'new_unsigned_transaction', data: transaction }));
-            eHTML.stakeInput.input.value = 0;
+            eHTML.stakeInput.input.value = '';
             break;
         case eHTML.minerThreads.decrementBtn:
             adjustInputValue(eHTML.minerThreads.input, -1);

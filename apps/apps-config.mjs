@@ -83,6 +83,7 @@ export const appsConfig = {
 	},
 	explorer: {
 		preload: false,
+		fullScreen: true,
 		minWidth: 860,
 		minHeight: 192,
 		initialWidth: 800,
