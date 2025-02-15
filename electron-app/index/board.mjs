@@ -35,8 +35,8 @@ const interactionsListenners = {
 		await new Promise(resolve => setTimeout(resolve, 1000));
 		assistant.idleMenu();
 		await new Promise(resolve => setTimeout(resolve, 2000));
-		appsManager.toggleAppWindow('assistant');
-		await new Promise(resolve => setTimeout(resolve, 1000));
+		/*appsManager.toggleAppWindow('assistant');
+		await new Promise(resolve => setTimeout(resolve, 1000));*/
 		appsManager.unlock();
 		await new Promise(resolve => setTimeout(resolve, 1000));
 		appsManager.toggleAppWindow('explorer');
@@ -185,7 +185,8 @@ class SubWindow {
 	}
 	toggleFold(originX, originY, duration = 400) {
 		this.folded = !this.folded;
-		if (this.folded) { this.element.classList.remove('onBoard'); }
+		//if (this.folded) this.element.classList.remove('onBoard');
+		if (!this.folded) this.element.classList.add('onBoard');
 
 		// COMBINED ANIMATION
 		if (this.animation) { this.animation.pause(); }
@@ -206,7 +207,7 @@ class SubWindow {
 			left: { value: toPosition.left, duration: duration, easing: 'easeOutQuad' },
 			top: { value: toPosition.top, duration: duration, easing: 'easeOutQuad' },
 			complete: () => {
-				if (!this.folded) { this.element.classList.add('onBoard'); }
+				if (this.folded) this.element.classList.remove('onBoard');
 			}
 		});
 
