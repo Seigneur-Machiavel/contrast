@@ -70,7 +70,9 @@ class ButtonsBar {
 	constructor(element = document.getElementById('bottom-buttons-bar')) {
 		/** @type {HTMLElement} */
 		this.element = element;
+		/** @type {HTMLElement[]} */
 		this.buttons = [];
+		/** @type {Object<string, HTMLElement>} */
 		this.buttonsByAppNames = {};
 	}
 
@@ -265,6 +267,7 @@ class AppsManager {
 	windows = {};
 	draggingWindow = null;
 	resizingWindow = null;
+	tempFrontAppName = null;
 	transitionsDuration = 400;
 	constructor(windowsWrap, buttonsBarElement, appsConf) {
 		this.windowsWrap = windowsWrap;
@@ -319,7 +322,7 @@ class AppsManager {
 		if (!this.appsConfig[appName]) return;
 		if (!this.windows[appName]) { this.loadApp(appName); }
 		
-		const isFront = this.windows[appName].element.style.zIndex === '1';
+		const isFront = this.windows[appName].element.classList.contains('front');
 		const unfoldButNotFront = isFront === false && this.windows[appName].folded === false;
 		let appToFocus = appName;
 		
@@ -340,14 +343,15 @@ class AppsManager {
 	setFrontWindow(appName) {
 		if (!this.windows[appName]) return;
 		if (!this.windows[appName].element) return;
-		if (this.windows[appName].element.style.zIndex === '1') return;
+		if (this.windows[appName].element.classList.contains('front')) return;
 
 		for (const app in this.windows) {
-			this.windows[app].element.style.zIndex = 0;
 			this.windows[app].element.classList.remove('front');
+			this.buttonsBar.buttonsByAppNames[app].classList.remove('front');
 		}
-		this.windows[appName].element.style.zIndex = 1;
+
 		this.windows[appName].element.classList.add('front');
+		this.buttonsBar.buttonsByAppNames[appName].classList.add('front');
 	}
 	lock() {
 		this.state = 'locked';
@@ -368,13 +372,30 @@ class AppsManager {
 		if (!button) return;
 
 		const appName = button.dataset.appName;
-		const appInitialized = this.windows[appName];
-		if (!appInitialized && !this.windows[appName]) {
+		const app = this.windows[appName];
+		if (!app) {
 			if (!this.appsConfig[appName]) { console.error('App not found:', appName); return; }
 			this.loadApp(appName);
 		}
 
 		this.toggleAppWindow(appName);
+	}
+	hoverAppButtonsHandler(e) {
+		const button = e.target.closest('.app-button');
+		if (!button && this.tempFrontAppName) {
+			for (const win in this.windows) this.windows[win].element.classList.remove('temp-front');
+			this.tempFrontAppName = null;
+		}
+		if (!button) return;
+
+		const app = this.windows[button.dataset.appName];
+		if (!app) return;
+
+		for (const win in this.windows) {
+			if (win === app.appName) { app.element.classList.add('temp-front');
+			} else { this.windows[win].element.classList.remove('temp-front'); }
+		}
+		this.tempFrontAppName = app.appName;
 	}
 	clickWindowHandler(e) {
 		switch(e.target.dataset.action) {
@@ -483,6 +504,7 @@ window.addEventListener('click', (e) => {
 	appsManager.clickAppButtonsHandler(e);
 	appsManager.clickWindowHandler(e);
 });
+window.addEventListener('mouseover', (e) => { appsManager.hoverAppButtonsHandler(e); });
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
 document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
 document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });

@@ -29,7 +29,8 @@ const windowsOptions = {
     logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
     nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
     mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 800, startHidden: false, isMainWindow: true }
-}
+};
+
 const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });
 const isDev = !app.isPackaged;
@@ -40,7 +41,7 @@ const windows = {};
 /** @type {NodeAppWorker} */
 let dashboardWorker;
 
-async function randomRestartTest() {
+async function randomRestartTest() { // DEV FUNCTION
     await new Promise(resolve => setTimeout(resolve, 5000)); // wait for the dashboard to start
     while(isDev) { // -- test restart after 120s to 600s --
         const restartTime = Math.floor(Math.random() * 480000) + 120000;

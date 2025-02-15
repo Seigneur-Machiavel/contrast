@@ -58,7 +58,7 @@ export class SyncHandler {
     peersHeights = {};
     consensusHeight = -1;
     syncFailureCount = 0;
-    syncFailureModulos = { loadSnapshot: 7, restart: 25 };
+    syncFailureModulos = { loadSnapshot: 5, restart: 20 };
     node;
 
     /** @param {Node} node */
@@ -409,16 +409,6 @@ export class SyncHandler {
         this.syncFailureCount++;
         await new Promise((resolve) => setTimeout(resolve, 5000));
 
-        // METHOD 1: try to sync from snapshots
-        // if syncFailureCount is a multiple of 10, try to sync from snapshots
-        const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
-        if (this.syncFailureCount % this.syncFailureModulos.loadSnapshot === 0 && snapshotsHeights.length > 0) {
-            const modulo = (this.syncFailureCount / this.syncFailureModulos.loadSnapshot) % snapshotsHeights.length;
-            const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
-            this.miniLogger.log(`(M1)--> Trying to sync from snapshot #${previousSnapHeight}`, (m) => { console.info(m); });
-            this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
-        }
-
         // METHOD 2: restart the node
         // if syncFailureCount is a multiple of 25, restart the node
         if (this.syncFailureCount % this.syncFailureModulos.restart === 0) {
@@ -427,11 +417,21 @@ export class SyncHandler {
             return message;
         }
 
+        // METHOD 1: try to sync from snapshots
+        // if syncFailureCount is a multiple of 5, try to sync from snapshots
+        const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
+        if (this.syncFailureCount % this.syncFailureModulos.loadSnapshot === 0 && snapshotsHeights.length > 0) {
+            const modulo = (this.syncFailureCount / this.syncFailureModulos.loadSnapshot) % snapshotsHeights.length;
+            const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
+            this.miniLogger.log(`(M1)--> Trying to sync from snapshot #${previousSnapHeight}`, (m) => { console.info(m); });
+            this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
+        }
+
         // IN WORDS:
-        // 7 failures -> try to sync from (n-1) snapshots
-        // 14 failures -> try to sync from (n-2) snapshots
-        // 21 failures -> try to sync from (n-3) snapshots
-        // 25 failures -> restart the node (n-1) snapshot loaded and placed in trash
+        // 5 failures -> try to sync from (n-1) snapshots
+        // 10 failures -> try to sync from (n-2) snapshots
+        // 15 failures -> try to sync from (n-3) snapshots
+        // 20 failures -> restart the node (n-1) snapshot loaded and placed in trash
         //this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
         return message;
     }
