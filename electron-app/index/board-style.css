@@ -19,6 +19,12 @@ body {
     margin-top: 4px;
     font-size: larger;
 }
+#connexion-resume {
+    position: absolute;
+    left: 10px;
+    font-size: smaller;
+    font-family: 'IBM Plex Mono';
+}
 #board-version {
     font-size: 12px;
     font-weight: normal;

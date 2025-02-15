@@ -43,6 +43,14 @@ const interactionsListenners = {
 		await new Promise(resolve => setTimeout(resolve, 1000));
 		appsManager.toggleAppWindow('dashboard');
 	},
+	onConnexionResume: (connexionResume) => {
+		const resumeElement = document.getElementById('connexion-resume');
+		if (!resumeElement) return;
+
+		const { totalPeers, connectedBootstraps, totalBootstraps } = connexionResume;
+		if (totalPeers === 0) { resumeElement.innerText = 'Connecting to peers...'; return; }
+		resumeElement.innerText = `Connected to: ${totalPeers} peers (${connectedBootstraps} bootstraps)`;
+	},
 	//onNodeSettingsSaved
 
 	onAssistantMessage: (message) => { assistant.sendMessage(message, 'system'); },

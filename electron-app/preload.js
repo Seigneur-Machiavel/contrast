@@ -23,6 +23,7 @@ const electronAPI = {
 
     onWaitingForPrivKey: (func) => { ipcRenderer.on('waiting-for-priv-key', (event, ...args) => func(...args)); },
     onNodeStarted: (func) => { ipcRenderer.on('node-started', (event, ...args) => func(...args)); },
+    onConnexionResume: (func) => { ipcRenderer.on('connexion-resume', (event, ...args) => func(...args)); },
     onNodeSettingsSaved: (func) => { ipcRenderer.on('node-settings-saved', (event, ...args) => func(...args)); },
 
     onAssistantMessage: (func) => { ipcRenderer.on('assistant-message', (event, message) => func(message)); },

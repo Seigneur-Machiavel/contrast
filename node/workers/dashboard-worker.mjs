@@ -92,6 +92,18 @@ async function setPassword(password = 'toto') {
     console.info('cryptoLight Key Derived');
     return true;
 }
+(async () => { // p2p connexion resume update loop
+    while(true) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (!dashApp.node) continue;
+        if (!dashApp.node.p2pNetwork) continue;
+
+        const resume = dashApp.node.p2pNetwork.connexionResume;
+        if (!resume) continue;
+
+        parentPort.postMessage({ type: 'connexion_resume', data: resume });
+    }
+})();
 
 // MESSAGE HANDLING
 parentPort.on('message', async (message) => {

@@ -383,9 +383,13 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
                     this.worker.terminate();
                     break;
                 case 'message_to_mainWindow':
-                    if (message.data === 'node-started') { this.nodeStarted = true; }
+                    if (message.data === 'node-started') this.nodeStarted = true;
                     if (this.#avoidMainWindowMessage(message)) return;
                     this.mainWindow.webContents.send(message.data);
+                    break;
+                case 'connexion_resume':
+                    if (this.#avoidMainWindowMessage(message, false)) return;
+                    this.mainWindow.webContents.send('connexion-resume', message.data);
                     break;
                 case 'assistant_message':
                     if (this.#avoidMainWindowMessage(message)) return;
