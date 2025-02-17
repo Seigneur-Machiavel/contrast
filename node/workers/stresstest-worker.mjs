@@ -194,7 +194,7 @@ async function userSendToNextUser(accounts) {
 
     const transferPromises = [];
     for (let i = 0; i < accounts.length; i++) {
-        if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 40)); }
+        if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
         const senderAccount = accounts[i];
         const receiverAccount = i + 1 === accounts.length ? accounts[0] : accounts[i + 1];
         const amountToSend = 1_000; //Math.floor(Math.random() * (1_000) + 1000);
@@ -203,7 +203,10 @@ async function userSendToNextUser(accounts) {
     
     const pushPromises = [];
     let errorIsMissingUtxos = false;
-    for (const promise of transferPromises) {
+    //for (const promise of transferPromises) {
+    for (let i = 0; i < transferPromises.length; i++) {
+        if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
+        const promise = transferPromises[i];
         const { signedTx, error } = await promise;
         if (error.message === 'No UTXO to spend') { errorIsMissingUtxos = true;}
         if (error) { continue; }
