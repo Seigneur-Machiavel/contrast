@@ -311,6 +311,7 @@ class AppsManager {
 	resizingWindow = null;
 	tempFrontAppName = null;
 	transitionsDuration = 400;
+	appsByZindex 
 	constructor(windowsWrap, buttonsBarElement, appsConf) {
 		this.windowsWrap = windowsWrap;
 		this.buttonsBar = new ButtonsBar(buttonsBarElement);

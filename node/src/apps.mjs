@@ -247,7 +247,7 @@ export class DashboardWsApp {
         node.validatorRewardAddress = this.#nodeSetting.validatorRewardAddress || node.validatorRewardAddress;
         node.minerAddress = this.#nodeSetting.minerAddress || node.minerAddress;
         node.miner.address = this.#nodeSetting.minerAddress || node.miner.address;
-        node.miner.nbOfWorkers = this.#nodeSetting.minerThreads || node.miner.nbOfWorkers;
+        node.miner.nbOfWorkers = typeof this.#nodeSetting.minerThreads === 'number' ? this.#nodeSetting.minerThreads : node.miner.nbOfWorkers;
     }
     #injectCallbacks() {
         const callbacksModes = []; // we will add the modes related to the callbacks we want to init
@@ -398,7 +398,7 @@ export class DashboardWsApp {
         if (!nodeSetting.privateKey || typeof nodeSetting.privateKey !== 'string') { return false; }
         if (!nodeSetting.validatorRewardAddress || typeof nodeSetting.validatorRewardAddress !== 'string') { return false; }
         if (!nodeSetting.minerAddress || typeof nodeSetting.minerAddress !== 'string') { return false; }
-        if (!nodeSetting.minerThreads || typeof nodeSetting.minerThreads !== 'number') { return false; }
+        if (typeof nodeSetting.minerThreads !== 'number' || nodeSetting.minerThreads < 0) { return false; }
         return true;
     }
     async #stopNodeIfRequestedLoop() {

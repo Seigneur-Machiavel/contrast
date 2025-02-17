@@ -159,7 +159,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         
         if (this.wsCallbacks.onBroadcastFinalizedBlock) { this.wsCallbacks.onBroadcastFinalizedBlock.execute(BlockUtils.getBlockHeader(finalizedBlock)); }
     }
-    async createMissingWorkers() {
+    async #createMissingWorkers() {
         const missingWorkers = this.nbOfWorkers - this.workers.length;
         let readyWorkers = this.workers.length;
         if (missingWorkers <= 0) { return readyWorkers }
@@ -174,7 +174,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         await new Promise((resolve) => setTimeout(resolve, 1000)); // let time to start workers
         return readyWorkers;
     }
-    async terminateUnusedWorkers() {
+    async #terminateUnusedWorkers() {
         const promises = [];
         for (let i = this.nbOfWorkers; i < this.workers.length; i++) { promises.push(this.workers[i].terminateAsync()); }
         await Promise.all(promises);
@@ -185,8 +185,8 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         const delayBetweenUpdate = 100;
         while (!this.terminated) {
             await new Promise((resolve) => setTimeout(resolve, delayBetweenUpdate));
-            await this.terminateUnusedWorkers();
-            const readyWorkers = await this.createMissingWorkers();
+            await this.#terminateUnusedWorkers();
+            const readyWorkers = await this.#createMissingWorkers();
             this.hashRate = this.#getAverageHashrate();
             
             const blockCandidate = this.bestCandidate;

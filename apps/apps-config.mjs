@@ -51,6 +51,14 @@ export const appsConfig = {
 		fullScreen: false,
 		setFront: true
 	},
+	/*wallet: {
+		preload: false,
+		disableOnLock: true,
+		minWidth: 322,
+		minHeight: 402,
+		title: '- )( - WALLET ___\\',
+		content: '../../apps/wallet/wallet-content.html',
+	},*/
 	/*chat: {
 		preload: false,
 		minWidth: 300,
@@ -59,11 +67,6 @@ export const appsConfig = {
 		content: '../../apps/chat/chat-content.html',
 		mainClass: 'ChatUI',
 		setGlobal: true
-	},*/
-	/*wallet: {
-		preload: false,
-		title: 'WALLET',
-		content: '../../wallet-plugin/popup.html',
 	},*/
 	/*vault: {
 		preload: true,
@@ -75,6 +78,7 @@ export const appsConfig = {
 	},*/
 	dashboard: {
 		preload: false,
+		disableOnLock: true,
 		minWidth: 420,
 		minHeight: 300,
 		initialHeight: 572,

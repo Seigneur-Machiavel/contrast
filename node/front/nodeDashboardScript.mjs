@@ -224,7 +224,7 @@ function displayNodeInfo(data) {
     eHTML.minerHeight.textContent = data.bestCandidateIndex || 0;
     eHTML.minerLegitimacy.textContent = data.bestCandidateLegitimacy || 0;
     eHTML.hashRate.textContent = data.minerHashRate ? data.minerHashRate.toFixed(2) : 0;
-    eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 1;
+    eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 0;
     updateMinerThreadsDisabledButtons();
 
     // Update Global Information
@@ -671,7 +671,7 @@ function togglePasswordVisibility(inputElement, toggleButton) {
         toggleButton.textContent = 'Show';
     }
 }
-function adjustInputValue(targetInput, delta, min = 1, max = 4) {
+function adjustInputValue(targetInput, delta, min = 0, max = 4) {
     const currentValue = parseInt(targetInput.value);
     if (isNaN(currentValue)) {
         targetInput.value = min;
@@ -681,7 +681,7 @@ function adjustInputValue(targetInput, delta, min = 1, max = 4) {
 
     targetInput.dispatchEvent(new Event('change'));
 }
-function updateMinerThreadsDisabledButtons(min = 1, max = 4) {
+function updateMinerThreadsDisabledButtons(min = 0, max = 4) {
     eHTML.minerThreads.decrementBtn.classList.remove('disabled');
     eHTML.minerThreads.incrementBtn.classList.remove('disabled');
     if (parseInt(eHTML.minerThreads.input.value) <= min) { eHTML.minerThreads.decrementBtn.classList.add('disabled'); }
