@@ -261,7 +261,7 @@ body {
     width: 100%;
     height: 100%;
     opacity: 1;
-    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 40%, var(--color2_2) 54%, var(--color2_2) 98%, var(--color2) 110%);
+    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 40%, var(--color2_3) 54%, var(--color2_3) 98%, var(--color2) 110%);
     background-position: 100% 50%;
     background-size: 220% 100%;
     transition:

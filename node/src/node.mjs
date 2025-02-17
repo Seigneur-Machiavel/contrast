@@ -286,7 +286,7 @@ export class Node {
         this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
     }
     /** @param {BlockData} finalizedBlock */
-    #saveSnapshot(finalizedBlock) {
+    async #saveSnapshot(finalizedBlock) {
         if (finalizedBlock.index === 0) { return; }
         if (finalizedBlock.index % this.snapshotSystem.snapshotHeightModulo !== 0) { return; }
         const eraseUnder = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve;
@@ -294,7 +294,7 @@ export class Node {
         // erase the outdated blocks cache and persist the addresses transactions references to disk
         const cacheErasable = this.blockchain.cache.erasableLowerThan(finalizedBlock.index - (eraseUnder - 1));
         if (cacheErasable !== null && cacheErasable.from < cacheErasable.to) {
-            this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, cacheErasable.from, cacheErasable.to);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, cacheErasable.from, cacheErasable.to);
             this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 
@@ -451,7 +451,7 @@ export class Node {
         if (!isSync) { this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); }); }
 
         timer.startPhase('saveSnapshot');
-        this.#saveSnapshot(finalizedBlock);
+        await this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
 
         this.#saveCheckpoint(finalizedBlock);

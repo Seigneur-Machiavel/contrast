@@ -79,7 +79,7 @@ export class OpStack {
         this.syncRequested = false;
     }
     /** @param {number} delayMS */
-    async #stackLoop(delayMS = 10) {
+    async #stackLoop(delayMS = 50) {
         while (true) {
             if (this.terminated) { break; }
 

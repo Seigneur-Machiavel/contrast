@@ -180,7 +180,7 @@ export class Blockchain {
         }
     }
     /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
-    persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
+    async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
         const startTime = performance.now();
         indexStart = Math.max(0, indexStart);
         if (indexStart > indexEnd) { return; }
@@ -206,6 +206,8 @@ export class Blockchain {
             }
         }
 
+        await new Promise(resolve => setTimeout(resolve, 200)); // avoid p2p disconnection
+
         let duplicateCountTime = 0;
         let totalRefs = 0;
         let totalDuplicates = 0;
@@ -228,6 +230,8 @@ export class Blockchain {
 
             this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
         }
+
+        await new Promise(resolve => setTimeout(resolve, 200)); // avoid p2p disconnection
 
         this.addressesTxsRefsStorage.save(indexEnd);
         
