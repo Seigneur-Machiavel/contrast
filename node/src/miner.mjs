@@ -58,6 +58,8 @@ export class Miner {
 
     /** @param {BlockData} blockCandidate */
     updateBestCandidate(blockCandidate) {
+        const posAddress = blockCandidate.Txs[0].inputs[0].split(':')[0];
+        const isMyBlock = posAddress === this.node.id;
         // check if powReward is coherent
         const posReward = blockCandidate.Txs[0].outputs[0].amount;
         const powReward = blockCandidate.powReward;
@@ -92,7 +94,7 @@ export class Miner {
 
         console.info(`[MINER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
-to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})`);
+to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (my block)' : ''}`);
         
         // if block is different than the highest block index, then reset the addressOfCandidatesBroadcasted
         if (blockCandidate.index !== this.bestCandidateIndex()) { this.addressOfCandidatesBroadcasted = []; }

@@ -203,7 +203,6 @@ async function userSendToNextUser(accounts) {
     
     const pushPromises = [];
     let errorIsMissingUtxos = false;
-    //for (const promise of transferPromises) {
     for (let i = 0; i < transferPromises.length; i++) {
         if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
         const promise = transferPromises[i];

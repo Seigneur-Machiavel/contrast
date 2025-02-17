@@ -206,13 +206,12 @@ export class Blockchain {
                 actualizedAddressesTxsRefs[address] = concatenated;
             }
 
-            await new Promise(resolve => setTimeout(resolve, 200)); // avoid p2p disconnection
+            await new Promise(resolve => setTimeout(resolve, 50)); // avoid p2p disconnection
         }
 
         let duplicateCountTime = 0;
         let totalRefs = 0;
         let totalDuplicates = 0;
-        //for (const address of Object.keys(actualizedAddressesTxsRefs)) {
         for (let i = 0; i < Object.keys(actualizedAddressesTxsRefs).length; i++) {
             const address = Object.keys(actualizedAddressesTxsRefs)[i];
             const actualizedAddressTxsRefs = actualizedAddressesTxsRefs[address];
