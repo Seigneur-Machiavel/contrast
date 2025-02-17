@@ -118,12 +118,13 @@
 }
 #board-send-btn {
     margin-top: 5px;
+    display: none;
 }
 
 #board-assistant-choices-container button {
     padding: 4px 20px;
     opacity: 0;
-    animation: choiceAppear .6s 1s forwards;
+    animation: choiceAppear .4s .8s forwards;
 }
 @keyframes choiceAppear {
     0% {

@@ -44,8 +44,16 @@ button {
     display: flex;
     justify-content: space-between;
 }
-.cbe-spacedText.cbe-textColorLight {
+/*.cbe-spacedText.cbe-textColorLight {
     color: var(--color2);
+}*/
+.cbe-spacedText h3, .cbe-spacedText div {
+    font-weight: 400;
+    color: var(--color2_3);
+}
+.cbe-spacedText h3:first-child, .cbe-spacedText div:first-child {
+    font-weight: 600;
+    color: var(--color2_1);
 }
 .cbe-spacedText:not(:last-child) {
     border-bottom: solid 1px var(--cbe-color5);

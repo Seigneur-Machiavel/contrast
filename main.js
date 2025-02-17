@@ -63,27 +63,22 @@ async function createWindow(options) {
     } = options;
 
     const window = new BrowserWindow({
+        webSecurity: true,
+        additionalArguments: [`--csp="default-src 'self'; script-src 'self' 'unsafe-inline';"`],
         show: !startHidden,
         width,
         height,
         icon: 'electron-app/img/icon_256.png',
         titleBarStyle: isMainWindow ? 'hidden' : 'default',
-        //titleBarStyle: isMainWindow ? 'hiddenInset' : 'default',
-        
-        /*titleBarOverlay: isMainWindow ? { color: '#000', symbolColor: '#fff' } : undefined,*/
-        //titleBarOverlay: isMainWindow && process.platform !== 'darwin' ? true : undefined,
         webPreferences: {
             preload: isMainWindow ? path.join(__dirname, 'electron-app', 'preload.js') : undefined,
             nodeIntegration,
             contextIsolation
-        },
-        //...(process.platform !== 'darwin' ? { titleBarOverlay: true } : {})
+        }
     });
 
     if (isMainWindow) {
         window.on('close', () => { if (!isQuiting) app.quit(); });
-        const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
-        window.webContents.executeJavaScript(`document.getElementById('board-version').innerText = "v${version}";`, true);
 
         // test of loading an extension
         //const walletExtensionPath = path.resolve(__dirname, './wallet-plugin');
@@ -95,6 +90,12 @@ async function createWindow(options) {
 
     const isUrl = url_or_file.startsWith('http');
     if (isUrl) { window.loadURL(url_or_file); } else { window.loadFile(url_or_file); }
+
+    setTimeout(() => {
+        const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
+        window.webContents.send('app-version', `v${version}`);
+        console.log(`App version sent to ${isMainWindow ? 'main' : 'other'} window: v${version}` );
+    }, 2000);
 
     return window;
 }

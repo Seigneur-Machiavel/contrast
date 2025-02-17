@@ -4,9 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">
     <title>Contrast Explorer v1.0</title>
-    <script src="/libs/msgpack.min.js"></script>
-    <script crossorigin src="https://unpkg.com/@msgpack/msgpack"></script>
     <script src="/libs/anime.min.js"></script>
     <script src="/front/explorerScript.mjs" type="module"></script>
     <link rel="stylesheet" href="/styles/contrast-style.css">
@@ -24,7 +23,7 @@
         <div class="cbe-container">
             <div class="cbe-spacedText">
                 <h1>Chain overview</h1>
-                <h3 class="cbe-heightText">Height: <span id="cbe-chainHeight">0</span></h3>
+                <h3 class="cbe-heightText">#<span id="cbe-chainHeight">0</span></h3>
             </div>
 
             <div class="cbe-spacedText cbe-textColorLight">

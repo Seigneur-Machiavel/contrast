@@ -64,7 +64,6 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
 }
 async function setPassword(password = 'toto') {
-    // HashFunctions.xxHash32(password); useless!
     const passwordStr = password === 'fingerPrint' ? fingerPrint.slice(0, 30) : password;
     const passHash = await cryptoLight.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
     if (!passHash) { console.error('Argon2 hash failed'); return false; }

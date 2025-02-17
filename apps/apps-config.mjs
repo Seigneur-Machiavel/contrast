@@ -7,6 +7,7 @@
  * @property {number} [initialWidth]
  * @property {number} [initialHeight]
  * @property {number} [initTop]
+ * @property {number} [initLeft]
  * @property {string} icon
  * @property {string} [iconWidth] - default '50%'
  * @property {string} title
@@ -26,6 +27,7 @@ export const AppConfig = (appName, appConfig) => {
 		initialWidth: appConfig.initialWidth || undefined,
 		initialHeight: appConfig.initialHeight || undefined,
 		initTop: appConfig.initTop || undefined,
+		initLeft: appConfig.initLeft || undefined,
 		icon: appConfig.icon || `../../apps/${appName}/img/icon_128.png`,
 		iconWidth: appConfig.iconWidth || '50%',
 		title: appConfig.title || 'App_Title',
@@ -76,19 +78,22 @@ export const appsConfig = {
 		minWidth: 420,
 		minHeight: 300,
 		initialHeight: 572,
-		initTop: 195,
+		initTop: 0,
 		iconWidth: '69%',
 		title: '~~ DASHBOARD ___\\',
-		content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>',
+		content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
 	},
 	explorer: {
 		preload: false,
-		fullScreen: true,
+		fullScreen: false,
 		minWidth: 860,
-		minHeight: 192,
-		initialWidth: 800,
+		minHeight: 190,
+		initialWidth: 860,
+		initialHeight: 610,
+		initTop: 0,
+		initLeft: 430,
 		iconWidth: '69%',
 		title: '°`° BLOCKCHAIN EXPLORER - }== -',
-		content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>',
+		content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>'
 	},
 };

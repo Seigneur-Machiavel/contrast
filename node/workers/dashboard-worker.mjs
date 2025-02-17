@@ -14,8 +14,6 @@ const observerPort = workerData.observerPort || 27270;
 const cryptoLight = new CryptoLight();
 cryptoLight.argon2Hash = argon2Hash;
 const dashApp = new DashboardWsApp(undefined, cryptoLight, nodePort, dashboardPort, false);
-/** @type {ObserverWsApp} */
-let observApp;
 
 // START
 const fingerPrint = nodeMachineId.machineIdSync();
@@ -139,7 +137,6 @@ parentPort.on('message', async (message) => {
             console.error('Unknown message type:', message.type);
     }
 });
-
 stopIfDashAppStoppedLoop();
 while(!dashApp.node) { await new Promise(resolve => setTimeout(resolve, 1000)); }
-observApp = new ObserverWsApp(dashApp.node, observerPort);
+const observApp = new ObserverWsApp(dashApp.node, observerPort);

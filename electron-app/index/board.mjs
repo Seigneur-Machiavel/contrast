@@ -1,9 +1,10 @@
 if (false) { // For better completion
 	const anime = require('animejs');
 	const ChatUI = require('../../apps/chat/front-scripts/chat-renderer.js');
-	const { Assistant } = require('../../apps/assistant/board-assistant.mjs');
+	//const { Assistant } = require('../../apps/assistant/board-assistant.mjs');
 }
 
+import { Assistant } from '../../apps/assistant/board-assistant.mjs';
 import { AppConfig, appsConfig } from '../../apps/apps-config.mjs';
 //const appsMainClasses = { 'ChatUI': ChatUI };
 //const assistant = new Assistant('board');
@@ -20,6 +21,7 @@ const interactionsListenners = {
 
 	onNoPasswordRequired: () => { assistant.sendMessage('No password required, initializing node...'); window.electronAPI.setPassword('fingerPrint'); },
 	
+	onAppVersion: (versionStr) => { document.getElementById('board-version').innerText = versionStr; },
 	onWaitingForPrivKey: () => {
 		assistant.sendMessage('Would you like to create a new private key or restore an existing wallet?')
 		assistant.requestChoice({
@@ -35,21 +37,28 @@ const interactionsListenners = {
 		await new Promise(resolve => setTimeout(resolve, 1000));
 		assistant.idleMenu();
 		await new Promise(resolve => setTimeout(resolve, 2000));
-		/*appsManager.toggleAppWindow('assistant');
-		await new Promise(resolve => setTimeout(resolve, 1000));*/
+		appsManager.toggleAppWindow('assistant');
+		await new Promise(resolve => setTimeout(resolve, 1000));
 		appsManager.unlock();
 		await new Promise(resolve => setTimeout(resolve, 1000));
-		appsManager.toggleAppWindow('explorer');
-		await new Promise(resolve => setTimeout(resolve, 1000));
 		appsManager.toggleAppWindow('dashboard');
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		appsManager.toggleAppWindow('explorer');
 	},
 	onConnexionResume: (connexionResume) => {
 		const resumeElement = document.getElementById('connexion-resume');
 		if (!resumeElement) return;
 
 		const { totalPeers, connectedBootstraps, totalBootstraps } = connexionResume;
-		if (totalPeers === 0) { resumeElement.innerText = 'Connecting to peers...'; return; }
-		resumeElement.innerText = `Connected to: ${totalPeers} peers (${connectedBootstraps} bootstraps)`;
+		if (totalPeers < 2 ) { 
+			resumeElement.innerText = 'Connecting network 🔴';
+		} else if (totalPeers < 5) {
+			resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟠`;
+		} else if (totalPeers < 10) {
+			resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟡`;
+		} else {
+			resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟢`;
+		}
 	},
 	//onNodeSettingsSaved
 
@@ -57,19 +66,36 @@ const interactionsListenners = {
 	onWindowToFront: (appName) => { appsManager.setFrontWindow(appName); },
 }
 
-/** @param {string} tag @param {string[]} classes @param {string} innerHTML @param {HTMLElement} [parent] */
-function newElement(tag, classes, innerHTML, parent) {
+/**
+ * @param {string} tag
+ * @param {string[]} classes
+ * @param {string} [innerText]
+ * @param {HTMLElement} [parent]
+ * @param {string} [innerHTML]
+ * */
+function newElement(tag, classes, innerText, parent, innerHTML) {
 	const element = document.createElement(tag);
+	if (innerText) element.innerText = innerText;
 	element.classList.add(...classes);
 
-	if (innerHTML.includes('.html')) {
+	if (innerHTML && innerHTML.includes('.html')) {
 		let url;
 		fetch(innerHTML).then(res => { url = res.url; return res.text() }).then(html => {
 			element.innerHTML = html;
 		});
-	} else {
-		element.innerHTML = innerHTML;
+	} else if (innerHTML) {
+		// element.innerHTML = innerHTML; // old method -> unsafe
+		// example : '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
+		const url = innerHTML.match(/src="([^"]+)"/) ? innerHTML.match(/src="([^"]+)"/)[1] : false;
+		if (!url) { console.error('No url found in:', innerHTML); return false; }
+		const iframe = document.createElement('iframe');
+		iframe.src = url || innerHTML;
+		iframe.style.width = '100%';
+		iframe.style.height = '100%';
+		iframe.style.border = 'none';
+		element.appendChild(iframe);
 	}
+
 	if (parent) parent.appendChild(element);
 	return element;
 }
@@ -116,8 +142,8 @@ class SubWindow {
 		/** @type {HTMLElement} */
 		this.element;
 		this.title = title;
-		this.content = content;
 		this.contentElement;
+		this.content = content;
 		// extract origin if present,
 		// ex: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
 		// => 'http://localhost:27271'
@@ -138,7 +164,13 @@ class SubWindow {
 		this.element.dataset.appName = this.appName;
 		this.element.appendChild(this.#newTitleBar(this.title));
 
-		this.contentElement = newElement('div', ['content'], this.content, this.element);
+		this.contentElement = newElement('div', ['content'], '', this.element, this.content);
+		if (!this.contentElement) { console.error('No content element found in:', this.content); return; }
+
+		// if iframe in content
+		const iframe = this.contentElement.querySelector('iframe');
+		if (iframe) iframe.id = this.appName + '-iframe';
+
 		this.element.style.minWidth = this.minSize.width + 'px';
 		this.element.style.minHeight = this.minSize.height + 'px';
 		this.element.style.maxWidth = window.innerWidth + 'px';
@@ -164,6 +196,7 @@ class SubWindow {
 			});
 
 			// Set dark mode to the iframe according to the board body class
+			if (!this.origin) return;
 			setTimeout(() => {
 				const iframe = this.contentElement.querySelector('iframe');
 				if (!iframe) return;
@@ -178,7 +211,7 @@ class SubWindow {
 		newElement('span', [], title, titleBar);
 
 		const buttonsWrap = newElement('div', ['buttons-wrap'], '', titleBar);
-		
+
 		const foldButton = newElement('img', ['fold-button'], '', buttonsWrap);
 		foldButton.dataset.appName = this.appName;
 		foldButton.dataset.action = 'fold';
@@ -307,12 +340,13 @@ class AppsManager {
 		const { title, content } = this.appsConfig[appName];
 		this.windows[appName] = new SubWindow(appName, title, content);
 
-		const { minWidth, minHeight, initialWidth, initialHeight, initTop } = this.appsConfig[appName];
+		const { minWidth, minHeight, initialWidth, initialHeight, initTop, initLeft } = this.appsConfig[appName];
 		this.windows[appName].minSize.width = minWidth;
 		this.windows[appName].minSize.height = minHeight;
 		this.windows[appName].initialSize.width = initialWidth;
 		this.windows[appName].initialSize.height = initialHeight;
 		this.windows[appName].position.top = initTop || 0;
+		this.windows[appName].position.left = initLeft || 0;
 
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
 		if (this.appsConfig[appName].setGlobal) window[appName] = this.windows[appName];
@@ -451,12 +485,15 @@ class AppsManager {
 		const appName = subWindow.element.dataset.appName;
 		this.setFrontWindow(appName);
 
-		const isThe20per20RightBottomCorner = e.clientX > subWindow.element.offsetWidth - 20 && e.clientY > subWindow.element.offsetHeight - 20;
-		if (isThe20per20RightBottomCorner) { 
+		/*const clickX = e.clientX - subWindow.element.offsetLeft;
+		const clickY = e.clientY - subWindow.element.offsetTop;
+		const isTheRightBottomCorner = clickX > subWindow.element.offsetWidth - 10 && clickY > subWindow.element.offsetHeight - 10;
+		if (isTheRightBottomCorner) {
+			console.log('clickX:', clickX, 'clickY:', clickY);
 			subWindow.element.style.pointerEvents = 'none';
 			this.resizingWindow = subWindow;
 			return;
-		}
+		}*/
 
 		if (!e.target.classList.contains('title-bar')) return;
 
@@ -468,10 +505,13 @@ class AppsManager {
 	moveWindowHandler(e) {
 		const subWindow = this.draggingWindow;
 		if (!subWindow) return;
-
 		
-		subWindow.element.style.left = e.clientX - subWindow.dragStart.x + 'px';
-		subWindow.element.style.top = e.clientY - subWindow.dragStart.y + 'px';
+		const maxLeft = this.windowsWrap.offsetWidth - 50;
+		const minTop = this.windowsWrap.offsetHeight - 32;
+		const left = Math.max(0, e.clientX - subWindow.dragStart.x);
+		const top = Math.max(0, e.clientY - subWindow.dragStart.y);
+		subWindow.element.style.left = Math.min(left, maxLeft) + 'px';
+		subWindow.element.style.top = Math.min(top, minTop) + 'px';
 	}
 	releaseWindowHandler(e) {
 		if (this.resizingWindow) {
@@ -552,8 +592,11 @@ window.addEventListener('message', function(e) {
 //await new Promise(resolve => setTimeout(resolve, 400));
 
 //Setup electronAPI listeners
-while(!window.assistant) { await new Promise(resolve => setTimeout(resolve, 20)); }
-assistant = window.assistant; // set exposed assistant to local variable
+//while(!window.assistant) { await new Promise(resolve => setTimeout(resolve, 20)); }
+//assistant = window.assistant; // set exposed assistant to local variable
+assistant = new Assistant('board');
+window.assistant = assistant;
+await assistant.init();
 
 for (const listener of Object.keys(interactionsListenners)) {
 	window.electronAPI[listener](interactionsListenners[listener]);

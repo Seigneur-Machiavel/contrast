@@ -37,13 +37,10 @@ export class Assistant {
     #userResponse = null;
     constructor(idPrefix = 'board') {
         this.idPrefix = idPrefix;
-        this.init();
     }
 
     async init() {
-        console.log('Assistant init', document.getElementById(`${this.idPrefix}-assistant-container`));
-        while (document.getElementById(`${this.idPrefix}-assistant-container`) === null) { await new Promise(resolve => setTimeout(resolve, 20)); }
-        console.log('Assistant init start');
+        while (document.getElementById(`${this.idPrefix}-assistant-container`) === null) await new Promise(resolve => setTimeout(resolve, 20));
 
         this.eHTML.assistantContainer = document.getElementById(`${this.idPrefix}-assistant-container`);
         this.eHTML.messagesContainer = document.getElementById(`${this.idPrefix}-messages-container`);
@@ -61,10 +58,12 @@ export class Assistant {
     }
     #setupEventListeners() {
         this.eHTML.sendBtn.addEventListener('click', () => {
+            console.log('click');
             this.sendMessage(this.eHTML.input.value, 'user');
             this.eHTML.input.value = '';
         });
         this.eHTML.inputForm.addEventListener('submit', (event) => {
+            console.log('submit');
             event.preventDefault();
         });
     }
@@ -153,7 +152,7 @@ export class Assistant {
         this.onResponse = this.#verifyPasswordAndExtract;
     }
     #verifyPasswordAndExtract(password = 'toto') {
-        const isValid = typeof password === 'string' && password.length > 5 && password.length < 30;
+        const isValid = typeof password === 'string';
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
 
         window.electronAPI.extractPrivateKey(password);
@@ -175,7 +174,7 @@ export class Assistant {
                 this.sendMessage(choice, 'user');
             });
             this.eHTML.choicesContainer.appendChild(choiceBtn);
-            await new Promise(resolve => setTimeout(resolve, 400));
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
     }
 
@@ -250,5 +249,6 @@ export class Assistant {
     }
 }
 
-const assistant = new Assistant('board');
-window.assistant = assistant; // Expose the assistant to the window object
+//const assistant = new Assistant('board');
+//await assistant.init();
+//window.assistant = assistant; // Expose the assistant to the window object

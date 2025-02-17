@@ -46,6 +46,7 @@ const fastConverter = new FastConverter();
  */
 export const serializer = {
     syncResponseMinLen: 76,
+    txPointerByte: 8, // ID:Offset => 4 bytes + 4 bytes
     serialize: {
         rawData(rawData) {
             /** @type {Uint8Array} */
@@ -280,7 +281,6 @@ export const serializer = {
         },
         /** @param {BlockData} blockData */
         block_finalized(blockData) {
-            const pointerByte = 8; // ID:Offset => 4 bytes + 4 bytes
             const elementsLength = {
                 nbOfTxs: 2, // 2bytes to store: blockData.Txs.length
                 indexBytes: 4,
@@ -294,7 +294,7 @@ export const serializer = {
                 hashBytes: 32,
                 nonceBytes: 4,
 
-                txsPointersBytes: blockData.Txs.length * pointerByte,
+                txsPointersBytes: blockData.Txs.length * serializer.txPointerByte,
                 txsBytes: 0
             }
 
@@ -367,7 +367,6 @@ export const serializer = {
         },
         /** @param {BlockData} blockData */
         block_candidate(blockData) {
-            const pointerByte = 8; // ID:Offset => 4 bytes + 4 bytes
             const elementsLength = {
                 nbOfTxs: 2, // 2bytes to store: blockData.Txs.length
                 indexBytes: 4,
@@ -379,7 +378,7 @@ export const serializer = {
                 posTimestampBytes: 6,
                 powRewardBytes: 8,
 
-                txsPointersBytes: blockData.Txs.length * pointerByte,
+                txsPointersBytes: blockData.Txs.length * serializer.txPointerByte,
                 txsBytes: 0
             }
 

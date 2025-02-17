@@ -73,21 +73,52 @@ function onOpen() {
 }
 function onClose(url = '') {
     console.info(`Connection closed: ${url}`);
-    
-   /* ws = undefined;
-    setTimeout(() => {
-        console.info('--- reseting blockExplorerWidget >>>');
-
-        const clonedData = blockExplorerWidget.getCloneBeforeReset();
-        blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
-
-        if (clonedData.modalContainer) {
-            blockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer);
-        }
-    }, SETTINGS.RECONNECT_INTERVAL);*/
+    ws = null;
 }
 function onError(error) {
     console.info('WebSocket error: ' + error);
+}
+function setup_ws(url = 'http://localhost:27270/') { // SIMPLE FOR DISCORD BOT
+    let lastKnownHeight = -1;
+    ws = new WebSocket(url);
+
+    ws.onmessage = (event) => { onMessage(event); };
+    async function onMessage(event) {
+
+    const message = JSON.parse(event.data);
+    const trigger = message.trigger;
+    const data = message.data;
+
+    switch (message.type) {
+        case 'current_height':
+            if (lastKnownHeight === data) { return; }
+            console.info(`new current_height #${lastKnownHeight} => #${data}`);
+            lastKnownHeight = data;
+            ws.send(JSON.stringify({ type: 'get_blocks_data_by_height', data }));
+            break;
+        case 'blocks_data_requested':
+            if (!data) { return; }
+            const block = data[0];
+            console.log(block);
+            console.log(`minerAddress ?: ${block.Txs[0].outputs[0].address}`);
+            console.log(`validatorAddress ?: ${data.Txs[1].inputs[0].split(':')[0]}`);
+            break;
+        default:
+            console.log('Unknown message type:', message.type);
+            break;
+        }
+    }
+
+    async function getHeightsLoop() {
+        while (true) {
+            await new Promise((resolve) => { setTimeout(() => { resolve(); }, 2000); });
+            if (!ws || ws.readyState !== 1) { continue; }
+            try { ws.send(JSON.stringify({ type: 'get_height', data: Date.now() })) } catch (error) { };
+        }
+    }; getHeightsLoop();
+
+    ws.onclose = () => { console.error('Connection closed'); };
+    ws.onerror = (error) => { console.error('WebSocket error:', error); };
 }
 async function onMessage(event) {
     if (!pageFocused) { return; }
@@ -95,11 +126,15 @@ async function onMessage(event) {
     const trigger = message.trigger;
     const data = message.data;
     
+    /** @type {BlockExplorerWidget} */
+    const blockExplorerWidget = window.blockExplorerWidget;
+    if (!blockExplorerWidget) { return; }
+
     const lastBlockInfoIndex = blockExplorerWidget.lastBlockInfoIndex;
     switch (message.type) {
         case 'current_height':
-            //console.info(`current_height #${data} | lastBlockIndex #${lastBlockInfoIndex} -> `);
-            if (lastBlockInfoIndex === -1) { return; }
+            console.info(`current_height #${data} | lastBlockIndex #${lastBlockInfoIndex} -> `);
+            //if (lastBlockInfoIndex === -1) { return; }
             if (data === lastBlockInfoIndex) { return; }
             if (data === lastBlockInfoIndex + 1) { // need the new block
                 console.info(`get_new_block_confirmed #${data} sent`);
@@ -172,50 +207,6 @@ async function onMessage(event) {
             break;
     }
 }
-function setup_ws(url = 'http://localhost:27270/') {
-    let lastKnownHeight = -1;
-    ws = new WebSocket(url);
-
-    ws.onmessage = (event) => { onMessage(event); };
-    async function onMessage(event) {
-
-    const message = JSON.parse(event.data);
-    const trigger = message.trigger;
-    const data = message.data;
-
-    switch (message.type) {
-        case 'current_height':
-            if (lastKnownHeight === data) { return; }
-            console.info(`new current_height #${lastKnownHeight} => #${data}`);
-            lastKnownHeight = data;
-            ws.send(JSON.stringify({ type: 'get_blocks_data_by_height', data }));
-            break;
-        case 'blocks_data_requested':
-            if (!data) { return; }
-            const block = data[0];
-            console.log(block);
-            console.log(`minerAddress ?: ${block.Txs[0].outputs[0].address}`);
-            console.log(`validatorAddress ?: ${data.Txs[1].inputs[0].split(':')[0]}`);
-            break;
-        default:
-            console.log('Unknown message type:', message.type);
-            break;
-        }
-    }
-
-    async function getHeightsLoop() {
-        while (true) {
-            await new Promise((resolve) => { setTimeout(() => { resolve(); }, 2000); });
-            if (!ws || ws.readyState !== 1) { continue; }
-            try { ws.send(JSON.stringify({ type: 'get_height', data: Date.now() })) } catch (error) { };
-        }
-    }; getHeightsLoop();
-
-    ws.onclose = () => { console.error('Connection closed'); };
-    ws.onerror = (error) => { console.error('WebSocket error:', error); };
-}
-// get_blocks_data_by_height
-
 function connectWS() {
     try { if (ws) { ws.close(); } } catch (error) {};
     let url = `${SETTINGS.WS_PROTOCOL}://${SETTINGS.DOMAIN}${SETTINGS.PORT ? ':' + SETTINGS.PORT : ''}`;
@@ -245,10 +236,12 @@ async function connectWSLoop() {
 
         console.info('--- reseting blockExplorerWidget >>>');
 
-        const clonedData = blockExplorerWidget.getCloneBeforeReset();
-        //blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget');
-        blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
+        const clonedData = window.blockExplorerWidget.getCloneBeforeReset();
+        window.blockExplorerWidget = null;
+
+        const blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
         if (clonedData.modalContainer) { blockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer); }
+        window.blockExplorerWidget = blockExplorerWidget;
 
         connectWS();
     }
@@ -1331,8 +1324,7 @@ class BlockChainElementsManager {
     }
 }
 
-blockExplorerWidget = new BlockExplorerWidget();
-window.blockExplorerWidget = blockExplorerWidget;
+window.blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget');
 
 //#region FUNCTIONS -------------------------------------------------------
 function getTimeSinceBlockConfirmedString(timestamp) {
@@ -1384,6 +1376,8 @@ function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-blockHas
 document.addEventListener('click', (event) => {
     if (window.parent && window !== window.parent) window.parent.postMessage({ type: 'iframeClick' }, 'file://');
 
+    /** @type {BlockExplorerWidget} */
+    const blockExplorerWidget = window.blockExplorerWidget;
     if (!blockExplorerWidget) { return; }
     const nbOfParentToTry = 5;
 
@@ -1404,6 +1398,8 @@ document.addEventListener('click', (event) => {
     }
 });
 document.addEventListener('keyup', (event) => {
+    /** @type {BlockExplorerWidget} */
+    const blockExplorerWidget = window.blockExplorerWidget;
     if (!blockExplorerWidget) { return; }
 
     let listener = blockExplorerWidget.inputEventsListeners[event.target.id];
@@ -1411,6 +1407,8 @@ document.addEventListener('keyup', (event) => {
 });
 // event hover
 document.addEventListener('mouseover', (event) => {
+    /** @type {BlockExplorerWidget} */
+    const blockExplorerWidget = window.blockExplorerWidget;
     if (!blockExplorerWidget) { return; }
     const nbOfParentToTry = 3;
 

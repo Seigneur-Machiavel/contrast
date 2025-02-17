@@ -2,6 +2,8 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <!--<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">-->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; frame-src http://localhost:27270 http://localhost:27271">
     <title>Contrast</title>
     <link rel="stylesheet" href="../../styles/contrast-style.css">
     <link rel="stylesheet" href="./board-style.css">
@@ -11,14 +13,13 @@
     <!-- APPS FRONT SCRIPTS -->
     <!--<script src="../../apps/chat/front-scripts/chat-renderer.js"></script>
     <script src="../../apps/vault/front-scripts/vault-renderer.js" defer></script>-->
-    <script src="../../apps/assistant/board-assistant.mjs" type="module"></script>
     <!-- INDEX SCRIPTS -->
     <script src="./board.mjs" type="module"></script>
 </head>
 <body>
     <div class="titlebar">
-        <span id="connexion-resume">Connecting to peers...</span>
-        <span>CONTRAST</span><span id="board-version">...</span>
+        <span id="connexion-resume">Connecting network 🔴</span>
+        <span>CONTRAST</span><span id="board-version">v0.0.0</span>
         <div class="window-controls">
             <button id="minimize-btn">─</button>
             <button id="maximize-btn">▭</button>
@@ -26,22 +27,12 @@
         </div>
     </div>
 
-
     <label class="dark-mode-switch">
         <input type="checkbox" id="dark-mode-toggle" checked>
         <span class="slider"></span>
     </label>
 
-    <!--<h1 style="text-align: center; width: 100%; margin-top: 40vh;">Hello world!</h1>-->
-    <!--<div id="board-assistant-container">
-        <div id="board-messages-container"></div>
-    
-        <input type="text" id="board-messages-input" placeholder="Type a message...">
-        <button id="board-send-btn">Send</button>
-    </div>-->
-
     <div id="board-windows-wrap"></div>
     <div id="board-bottom-buttons-bar"></div>
-    <!--<div id="board-version">...</div>-->
 </body>
 </html>

@@ -1,6 +1,7 @@
 if (false) { const { CryptoLight } = require('../../utils/cryptoLight.mjs'); }
 
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import cors from 'cors';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -164,6 +165,7 @@ export class DashboardWsApp {
         // WEB SERVER INIT
         if (this.app === null) {
             this.app = express();
+            this.app.use(cors({ origin: `http://localhost:${this.dashboardPort}` }));
             this.app.use(express.static(APPS_VARS.__nodeDir));
             this.app.use(express.json({ limit: '1mb' }));
             this.app.use(express.urlencoded({ extended: true }));
@@ -455,7 +457,7 @@ export class ObserverWsApp {
         /** @type {CallBackManager} */
         this.callBackManager = null;
         /** @type {express.Application} */
-        this.app = express();
+        this.app = null;
         this.port = port;
         /** @type {WebSocketServer} */
         this.wss =  null;
@@ -474,19 +476,23 @@ export class ObserverWsApp {
         if (!this.node.roles.includes('validator')) { throw new Error('ObserverWsApp must be used with a validator node'); }
         if (!this.node.roles.includes('observer')) { throw new Error('ObserverWsApp must be used with an observer node'); }
 
-        this.app.use(express.static(APPS_VARS.__dirname));
-        //this.app.use(express.static(APPS_VARS.__nodeDir));
-        
-        this.app.use('/styles', express.static(path.join(APPS_VARS.__contrastDir, 'styles')));
-        this.app.use('/front', express.static(path.join(APPS_VARS.__nodeDir, 'front')));
-        this.app.use('/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
-        this.app.use('/node/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
-        this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
-        this.app.use('/fonts', express.static(path.join(APPS_VARS.__contrastDir, 'fonts')));
-        this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));
-        this.app.use('/miniLogger', express.static(path.join(APPS_VARS.__contrastDir, 'miniLogger')));
-        
-        this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/explorer.html'); });
+        if (this.app === null) {
+            this.app = express();
+            this.app.use(cors());
+            this.app.use(express.static(APPS_VARS.__dirname));
+            //this.app.use(express.static(APPS_VARS.__nodeDir));
+            
+            this.app.use('/styles', express.static(path.join(APPS_VARS.__contrastDir, 'styles')));
+            this.app.use('/front', express.static(path.join(APPS_VARS.__nodeDir, 'front')));
+            this.app.use('/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
+            this.app.use('/node/src', express.static(path.join(APPS_VARS.__nodeDir, 'src')));
+            this.app.use('/libs', express.static(path.join(APPS_VARS.__contrastDir, 'libs')));
+            this.app.use('/fonts', express.static(path.join(APPS_VARS.__contrastDir, 'fonts')));
+            this.app.use('/utils', express.static(path.join(APPS_VARS.__contrastDir, 'utils')));
+            this.app.use('/miniLogger', express.static(path.join(APPS_VARS.__contrastDir, 'miniLogger')));
+            
+            this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/explorer.html'); });
+        }
         const server = this.app.listen(this.port, () => { console.log(`Server running on http://${'???'}:${this.port}`); });
         
         this.wss = new WebSocketServer({ server });
