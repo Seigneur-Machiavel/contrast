@@ -213,18 +213,15 @@ async function userSendToNextUser(accounts) {
         pushPromises.push(dashApp.node.pushTransaction(signedTx));
     }
 
-    const timeToCreateAndSignAllTxs = Date.now() - startTime;
-    startTime = Date.now();
-
     let broadcasted = 0;
     for (const promise of pushPromises) {
         const result = await promise;
         if (result.broadcasted) { broadcasted++; }
     }
-    const timeToPushAllTxsToMempool = Date.now() - startTime;
+    const elapsedTime = Date.now() - startTime;
 
     if (errorIsMissingUtxos) { testMiniLogger.log(`[TEST-USTNU] Missing UTXOs`, (m) => console.error(m)); }
-    testMiniLogger.log(`[TEST-USTNU] Nb broadcasted Txs: ${broadcasted} | timeToCreate: ${(timeToCreateAndSignAllTxs / 1000).toFixed(2)}s | timeToBroadcast: ${(timeToPushAllTxsToMempool / 1000).toFixed(2)}s`, (m) => console.info(m));
+    testMiniLogger.log(`[TEST-USTNU] Nb broadcasted Txs: ${broadcasted} | timeToCreate: ${(elapsedTime).toFixed(2)}s`, (m) => console.info(m));
 }
 /** User send to all other accounts @param {Account[]} accounts @param {number} senderAccountIndex */
 async function userSendToAllOthers(accounts, senderAccountIndex = 0) {

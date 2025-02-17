@@ -193,6 +193,7 @@ export class Blockchain {
         for (let i = indexStart; i <= indexEnd; i++) {
             const finalizedBlock = this.getBlock(i);
             if (!finalizedBlock) { console.error(`Block not found #${i}`); continue; }
+
             const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(finalizedBlock, memPool.knownPubKeysAddresses);
 
             for (const address of Object.keys(transactionsReferencesSortedByAddress)) {
@@ -204,14 +205,16 @@ export class Blockchain {
                 const concatenated = actualizedAddressesTxsRefs[address].concat(newTxsReferences);
                 actualizedAddressesTxsRefs[address] = concatenated;
             }
-        }
 
-        await new Promise(resolve => setTimeout(resolve, 200)); // avoid p2p disconnection
+            await new Promise(resolve => setTimeout(resolve, 10)); // avoid p2p disconnection
+        }
 
         let duplicateCountTime = 0;
         let totalRefs = 0;
         let totalDuplicates = 0;
-        for (const address of Object.keys(actualizedAddressesTxsRefs)) {
+        //for (const address of Object.keys(actualizedAddressesTxsRefs)) {
+        for (let i = 0; i < Object.keys(actualizedAddressesTxsRefs).length; i++) {
+            const address = Object.keys(actualizedAddressesTxsRefs)[i];
             const actualizedAddressTxsRefs = actualizedAddressesTxsRefs[address];
             const cleanedTxsRefs = [];
 
@@ -229,9 +232,9 @@ export class Blockchain {
             duplicateCountTime += (performance.now() - duplicateStart);
 
             this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
-        }
 
-        await new Promise(resolve => setTimeout(resolve, 200)); // avoid p2p disconnection
+            if (i % 100 === 0) { await new Promise(resolve => setTimeout(resolve, 10)); } // avoid p2p disconnection
+        }
 
         this.addressesTxsRefsStorage.save(indexEnd);
         
