@@ -27,7 +27,8 @@ autoUpdater.logger = log;*/
 // GLOBAL VARIABLES
 const windowsOptions = {
     logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
-    nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
+    //nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
+    nodeDashboard: { url_or_file: 'http://localhost:27271', minWidth: 420, minHeight: 300, height: 572 },
     mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 800, startHidden: false, isMainWindow: true }
 };
 
@@ -51,23 +52,28 @@ async function randomRestartTest() { // DEV FUNCTION
     }
 }
 /** @param {WindowOptions} options */
-async function createWindow(options) {
+async function createWindow(options, parentWindow) {
     const {
-        nodeIntegration,
-        contextIsolation,
+        nodeIntegration = false,
+        contextIsolation = true,
         url_or_file,
         width,
         height,
+        minWidth,
+        minHeight,
         startHidden = true,
         isMainWindow = false
     } = options;
 
     const window = new BrowserWindow({
         webSecurity: true,
-        additionalArguments: [`--csp="default-src 'self'; script-src 'self' 'unsafe-inline';"`],
+        additionalArguments: [`--csp="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"`],
         show: !startHidden,
+        parent: parentWindow,
         width,
         height,
+        minWidth,
+        minHeight,
         icon: 'electron-app/img/icon_256.png',
         titleBarStyle: isMainWindow ? 'hidden' : 'default',
         webPreferences: {
@@ -124,12 +130,18 @@ app.on('ready', async () => {
     if (!isDev) autoUpdater.checkForUpdatesAndNotify();
 
     windows.mainWindow = await createWindow(windowsOptions.mainWindow);
+    //windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard, windows.mainWindow);
+    //windows.nodeDashboard.show();
 
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.mainWindow);
 
     if (isDev) windows.mainWindow.webContents.toggleDevTools(); // dev tools on start
 
+    windows.mainWindow.on('move', () => {
+        const [parentX, parentY] = windows.mainWindow.getPosition();
+        console.log(`Main window moved to: ${parentX}, ${parentY}`);
+    });
     ipcMain.on('set-password', async (event, password) => {
         console.log('setting password...');
         const { channel, data } = await dashboardWorker.setPasswordAndWaitResult(password);
@@ -137,7 +149,7 @@ app.on('ready', async () => {
         
         // randomRestartTest(); // -- test restart each 120s to 600s --
         windows.logger = await createWindow(windowsOptions.logger);
-        windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard);
+        //windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard);
         setShortcuts(windows, isDev);
     });
     ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());

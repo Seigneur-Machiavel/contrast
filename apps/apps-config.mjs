@@ -51,14 +51,14 @@ export const appsConfig = {
 		fullScreen: false,
 		setFront: true
 	},
-	/*wallet: {
-		preload: false,
+	wallet: {
+		preload: true,
 		disableOnLock: true,
 		minWidth: 322,
 		minHeight: 402,
 		title: '- )( - WALLET ___\\',
-		content: '../../apps/wallet/wallet-content.html',
-	},*/
+		content: '../../apps/wallet/biw-content.html',
+	},
 	/*chat: {
 		preload: false,
 		minWidth: 300,

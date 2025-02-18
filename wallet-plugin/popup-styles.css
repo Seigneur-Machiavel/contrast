@@ -280,7 +280,6 @@ form {
     justify-content: center;
     flex-direction: column;
     width: 100%;
-    height: 100%;
     height: calc(100% - 50.8px);
 }
 input {
@@ -462,7 +461,6 @@ button.classy.clicked:not(.disabled) {
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    /*height: 222px !important;*/
     height: 166px !important;
 }
 #walletForm .textInfo {

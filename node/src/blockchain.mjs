@@ -206,7 +206,7 @@ export class Blockchain {
                 actualizedAddressesTxsRefs[address] = concatenated;
             }
 
-            await new Promise(resolve => setTimeout(resolve, 50)); // avoid p2p disconnection
+            //await new Promise(resolve => setTimeout(resolve, 50)); // avoid p2p disconnection
         }
 
         let duplicateCountTime = 0;
@@ -232,7 +232,7 @@ export class Blockchain {
 
             this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
 
-            if (i % 300 === 0) { await new Promise(resolve => setTimeout(resolve, 50)); } // avoid p2p disconnection
+            //if (i % 300 === 0) { await new Promise(resolve => setTimeout(resolve, 50)); } // avoid p2p disconnection
         }
 
         this.addressesTxsRefsStorage.save(indexEnd);
