@@ -140,7 +140,7 @@ export class OpStack {
                     break;
                 case 'pushTransactions':
                     const { success, failed } = await this.node.memPool.pushTransactions(this.node.utxoCache, content);
-                    this.miniLogger.log(`[OpStack] pushTransactions: ${success.length} success, ${failed.length} failed`, (m) => console.info(m));
+                    this.miniLogger.log(`[OpStack] pushTransactions: ${success.length} success, ${failed.length} failure`, (m) => console.info(m));
                     break;
                 case 'digestPowProposal':
                     if (content.Txs[1].inputs[0] === undefined) { this.miniLogger.log(`[OpStack] Invalid block validator`, (m) => console.error(m)); return; }

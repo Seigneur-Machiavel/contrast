@@ -25,20 +25,22 @@ log.info('--- Test log ---');
 autoUpdater.logger = log;*/
 
 // GLOBAL VARIABLES
-const windowsOptions = {
-    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
-    //nodeDashboard: { nodeIntegration: false, contextIsolation: true, url_or_file: 'http://localhost:27271', width: 1366, height: 768 },
-    nodeDashboard: { url_or_file: 'http://localhost:27271', minWidth: 420, minHeight: 300, height: 572 },
-    mainWindow: { nodeIntegration: false, contextIsolation: true, url_or_file: './electron-app/index/board.html', width: 1366, height: 800, startHidden: false, isMainWindow: true }
-};
-
+const isDev = !app.isPackaged;
+const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
 const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });
-const isDev = !app.isPackaged;
 const nodeApp = isDev ? 'stresstest' : 'dashboard';
 let isQuiting = false;
 /** @type {Object<string, BrowserWindow>} */
 const windows = {};
+const windowsOptions = {
+    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
+    boardWindow: {
+        nodeIntegration: true, contextIsolation: false, url_or_file: './electron-app/index/board.html',
+        width: 1366, height: 800, startHidden: false, isMainWindow: true,
+        //preload: path.join(__dirname, 'electron-app', 'index', 'board-preload.js')
+    }
+};
 /** @type {NodeAppWorker} */
 let dashboardWorker;
 
@@ -54,15 +56,9 @@ async function randomRestartTest() { // DEV FUNCTION
 /** @param {WindowOptions} options */
 async function createWindow(options, parentWindow) {
     const {
-        nodeIntegration = false,
-        contextIsolation = true,
-        url_or_file,
-        width,
-        height,
-        minWidth,
-        minHeight,
-        startHidden = true,
-        isMainWindow = false
+        nodeIntegration = false, contextIsolation = true, url_or_file,
+        width, height, minWidth, minHeight,
+        startHidden = true, isMainWindow = false, preload
     } = options;
 
     const window = new BrowserWindow({
@@ -70,46 +66,25 @@ async function createWindow(options, parentWindow) {
         additionalArguments: [`--csp="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"`],
         show: !startHidden,
         parent: parentWindow,
-        width,
-        height,
-        minWidth,
-        minHeight,
+        width, height, minWidth, minHeight,
         icon: 'electron-app/img/icon_256.png',
         titleBarStyle: isMainWindow ? 'hidden' : 'default',
-        webPreferences: {
-            preload: isMainWindow ? path.join(__dirname, 'electron-app', 'preload.js') : undefined,
-            nodeIntegration,
-            contextIsolation
-        }
+        webPreferences: { preload, nodeIntegration, contextIsolation }
     });
 
-    if (isMainWindow) {
-        window.on('close', () => { if (!isQuiting) app.quit(); });
+    if (isMainWindow) window.on('close', () => { if (!isQuiting) app.quit(); });
+    else window.on('close', (e) => { if (!isQuiting) { e.preventDefault(); window.hide() } });
 
-        // test of loading an extension
-        //const walletExtensionPath = path.resolve(__dirname, './wallet-plugin');
-        //console.log(walletExtensionPath);
-        //await session.defaultSession.loadExtension(walletExtensionPath);
-    } else {
-        window.on('close', (e) => { if (!isQuiting) { e.preventDefault(); window.hide() } });
-    }
+    if (url_or_file.startsWith('http')) { window.loadURL(url_or_file); } else { window.loadFile(url_or_file); }
 
-    const isUrl = url_or_file.startsWith('http');
-    if (isUrl) { window.loadURL(url_or_file); } else { window.loadFile(url_or_file); }
-
-    setTimeout(() => {
-        const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
-        window.webContents.send('app-version', `v${version}`);
-        console.log(`App version sent to ${isMainWindow ? 'main' : 'other'} window: v${version}` );
-    }, 2000);
+    setTimeout(() => window.webContents.send('app-version', `v${version}`), 2000);
 
     return window;
 }
 
+
+// AUTO UPDATER EVENTS
 autoUpdater.on('update-available', (e) => { console.log(`A new update is available: v${e.version}`); });
-app.on('before-quit', () => { isQuiting = true; globalShortcut.unregisterAll(); if (dashboardWorker) dashboardWorker.stop(); });
-app.on('will-quit', async () => { await new Promise(resolve => setTimeout(resolve, 10000)) }); // let time for the node to stop properly
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     const dialogOpts = {
         type: 'info',
@@ -125,50 +100,54 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     });
 });
 
+// IPC EVENTS
+ipcMain.on('minimize-btn-click', () => windows.boardWindow.minimize());
+ipcMain.on('maximize-btn-click', () => windows.boardWindow.isMaximized() ? windows.boardWindow.unmaximize() : windows.boardWindow.maximize());
+ipcMain.on('close-btn-click', () => windows.boardWindow.close());
+ipcMain.on('set-password', async (event, password) => {
+    console.log('setting password...');
+    const { channel, data } = await dashboardWorker.setPasswordAndWaitResult(password);
+    event.reply(channel, data);
+    
+    // randomRestartTest(); // -- test restart each 120s to 600s --
+    windows.logger = await createWindow(windowsOptions.logger);
+    setShortcuts(windows, isDev);
+});
+ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());
+ipcMain.on('set-private-key-and-start-node', (event, privateKey) => dashboardWorker.setPrivateKeyAndStartNode(privateKey));
+ipcMain.on('extract-private-key', async (event, password) => {
+    const extracted = await dashboardWorker.extractPrivateKeyAndWaitResult(password);
+    event.reply('assistant-message', extracted);
+});
+ipcMain.on('set-auto-launch', async (event, value) => {
+    const isEnabled = await myAppAutoLauncher.isEnabled();
+    if (value && !isEnabled) await myAppAutoLauncher.enable();
+    if (!value && isEnabled) await myAppAutoLauncher.disable();
 
+    const isNowEnabled = await myAppAutoLauncher.isEnabled();
+    console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);
+    event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
+});
+
+// APP EVENTS
+app.on('before-quit', () => { isQuiting = true; globalShortcut.unregisterAll(); if (dashboardWorker) dashboardWorker.stop(); });
+app.on('will-quit', async () => { await new Promise(resolve => setTimeout(resolve, 10000)) }); // let time for the node to stop properly
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 app.on('ready', async () => {
     if (!isDev) autoUpdater.checkForUpdatesAndNotify();
 
-    windows.mainWindow = await createWindow(windowsOptions.mainWindow);
-    //windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard, windows.mainWindow);
+    windows.boardWindow = await createWindow(windowsOptions.boardWindow);
+    //windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard, windows.boardWindow);
     //windows.nodeDashboard.show();
 
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
-    dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.mainWindow);
+    dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.boardWindow);
 
-    if (isDev) windows.mainWindow.webContents.toggleDevTools(); // dev tools on start
+    if (isDev) windows.boardWindow.webContents.toggleDevTools(); // dev tools on start
 
-    windows.mainWindow.on('move', () => {
-        const [parentX, parentY] = windows.mainWindow.getPosition();
+    windows.boardWindow.on('move', () => {
+        const [parentX, parentY] = windows.boardWindow.getPosition();
         console.log(`Main window moved to: ${parentX}, ${parentY}`);
     });
-    ipcMain.on('set-password', async (event, password) => {
-        console.log('setting password...');
-        const { channel, data } = await dashboardWorker.setPasswordAndWaitResult(password);
-        event.reply(channel, data);
-        
-        // randomRestartTest(); // -- test restart each 120s to 600s --
-        windows.logger = await createWindow(windowsOptions.logger);
-        //windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard);
-        setShortcuts(windows, isDev);
-    });
-    ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());
-    ipcMain.on('set-private-key-and-start-node', (event, privateKey) => dashboardWorker.setPrivateKeyAndStartNode(privateKey));
-    ipcMain.on('extract-private-key', async (event, password) => {
-        const extracted = await dashboardWorker.extractPrivateKeyAndWaitResult(password);
-        event.reply('assistant-message', extracted);
-    });
-    ipcMain.on('set-auto-launch', async (event, value) => {
-        const isEnabled = await myAppAutoLauncher.isEnabled();
-        if (value && !isEnabled) await myAppAutoLauncher.enable();
-        if (!value && isEnabled) await myAppAutoLauncher.disable();
 
-        const isNowEnabled = await myAppAutoLauncher.isEnabled();
-        console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);
-        event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
-    });
-
-    ipcMain.on('minimize-btn-click', () => windows.mainWindow.minimize());
-    ipcMain.on('maximize-btn-click', () => windows.mainWindow.isMaximized() ? windows.mainWindow.unmaximize() : windows.mainWindow.maximize());
-    ipcMain.on('close-btn-click', () => windows.mainWindow.close());
 });

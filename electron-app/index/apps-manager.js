@@ -1,107 +1,41 @@
-if (false) { // For better completion
-	const anime = require('animejs');
-	const ChatUI = require('../../apps/chat/front-scripts/chat-renderer.js');
-	//const { Assistant } = require('../../apps/assistant/board-assistant.mjs');
-}
-
-import { Assistant } from '../../apps/assistant/board-assistant.mjs';
-import { AppConfig, appsConfig } from '../../apps/apps-config.mjs';
-//const appsMainClasses = { 'ChatUI': ChatUI };
-//const assistant = new Assistant('board');
-
-/** @type {Assistant} */
-let assistant;
-
-const interactionsListenners = {
-	onNoExistingPassword: () => { assistant.requestNewPassword(); },
-	onSetNewPasswordResult: async (message) => { if (!message) assistant.requestNewPassword('Password creation failed, try again'); },
-
-	onPasswordRequested: () => { appsManager.lock(); assistant.requestPasswordToUnlock(); },
-	onSetPasswordResult: (message) => { if (!message) assistant.requestPasswordToUnlock(true); },
-
-	onNoPasswordRequired: () => { assistant.sendMessage('No password required, initializing node...'); window.electronAPI.setPassword('fingerPrint'); },
-	
-	onAppVersion: (versionStr) => { document.getElementById('board-version').innerText = versionStr; },
-	onWaitingForPrivKey: () => {
-		assistant.sendMessage('Would you like to create a new private key or restore an existing wallet?')
-		assistant.requestChoice({
-			'Generate (new user)': () => {
-				assistant.sendMessage('Initializing node... (can take a up to a minute)');
-				window.electronAPI.generatePrivateKeyAndStartNode();
-			},
-			'Restore wallet': () => assistant.requestPrivateKey()
-		});
-	},
-	onNodeStarted: async () => {
-		assistant.sendMessage('We are connected baby!');
-		await new Promise(resolve => setTimeout(resolve, 1000));
-		assistant.idleMenu();
-		await new Promise(resolve => setTimeout(resolve, 2000));
-		appsManager.toggleAppWindow('assistant');
-		await new Promise(resolve => setTimeout(resolve, 1000));
-		appsManager.unlock();
-		await new Promise(resolve => setTimeout(resolve, 1000));
-		appsManager.toggleAppWindow('dashboard');
-		await new Promise(resolve => setTimeout(resolve, 1000));
-		appsManager.toggleAppWindow('explorer');
-	},
-	onConnexionResume: (connexionResume) => {
-		const resumeElement = document.getElementById('connexion-resume');
-		if (!resumeElement) return;
-
-		const { totalPeers, connectedBootstraps, totalBootstraps } = connexionResume;
-		if (totalPeers < 2 ) { 
-			resumeElement.innerText = 'Connecting network 🔴';
-		} else if (totalPeers < 5) {
-			resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟠`;
-		} else if (totalPeers < 10) {
-			resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟡`;
-		} else {
-			resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟢`;
-		}
-	},
-	//onNodeSettingsSaved
-
-	onAssistantMessage: (message) => { assistant.sendMessage(message, 'system'); },
-	onWindowToFront: (appName) => { appsManager.setFrontWindow(appName); },
-}
+const { AppConfig, appsConfig } = require('../../apps/apps-config.js');
+const { BrowserWindow, ipcRenderer } = require('electron');
 
 /**
  * @param {string} tag
  * @param {string[]} classes
  * @param {string} [innerText]
  * @param {HTMLElement} [parent]
- * @param {string} [innerHTML]
- * */
+ * @param {string} [innerHTML] */
 function newElement(tag, classes, innerText, parent, innerHTML) {
-	const element = document.createElement(tag);
-	if (innerText) element.innerText = innerText;
-	element.classList.add(...classes);
+    const element = document.createElement(tag);
+    if (innerText) element.innerText = innerText;
+    element.classList.add(...classes);
 
-	if (innerHTML && innerHTML.includes('.html')) {
-		let url;
-		fetch(innerHTML).then(res => { url = res.url; return res.text() }).then(html => {
-			element.innerHTML = html;
-		});
-	} else if (innerHTML) {
-		// element.innerHTML = innerHTML; // old method -> unsafe
-		// example : '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
-		const url = innerHTML.match(/src="([^"]+)"/) ? innerHTML.match(/src="([^"]+)"/)[1] : false;
-		if (!url) { console.error('No url found in:', innerHTML); return false; }
-		const iframe = document.createElement('iframe');
-		iframe.src = url || innerHTML;
-		iframe.style.width = '100%';
-		iframe.style.height = '100%';
-		iframe.style.border = 'none';
-		element.appendChild(iframe);
-	}
+    if (innerHTML && innerHTML.includes('.html')) {
+        let url;
+        fetch(innerHTML).then(res => { url = res.url; return res.text() }).then(html => {
+            element.innerHTML = html;
+        });
+    } else if (innerHTML) {
+        // element.innerHTML = innerHTML; // old method -> unsafe
+        // example : '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
+        const url = innerHTML.match(/src="([^"]+)"/) ? innerHTML.match(/src="([^"]+)"/)[1] : false;
+        if (!url) { console.error('No url found in:', innerHTML); return false; }
+        const iframe = document.createElement('iframe');
+        iframe.src = url || innerHTML;
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        element.appendChild(iframe);
+    }
 
-	if (parent) parent.appendChild(element);
-	return element;
+    if (parent) parent.appendChild(element);
+    return element;
 }
 
 class ButtonsBar {
-	constructor(element = document.getElementById('bottom-buttons-bar')) {
+	constructor(element) {
 		/** @type {HTMLElement} */
 		this.element = element;
 		/** @type {HTMLElement[]} */
@@ -312,11 +246,11 @@ class AppsManager {
 	tempFrontAppName = null;
 	transitionsDuration = 400;
 	appsByZindex 
-	constructor(windowsWrap, buttonsBarElement, appsConf) {
+	constructor(windowsWrap, buttonsBarElement) {
 		this.windowsWrap = windowsWrap;
 		this.buttonsBar = new ButtonsBar(buttonsBarElement);
 		/** @type {Object<string, AppConfig>} */
-		this.appsConfig = this.#buildAppsConfig(appsConf);
+		this.appsConfig = this.#buildAppsConfig(appsConfig);
 	}
 
 	#buildAppsConfig(appsConf) {
@@ -498,6 +432,7 @@ class AppsManager {
 
 		if (!e.target.classList.contains('title-bar')) return;
 
+		e.preventDefault();
 		this.draggingWindow = subWindow;
 		subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
 		subWindow.dragStart.y = e.clientY - subWindow.element.offsetTop;
@@ -530,75 +465,4 @@ class AppsManager {
 	}
 }
 
-const appsManager = new AppsManager(
-	document.getElementById('board-windows-wrap'),
-	document.getElementById('board-bottom-buttons-bar'),
-	appsConfig
-);
-appsManager.initApps();
-window.appsManager = appsManager;
-
-// better implementation with less event listeners
-function clickTitleBarButtonsHandler(e) {
-	const button = e.target.closest('button');
-	if (!button) return;
-
-	switch(button.id) {
-		case 'minimize-btn': window.electronAPI.onMinimizeBtnClick(); break;
-		case 'maximize-btn': window.electronAPI.onMaximizeBtnClick(); break;
-		case 'close-btn': window.electronAPI.onCloseBtnClick(); break;
-	}
-}
-window.addEventListener('click', (e) => {
-	clickTitleBarButtonsHandler(e);
-	appsManager.clickAppButtonsHandler(e);
-	appsManager.clickWindowHandler(e);
-});
-window.addEventListener('mouseover', (e) => { appsManager.hoverAppButtonsHandler(e); });
-document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
-document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
-document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });
-document.addEventListener('mouseup', (e) => { appsManager.releaseWindowHandler(e); });
-document.addEventListener('change', (event) => {
-	switch(event.target.id) {
-		case 'dark-mode-toggle':
-    		document.body.classList.toggle('dark-mode');
-			const darkModeState = document.body.classList.contains('dark-mode');
-			for (const app in appsManager.windows) {
-				const iframe = appsManager.windows[app].contentElement.querySelector('iframe');
-				if (!iframe) continue;
-
-				iframe.contentWindow.postMessage({ type: 'darkMode', value: darkModeState }, appsManager.windows[app].origin);
-				console.log('darkMode msg sent:', darkModeState);
-			}
-			break;
-	}
-});
-window.addEventListener('resize', function() {
-	for (const app in appsManager.windows) {
-		appsManager.windows[app].element.style.maxWidth = window.innerWidth + 'px';
-		appsManager.windows[app].element.style.maxHeight = window.innerHeight + 'px';
-	}
-});
-window.addEventListener('message', function(e) {
-	if (e.data.type && e.data.type === 'iframeClick') {
-		for (const app in appsManager.windows) {
-			if (appsManager.windows[app].origin !== e.origin) { continue; }
-			appsManager.setFrontWindow(app);
-			break;
-		}
-	}
-});
-
-//await new Promise(resolve => setTimeout(resolve, 400));
-
-//Setup electronAPI listeners
-//while(!window.assistant) { await new Promise(resolve => setTimeout(resolve, 20)); }
-//assistant = window.assistant; // set exposed assistant to local variable
-assistant = new Assistant('board');
-window.assistant = assistant;
-await assistant.init();
-
-for (const listener of Object.keys(interactionsListenners)) {
-	window.electronAPI[listener](interactionsListenners[listener]);
-}
+module.exports = { AppsManager, AppConfig, appsConfig };

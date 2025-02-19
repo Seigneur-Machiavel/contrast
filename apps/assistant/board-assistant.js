@@ -2,6 +2,8 @@ if (false) { // For better completion
 	const anime = require('animejs');
 }
 
+const { ipcRenderer } = require('electron');
+
 /**
  * @typedef {Object<string, Function>} ChoicesActions
  * 
@@ -16,7 +18,7 @@ if (false) { // For better completion
  * @property {HTMLElement} choicesContainer
  */
 
-export class Assistant {
+class Assistant {
     isFirstMessage = true;
     activeInput = 'idle';
     nextActiveInputTimeout = null;
@@ -97,7 +99,8 @@ export class Assistant {
     }
     #verifyNewPassword(password = 'toto') {
         if (password === '') {
-            window.electronAPI.setPassword('fingerPrint'); // less secure: use the finger print as password
+            //window.electronAPI.setPassword('fingerPrint'); // less secure: use the finger print as password
+            ipcRenderer.send('set-password', 'fingerPrint'); // less secure: use the finger print as password
             this.#setActiveInput('idle');
             return;
         }
@@ -114,7 +117,8 @@ export class Assistant {
         if (typeof password !== 'string') { this.sendMessage('What the hell are you typing?'); return; }
         if (password !== this.#userResponse) { this.requestNewPassword('Passwords do not match.'); return; } // Retry at step (1)
 
-        window.electronAPI.setPassword(password);
+        //window.electronAPI.setPassword(password);
+        ipcRenderer.send('set-password', password);
         this.#setActiveInput('idle');
     }
 
@@ -129,7 +133,8 @@ export class Assistant {
         if (!isValid) { this.sendMessage('Invalid private key.'); return; }
         
         this.sendMessage('Initializing node... (can take a up to a minute)');
-        window.electronAPI.setPrivateKeyAndStartNode(privateKey);
+        //window.electronAPI.setPrivateKeyAndStartNode(privateKey);
+        ipcRenderer.send('set-private-key-and-start-node', privateKey);
         this.#setActiveInput('idle');
     }
 
@@ -142,7 +147,8 @@ export class Assistant {
         const isValid = typeof password === 'string' && password.length > 5 && password.length < 30;
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
 
-        window.electronAPI.setPassword(password);
+        //window.electronAPI.setPassword(password);
+        ipcRenderer.send('set-password', password);
         this.#setActiveInput('idle');
     }
 
@@ -155,7 +161,9 @@ export class Assistant {
         const isValid = typeof password === 'string';
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
 
-        window.electronAPI.extractPrivateKey(password);
+        //window.electronAPI.extractPrivateKey(password);
+        ipcRenderer.send('extract-private-key', password);
+
         setTimeout(() => { this.idleMenu(); }, 1000);
     }
 
@@ -183,8 +191,10 @@ export class Assistant {
 			'Extract my private key': () => this.requestPasswordToExtract(),
 			'Launch at startup': () => {
                 this.requestChoice({
-                    'Yes': () => { window.electronAPI.setAutoLaunch(true), this.idleMenu(); },
-                    'No': () => { window.electronAPI.setAutoLaunch(false), this.idleMenu(); }
+                    //'Yes': () => { window.electronAPI.setAutoLaunch(true), this.idleMenu(); },
+                    //'No': () => { window.electronAPI.setAutoLaunch(false), this.idleMenu(); }
+                    'Yes': () => { ipcRenderer.send('set-auto-launch', true); this.idleMenu(); },
+                    'No': () => { ipcRenderer.send('set-auto-launch', false); this.idleMenu(); }
                 });
             },
 		});
@@ -249,6 +259,4 @@ export class Assistant {
     }
 }
 
-//const assistant = new Assistant('board');
-//await assistant.init();
-//window.assistant = assistant; // Expose the assistant to the window object
+module.exports = { Assistant };

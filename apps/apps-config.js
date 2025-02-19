@@ -18,7 +18,7 @@
  * @property {boolean} [setFront] - default false
  */
 
-export const AppConfig = (appName, appConfig) => {
+const AppConfig = (appName, appConfig) => {
 	return {
 		preload: appConfig.preload || false,
 		disableOnLock: appConfig.disableOnLock === false ? false : true,
@@ -38,7 +38,7 @@ export const AppConfig = (appName, appConfig) => {
 		setFront: appConfig.setFront || false
 	}
 }
-export const appsConfig = {
+const appsConfig = {
 	assistant: {
 		preload: true,
 		disableOnLock: false,
@@ -101,3 +101,5 @@ export const appsConfig = {
 		content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>'
 	},
 };
+
+module.exports = { AppConfig, appsConfig };

@@ -10,6 +10,9 @@ export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || pr
 GET LAST NODE VERSION:
 nvm install node
 
+(OPTIONAL) PM2 SETUP:
+npm install pm2 -g
+
 NAVIGATE TO PROJECT FOLDER AND INSTALL DEPENDENCIES:
 cd contrast && npm i
 
