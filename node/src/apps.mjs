@@ -117,6 +117,7 @@ class AppStaticFncs {
 export class DashboardWsApp {
     /** @type {NodeSetting} */
     #nodeSetting; // new version
+    localonly = true;
     stopping = false;
     stopped = false;
     waitingForPrivKey = false;
@@ -218,7 +219,7 @@ export class DashboardWsApp {
         const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
 
         // Allow only localhost connections
-        if (localonly && (clientIp !== '127.0.0.1' && clientIp !== '::1')) {
+        if (this.localonly && (clientIp !== '127.0.0.1' && clientIp !== 'localhost')) {
             console.warn(`[DASHBOARD] Connection attempt from unauthorized IP: ${clientIp}`);
             ws.close(1008, 'Unauthorized'); // 1008: Policy Violation
             return;

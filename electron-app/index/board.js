@@ -10,6 +10,7 @@ const { BrowserWindow, ipcRenderer } = require('electron');
 const { AppsManager } = require('./apps-manager.js');
 /** @type {Assistant} */
 let assistant;
+window.ipcRenderer = ipcRenderer;
 
 ipcRenderer.on('no-existing-password', (event, ...args) => assistant.requestNewPassword() );
 ipcRenderer.on('set-new-password-result', (event, ...args) => { if (!args[0]) assistant.requestNewPassword('Password creation failed, try again'); });

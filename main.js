@@ -34,11 +34,13 @@ let isQuiting = false;
 /** @type {Object<string, BrowserWindow>} */
 const windows = {};
 const windowsOptions = {
-    logger: { nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html', width: 300, height: 500 },
+    logger: { 
+        nodeIntegration: true, contextIsolation: false, url_or_file: './miniLogger/miniLoggerSetting.html',
+        width: 300, height: 500
+    },
     boardWindow: {
         nodeIntegration: true, contextIsolation: false, url_or_file: './electron-app/index/board.html',
-        width: 1366, height: 800, startHidden: false, isMainWindow: true,
-        //preload: path.join(__dirname, 'electron-app', 'index', 'board-preload.js')
+        width: 1366, height: 800, startHidden: false, isMainWindow: true
     }
 };
 /** @type {NodeAppWorker} */
@@ -137,17 +139,13 @@ app.on('ready', async () => {
     if (!isDev) autoUpdater.checkForUpdatesAndNotify();
 
     windows.boardWindow = await createWindow(windowsOptions.boardWindow);
-    //windows.nodeDashboard = await createWindow(windowsOptions.nodeDashboard, windows.boardWindow);
-    //windows.nodeDashboard.show();
+    if (isDev) windows.boardWindow.webContents.toggleDevTools(); // dev tools on start
 
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.boardWindow);
-
-    if (isDev) windows.boardWindow.webContents.toggleDevTools(); // dev tools on start
 
     windows.boardWindow.on('move', () => {
         const [parentX, parentY] = windows.boardWindow.getPosition();
         console.log(`Main window moved to: ${parentX}, ${parentY}`);
     });
-
 });
