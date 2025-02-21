@@ -57,9 +57,9 @@ ipcRenderer.on('node-started', (event, ...args) => {
 	setTimeout(() => assistant.idleMenu(), 1000);
 	setTimeout(() => appsManager.toggleAppWindow('assistant'), 2000);
 	setTimeout(() => appsManager.unlock(), 3000);
-	//setTimeout(() => appsManager.toggleAppWindow('dashboard');, 4000);
-	//setTimeout(() => appsManager.toggleAppWindow('explorer');, 5000);
-	setTimeout(() => appsManager.toggleAppWindow('wallet'), 4000);
+	setTimeout(() => appsManager.toggleAppWindow('dashboard'), 4000);
+	setTimeout(() => appsManager.toggleAppWindow('explorer'), 5000);
+	//setTimeout(() => appsManager.toggleAppWindow('wallet'), 4000);
 });
 ipcRenderer.on('connexion-resume', (event, ...args) => {
 	const resumeElement = document.getElementById('connexion-resume');
