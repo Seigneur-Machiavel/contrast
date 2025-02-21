@@ -84,7 +84,6 @@ async function createWindow(options, parentWindow) {
     return window;
 }
 
-
 // AUTO UPDATER EVENTS
 autoUpdater.on('update-available', (e) => { console.log(`A new update is available: v${e.version}`); });
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
@@ -130,6 +129,10 @@ ipcMain.on('set-auto-launch', async (event, value) => {
     console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);
     event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
 });
+ipcMain.on('generate-new-address', async (event, prefix) => {
+    const newAddress = await dashboardWorker.generateNewAddressAndWaitResult(prefix);
+    event.reply('new-address-generated', newAddress);
+});
 
 // APP EVENTS
 app.on('before-quit', () => { isQuiting = true; globalShortcut.unregisterAll(); if (dashboardWorker) dashboardWorker.stop(); });
@@ -144,8 +147,8 @@ app.on('ready', async () => {
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.boardWindow);
 
-    windows.boardWindow.on('move', () => {
+    /*windows.boardWindow.on('move', () => {
         const [parentX, parentY] = windows.boardWindow.getPosition();
         console.log(`Main window moved to: ${parentX}, ${parentY}`);
-    });
+    });*/
 });

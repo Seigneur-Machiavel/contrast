@@ -5,9 +5,16 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
  * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
  */
 
-const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
+//const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
+let WorkerModule;
+try {
+    WorkerModule = (await import('worker_threads')).Worker;
+} catch (error) {
+    WorkerModule = Worker;
+}
+
 function newWorker(scriptPath, workerCode, workerData = {}) {
-    if (isNode) return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
+    if (scriptPath) return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
     
     const blob = new Blob([workerCode], { type: 'application/javascript' });
     return new Worker(URL.createObjectURL(blob));
@@ -176,22 +183,21 @@ export class AccountDerivationWorker {
         this.state = 'idle';
 
         /** @type {Worker} worker */
-        this.worker = isNode ?
-        newWorker('./account-worker-nodejs.mjs') :
-        newWorker(undefined, accountWorkerCode);
+        //this.worker = isNode ?
+        //newWorker('./account-worker-nodejs.mjs') :
+        //newWorker(undefined, accountWorkerCode || window?.accountWorkerCode);
+        this.worker = typeof accountWorkerCode === 'undefined' ? newWorker('./account-worker-nodejs.mjs') : newWorker(undefined, accountWorkerCode);
     }
     async derivationUntilValidAccount(seedModifierStart, maxIterations, masterHex, desiredPrefix) {
         this.state = 'working';
 
-        if (isNode) {
-            this.worker.removeAllListeners();
-        } else {
-            this.worker.onmessage = null;
-        }
+        if (typeof accountWorkerCode === 'undefined') this.worker.removeAllListeners();
+        else this.worker.onmessage = null;
+
         //this.promise = new Promise((resolve, reject) => {
         const promise = new Promise((resolve, reject) => {
-            if (isNode) {
-                this.state = 'working';
+            this.state = 'working';
+            if (typeof accountWorkerCode === 'undefined') {
                 this.worker.on('exit', (code) => { console.log(`DerivationWorker ${this.id} stopped with exit code ${code}`); });
                 this.worker.on('close', () => { console.log('DerivationWorker ${this.id} closed'); });
                 this.worker.on('message', (message) => {
@@ -212,7 +218,6 @@ export class AccountDerivationWorker {
                     resolve(result);
                 });
             } else {
-                this.state = 'working';
                 this.worker.onmessage = (e) => {
                     const message = e.data;
                     if (message.error) { return reject({ isValid: message.isValid, error: message.error }); }
@@ -338,6 +343,18 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
 
         return promise;
     }
+    async generateNewAddressAndWaitResult(prefix = 'W') {
+        const promise = new Promise((resolve, reject) => {
+            this.worker.on('message', (message) => {
+                if (message.type === 'new_address_generated') return resolve(message.data);
+            }), setTimeout(() => { reject('Timeout'); }, 120000);
+        });
+
+        this.worker.postMessage({ type: 'generate_new_address', data: prefix });
+        console.info('msg sent to NodeAppWorker: generate_new_address');
+
+        return promise;
+    }
     async autoRestartLoop() {
         while (true) {
             await new Promise(resolve => setTimeout(resolve, 1000));
@@ -383,9 +400,13 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
                     this.worker.terminate();
                     break;
                 case 'message_to_mainWindow':
-                    if (message.data === 'node-started') this.nodeStarted = true;
                     if (this.#avoidMainWindowMessage(message)) return;
                     this.mainWindow.webContents.send(message.data);
+                    break;
+                case 'node_started':
+                    this.nodeStarted = true;
+                    if (this.#avoidMainWindowMessage(message)) return;
+                    this.mainWindow.webContents.send('node-started', message.data);
                     break;
                 case 'connexion_resume':
                     if (this.#avoidMainWindowMessage(message, false)) return;
@@ -399,6 +420,10 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
                     if (this.#avoidMainWindowMessage(message)) return;
                     this.mainWindow.webContents.send('window-to-front', message.data);
                     break;
+                case 'new_address_generated':
+                    break; // Managed by generateNewAddressAndWaitResult()
+                case 'private_key_extracted':
+                    break; // Managed by extractPrivateKeyAndWaitResult()
                 default:
                     console.log('Unknown NodeAppWorker message:', message);
                     break;

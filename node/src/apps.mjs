@@ -117,6 +117,8 @@ class AppStaticFncs {
 export class DashboardWsApp {
     /** @type {NodeSetting} */
     #nodeSetting; // new version
+    /** @type {Wallet} */
+    #wallet;
     localonly = true;
     stopping = false;
     stopped = false;
@@ -194,12 +196,12 @@ export class DashboardWsApp {
         return true;
     }
     async initMultiNode(nodePrivateKey = 'ff') {
-        const wallet = new Wallet(nodePrivateKey);
-        wallet.loadAccounts();
+        this.#wallet = new Wallet(nodePrivateKey);
+        await this.#wallet.loadAccounts();
 
-        const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(2, "C");
+        const { derivedAccounts, avgIterations } = await this.#wallet.deriveAccounts(2, "C");
         if (!derivedAccounts) { console.error('Failed to derive addresses.'); return; }
-        wallet.saveAccounts();
+        await this.#wallet.saveAccounts();
 
         this.node = new Node(derivedAccounts[0], ['validator', 'miner', 'observer'], `/ip4/0.0.0.0/tcp/${this.nodePort}`);
         this.node.minerAddress = derivedAccounts[1].address;
@@ -215,11 +217,28 @@ export class DashboardWsApp {
         const clone = JSON.parse(JSON.stringify(this.#nodeSetting));
         return clone;
     }
+    async generateNewAddress(prefix = 'W') {
+        if (!this.#wallet) { console.error('No wallet found'); return; }
+
+        await this.#wallet.loadAccounts();
+        const nbOfExistingAccounts = this.#wallet.accountsGenerated[prefix].length;
+        const derivedAccounts = (await this.#wallet.deriveAccounts(nbOfExistingAccounts + 1, prefix)).derivedAccounts;
+        if (!derivedAccounts) { console.error('Failed to derive accounts.'); return; }
+
+        const derivedAccount = derivedAccounts[derivedAccounts.length - 1];
+        if (!derivedAccount) { console.error('Failed to derive address.'); return; }
+
+        await this.#wallet.saveAccounts();
+        return derivedAccount.address;
+    }
     async #onConnection(ws, req, localonly = false) {
-        const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
+        //const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
+        let clientIp = req.socket.remoteAddress;
+        if (clientIp === '::1') { clientIp = 'localhost'; }
+        if (clientIp === '::ffff:127.0.0.1') { clientIp = 'localhost'; }
 
         // Allow only localhost connections
-        if (this.localonly && (clientIp !== '127.0.0.1' && clientIp !== 'localhost')) {
+        if (this.localonly && clientIp !== 'localhost') {
             console.warn(`[DASHBOARD] Connection attempt from unauthorized IP: ${clientIp}`);
             ws.close(1008, 'Unauthorized'); // 1008: Policy Violation
             return;
@@ -333,7 +352,7 @@ export class DashboardWsApp {
                 console.log(`signing transaction ${data.id}`);
                 const tx = await this.node.account.signTransaction(data);
                 console.log('Broadcast transaction', data);
-                const { broadcasted, pushedInLocalMempool, error } = this.node.pushTransaction(tx);
+                const { broadcasted, pushedInLocalMempool, error } = await this.node.pushTransaction(tx);
 
                 if (error) { console.error('Error broadcasting transaction', error); return; }
 

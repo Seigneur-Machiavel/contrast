@@ -2,13 +2,18 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <!--<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">-->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src http://localhost:27270 http://localhost:27271">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        style-src 'self' 'unsafe-inline';
+        frame-src http://localhost:27270 http://localhost:27271;
+        connect-src ws://localhost:27270 ws://localhost:27271 file:;
+    "> <!-- removed: worker-src 'self' blob:; -->
     <title>Contrast</title>
     <link rel="stylesheet" href="../../styles/contrast-style.css">
     <link rel="stylesheet" href="./board-style.css">
     <!-- SHARED FRONT SCRIPTS -->
     <script src="../../libs/anime.min.js"></script>
+    <script src="../../apps/wallet/scripts/modulesLoader.mjs" type="module"></script>
 
     <!-- APPS FRONT SCRIPTS -->
     <!--<script src="../../apps/chat/front-scripts/chat-renderer.js"></script>

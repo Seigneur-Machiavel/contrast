@@ -98,6 +98,10 @@
 ::-webkit-scrollbar-thumb {
     background: var(--color1);
     border-radius: 2px;
+    transition: box-shadow .12s;
+}
+::-webkit-scrollbar-thumb:hover {
+    box-shadow: inset 0 0 1px var(--color3);
 }
 .dark-mode {
     --dark-mode-boolean: 1;

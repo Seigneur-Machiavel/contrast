@@ -181,8 +181,11 @@ h3 {
     right: 0;
     bottom: 0;
     font-size: 66px;
+    color: var(--color1_1);
     transform: translate(58px, 58px);
-    opacity: .1;
+}
+.editable-address-wrap .link-to-amount:nth-child(2) {
+    transform: translate(58px, 114px);
 }
 
 .incrementalInput {

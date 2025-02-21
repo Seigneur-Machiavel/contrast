@@ -7,15 +7,17 @@ import { xxHash32 } from '../../libs/xxhash32.mjs';
 
 async function getArgon2Lib() {
     if (isNode) {
-        const a = await import('argon2');
-        a.limits.timeCost.min = 1; // ByPass the minimum time cost
-        return a;
+        try {
+            const a = await import('argon2');
+            a.limits.timeCost.min = 1; // ByPass the minimum time cost
+            return a;
+        } catch (error) {}
     }
 
     try {
         if (argon2) { 
             console.log('Argon2 loaded as a global variable');
-            return argon2; 
+            return argon2;
         }
     } catch (error) { }
 
@@ -114,7 +116,7 @@ export class AsymetricFunctions {
     static async generateKeyPairFromHash(privKeyHex) {
         if (privKeyHex.length !== 64) { console.error('Hash must be 32 bytes long (hex: 64 chars)'); return false; }
         
-        // Calculer la clé publique à partir de la clé privée
+        // Calculate the public key from the private key
         const publicKey = await ed25519.getPublicKeyAsync(privKeyHex);
         const pubKeyHex = convert.uint8Array.toHex(publicKey);
     
@@ -131,7 +133,7 @@ export class AsymetricFunctions {
         if (typeof messageHex !== 'string') { result.error = 'Invalid message type'; return result; }
         if (typeof privKeyHex !== 'string') { result.error = 'Invalid privKeyHex type'; return result; }
         if (privKeyHex.length !== 64) { result.error = 'Hash must be 32 bytes long (hex: 64 chars)'; return result; }
-        
+
         const signature = await ed25519.signAsync(messageHex, privKeyHex);
         if (!signature) { result.error = 'Failed to sign the message'; return result; }
         

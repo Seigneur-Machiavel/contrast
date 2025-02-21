@@ -4,14 +4,31 @@ if (false) { // For better completion
 	//const { Assistant } = require('../../apps/assistant/board-assistant.mjs');
 }
 
-//const { Assistant } = await import('../../apps/assistant/board-assistant.mjs');
-const { Assistant } = require('../../apps/assistant/board-assistant.js');
+const path = require('path');
+window.path = path;
+const fs = require('fs');
+window.fs = fs;
+const url = require('url');
+window.url = url;
+
 const { BrowserWindow, ipcRenderer } = require('electron');
-const { AppsManager } = require('./apps-manager.js');
-/** @type {Assistant} */
-let assistant;
 window.ipcRenderer = ipcRenderer;
 
+const { AppsManager } = require('./apps-manager.js');
+const { Assistant } = require('../../apps/assistant/board-assistant.js');
+const { BoardInternalWallet } = require('../../apps/wallet/biw.js');
+
+/*let BoardInternalWallet;
+import("../../apps/wallet/biw.mjs").then((module) => {
+    BoardInternalWallet = module.BoardInternalWallet;
+}).catch(err => console.error(err));*/
+
+/** @type {Assistant} */
+let assistant;
+/** @type {BoardInternalWallet} */
+let biw;
+
+//#region IPC listeners
 ipcRenderer.on('no-existing-password', (event, ...args) => assistant.requestNewPassword() );
 ipcRenderer.on('set-new-password-result', (event, ...args) => { if (!args[0]) assistant.requestNewPassword('Password creation failed, try again'); });
 ipcRenderer.on('password-requested', (event, ...args) => { appsManager.lock(); assistant.requestPasswordToUnlock(); });
@@ -32,12 +49,17 @@ ipcRenderer.on('waiting-for-priv-key', (event, ...args) => {
 	});
 });
 ipcRenderer.on('node-started', (event, ...args) => {
+	const privateKey = args[0];
+	biw = new BoardInternalWallet(privateKey);
+	window.biw = biw;
+
 	assistant.sendMessage('We are connected baby!');
-	setTimeout(() => { assistant.idleMenu(); }, 1000);
-	setTimeout(() => { appsManager.toggleAppWindow('assistant'); }, 2000);
-	setTimeout(() => { appsManager.unlock(); }, 3000);
-	setTimeout(() => { appsManager.toggleAppWindow('dashboard'); }, 4000);
-	setTimeout(() => { appsManager.toggleAppWindow('explorer'); }, 5000);
+	setTimeout(() => assistant.idleMenu(), 1000);
+	setTimeout(() => appsManager.toggleAppWindow('assistant'), 2000);
+	setTimeout(() => appsManager.unlock(), 3000);
+	//setTimeout(() => appsManager.toggleAppWindow('dashboard');, 4000);
+	//setTimeout(() => appsManager.toggleAppWindow('explorer');, 5000);
+	setTimeout(() => appsManager.toggleAppWindow('wallet'), 4000);
 });
 ipcRenderer.on('connexion-resume', (event, ...args) => {
 	const resumeElement = document.getElementById('connexion-resume');
@@ -56,6 +78,7 @@ ipcRenderer.on('connexion-resume', (event, ...args) => {
 });
 ipcRenderer.on('assistant-message', (event, ...args) => assistant.sendMessage(args[0], 'system'));
 ipcRenderer.on('window-to-front', (event, ...args) => appsManager.setFrontWindow(args[0]));
+//#endregion
 
 const windowsWrap = document.getElementById('board-windows-wrap');
 const bottomButtonsBar = document.getElementById('board-bottom-buttons-bar');
@@ -101,8 +124,8 @@ document.addEventListener('change', (event) => {
 });
 window.addEventListener('resize', function() {
 	for (const app in appsManager.windows) {
-		appsManager.windows[app].element.style.maxWidth = window.innerWidth + 'px';
-		appsManager.windows[app].element.style.maxHeight = window.innerHeight + 'px';
+		appsManager.windows[app].element.style.maxWidth = Math.min(appsManager.windows[app].element.style.maxWidth, window.innerWidth) + 'px';
+		appsManager.windows[app].element.style.maxHeight = Math.min(appsManager.windows[app].element.style.maxHeight, window.innerHeight) + 'px';
 	}
 });
 window.addEventListener('message', function(e) {
@@ -122,4 +145,4 @@ window.addEventListener('message', function(e) {
 //assistant = window.assistant; // set exposed assistant to local variable
 assistant = new Assistant('board');
 window.assistant = assistant;
-await assistant.init();
+assistant.init();

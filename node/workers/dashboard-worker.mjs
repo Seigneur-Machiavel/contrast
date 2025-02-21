@@ -56,7 +56,7 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     nodeInitialized = initialized;
     if (!initialized) return;
     
-    parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-started' });
+    parentPort.postMessage({ type: 'node_started', data: dashApp.extractNodeSetting().privateKey });
     dashApp.saveNodeSettingBinary();
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
 }
@@ -132,6 +132,13 @@ parentPort.on('message', async (message) => {
             if (!verified) { console.error('Password not match'); return; }
 
             parentPort.postMessage({ type: 'private_key_extracted', data: dashApp.extractNodeSetting().privateKey });
+            break;
+        case 'generate_new_address':
+            const prefix = message.data;
+            if (prefix !== 'W' && prefix !== 'C' && prefix !== 'P' && prefix !== 'U') { console.error('Invalid prefix'); return; }
+
+            const newAddress = await dashApp.generateNewAddress(prefix);
+            parentPort.postMessage({ type: 'new_address_generated', data: newAddress });
             break;
         default:
             console.error('Unknown message type:', message.type);

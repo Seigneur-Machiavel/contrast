@@ -5,9 +5,22 @@ import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
 import { FastConverter } from "./converters.mjs";
 import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
-//import archiver from 'archiver';
-import AdmZip from 'adm-zip';
+
+/*import AdmZip from 'adm-zip';
 import * as crypto from 'crypto';
+const fs = await import('fs');
+const path = await import('path');
+const url = await import('url');*/ // -> DEPRECATED
+
+// -> Imports compatibility for Node.js, Electron and browser
+let AdmZip, crypto, fs, path, url;
+(async () => {
+    try { fs = await import('fs'); } catch (error) { fs = window.fs; }
+    try { path = await import('path'); } catch (error) { path = window.path; }
+    try { url = await import('url'); } catch (error) { url = window.url; }
+    try { AdmZip = await import('adm-zip').then(module => module.default); } catch (error) { AdmZip = window.AdmZip; }
+    try { crypto = await import('crypto'); } catch (error) { crypto = window.crypto; }
+})();
 
 /**
 * @typedef {import("../node/src/block-classes.mjs").BlockInfo} BlockInfo
@@ -18,15 +31,13 @@ import * as crypto from 'crypto';
 // GLOBALS VARS
 /** @type {MiniLogger} */
 const storageMiniLogger = new MiniLogger('storage');
-const fs = await import('fs');
-const path = await import('path');
-const url = await import('url');
 const BLOCK_PER_DIRECTORY = 1000;
 let isProductionEnv = false;
 
-function targetStorageFolder() {
+async function targetStorageFolder() {
     let storagePath = '';
 
+    while (!url) { await new Promise(resolve => setTimeout(resolve, 10)); }
     const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked'); // path to the storage-manager.mjs file
     if (!filePath.includes('app.asar')) {
         const rootFolder = path.dirname(path.dirname(filePath));
@@ -59,7 +70,7 @@ export function copyFolderRecursiveSync(src, dest) {
     }
 }
 
-const basePath = targetStorageFolder();
+const basePath = await targetStorageFolder();
 // CLEANUP v0.0.4
 const oldStoragePath1 = path.join(path.dirname(path.dirname(url.fileURLToPath(import.meta.url))), 'node', 'storage');
 if (fs.existsSync(oldStoragePath1)) { fs.rmSync(oldStoragePath1, { recursive: true }); }
@@ -139,6 +150,11 @@ export class Storage {
         } catch (error) {
             return false;
         }
+    }
+
+    static deleteFile(fileNameWithExtension = 'toto.bin', directoryPath = PATH.STORAGE) {
+        const filePath = path.join(directoryPath, fileNameWithExtension);
+        if (fs.existsSync(filePath)) { fs.rmSync(filePath); }
     }
 }
 

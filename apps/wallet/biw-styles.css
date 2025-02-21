@@ -2,14 +2,16 @@
     font-family: "Consolas", monospace;
     display: flex;
     align-items: center;
-    justify-content: center;
     flex-direction: column;
     width: 100%;
     height: 100%;
 }
 .biw-container h1 {
-    margin: 20px 0 0px 0;
-    font-size: xx-large;
+    margin: 30px 0 0px 0;
+    font-size: x-large;
+}
+.biw-container h2 {
+    font-size: medium;
 }
 .biw-container button {
     cursor: pointer;
@@ -31,6 +33,7 @@
     position: relative;
     width: 100%;
     height: 100%;
+    height: 212px !important;
 }
 
 .biw-miniFormsWrap {
@@ -40,20 +43,14 @@
     height: 100%;
     overflow: hidden;
 }
-.stakedBalance {
-    border-top: solid #80808024 1px;
-    margin: 10px 0 16px 0;
-    padding-top: 4px;
-    color: var(--color3);
-}
 .biw-textInfo {
     text-align: center;
     font-weight: bold;
-    font-size: 14px;
-    animation: blink 1s infinite;
+    font-size: 12px;
     height: 32px;
     width: 100%;
     margin: 0;
+    animation: textColorBlink 1s infinite;
 }
 .biw-buttonBar {
     display: flex;
@@ -86,7 +83,7 @@
 }
 .biw-buttonBar button:not(.disabled):hover {
     transform: none !important;
-    box-shadow: -2px -2px 7px -4px white, 1px 1px 10px -6px var(--primary-color);
+    box-shadow: -2px -2px 7px -4px white, 1px 1px 10px -6px var(--color1_3);
 
     background: var(--color1);
     color: var(--color2);
@@ -100,11 +97,11 @@
 .biw-buttonBar button img {
     pointer-events: none;
     width: 24px;
-    filter: invert(0) drop-shadow(4px 3px .8px rgba(0, 0, 0, .2)) drop-shadow(-3px -1px .6px rgba(255, 255, 255, .06));
+    filter: invert(var(--dark-mode-boolean)) drop-shadow(4px 3px .8px rgba(0, 0, 0, .2)) drop-shadow(-3px -1px .6px rgba(255, 255, 255, .06));
     transform: translateY(5px);
 }
 .biw-buttonBar button:not(.disabled):hover img {
-    filter: invert(1) brightness(1) drop-shadow(-3px -1px .6px rgba(0, 0, 0, .2)) drop-shadow(4px 3px .8px rgba(255, 255, 255, .06));
+    filter: invert(calc(1 - var(--dark-mode-boolean))) brightness(1) drop-shadow(-3px -1px .6px rgba(0, 0, 0, .2)) drop-shadow(4px 3px .8px rgba(255, 255, 255, .06));
     transform: skew(-1deg, -.4deg) translateY(4px);
     transition: filter .06s .06s ease-in-out, transform .06s ease-in-out;
 }
@@ -136,9 +133,7 @@
     width: 100%;
     height: 185px;
     margin: 0;
-    margin-top: 25px;
-    box-shadow: -1px 0px 10px 2px rgb(0 0 0 / 50%);
-    /*overflow: hidden;*/
+    box-shadow: -1px 0px 20px -10px rgb(0 0 0 / 50%), inset 0px 0px 20px -10px rgb(0 0 0 / 50%);
     transform: rotateY(60deg) translateX(-160%);
     opacity: 0;
     background-color: var(--color1);
@@ -148,14 +143,37 @@
 #biw-spendMiniForm .biw-textInfo, #biw-stakeMiniForm .biw-textInfo {
     position: absolute;
     opacity: 0;
-    top: 14px;
-    width: 80%;
+    padding: 6px 0;
+    width: 90%;
     background: var(--color1);
-    animation: textColorBlink 1s infinite;
     transition: opacity 0.2s ease-in-out;
+}
+@keyframes textColorBlink {
+    0% {
+        color: var(--color2);
+    }
+    10% {
+        color: var(--color3);
+    }
+    40% {
+        color: var(--color2);
+    }
+    100% {
+        color: var(--color2);
+    }
 }
 #biw-spendMiniForm h2, #biw-stakeMiniForm h2 {
     color: var(--color2);
+}
+#biw-spendMiniForm h3, #biw-stakeMiniForm h3 {
+    color: var(--color3);
+    font-size: .9em;
+    margin: 0px;
+}
+#biw-spendMiniForm h4, #biw-stakeMiniForm h4 {
+    color: var(--color3);
+    font-size: .8em;
+    margin: 10px 0 12px 0;
 }
 #biw-spendMiniForm input, #biw-stakeMiniForm input {
     height: 30px !important;
@@ -166,6 +184,7 @@
 }
 #biw-spendMiniForm button, #biw-stakeMiniForm button {
     font-weight: bold;
+    font-size: 1em;
     color: var(--neumo-color2) !important;
     margin: 10px 0 !important;
     background: linear-gradient(90deg, var(--color1) 0%, var(--color2) 0%);
@@ -185,7 +204,8 @@
     left: 0px;
     filter: brightness(.92);
     /*background: linear-gradient(90deg, #6d6d6d, transparent);*/
-    background: linear-gradient(90deg, var(--primary-color), transparent), radial-gradient(circle, var(--primary-color) 0%, transparent 0%);
+    /*background: linear-gradient(90deg, var(--color1_3), transparent), radial-gradient(circle, var(--color1_3) 0%, transparent 0%);*/
+    background: linear-gradient(90deg, var(--color1), transparent), radial-gradient(circle, var(--color1_3) -25%, transparent 20%);
     height: 100%;
     width: 20px;
     margin: 0 !important;
@@ -197,8 +217,108 @@
 }
 #biw-spendMiniForm button.biw-foldBtn:hover, #biw-stakeMiniForm button.biw-foldBtn:hover {
     filter: brightness(.8);
-    /*background: linear-gradient(90deg, #6d6d6d, transparent), radial-gradient(circle, var(--primary-color) -100%, transparent 100%);*/
+    /*background: linear-gradient(90deg, #6d6d6d, transparent), radial-gradient(circle, var(--color1_3) -100%, transparent 100%);*/
 }
+
+#biw-buttonRefresh {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: none;
+}
+#biw-buttonRefresh img {
+    pointer-events: none;
+    width: 100%;
+    opacity: .2;
+    filter: invert(calc(1 - var(--dark-mode-boolean)));
+    transition: transform .5s, opacity .24s;
+}
+#biw-buttonRefresh:hover img {
+    opacity: .3;
+    transform: rotate(320deg) scale(1.02);
+}
+#biw-buttonRefresh.active img {
+    animation: biw-spin .6s infinite linear;
+}
+@keyframes biw-spin {
+    0% {
+        opacity: .1;
+        transform: rotate(0deg) scale(1);
+    }
+    50% {
+        opacity: .5;
+        transform: rotate(180deg) scale(.9);
+    }
+    100% {
+        opacity: .1;
+        transform: rotate(360deg) scale(1);
+    }
+}
+#biw-addressTypeList {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 0px;
+    /*right: -10px;
+    margin-right: 6px;*/
+    right: 0px;
+    box-shadow: inset 0px 0px 0px 0px var(--color1_1);
+    padding: 4px 10px;
+    border-radius: 10px;
+    transition: gap .24s, box-shadow .12s, right .12s;
+}
+#biw-addressTypeList.expand {
+    box-shadow:
+    0px 0px 8px -4px var(--color2),
+    inset 0px 0px 4px 4px var(--color1_1);
+    gap: 6px;
+    right: 6px;
+}
+#biw-addressTypeList h2 {
+    margin: 0 10px 0 0;
+    font-size: 0em;
+    transition: font-size .12s;
+    color: var(--color3);
+}
+#biw-addressTypeList.expand h2 {
+    font-size: 1em;
+}
+#biw-addressTypeList button {
+    width: 0px;
+    height: 30px;
+    background: var(--color1);
+    color: var(--color3);
+    padding: 0;
+    border-radius: 6px;
+    font-size: 0em;
+    font-weight: bold;
+    transition: width .12s, font-size .12s;
+}
+/*#biw-addressTypeList button.disabled { useless ?
+    background: var(--color1) !important;
+    color: var(--color3) !important;
+    cursor: not-allowed;
+}*/
+#biw-addressTypeList button.active {
+    pointer-events: none;
+    box-shadow: inset 0px 0px 2px 1px var(--color1_3);
+    width: 30px;
+    font-size: .86em;
+}
+#biw-addressTypeList.expand button.active {
+    box-shadow: inset 0px 0px 2px 1px var(--color2);
+}
+#biw-addressTypeList button:not(.disabled):hover {
+    box-shadow: inset 0px 0px 2px 1px var(--color1_3);
+}
+#biw-addressTypeList.expand button {
+    width: 30px;
+    font-size: .86em;
+}
+
 .biw-stakedBalance {
     border-top: solid #80808024 1px;
     margin: 10px 0 16px 0;
@@ -212,10 +332,20 @@
     flex-direction: column;
     align-items: center;
     overflow-y: auto;
-    padding-bottom: 10px;
-    height: 100%;
-    width: 100%;
-    box-shadow: inset 0px 0px 14px -11px black;
+    height: calc(100% - 2px);
+    width: 96%;
+    border-radius: 5px;
+    margin: 0 2%;
+}
+#biw-accountsWrap-box {
+    z-index: 1;
+    position: absolute;
+    pointer-events: none;
+    height: calc(100% - 2px);
+    width: 96%;
+    border-radius: 5px;
+    margin: 0 2%;
+    box-shadow: inset 0px 0px 4px -2px black;
 }
 .biw-accountLabel {
     display: flex;
@@ -237,10 +367,9 @@
     position: relative;
     width: 52px;
     height: 52px;
-    filter: invert(0);
     transition: filter 0.12s ease-in-out;
 }
-.biw-accountLabel .biw-accountImgWrap:hover {
+.biw-accountLabel:not(.active) .biw-accountImgWrap:hover {
     /*transform: scale(1.02);*/
     filter: invert(.5);
 }
@@ -253,12 +382,9 @@
     height: 100%;
     transition: box-shadow 0.12s ease-in-out;
 }
-.biw-accountLabel .biw-accountImgWrap:hover div {
-    box-shadow: inset 0px 0px 10px var(--neumo-color1), inset 0px 0px 10px var(--neumo-color2);
+.biw-accountLabel:not(.active) .biw-accountImgWrap:hover div {
+    box-shadow: 0px 0px 1px 2px var(--color3), inset 0px 0px 2px -1px var(--color3);
     transition: box-shadow 0.12s ease-in-out;
-}
-.biw-accountLabel.active .biw-accountImgWrap {
-    filter: invert(1);
 }
 .biw-accountLabel.active .biw-accountImgWrap div:first-child {
     animation: biw-spinTransformGlowShadowA 9.9s infinite alternate-reverse cubic-bezier(.71,.93,.86,.7) !important
@@ -338,23 +464,23 @@
     left: 50%;
     transform: translate(-50%, -50%);
     border-radius: 50%;
-    filter: blur(.4px) brightness(.9);
+    filter: blur(.4px) brightness(.9) invert(calc(1 - var(--dark-mode-boolean)));
     transition: box-shadow 0.12s ease-in-out, filter 0.12s ease-in-out;
 }
 .biw-accountLabel.active .biw-accountImgWrap canvas {
-    box-shadow: 0px 0px 1px 2px var(--color1);
-    filter: blur(0px) brightness(1);
+    box-shadow: 0px 0px 1px 2px white;
+    filter: blur(0px) brightness(1) invert(calc(1 - var(--dark-mode-boolean)));
     animation: biw-brightnessGlow 2s infinite;
 }
 @keyframes biw-brightnessGlow {
     0% {
-        filter: brightness(1.06);
+        filter: brightness(1.06) invert(calc(1 - var(--dark-mode-boolean)));
     }
     40% {
-        filter: brightness(1.27);
+        filter: brightness(1.27) invert(calc(1 - var(--dark-mode-boolean)));
     }
     100% {
-        filter: brightness(.96);
+        filter: brightness(.96) invert(calc(1 - var(--dark-mode-boolean)));
     }
 }
 .biw-accountLabelInfoWrap {
@@ -371,10 +497,17 @@
     pointer-events: all;
     color: var(--color2);
     opacity: .7;
+    font-size: .8em;
 }
 .biw-accountLabelNameAndValueWrap h3 {
     pointer-events: all;
     color: var(--color2);
+    font-size: .8em;
+    font-weight: 500;
+}
+.biw-accountLabel.active .biw-accountLabelNameAndValueWrap h3 {
+    opacity: .8;
+    font-weight: 600;
 }
 .biw-accountLabelAddress {
     display: flex;
@@ -384,13 +517,17 @@
     pointer-events: all;
     color: var(--color2);
     text-align: right;
-    font-size: 1.6em;
+    font-size: medium;
     margin: 0 0 4px 0;
     opacity: .6;
+}
+.biw-accountLabel.active .biw-accountLabelAddress h3 {
+    opacity: .8;
 }
 #biw-newAddressBtn {
     position: relative;
     margin-top: 6px;
+    margin-bottom: 10px;
     width: 34px;
     height: 34px;
     background: var(--color2);
@@ -405,7 +542,7 @@
 }
 #biw-newAddressBtn.loading {
     border: 2px solid transparent;
-    background: linear-gradient(120deg, var(--color1) 0%, rgba(0, 0, 0, 1) 258%) padding-box, linear-gradient(269deg, #fdfdfd, #9e9e9e, var(--primary-color), #3d3d3d, #000000);
+    background: linear-gradient(120deg, var(--color1) 0%, rgba(0, 0, 0, 1) 258%) padding-box, linear-gradient(269deg, #fdfdfd, #9e9e9e, var(--color1_3), #3d3d3d, #000000);
     background-size: .01% 100%;
     background-position: 50% 100%;
     animation: biw-loadingBtnBorderAnimation 2s alternate infinite;

@@ -1,8 +1,10 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { ProgressLogger } from '../../utils/progress-logger.mjs';
+import { convert } from '../../utils/converters.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
 import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
+//import * as crypto from 'crypto';
 
 /**
 * @typedef {import("../src/transaction.mjs").Transaction} Transaction
@@ -82,43 +84,121 @@ class generatedAccount {
 }
 export class Wallet {
     #masterHex = '';
+    miniLogger = new MiniLogger('wallet');
+
+    /** @type {AccountDerivationWorker[]} */
+    workers = [];
+    nbOfWorkers = 4;
+    /** @type {Object<string, Account[]>} */
+    accounts = { W: [], C: [], P: [], U: [] }; // max accounts per type = 65 536
+    /** @type {Object<string, generatedAccount[]>} */
+    accountsGenerated = { W: [], C: [], P: [], U: [] };
+
     constructor(masterHex, useDevArgon2 = false) {
-        this.miniLogger = new MiniLogger('wallet');
         /** @type {string} */
         this.#masterHex = masterHex; // 30 bytes - 60 chars
-        console.log(`[---- WALLET ----] masterHex: ${this.#masterHex}`);
-        /** @type {Object<string, Account[]>} */
-        this.accounts = { // max accounts per type = 65 536
-            W: [],
-            C: [],
-            P: [],
-            U: []
-        };
-        /** @type {Object<string, generatedAccount[]>} */
-        this.accountsGenerated = {
-            W: [],
-            C: [],
-            P: [],
-            U: []
-        };
         this.useDevArgon2 = useDevArgon2;
-        /** @type {AccountDerivationWorker[]} */
-        this.workers = [];
-        this.nbOfWorkers = 4;
     }
-    saveAccounts() {
-        const id = this.#masterHex.slice(0, 6);
-        const folder = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
-        Storage.saveJSON(folder, this.accountsGenerated);
+    #rndUint8Array(len = 12) {
+        const arr = new Uint8Array(len);
+        crypto.getRandomValues(arr);
+        return arr;
     }
-    loadAccounts() {
+    async #encryptAccountsGenerated() {
+        const encryptedAccounts = {W: [], C: [], P: [], U: []};
+        const masterHexUint8 = convert.hex.toUint8Array(this.#masterHex);
+        const key = await crypto.subtle.importKey(
+            "raw",
+            Buffer.from(masterHexUint8),
+            { name: "AES-GCM" },
+            false, // extractable
+            ["encrypt", "decrypt"]
+        );
+        for (const prefix in this.accountsGenerated) {
+            for (const account of this.accountsGenerated[prefix]) {
+                const iv = this.#rndUint8Array(12);
+                const encryptedAccount = { address: account.address, seedModifierHex: '', iv: convert.uint8Array.toHex(iv) };
+                const seedModifierEncrypted = await crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv },
+                    key,
+                    Buffer.from(convert.hex.toUint8Array(account.seedModifierHex))
+                );
+                encryptedAccount.seedModifierHex = convert.uint8Array.toHex(new Uint8Array(seedModifierEncrypted));
+                encryptedAccounts[prefix].push(encryptedAccount);
+            }
+        }
+
+        return encryptedAccounts;
+    }
+    async #decryptAccountsGenerated(encryptedAccounts) {
+        const decryptedAccounts = {W: [], C: [], P: [], U: []};
+        const masterHexUint8 = convert.hex.toUint8Array(this.#masterHex);
+        const key = await crypto.subtle.importKey(
+            "raw",
+            Buffer.from(masterHexUint8),
+            { name: "AES-GCM" },
+            false, // extractable
+            ["encrypt", "decrypt"]
+        );
+        for (const prefix in encryptedAccounts) {
+            for (const account of encryptedAccounts[prefix]) {
+                const iv = convert.hex.toUint8Array(account.iv);
+                const decryptedAccount = { address: account.address, seedModifierHex: '' };
+                const seedModifierDecrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv },
+                    key,
+                    Buffer.from(convert.hex.toUint8Array(account.seedModifierHex))
+                );
+                decryptedAccount.seedModifierHex = convert.uint8Array.toHex(new Uint8Array(seedModifierDecrypted));
+                decryptedAccounts[prefix].push(decryptedAccount);
+            }
+        }
+
+        return decryptedAccounts;
+    }
+    async saveAccounts() { // MERGING FONCTION from < 0.0.7
+        // new version without startPrivKey leak by hashing the masterHex
+        const hashId = HashFunctions.xxHash32(this.#masterHex);
+        const secureFilePath = this.useDevArgon2 ? `accounts(dev)/${hashId}_accounts` : `accounts/${hashId}_accounts`;
+        const encryptedAccounts = await this.#encryptAccountsGenerated();
+        Storage.saveJSON(secureFilePath, encryptedAccounts);
+
+        return true;
+        // old version (should be cleaned)
         const id = this.#masterHex.slice(0, 6);
-        const folder = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
-        const accountsGenerated = Storage.loadJSON(folder);
+        const filePath = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
+        Storage.saveJSON(filePath, this.accountsGenerated);
+    }
+    async loadAccounts() { // MERGING FONCTION from < 0.0.7
+        // new version without startPrivKey leak by hashing the masterHex
+        const hashId = HashFunctions.xxHash32(this.#masterHex);
+        const secureFilePath = this.useDevArgon2 ? `accounts(dev)/${hashId}_accounts` : `accounts/${hashId}_accounts`;
+        const accountsGeneratedEncrypted = Storage.loadJSON(secureFilePath);
+        if (accountsGeneratedEncrypted) {
+            this.accountsGenerated = await this.#decryptAccountsGenerated(accountsGeneratedEncrypted);
+            // delete old version if exists
+            const id = this.#masterHex.slice(0, 6);
+            const filePath = this.useDevArgon2 ? `accounts(dev)/${id}_accounts.json` : `accounts/${id}_accounts.json`;
+            Storage.deleteFile(filePath);
+            return true;
+        }
+
+        // old version
+        const id = this.#masterHex.slice(0, 6);
+        const filePath = this.useDevArgon2 ? `accounts(dev)/${id}_accounts` : `accounts/${id}_accounts`;
+        const accountsGenerated = Storage.loadJSON(filePath);
         if (!accountsGenerated) { return false; }
 
         this.accountsGenerated = accountsGenerated;
         return true;
+    }
+    /** Post load fnc() -> to be called after loadAccounts() -> derive all generated accounts */
+    /** @param {string} [prefixFilter] */
+    async deriveGeneratedAccounts(prefixFilter) {
+        for (const prefix in this.accountsGenerated) {
+            if (prefixFilter && prefix !== prefixFilter) { continue; }
+            await this.deriveAccounts(this.accountsGenerated[prefix].length, prefix);
+        }
     }
     async deriveAccounts(nbOfAccounts = 1, addressPrefix = "C") {
         //this.accounts[addressPrefix] = [];  // no reseting accounts anymore
@@ -150,13 +230,13 @@ export class Wallet {
             let derivationResult;
             if (this.nbOfWorkers === 0) {
                 // USUALLY UNUSED
-                derivationResult = await this.tryDerivationUntilValidAccount(i, addressPrefix);
+                derivationResult = await this.#tryDerivationUntilValidAccount(i, addressPrefix);
             } else {
                 for (let i = this.workers.length; i < this.nbOfWorkers; i++) {
                     this.workers.push(new AccountDerivationWorker(i));
                 }
                 await new Promise(r => setTimeout(r, 10)); // avoid spamming the CPU/workers
-                derivationResult = await this.tryDerivationUntilValidAccountUsingWorkers(i, addressPrefix);
+                derivationResult = await this.#tryDerivationUntilValidAccountUsingWorkers(i, addressPrefix);
             }
 
             if (!derivationResult) {
@@ -192,7 +272,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`);
 
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
     }
-    async tryDerivationUntilValidAccountUsingWorkers(accountIndex = 0, desiredPrefix = "C") {
+    async #tryDerivationUntilValidAccountUsingWorkers(accountIndex = 0, desiredPrefix = "C") {
         /** @type {AddressTypeInfo} */
         const addressTypeInfo = addressUtils.glossary[desiredPrefix];
         if (addressTypeInfo === undefined) { throw new Error(`Invalid desiredPrefix: ${desiredPrefix}`); }
@@ -238,13 +318,13 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`);
 
         return { account, iterations };
     }
-    async tryDerivationUntilValidAccount(accountIndex = 0, desiredPrefix = "C") { // SINGLE THREAD
+    async #tryDerivationUntilValidAccount(accountIndex = 0, desiredPrefix = "C") { // SINGLE THREAD
         /** @type {AddressTypeInfo} */
         const addressTypeInfo = addressUtils.glossary[desiredPrefix];
         if (addressTypeInfo === undefined) { throw new Error(`Invalid desiredPrefix: ${desiredPrefix}`); }
 
         // To be sure we have enough iterations, but avoid infinite loop
-        console.log(`[WALLET] tryDerivationUntilValidAccount: ai: ${accountIndex} | prefix: ${desiredPrefix} | zeroBits: ${addressTypeInfo.zeroBits}`);
+        console.log(`[WALLET] #tryDerivationUntilValidAccount: ai: ${accountIndex} | prefix: ${desiredPrefix} | zeroBits: ${addressTypeInfo.zeroBits}`);
         const maxIterations = 65_536 * (2 ** addressTypeInfo.zeroBits); // max with zeroBits(16): 65 536 * (2^16) => 4 294 967 296
         const seedModifierStart = accountIndex * maxIterations; // max with accountIndex: 65 535 * 4 294 967 296 => 281 470 681 743 360 
         for (let i = 0; i < maxIterations; i++) {

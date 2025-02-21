@@ -1,53 +1,62 @@
 /**
  * @typedef {Object} AppConfig
- * @property {boolean} preload - default false
+ * @property {string} [preload] - default false
  * @property {boolean} disableOnLock - default true
  * @property {number} [minWidth]
  * @property {number} [minHeight]
- * @property {number} [initialWidth]
- * @property {number} [initialHeight]
+ * @property {number} [maxWidth]
+ * @property {number} [maxHeight]
+ * @property {number} [initWidth]
+ * @property {number} [initHeight]
  * @property {number} [initTop]
  * @property {number} [initLeft]
  * @property {string} icon
  * @property {string} [iconWidth] - default '50%'
  * @property {string} title
- * @property {string} content - HTML content (not full html document)
+ * @property {string} url_or_file
  * @property {string} [mainClass]
  * @property {boolean} [setGlobal] - Set the app as global (window)
  * @property {boolean} [fullScreen] - default false
+ * @property {boolean} canFullScreen - default true
  * @property {boolean} [setFront] - default false
  */
 
+//const path = require('path');
+/** @param {string} appName @param {AppConfig} appConfig */
 const AppConfig = (appName, appConfig) => {
 	return {
 		preload: appConfig.preload || false,
 		disableOnLock: appConfig.disableOnLock === false ? false : true,
 		minWidth: appConfig.minWidth || undefined,
 		minHeight: appConfig.minHeight || undefined,
-		initialWidth: appConfig.initialWidth || undefined,
-		initialHeight: appConfig.initialHeight || undefined,
+		maxWidth: appConfig.maxWidth || undefined,
+		maxHeight: appConfig.maxHeight || undefined,
+		initWidth: appConfig.initWidth || undefined,
+		initHeight: appConfig.initHeight || undefined,
 		initTop: appConfig.initTop || undefined,
 		initLeft: appConfig.initLeft || undefined,
 		icon: appConfig.icon || `../../apps/${appName}/img/icon_128.png`,
 		iconWidth: appConfig.iconWidth || '50%',
 		title: appConfig.title || 'App_Title',
-		content: appConfig.content || 'This is a default app.',
+		url_or_file: appConfig.url_or_file,
 		mainClass: appConfig.mainClass || undefined,
 		setGlobal: appConfig.setGlobal || false,
 		fullScreen: appConfig.fullScreen || false,
+		canFullScreen: appConfig.canFullScreen === false ? false : true,
 		setFront: appConfig.setFront || false
 	}
 }
 const appsConfig = {
 	assistant: {
 		preload: true,
+		//preload: path.join(__dirname, 'electron-app', 'index', 'board-preload.js')
 		disableOnLock: false,
 		minWidth: 500,
 		minHeight: 300,
-		initialWidth: 700,
+		initWidth: 700,
 		iconWidth: '60%',
 		title: '❖ ASSISTANT ` ` \\_',
-		content: '../../apps/assistant/assistant-content.html',
+		url_or_file: '../../apps/assistant/assistant-content.html',
 		fullScreen: false,
 		setFront: true
 	},
@@ -55,16 +64,19 @@ const appsConfig = {
 		preload: true,
 		disableOnLock: true,
 		minWidth: 322,
-		minHeight: 402,
+		minHeight: 472,
+		maxWidth: 322,
+		maxHeight: 472,
+		canFullScreen: false,
 		title: '- )( - WALLET ___\\',
-		content: '../../apps/wallet/biw-content.html',
+		url_or_file: '../../apps/wallet/biw-content.html',
 	},
 	/*chat: {
 		preload: false,
 		minWidth: 300,
 		minHeight: 300,
 		title: 'CHAT',
-		content: '../../apps/chat/chat-content.html',
+		url_or_file: '../../apps/chat/chat-content.html',
 		mainClass: 'ChatUI',
 		setGlobal: true
 	},*/
@@ -74,32 +86,41 @@ const appsConfig = {
 		minHeight: 600,
 		iconWidth: '68%',
 		title: 'VAULT',
-		content: '../../apps/vault/vault-content.html',
+		url_or_file: '../../apps/vault/vault-content.html',
 	},*/
 	dashboard: {
 		preload: false,
 		disableOnLock: true,
 		minWidth: 420,
 		minHeight: 300,
-		initialHeight: 572,
+		initHeight: 572,
 		initTop: 0,
 		iconWidth: '69%',
 		title: '~~ DASHBOARD ___\\',
-		content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
+		//content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
+		url_or_file: 'http://localhost:27271',
 	},
 	explorer: {
 		preload: false,
 		fullScreen: false,
 		minWidth: 860,
 		minHeight: 190,
-		initialWidth: 860,
-		initialHeight: 610,
+		initWidth: 860,
+		initHeight: 610,
 		initTop: 0,
 		initLeft: 430,
 		iconWidth: '69%',
 		title: '°`° BLOCKCHAIN EXPLORER - }== -',
-		content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>'
+		//content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>'
+		url_or_file: 'http://localhost:27270',
 	},
 };
 
-module.exports = { AppConfig, appsConfig };
+function buildAppsConfig(appsConf) {
+	/** @type {Object<string, AppConfig>} */
+	const result = {};
+	for (const appName in appsConf) { result[appName] = AppConfig(appName, appsConf[appName]); }
+	return result;
+}
+
+module.exports = { AppConfig, appsConfig, buildAppsConfig };

@@ -7,13 +7,15 @@ let basePath = __dirname;
 (async () => {
     if (!isNode) { return; }
 
-    path = await import('path');
-    fs = await import('fs');
-    const url = await import('url');
-    //basePath = path.resolve('miniLogger');
-    //const { app } = await electron;
-    //basePath = path.resolve('miniLogger');
+    //path = await import('path');
+    //fs = await import('fs');
+    //const url = await import('url');
+    try { path = await import('path'); } catch (error) { path = window.path; }
+    try { fs = await import('fs'); } catch (error) { fs = window.fs; }
+    let url;
+    try { url = await import('url'); } catch (error) { url = window.url; }
 
+    while (!url) { await new Promise(resolve => setTimeout(resolve, 10)); }
     const __filename = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
     const parentFolder = path.dirname(__filename);
     basePath = path.join(path.dirname(parentFolder), 'miniLogger');

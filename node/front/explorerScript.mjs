@@ -530,7 +530,7 @@ export class BlockExplorerWidget {
         const containerDiv = this.cbeHTML.containerDiv;
         containerDiv.innerHTML = '';
 
-        const upperBackground = createHtmlElement('div', 'cbe-blockExplorerWrapUpperBackground', [], containerDiv);
+        createHtmlElement('div', 'cbe-blockExplorerWrapUpperBackground', [], containerDiv);
         const relativeWrap = createHtmlElement('div', 'cbe-relativeWrap', [], containerDiv);
         const wrap = createHtmlElement('div', 'cbe-blockExplorerWrap', [], relativeWrap);
 
@@ -754,10 +754,16 @@ export class BlockExplorerWidget {
         createSpacedTextElement('Size', [], `${(blockData.blockBytes / 1024).toFixed(2)} KB`, [], leftContainer);
         createSpacedTextElement('Transactions', [], `${blockData.nbOfTxs}`, [], leftContainer);
         createSpacedTextElement('Total fees', [], `${convert.formatNumberAsCurrency(blockData.totalFees)}`, [], leftContainer);
-        const minerAddressElmnt = createSpacedTextElement('Miner', [], blockData.minerAddress, [], leftContainer);
-        minerAddressElmnt.children[1].innerHTML = `<span class="cbe-addressSpan">${blockData.minerAddress}</span>`;
-        const validatorAddressElmnt = createSpacedTextElement('Validator', [], blockData.validatorAddress, [], leftContainer);
-        validatorAddressElmnt.children[1].innerHTML = `<span class="cbe-addressSpan">${blockData.validatorAddress}</span>`;
+        
+        const minerAddressElmnt = createSpacedTextElement('Miner', [], '', [], leftContainer);
+        const minerAddressDiv = minerAddressElmnt.children[1];
+        const minerAddressSpanElmnt = createHtmlElement('span', undefined, ['cbe-addressSpan'], minerAddressDiv);
+        minerAddressSpanElmnt.textContent = blockData.minerAddress;
+
+        const validatorAddressElmnt = createSpacedTextElement('Validator', [], '', [], leftContainer);
+        const validatorAddressDiv = validatorAddressElmnt.children[1];
+        const validatorAddressSpanElmnt = createHtmlElement('span', undefined, ['cbe-addressSpan'], validatorAddressDiv);
+        validatorAddressSpanElmnt.textContent = blockData.validatorAddress;
         
         const rightContainer = createHtmlElement('div', undefined, ['cbe-rightContainer'], twoContainerWrap);
         createSpacedTextElement('Legitimacy', [], blockData.legitimacy, [], rightContainer);
@@ -953,17 +959,19 @@ export class BlockExplorerWidget {
             if (isMinerTx) { inputDiv.textContent = anchor; continue; }
             // check conformity of anchor to avoid code injection
             if (!typeValidation.isConformAnchor(anchor)) { console.error(`Invalid anchor: ${anchor}`); return; }
-            inputDiv.innerHTML = `<span class="cbe-anchorSpan">${anchor}</span>`;
+            const anchorSpan = createHtmlElement('span', undefined, ['cbe-anchorSpan'], inputDiv);
+            anchorSpan.textContent = anchor;
         }
 
         const outputsWrap = createHtmlElement('div', undefined, ['cbe-TxOutputsWrap'], threeContainerWrap);
         createHtmlElement('h3', undefined, [], outputsWrap).textContent = `(${tx.outputs.length}) Outputs`;
         for (const output of tx.outputs) {
             const { address, amount, rule } = output;
+            if (typeof amount !== 'number') { console.error(`Invalid amount: ${amount}`); return; }
+            if (typeof rule !== 'string') { console.error(`Invalid rule: ${rule}`); return; }
             if (!addressUtils.conformityCheck(address)) { console.error(`Invalid address: ${address}`); return; }
             const outputDiv = createHtmlElement('div', undefined, ['cbe-TxOutput'], outputsWrap);
             const addressSpanAsText = `<span class="cbe-addressSpan">${address}</span>`;
-
             outputDiv.innerHTML = `${convert.formatNumberAsCurrency(amount)} >>> ${addressSpanAsText} (${rule})`;
         }
         if (tx.fee) {
@@ -1055,6 +1063,7 @@ export class BlockExplorerWidget {
         
         const tbody = document.createElement('tbody');
         for (const UTXO of UTXOs) {
+            if (typeof UTXO.amount !== 'number') { console.error(`Invalid amount: ${UTXO.amount}`); return; }
             if (!typeValidation.isConformAnchor(UTXO.anchor)) { console.error(`Invalid anchor: ${UTXO.anchor}`); return; }
             const row = document.createElement('tr');
             createHtmlElement('td', undefined, ['cbe-anchorSpan'], row).textContent = UTXO.anchor;

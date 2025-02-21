@@ -1,5 +1,4 @@
-const { AppConfig, appsConfig } = require('../../apps/apps-config.js');
-const { BrowserWindow, ipcRenderer } = require('electron');
+const { AppConfig, appsConfig, buildAppsConfig } = require('../../apps/apps-config.js');
 
 /**
  * @param {string} tag
@@ -7,23 +6,18 @@ const { BrowserWindow, ipcRenderer } = require('electron');
  * @param {string} [innerText]
  * @param {HTMLElement} [parent]
  * @param {string} [innerHTML] */
-function newElement(tag, classes, innerText, parent, innerHTML) {
+function newElement(tag, classes, innerText, parent, url_or_file) {
     const element = document.createElement(tag);
     if (innerText) element.innerText = innerText;
     element.classList.add(...classes);
 
-    if (innerHTML && innerHTML.includes('.html')) {
-        let url;
-        fetch(innerHTML).then(res => { url = res.url; return res.text() }).then(html => {
+    if (url_or_file && url_or_file.includes('.html')) {
+        fetch(url_or_file).then(res => res.text()).then(html => {
             element.innerHTML = html;
         });
-    } else if (innerHTML) {
-        // element.innerHTML = innerHTML; // old method -> unsafe
-        // example : '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
-        const url = innerHTML.match(/src="([^"]+)"/) ? innerHTML.match(/src="([^"]+)"/)[1] : false;
-        if (!url) { console.error('No url found in:', innerHTML); return false; }
+    } else if (url_or_file) {
         const iframe = document.createElement('iframe');
-        iframe.src = url || innerHTML;
+        iframe.src = url_or_file;
         iframe.style.width = '100%';
         iframe.style.height = '100%';
         iframe.style.border = 'none';
@@ -69,48 +63,47 @@ class ButtonsBar {
 	}
 }
 class SubWindow {
-	constructor(appName, title, content) {
+	canFullScreen = true;
+	dragStart = { x: 0, y: 0 };
+	position = { left: 0, top: 0 };
+	minSize = { width: 0, height: 0 };
+	maxSize = { width: 0, height: 0 };
+	initSize = { width: undefined, height: undefined };
+	windowSize = { width: 0, height: 0 };
+	folded = true;
+	animation = null;
+	animationsComplexity = 1; // 0: none, 1: simple, 2: complex
+	url_or_file;
+
+	constructor(appName, title, url_or_file = '') {
 		this.appName = appName;
-		this.mainInstance = null;
 
 		/** @type {HTMLElement} */
 		this.element;
 		this.title = title;
 		this.contentElement;
-		this.content = content;
-		// extract origin if present,
-		// ex: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
-		// => 'http://localhost:27271'
-		this.origin = content.match(/src="([^"]+)"/) ? content.match(/src="([^"]+)"/)[1] : '';
-
-		this.dragStart = { x: 0, y: 0 };
-		this.position = { left: 0, top: 0 };
-		this.minSize = { width: 0, height: 0 };
-		this.initialSize = { width: undefined, height: undefined };
-		this.windowSize = { width: 0, height: 0 };
-		this.folded = true;
-		this.animation = null;
-		this.animationsComplexity = 1; // 0: none, 1: simple, 2: complex
+		this.url_or_file = url_or_file;
+		this.origin = url_or_file.includes('.html') ? null : url_or_file;
 	}
 
 	render(parentElement = document.body, fromX= 0, fromY= 0) {
 		this.element = newElement('div', ['window', 'resizable'], '', parentElement);
 		this.element.dataset.appName = this.appName;
-		this.element.appendChild(this.#newTitleBar(this.title));
+		this.element.appendChild(this.#newTitleBar(this.title, this.canFullScreen));
 
-		this.contentElement = newElement('div', ['content'], '', this.element, this.content);
-		if (!this.contentElement) { console.error('No content element found in:', this.content); return; }
+		this.contentElement = newElement('div', ['content'], '', this.element, this.url_or_file);
+		if (!this.contentElement) { console.error('Content cannot be build for:', this.url_or_file); return; }
 
 		// if iframe in content
 		const iframe = this.contentElement.querySelector('iframe');
 		if (iframe) iframe.id = this.appName + '-iframe';
 
-		this.element.style.minWidth = this.minSize.width + 'px';
-		this.element.style.minHeight = this.minSize.height + 'px';
-		this.element.style.maxWidth = window.innerWidth + 'px';
-		this.element.style.maxHeight = window.innerHeight + 'px';
-		if (this.initialSize.width) { this.element.style.width = this.initialSize.width + 'px'; }
-		if (this.initialSize.height) { this.element.style.height = this.initialSize.height + 'px'; }
+		this.element.style.minWidth = this.minSize.width ? `${this.minSize.width}px` : 'auto';
+		this.element.style.minHeight = this.minSize.height ? `${this.minSize.height}px` : 'auto';
+		this.element.style.maxWidth = this.maxSize.width ? `${this.maxSize.width}px` : `${window.innerWidth}px`;
+		this.element.style.maxHeight = this.maxSize.height ? `${this.maxSize.height}px` : `${window.innerHeight}px`;
+		if (this.initSize.width) { this.element.style.width = this.initSize.width + 'px'; }
+		if (this.initSize.height) { this.element.style.height = this.initSize.height + 'px'; }
 		
 		if (fromX && fromY) {
 			this.element.style.opacity = 1;
@@ -139,7 +132,7 @@ class SubWindow {
 			}, 800);
 		}
 	}
-	#newTitleBar(title) {
+	#newTitleBar(title, expandable = true) {
 		const titleBar = newElement('div', ['title-bar'], '');
 		newElement('div', ['background'], '', titleBar);
 		newElement('span', [], title, titleBar);
@@ -151,6 +144,8 @@ class SubWindow {
 		foldButton.dataset.action = 'fold';
 		foldButton.src = '../img/fold_64.png';
 
+		if (!expandable) return titleBar;
+		
 		const expandButton = newElement('img', ['expand-button'], '', buttonsWrap);
 		expandButton.dataset.appName = this.appName;
 		expandButton.dataset.action = 'expand';
@@ -189,6 +184,7 @@ class SubWindow {
 		return this.folded;
 	}
 	setFullScreen(boardSize = { width: 0, height: 0 }, duration = 400) {
+		if (!this.canFullScreen) return;
 		if (this.element.classList.contains('fullscreen')) { return; }
 		this.element.classList.add('fullscreen');
 
@@ -237,8 +233,12 @@ class SubWindow {
 		});
 	}
 }
+
 class AppsManager {
 	state = 'locked';
+	appsConfig = buildAppsConfig(appsConfig);
+	windowsWrap;
+	buttonsBar;
 	/** @type {Object<string, SubWindow>} */
 	windows = {};
 	draggingWindow = null;
@@ -246,18 +246,13 @@ class AppsManager {
 	tempFrontAppName = null;
 	transitionsDuration = 400;
 	appsByZindex 
+
+	/** @param {HTMLElement} windowsWrap, @param {HTMLElement} buttonsBarElement */
 	constructor(windowsWrap, buttonsBarElement) {
 		this.windowsWrap = windowsWrap;
 		this.buttonsBar = new ButtonsBar(buttonsBarElement);
-		/** @type {Object<string, AppConfig>} */
-		this.appsConfig = this.#buildAppsConfig(appsConfig);
 	}
 
-	#buildAppsConfig(appsConf) {
-		const result = {};
-		for (const appName in appsConf) { result[appName] = AppConfig(appName, appsConf[appName]); }
-		return result;
-	}
 	updateCssAnimationsDuration() {
 		document.documentElement.style.setProperty('--windows-animation-duration', this.transitionsDuration + 'ms');
 	}
@@ -272,14 +267,21 @@ class AppsManager {
 		if (!this.appsConfig[appName]) return;
 
 		const origin = this.buttonsBar.getButtonOrigin(appName);
-		const { title, content } = this.appsConfig[appName];
-		this.windows[appName] = new SubWindow(appName, title, content);
+		const { title, url_or_file } = this.appsConfig[appName];
+		this.windows[appName] = new SubWindow(appName, title, url_or_file);
 
-		const { minWidth, minHeight, initialWidth, initialHeight, initTop, initLeft } = this.appsConfig[appName];
+		const {
+			minWidth, minHeight, maxWidth, maxHeight, initWidth, initHeight,
+			initTop, initLeft, canFullScreen
+		} = this.appsConfig[appName];
+
+		this.windows[appName].canFullScreen = canFullScreen;
 		this.windows[appName].minSize.width = minWidth;
 		this.windows[appName].minSize.height = minHeight;
-		this.windows[appName].initialSize.width = initialWidth;
-		this.windows[appName].initialSize.height = initialHeight;
+		this.windows[appName].maxSize.width = maxWidth;
+		this.windows[appName].maxSize.height = maxHeight;
+		this.windows[appName].initSize.width = initWidth;
+		this.windows[appName].initSize.height = initHeight;
 		this.windows[appName].position.top = initTop || 0;
 		this.windows[appName].position.left = initLeft || 0;
 

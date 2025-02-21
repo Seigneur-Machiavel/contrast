@@ -102,8 +102,6 @@ class AddressExhaustiveData {
     }
 }
 
-console.log('Argon2 worker enabled!');
-
 const settings = {
     appVersion: chrome.runtime.getManifest().version,
     minVersionAcceptedWithoutReset: '1.2.0',
@@ -1244,10 +1242,8 @@ document.addEventListener('click', async function(e) {
             selectAccountLabel(target);
             break;
         case 'accountImgWrap':
-            //console.log('accountImgWrap clicked');
             const accountLabel = target.parentElement;
             selectAccountLabel(accountLabel);
-
             break;
         case 'foldBtn':
             console.log('foldBtn');

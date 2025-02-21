@@ -2,7 +2,7 @@
 
 <div id="biw-container" class="biw-container">
     <div class="biw-miniFormsWrap">
-        <div id="biw-spendMiniForm" class="biw-miniFold">
+        <div id="biw-spendMiniForm" class="biw-miniFold" data-foldName="spend">
             <button class="biw-foldBtn"></button>
             <p class="biw-textInfo"></p>
             <h2>sender: <span class="biw-senderAddress"></span></h2>
@@ -10,44 +10,39 @@
             <input type="text" placeholder="Receiver address">
             <button class="biw-sendBtn biw-holdBtn"><div>Send</div></button>
         </div>
-        <div id="biw-stakeMiniForm" class="biw-miniFold">
-            <p class="biw-textInfo"></p>
+        <div id="biw-stakeMiniForm" class="biw-miniFold" data-foldName="stake">
             <button class="biw-foldBtn"></button>
+            <p class="biw-textInfo"></p>
             <h2>sender: <span class="biw-senderAddress"></span></h2>
-            <input class="biw-amountInput" type="text" placeholder="Amount to stake">
+            <h3>stakes on: <span class="biw-destAddress"></span></h3>
+            <input class="biw-amountInput biw-stakingInput" type="text" placeholder="Amount to stake">
+            <h3>+<span id="biw-stakingFee">0.000000c</span> (staking fee)</h3>
             <input type="text" placeholder="Receiver address" style="display: none;">
             <button class="biw-stakeBtn biw-holdBtn"><div>Stake</div></button>
         </div>
     </div>
+    <button id="biw-buttonRefresh"><img src="../../apps/wallet/img/refresh64.png" alt="Send"></button>
+    <div id="biw-addressTypeList">
+        <h2>Address type: </h2>
+        <button data-addresstype="W">W</button>
+        <button data-addresstype="C">C</button>
+        <button data-addresstype="P" class="disabled">P</button>
+        <button data-addresstype="U" class="disabled">U</button>
+    </div>
     <h1><span id="biw-spendableBalanceStr">0.00</span>c</h1>
     <h2 class="biw-stakedBalance">Staked: <span id="biw-stakedStr">0.00</span>c</h2>
     <div class="biw-buttonBar">
-        <!--<button><div class="btnBackground"></div><img src="../images/qr-code32.png" alt="Receive">Receive</button>-->
         <button id="biw-buttonBarSend"><div class="biw-btnBackground"></div><img src="../../apps/wallet/img/send32.png" alt="Send">Send</button>
         <button id="biw-buttonBarStake"><div class="biw-btnBackground"></div><img src="../../apps/wallet/img/stake64.png" alt="Stake">Stake</button>
         <button id="biw-buttonBarSwap" class="disabled"><div class="biw-btnBackground"></div><img src="../../apps/wallet/img/swap32.png" alt="Swap">Swap</button>
         <button id="biw-buttonBarSpecial" class="disabled"><div class="biw-btnBackground"></div><img src="../../apps/wallet/img/specialtx64.png" alt="Swap">Special</button>
     </div>
     <div class="wrap">
+        <div id="biw-accountsWrap-box"></div>
         <div id="biw-accountsWrap">
-            <!--<div class="accountLabel">
-                <div class="accountImgWrap">
-                    <div></div>
-                    <div></div>
-                    <img src="../images/qr-code32.png" alt="Account">
-                </div>
-                <div class="accountLabelInfoWrap">
-                    <div class="accountLabelNameAndValueWrap">
-                        <h2>Account 1</h2>
-                        <h3>0.00c</h3>
-                    </div>
-                    <div class="accountLabelAddress">
-                        <h3>WKDEJFIUHESVUOHEIUEF</h3>
-                    </div>
-                </div>
-            </div>-->
             <button id="biw-newAddressBtn">+</button>
         </div>
     </div>
-    <p class="biw-textInfo"></p>
+    <h3 style="position: absolute; font-size: .84em; color: var(--color1_2); bottom: 0;">v0.0.1</h3>
+    <div id="biw-globalTextInfo" class="biw-textInfo"></div>
 </div>

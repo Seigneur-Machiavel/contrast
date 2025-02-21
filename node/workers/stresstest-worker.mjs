@@ -59,7 +59,7 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     nodeInitialized = initialized;
     if (!initialized) return;
     
-    parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-started' });
+    parentPort.postMessage({ type: 'node_started', data: dashApp.extractNodeSetting().privateKey });
     dashApp.saveNodeSettingBinary();
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
 }
@@ -135,6 +135,13 @@ parentPort.on('message', async (message) => {
             if (!verified) { console.error('Password not match'); return; }
 
             parentPort.postMessage({ type: 'private_key_extracted', data: dashApp.extractNodeSetting().privateKey });
+            break;
+        case 'generate_new_address':
+            const prefix = message.data;
+            if (prefix !== 'W' && prefix !== 'C' && prefix !== 'P' && prefix !== 'U') { console.error('Invalid prefix'); return; }
+
+            const newAddress = await dashApp.generateNewAddress(prefix);
+            parentPort.postMessage({ type: 'new_address_generated', data: newAddress });
             break;
         default:
             console.error('Unknown message type:', message.type);
@@ -306,13 +313,13 @@ async function test() {
     if (!nodeSetting || !nodeSetting.privateKey) { testMiniLogger.log(`Failed to extract nodeSetting.`, (m) => console.error(m)); return; }
 
     const wallet = new Wallet(nodeSetting.privateKey);
-    wallet.loadAccounts();
+    await wallet.loadAccounts();
 
-    const { derivedAccounts, avgIterations } = await wallet.deriveAccounts(testParams.nbOfAccounts, testParams.addressType);
+    const derivedAccounts = (await wallet.deriveAccounts(testParams.nbOfAccounts, testParams.addressType)).derivedAccounts;
     const mainAccount = (await wallet.deriveAccounts(1, "C")).derivedAccounts[0];
     if (!derivedAccounts || !mainAccount) { testMiniLogger.log(`Failed to derive addresses.`, (m) => console.error(m)); return; }
 
-    wallet.saveAccounts();
+    await wallet.saveAccounts();
 
     const accounts = derivedAccounts;
     const account0Address = derivedAccounts[0].address;
