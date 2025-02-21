@@ -85,7 +85,7 @@ async function createWindow(options, parentWindow) {
 }
 
 // AUTO UPDATER EVENTS
-autoUpdater.on('update-available', (e) => { console.log(`A new update is available: v${e.version}`); });
+autoUpdater.on('update-available', (e) => console.log(`A new update is available: v${e.version}`));
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     const dialogOpts = {
         type: 'info',

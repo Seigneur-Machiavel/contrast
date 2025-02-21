@@ -402,8 +402,8 @@ class BoardInternalWallet {
         document.addEventListener('input', async (event) => {
             if (event.target.classList.contains('biw-amountInput')) {
                 event.target.value = event.target.value.replace(/[^\d.]/g, '');
-                const nbOfDecimals = event.target.value.split('.')[1] ? event.target.value.split('.')[1].length : 0;
-                if (nbOfDecimals > 6) { event.target.value = parseFloat(event.target.value).toFixed(6); }
+                //const nbOfDecimals = event.target.value.split('.')[1] ? event.target.value.split('.')[1].length : 0;
+                //if (nbOfDecimals > 6) { event.target.value = parseFloat(event.target.value).toFixed(6); }
             }
         });
         document.addEventListener('focusin', async (event) => {
