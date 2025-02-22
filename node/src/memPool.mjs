@@ -137,6 +137,7 @@ export class MemPool {
             } catch (error) {
                 results.failed.push(error.message);
             }
+            await new Promise(resolve => setImmediate(resolve));
         }
 
         return results;

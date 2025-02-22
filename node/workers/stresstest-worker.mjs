@@ -202,11 +202,12 @@ async function userSendToNextUser(accounts) {
 
     const transferPromises = [];
     for (let i = 0; i < accounts.length; i++) {
-        await breather.breathe();
         const senderAccount = accounts[i];
         const receiverAccount = i + 1 === accounts.length ? accounts[0] : accounts[i + 1];
         const amountToSend = 1_000; //Math.floor(Math.random() * (1_000) + 1000);
         transferPromises.push(Transaction_Builder.createAndSignTransfer(senderAccount, amountToSend, receiverAccount.address));
+        await breather.breathe();
+        if (i % 100 === 0) { await new Promise(resolve => setTimeout(resolve, 500)); }
     }
     
     const pushPromises = [];
@@ -218,6 +219,7 @@ async function userSendToNextUser(accounts) {
         if (error.message === 'No UTXO to spend') { errorIsMissingUtxos = true;}
         if (error) { continue; }
         pushPromises.push(dashApp.node.pushTransaction(signedTx));
+        if (i % 100 === 0) { await new Promise(resolve => setTimeout(resolve, 500)); }
     }
 
     let broadcasted = 0;

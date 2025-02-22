@@ -43,6 +43,7 @@ import ReputationManager from './peers-reputation.mjs';
  * @property {number} peers
  * @property {string} blockHash
  * @property {CheckpointInfo | false} checkpointInfo
+ * @property {number} checkpointPeers
  */
 
 export class SyncHandler {
@@ -216,7 +217,7 @@ export class SyncHandler {
         this.consensusHeight = Math.max(this.consensusHeight, consensus.height);
         if (consensus.height === 0 || consensus.height <= myCurrentHeight) { return 'Already at the consensus height'; }
         
-        this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height}`, (m) => { console.info(m); });
+        this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height} (${consensus.checkpointPeers} peers)`, (m) => { console.info(m); });
         // wait a bit before starting the sync, time for previous connections to be closed
         //?await new Promise((resolve) => setTimeout(resolve, 5000));
 
@@ -321,6 +322,7 @@ export class SyncHandler {
             checkpointConsensus.checkpointInfo = { height, hash };
         }
         consensus.checkpointInfo = checkpointConsensus.checkpointInfo;
+        consensus.checkpointPeers = checkpointConsensus.peers;
         
         return consensus;
     }

@@ -63,8 +63,8 @@ export class Miner {
         // check if powReward is coherent
         const posReward = blockCandidate.Txs[0].outputs[0].amount;
         const powReward = blockCandidate.powReward;
-        if (!posReward || !powReward) { console.info(`[MINER] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`); return; }
-        if (Math.abs(posReward - powReward) > 1) { console.info(`[MINER] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`); return; }
+        if (!posReward || !powReward) { console.info(`[MINER-${this.address.slice(0, 6)}] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`); return; }
+        if (Math.abs(posReward - powReward) > 1) { console.info(`[MINER-${this.address.slice(0, 6)}] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`); return; }
 
         const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
         if (blockCandidate.prevHash !== prevHash) { return false; }
@@ -92,7 +92,7 @@ export class Miner {
         // preserve the current best candidate, but update considered as true to encourage re-bradcasting
         if (reasonChange === 'none') { return true; }
 
-        console.info(`[MINER] Best block candidate changed${reasonChange}:
+        console.info(`[MINER-${this.address.slice(0, 6)}] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
 to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (my block)' : ''}`);
         

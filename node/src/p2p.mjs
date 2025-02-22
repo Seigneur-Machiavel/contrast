@@ -117,7 +117,7 @@ class P2PNetwork extends EventEmitter {
             });
 
             await p2pNode.start();
-            this.miniLogger.log(`P2P network started with peerId ${p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
+            this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
             
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
             p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);

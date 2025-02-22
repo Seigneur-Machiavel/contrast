@@ -14,6 +14,10 @@ const path = await import('path');
 const url = await import('url');*/ // -> DEPRECATED
 if (false) {
     const AdmZip = require('adm-zip');
+    const fs = require('fs');
+    const path = require('path');
+    const crypto = require('crypto');
+    const url = require('url');
 }
 
 // -> Imports compatibility for Node.js, Electron and browser
@@ -188,8 +192,22 @@ export class CheckpointsStorage {
             //zip.addLocalFolder(snapshotsPath, 'snapshots');
 
             await breather.breathe();
+            //const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
+            //zip.addLocalFolder(addTxsRefsPath, 'addresses-txs-refs');
+            //! folder is to heavy, we pass subFolder one by one
             const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
-            zip.addLocalFolder(addTxsRefsPath, 'addresses-txs-refs');
+            const lvl0Folders = fs.readdirSync(addTxsRefsPath);
+            for (let i = 0; i < lvl0Folders.length; i++) {
+                const lvl0 = lvl0Folders[i];
+                const lvl0Path = path.join(addTxsRefsPath, lvl0);
+                const lvl1Folders = fs.readdirSync(lvl0Path);
+                for (let j = 0; j < lvl1Folders.length; j++) {
+                    const lvl1 = lvl1Folders[j];
+                    const lvl1Path = path.join(lvl0Path, lvl1);
+                    zip.addLocalFolder(lvl1Path, path.join('addresses-txs-refs', lvl0, lvl1));
+                    breather.breathe();
+                }
+            }
             
             await breather.breathe();
             const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
