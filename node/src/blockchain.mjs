@@ -188,6 +188,22 @@ export class Blockchain {
         const addressesTxsRefsSnapHeight = this.addressesTxsRefsStorage.snapHeight;
         if (addressesTxsRefsSnapHeight >= indexEnd) { console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`); return; }
 
+        class Breather {
+            lastBreathTime = 0;
+            breath = 0;
+            constructor(msBetweenBreaths = 2000, breathDuration = 50) {
+                this.msBetweenBreaths = msBetweenBreaths;
+                this.breathDuration = breathDuration;
+            }
+            async breathe() {
+                const now = performance.now();
+                if (now - this.lastBreathTime > this.msBetweenBreaths) return;
+                await new Promise(resolve => setTimeout(resolve, this.breathDuration));
+                this.breath++;
+            }
+        }
+        const breather = new Breather();
+
         /** @type {Object<string, string[]>} */
         const actualizedAddressesTxsRefs = {};
         for (let i = indexStart; i <= indexEnd; i++) {
@@ -199,14 +215,16 @@ export class Blockchain {
             for (const address of Object.keys(transactionsReferencesSortedByAddress)) {
                 if (actualizedAddressesTxsRefs[address]) { continue; } // already loaded
                 actualizedAddressesTxsRefs[address] = this.addressesTxsRefsStorage.getTxsReferencesOfAddress(address);
+                await breather.breathe();
             }
 
             for (const [address, newTxsReferences] of Object.entries(transactionsReferencesSortedByAddress)) {
                 const concatenated = actualizedAddressesTxsRefs[address].concat(newTxsReferences);
                 actualizedAddressesTxsRefs[address] = concatenated;
+                await breather.breathe();
             }
 
-            await new Promise(resolve => setTimeout(resolve, 50)); // avoid p2p disconnection
+            //await new Promise(resolve => setTimeout(resolve, 50)); // avoid p2p disconnection
         }
 
         let duplicateCountTime = 0;
@@ -232,12 +250,14 @@ export class Blockchain {
 
             this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
 
-            if (i % 300 === 0) { await new Promise(resolve => setTimeout(resolve, 50)); } // avoid p2p disconnection
+            //if (i % 300 === 0) { await new Promise(resolve => setTimeout(resolve, 50)); } // avoid p2p disconnection
+            await breather.breathe();
         }
 
         this.addressesTxsRefsStorage.save(indexEnd);
         
-        const logText = `Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included) - Duplicates: ${totalDuplicates}/${totalRefs} - Time: ${(performance.now() - startTime).toFixed(2)}ms (duplicates: ${duplicateCountTime.toFixed(2)}ms)`;
+        const logText = `Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included) [${breather.breath} breaths]
+-> Duplicates: ${totalDuplicates}/${totalRefs} - Time: ${(performance.now() - startTime).toFixed(2)}ms (duplicates: ${duplicateCountTime.toFixed(2)}ms)`;
         this.miniLogger.log(logText, (m) => { console.info(m); });
     }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */
