@@ -349,6 +349,8 @@ export class DashboardWsApp {
                 await this.saveNodeSettingBinary();
                 break;
             case 'new_unsigned_transaction':
+                console.log(`DISABLED new_unsigned_transaction`, (m) => { console.log(m); });
+                break;
                 console.log(`signing transaction ${data.id}`);
                 const tx = await this.node.account.signTransaction(data);
                 console.log('Broadcast transaction', data);

@@ -20,7 +20,7 @@ function newWorker(scriptPath, workerCode, workerData = {}) {
     return new Worker(URL.createObjectURL(blob));
 }
 
-// CLASS FOR EASY USAGE OF THE WORKER
+// CLASSES SIMPLIFYING USAGE OF THE WORKERS
 export class ValidationWorker {
     constructor (id = 0) {
         this.id = id;
