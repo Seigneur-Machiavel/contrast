@@ -84,6 +84,10 @@ export class SyncHandler {
             const readResult = await P2PNetwork.streamRead(stream, this.fastConverter);
             if (!readResult) { throw new Error('(#handleIncomingStream) Failed to read data from stream'); }
             readResultCopy = readResult;
+            if (readResult.data.byteLength === 0) {
+                stream.close();
+                return;
+            }
 
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(readResult.data);
