@@ -32,8 +32,8 @@ function setShortcuts(windows, dev = true) {
         const focusedWindow = BrowserWindow.getFocusedWindow();
         if (!focusedWindow) return;
         // if main window is focused, restart the app (not in debug/unpackaged mode)
-        if (focusedWindow === windows.mainWindow && !app.isPackaged) return;
-        if (focusedWindow === windows.mainWindow) { app.relaunch(); app.quit() } else focusedWindow.reload();
+        if (focusedWindow === windows.boardWindow && !app.isPackaged) return;
+        if (focusedWindow === windows.boardWindow) { app.relaunch(); app.quit() } else focusedWindow.reload();
     });
     // TOGGLE LOGGER SETTINGS MENU
     if (shortcutsKeys.toggleLoggerSettingsMenu.enabled) globalShortcut.register(shortcutsKeys.toggleLoggerSettingsMenu.key, () => {
