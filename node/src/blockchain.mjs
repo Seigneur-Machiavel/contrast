@@ -3,6 +3,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
+import { Breather } from '../../utils/breather.mjs';
 
 /**
 * @typedef {import("../src/block-tree.mjs").TreeNode} TreeNode
@@ -188,21 +189,6 @@ export class Blockchain {
         const addressesTxsRefsSnapHeight = this.addressesTxsRefsStorage.snapHeight;
         if (addressesTxsRefsSnapHeight >= indexEnd) { console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`); return; }
 
-        class Breather {
-            lastBreathTime = 0;
-            breath = 0;
-            constructor(msBetweenBreaths = 2000, breathDuration = 50) {
-                this.msBetweenBreaths = msBetweenBreaths;
-                this.breathDuration = breathDuration;
-            }
-            async breathe() {
-                const now = performance.now();
-                if (now - this.lastBreathTime < this.msBetweenBreaths) return;
-                await new Promise(resolve => setTimeout(resolve, this.breathDuration));
-                this.lastBreathTime = performance.now();
-                this.breath++;
-            }
-        }
         const breather = new Breather();
 
         /** @type {Object<string, string[]>} */
@@ -257,8 +243,7 @@ export class Blockchain {
 
         this.addressesTxsRefsStorage.save(indexEnd);
         
-        const logText = `Addresses transactions persisted to disk from ${indexStart} to ${indexEnd} (included) [${breather.breath} breaths]
--> Duplicates: ${totalDuplicates}/${totalRefs} - Time: ${(performance.now() - startTime).toFixed(2)}ms (duplicates: ${duplicateCountTime.toFixed(2)}ms)`;
+        const logText = `AddressesTxsRefs persisted from #${indexStart} to #${indexEnd}(included) [${breather.breath} breaths] -> Duplicates: ${totalDuplicates}/${totalRefs}(${duplicateCountTime.toFixed(2)}ms) - TotalTime: ${(performance.now() - startTime).toFixed(2)}ms`;
         this.miniLogger.log(logText, (m) => { console.info(m); });
     }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */

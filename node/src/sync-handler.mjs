@@ -79,9 +79,11 @@ export class SyncHandler {
         this.p2pNet.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         //this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         
+        let readResultCopy;
         try {
             const readResult = await P2PNetwork.streamRead(stream, this.fastConverter);
             if (!readResult) { throw new Error('(#handleIncomingStream) Failed to read data from stream'); }
+            readResultCopy = readResult;
 
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(readResult.data);
@@ -123,7 +125,10 @@ export class SyncHandler {
             if (msg.type === 'getCheckpoint') logComplement = `: ${msg.checkpointHash.slice(0,10)}`;
             this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (${msg.type}${logComplement}} | ${serializedResponse.length} bytes)`, (m) => { console.info(m); });
         } catch (err) {
-            if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+            if (err.code !== 'ABORT_ERR') {
+                this.miniLogger.log(`nbChunks: ${readResultCopy?.nbChunks} | bytes: ${readResultCopy?.data.byteLength}`, (m) => { console.error(m); });
+                this.miniLogger.log(err, (m) => { console.error(m); });
+            }
         }
     }
     /** @param {string} peerIdStr @param {SyncRequest} msg */

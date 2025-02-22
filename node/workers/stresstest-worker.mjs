@@ -7,8 +7,9 @@ import { Transaction_Builder } from '../src/transaction.mjs';
 import { Wallet, Account } from '../src/wallet.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { argon2Hash } from '../src/conCrypto.mjs';
-import { CryptoLight } from '../../utils/cryptoLight.mjs'
+import { CryptoLight } from '../../utils/cryptoLight.mjs';
 import { Storage } from '../../utils/storage-manager.mjs';
+import { Breather } from '../../utils/breather.mjs';
 import nodeMachineId from 'node-machine-id';
 
 const nodePort = workerData.nodePort || 27260;
@@ -197,11 +198,11 @@ async function userSendToNextUser(accounts) {
     txsTaskDoneThisBlock['userSendToNextUser'] = true;
 
     let startTime = Date.now();
-    const pauseEach = 50; // txs
+    const breather = new Breather();
 
     const transferPromises = [];
     for (let i = 0; i < accounts.length; i++) {
-        if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
+        await breather.breathe();
         const senderAccount = accounts[i];
         const receiverAccount = i + 1 === accounts.length ? accounts[0] : accounts[i + 1];
         const amountToSend = 1_000; //Math.floor(Math.random() * (1_000) + 1000);
@@ -211,7 +212,7 @@ async function userSendToNextUser(accounts) {
     const pushPromises = [];
     let errorIsMissingUtxos = false;
     for (let i = 0; i < transferPromises.length; i++) {
-        if (i % pauseEach === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
+        await breather.breathe();
         const promise = transferPromises[i];
         const { signedTx, error } = await promise;
         if (error.message === 'No UTXO to spend') { errorIsMissingUtxos = true;}
@@ -221,13 +222,14 @@ async function userSendToNextUser(accounts) {
 
     let broadcasted = 0;
     for (const promise of pushPromises) {
+        await breather.breathe();
         const result = await promise;
         if (result.broadcasted) { broadcasted++; }
     }
     const elapsedTime = Date.now() - startTime;
 
     if (errorIsMissingUtxos) { testMiniLogger.log(`[TEST-USTNU] Missing UTXOs`, (m) => console.error(m)); }
-    testMiniLogger.log(`[TEST-USTNU] Nb broadcasted Txs: ${broadcasted} | timeToCreate: ${(elapsedTime).toFixed(2)}s`, (m) => console.info(m));
+    testMiniLogger.log(`[TEST-USTNU] Nb broadcasted Txs: ${broadcasted} | timeToCreate: ${(elapsedTime).toFixed(2)}s [${breather.breath} breaths]`, (m) => console.info(m));
 }
 /** User send to all other accounts @param {Account[]} accounts @param {number} senderAccountIndex */
 async function userSendToAllOthers(accounts, senderAccountIndex = 0) {
