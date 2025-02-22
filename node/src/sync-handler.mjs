@@ -398,7 +398,7 @@ export class SyncHandler {
 
                     if (activeCheckpointTargetHeight === block.index) {
                         this.node.updateState(`Deploying checkpoint #${this.node.checkpointSystem.activeCheckpointHeight}...`); // can be long...
-                        this.node.checkpointSystem.deployActiveCheckpoint(); // throws if failure
+                        await this.node.checkpointSystem.deployActiveCheckpoint(); // throws if failure
                         return 'Checkpoint deployed';
                     }
 

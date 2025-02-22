@@ -298,7 +298,7 @@ export class Node {
             this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 
-        this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool);
+        await this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool);
         this.snapshotSystem.moveSnapshotsLowerThanHeightToTrash(finalizedBlock.index - eraseUnder);
         // avoid gap between the loaded snapshot and the new one
         // at this stage we know that the loaded snapshot is consistent with the blockchain
@@ -308,7 +308,7 @@ export class Node {
         this.snapshotSystem.restoreLoadedSnapshot();
     }
     /** @param {BlockData} finalizedBlock */
-    #saveCheckpoint(finalizedBlock) {
+    async #saveCheckpoint(finalizedBlock) {
         if (finalizedBlock.index < 100) { return; }
 
         const startTime = performance.now();
@@ -319,7 +319,7 @@ export class Node {
 
         // oldest example: #1050 - (5 * 10) = 1000
         const oldestSnapHeight = finalizedBlock.index - snapshotGap;
-        const result = this.checkpointSystem.newCheckpoint(oldestSnapHeight);
+        const result = await this.checkpointSystem.newCheckpoint(oldestSnapHeight);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
         this.miniLogger.log(`${logText} ${oldestSnapHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
     }
@@ -454,7 +454,7 @@ export class Node {
         await this.#saveSnapshot(finalizedBlock);
         timer.endPhase('saveSnapshot');
 
-        this.#saveCheckpoint(finalizedBlock);
+        await this.#saveCheckpoint(finalizedBlock);
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate) { return; }

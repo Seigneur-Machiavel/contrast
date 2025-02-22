@@ -5,14 +5,19 @@ import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
 import { FastConverter } from "./converters.mjs";
 import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
+import { Breather } from './breather.mjs';
 
 /*import AdmZip from 'adm-zip';
 import * as crypto from 'crypto';
 const fs = await import('fs');
 const path = await import('path');
 const url = await import('url');*/ // -> DEPRECATED
+if (false) {
+    const AdmZip = require('adm-zip');
+}
 
 // -> Imports compatibility for Node.js, Electron and browser
+
 let AdmZip, crypto, fs, path, url;
 (async () => {
     try { fs = await import('fs'); } catch (error) { fs = window.fs; }
@@ -160,9 +165,11 @@ export class Storage {
 
 export class CheckpointsStorage {
     /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
-    static archiveCheckpoint(checkpointHeight = 0, fromPath) {
+    static async archiveCheckpoint(checkpointHeight = 0, fromPath) {
         try {
+            /** @type {AdmZip} */
             const zip = new AdmZip();
+            const breather = new Breather();
 
             if (fromPath) {
                 const snapshotsPath = path.join(fromPath, 'snapshots');
@@ -180,15 +187,19 @@ export class CheckpointsStorage {
             //const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
             //zip.addLocalFolder(snapshotsPath, 'snapshots');
 
+            await breather.breathe();
             const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
             zip.addLocalFolder(addTxsRefsPath, 'addresses-txs-refs');
             
+            await breather.breathe();
             const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
             zip.addLocalFile(addTxsRefsConfigPath);
 
+            await breather.breathe();
             const buffer = zip.toBuffer();
             const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 
+            await breather.breathe();
             const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight.toString());
             if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
             fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
@@ -207,7 +218,7 @@ export class CheckpointsStorage {
             const destPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
             if (fs.existsSync(destPath)) { fs.rmSync(destPath, { recursive: true }); }
             fs.mkdirSync(destPath, { recursive: true });
-    
+            /** @type {AdmZip} */
             const zip = new AdmZip(buffer);
             zip.extractAllTo(destPath, true);
     

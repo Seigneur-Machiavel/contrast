@@ -5,6 +5,7 @@ import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockData, BlockUtils } from './block-classes.mjs';
 import { HashFunctions } from './conCrypto.mjs';
+import { Breather } from '../../utils/breather.mjs';
 
 /**
 * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
@@ -52,7 +53,8 @@ export class SnapshotSystem {
 	 * @param {UtxoCache} utxoCache 
 	 * @param {Vss} vss 
 	 * @param {MemPool} memPool */
-	newSnapshot(utxoCache, vss, memPool) {
+	async newSnapshot(utxoCache, vss, memPool) {
+		const breather = new Breather();
 		const logPerf = false;
 		const height = utxoCache.blockchain.currentHeight;
 		const heightPath = path.join(PATH.SNAPSHOTS, `${height}`);
@@ -62,12 +64,14 @@ export class SnapshotSystem {
 		const serializedSpectum = serializer.serialize.rawData(vss.spectrum);
 		Storage.saveBinary('vss', serializedSpectum, heightPath);
 		performance.mark('endSaveVssSpectrum');
+		await breather.breathe();
 
 		performance.mark('startSaveMemPool'); // SAVE MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = serializer.serialize.pubkeyAddressesObj(memPool.knownPubKeysAddresses);
 		this.knownPubKeysAddressesSnapInfo = { height, hash: HashFunctions.xxHash32(serializedPKAddresses) };
 		Storage.saveBinary('memPool', serializedPKAddresses, heightPath);
 		performance.mark('endSaveMemPool');
+		await breather.breathe();
 
 		performance.mark('startSaveUtxoCache'); // SAVE UTXO CACHE
 		const utxoCacheDataSerialized = serializer.serialize.utxoCacheData(utxoCache);
@@ -211,7 +215,7 @@ export class CheckpointSystem {
 			fs.rmSync(path.join(PATH.CHECKPOINTS, h.toString), { recursive: true, force: true });
 		}
 	}
-	newCheckpoint(height = 1000, fromPath, overwrite = false) {
+	async newCheckpoint(height = 1000, fromPath, overwrite = false) {
 		// We prefer to not overwrite existing checkpoints, but it's possible to force it
 		//! The danger is to overwrite a valid checkpoint with a corrupted one:
 		//! The "addresses-txs-refs" can be different and includes unexisting txs
@@ -219,7 +223,7 @@ export class CheckpointSystem {
 		if (fs.existsSync(heightPath)) { console.error(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`); return false; }
 		if (fs.existsSync(heightPath) && !overwrite) { return false; }
 
-		const hash = CheckpointsStorage.archiveCheckpoint(height, fromPath); // save new checkpoint archive (.zip)
+		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath); // save new checkpoint archive (.zip)
 		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return false; }
 
 		this.lastCheckpointInfo = { height, hash };
@@ -236,7 +240,7 @@ export class CheckpointSystem {
 			return false;
 		}
 	}
-	/** Read one time only if necessary, this.lastCheckpointInfo filled by: newCheckpoint() */
+	/** Read one time only if necessary, this.lastCheckpointInfo filled by: newCheckpoint () */
 	myLastCheckpointInfo() {
 		if (!this.lastCheckpointInfo.height) {
 			const checkpointsInfos = this.#getCheckpointsInfos();
@@ -327,12 +331,12 @@ export class CheckpointSystem {
 
 		return true;
 	}
-	deployActiveCheckpoint(saveZipArchive = true) {
+	async deployActiveCheckpoint(saveZipArchive = true) {
 		if (this.activeCheckpointHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint not set`); }
 		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
 
 		if (saveZipArchive) {
-			const checkpointSavedf = this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
+			const checkpointSavedf = await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
 			if (!checkpointSavedf) { throw new Error(`(Checkpoint deploy) Checkpoint save failed`); }
 		}
 
