@@ -197,7 +197,7 @@ export class Blockchain {
             }
             async breathe() {
                 const now = performance.now();
-                if (now - this.lastBreathTime > this.msBetweenBreaths) return;
+                if (now - this.lastBreathTime < this.msBetweenBreaths) return;
                 await new Promise(resolve => setTimeout(resolve, this.breathDuration));
                 this.breath++;
             }
