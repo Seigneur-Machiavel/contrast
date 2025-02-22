@@ -65,13 +65,14 @@ class P2PNetwork extends EventEmitter {
     connectedBootstrapNodes = {};
     connexionResume = { totalPeers: 0, connectedBootstraps: 0, totalBootstraps: 0 };
     targetBootstrapNodes = 5;
+    totalOfDisconnections = 0;
     options = {
         bootstrapNodes: [],
         maxPeers: 12,
         logLevel: 'info',
         logging: true,
         listenAddress: '/ip4/0.0.0.0/tcp/27260',
-        dialTimeout: 30000, //3000,
+        dialTimeout: 3000, //3000,
         reputationOptions: {}, // Options for ReputationManager
     };
     
@@ -91,6 +92,74 @@ class P2PNetwork extends EventEmitter {
         });
     }
 
+    /** @param {string} uniqueHash - A unique hash of 32 bytes to generate the private key from. */
+    async start(uniqueHash) {
+        const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
+        const hashUint8Array = convert.hex.toUint8Array(hash);
+        const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
+        const peerDiscovery = [mdns()];
+        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
+        try {
+            const p2pNode = await createLibp2p({
+                privateKey: privateKeyObject,
+                addresses: { listen: [this.options.listenAddress] },
+                transports: [tcp()],
+                streamMuxers: [yamux()],
+                connectionEncrypters: [noise()],
+                services: { identify: identify(), pubsub: gossipsub() },
+                /*streamMuxers: [yamux({
+                    maxStreamWindows: 128,  // 128 streams
+                    maxInboundStreams: 1024, // 1024 streams
+                    maxOutboundStreams: 1024, // 1024 streams
+                    connectionTimeout: 30000  // 30s
+                })],*/
+                peerDiscovery
+            });
+
+            await p2pNode.start();
+            this.miniLogger.log(`P2P network started with peerId ${p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
+            
+            p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
+            p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
+            p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+            this.p2pNode = p2pNode;
+        } catch (error) {
+            this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
+            this.miniLogger.log(error.stack, (m) => { console.error(m); });
+            throw error;
+        }
+
+        this.#bootstrapsReconnectLoop();
+        this.#controlLoop();
+        //this.#heartBeat();
+    }
+    async #controlLoop() {
+        while(true) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            const consInfo = {};
+            this.p2pNode.getConnections().forEach(connection => {
+                const peerIdStr = connection.remotePeer.toString();
+                const ip = connection.remoteAddr.nodeAddress().address;
+
+                if (!consInfo[peerIdStr]) consInfo[peerIdStr] = { ip, count: 0 };
+                consInfo[peerIdStr].count++;
+            });
+
+            console.log(`[CONTROL] Total of disconnections: ${this.totalOfDisconnections} -------`);
+            for (const peerIdStr in consInfo) {
+                const { ip, count } = consInfo[peerIdStr];
+                console.log(`Peer ${readableId(peerIdStr)} | IP ${ip} | Connections: ${count}`);
+            }
+        }
+    }
+    async #heartBeat() {
+        // ping all peers through the pubsub
+        while(true) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            this.broadcast('heartbeat', { time: this.timeSynchronizer.getCurrentTime() });
+        }
+    }
     #handlePeerDiscovery = async (event) => {
         /** @type {PeerId} */
         const peerId = event.detail.id;
@@ -99,7 +168,8 @@ class P2PNetwork extends EventEmitter {
         if (connections.length > 0) { return; }
 
         try {
-            await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const con = await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            con.newStream(P2PNetwork.SYNC_PROTOCOL);
         } catch (err) {
             this.miniLogger.log(`(Discovery) Failed to dial peer ${readableId(peerIdStr)}`, (m) => { console.error(m); });
         }
@@ -119,6 +189,7 @@ class P2PNetwork extends EventEmitter {
     };
     /** @param {CustomEvent} event */
     #handlePeerDisconnect = async (event) => {
+        this.totalOfDisconnections++;
         /** @type {PeerId} */
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
@@ -164,47 +235,7 @@ class P2PNetwork extends EventEmitter {
         return false;
     }
 
-    /** @param {string} uniqueHash - A unique hash of 32 bytes to generate the private key from. */
-    async start(uniqueHash) {
-        const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
-        const hashUint8Array = convert.hex.toUint8Array(hash);
-        const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
-        const peerDiscovery = [mdns()];
-        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
-        try {
-            const p2pNode = await createLibp2p({
-                privateKey: privateKeyObject,
-                addresses: { listen: [this.options.listenAddress] },
-                transports: [tcp()],
-                streamMuxers: [yamux()],
-                /*streamMuxers: [yamux({
-                    maxStreamWindows: 128,  // 128 streams
-                    maxInboundStreams: 1024, // 1024 streams
-                    maxOutboundStreams: 1024, // 1024 streams
-                    connectionTimeout: 30000  // 30s
-                })],*/
-                connectionEncrypters: [noise()],
-                services: { identify: identify(), pubsub: gossipsub() },
-                peerDiscovery
-            });
-
-            await p2pNode.start();
-            this.miniLogger.log(`P2P network started with peerId ${p2pNode.peerId} and listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
-            
-            p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
-            p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
-            p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
-            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
-            this.p2pNode = p2pNode;
-        } catch (error) {
-            this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
-            this.miniLogger.log(error.stack, (m) => { console.error(m); });
-            throw error;
-        }
-
-        this.#connectionMaintainerLoop();
-    }
-    async #connectionMaintainerLoop() {
+    async #bootstrapsReconnectLoop() {
         while(true) {
             if (Object.keys(this.connectedBootstrapNodes).length < this.targetBootstrapNodes) {
                 await this.#connectToBootstrapNodes();
@@ -226,6 +257,7 @@ class P2PNetwork extends EventEmitter {
 
             promises.push(this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) })
                 .then(con => {
+                    con.newStream(P2PNetwork.SYNC_PROTOCOL);
                     const peerIdStr = con.remotePeer.toString();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                 })
@@ -303,7 +335,7 @@ class P2PNetwork extends EventEmitter {
         //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
         if (Object.keys(this.peers).length === 0) { return; }
         
-        const serializationFnc = this.topicsTreatment[topic].serialize || serializer.serialize.rawData;
+        const serializationFnc = this.topicsTreatment[topic]?.serialize || serializer.serialize.rawData;
         try {
             const serialized = serializationFnc(message);
             await this.p2pNode.services.pubsub.publish(topic, serialized);
