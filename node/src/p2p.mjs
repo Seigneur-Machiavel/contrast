@@ -71,16 +71,16 @@ class P2PNetwork extends EventEmitter {
         maxPeers: 12,
         logLevel: 'info',
         logging: true,
-        listenAddress: '/ip4/0.0.0.0/tcp/27260',
+        listenAddresses: ['/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0'],
         dialTimeout: 3000, //3000,
         reputationOptions: {}, // Options for ReputationManager
     };
     
-    /** @param {TimeSynchronizer} timeSynchronizer */
-    constructor(timeSynchronizer, listenAddress = '/ip4/0.0.0.0/tcp/27260') {
+    /** @param {TimeSynchronizer} timeSynchronizer @param {string[]} [listenAddresses] */
+    constructor(timeSynchronizer, listenAddresses) {
         super();
         this.timeSynchronizer = timeSynchronizer;
-        this.options.listenAddress = listenAddress;
+        if (listenAddresses) this.options.listenAddresses = listenAddresses;
 
         this.reputationManager = new ReputationManager(this.options.reputationOptions);
         this.reputationManager.on('identifierBanned', ({ identifier }) => {
@@ -102,22 +102,16 @@ class P2PNetwork extends EventEmitter {
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
-                addresses: { listen: [this.options.listenAddress] },
+                addresses: { listen: this.options.listenAddresses },
                 transports: [tcp()],
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 services: { identify: identify(), pubsub: gossipsub() },
-                /*streamMuxers: [yamux({
-                    maxStreamWindows: 128,  // 128 streams
-                    maxInboundStreams: 1024, // 1024 streams
-                    maxOutboundStreams: 1024, // 1024 streams
-                    connectionTimeout: 30000  // 30s
-                })],*/
                 peerDiscovery
             });
 
             await p2pNode.start();
-            this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen address ${this.options.listenAddress}`, (m) => { console.info(m); });
+            this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
             
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
             p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);

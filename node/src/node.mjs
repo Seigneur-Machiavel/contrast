@@ -36,7 +36,7 @@ export class Node {
     id;
     account;
     roles;
-    listenAddress;
+    listenAddresses = ['/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0'];
     version;
     validatorRewardAddress;
     useDevArgon2 = false;
@@ -76,17 +76,17 @@ export class Node {
     ignoreIncomingBlocks = false;
     logValidationTime = false;
 
-    /** @param {Account} account */
-    constructor(account, roles = ['validator'], listenAddress = '/ip4/0.0.0.0/tcp/27260', version = 1) {
+    /** @param {Account} account @param {string[]} roles @param {string[]} listenAddresses @param {number} version */
+    constructor(account, roles = ['validator'], listenAddresses, version = 1) {
         this.id = account.address;
         this.account = account;
         this.roles = roles; // 'miner', 'validator', ...
-        this.listenAddress = listenAddress;
+        this.listenAddresses = listenAddresses;
         this.version = version;
         this.validatorRewardAddress = account.address;
 
         /** @type {P2PNetwork} */
-        this.p2pNetwork = new P2PNetwork(this.timeSynchronizer, this.listenAddress);
+        this.p2pNetwork = new P2PNetwork(this.timeSynchronizer, this.listenAddresses);
 
         /** @type {Vss} */
         this.vss = new Vss(BLOCKCHAIN_SETTINGS.maxSupply);
