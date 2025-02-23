@@ -82,6 +82,10 @@
 
     --color3: #7b7b7b;
 
+    --invalid-color: indianred;
+    --valid-color: cornflowerblue;
+    --correct-color: green;
+
     /*--buttons-bar-height: 70px;*/
     --buttons-bar-width: 60px;
     --windows-animation-duration: 400ms;
@@ -123,7 +127,6 @@ body {
     font-family: "IBM Plex Mono", monospace;
 }
 input {
-    /*width: 236px;*/
     padding: 2px 12px;
     font-size: 1em; /* same as h2 */
     text-align: center;
@@ -131,6 +134,19 @@ input {
     color: var(--color1);
     border-radius: 6px;
     border-style: none;
+}
+input:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color3);
+}
+input.invalid {
+    box-shadow: 0 0 0 1px var(--invalid-color), inset 0 0 0 1px var(--invalid-color);
+}
+input.valid {
+    box-shadow: 0 0 0 1px var(--valid-color), inset 0 0 0 1px var(--valid-color);
+}
+input.correct {
+    box-shadow: 0 0 0 1px var(--correct-color), inset 0 0 0 1px var(--correct-color);
 }
 button {
     cursor: pointer;

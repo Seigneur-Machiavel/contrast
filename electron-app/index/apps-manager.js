@@ -64,7 +64,9 @@ class ButtonsBar {
 }
 class SubWindow {
 	canFullScreen = true;
+	autoSized = false;
 	dragStart = { x: 0, y: 0 };
+	resizeStart = { x: 0, y: 0, width: 0, height: 0 };
 	position = { left: 0, top: 0 };
 	minSize = { width: 0, height: 0 };
 	maxSize = { width: 0, height: 0 };
@@ -87,12 +89,21 @@ class SubWindow {
 	}
 
 	render(parentElement = document.body, fromX= 0, fromY= 0) {
-		this.element = newElement('div', ['window', 'resizable'], '', parentElement);
+		const windowClasses = this.autoSized ? ['window', 'fitContent'] : ['window', 'resizable'];
+		this.element = newElement('div', windowClasses, '', parentElement);
 		this.element.dataset.appName = this.appName;
 		this.element.appendChild(this.#newTitleBar(this.title, this.canFullScreen));
 
 		this.contentElement = newElement('div', ['content'], '', this.element, this.url_or_file);
 		if (!this.contentElement) { console.error('Content cannot be build for:', this.url_or_file); return; }
+
+		if (this.autoSized) {
+			this.contentElement.style.position = 'relative';
+		} else {
+			const resizeBtn = newElement('div', ['resize-button'], '||', this.element);
+			resizeBtn.dataset.appName = this.appName;
+			//resizeBtn.dataset.action = 'resize';
+		}
 
 		// if iframe in content
 		const iframe = this.contentElement.querySelector('iframe');
@@ -241,7 +252,9 @@ class AppsManager {
 	buttonsBar;
 	/** @type {Object<string, SubWindow>} */
 	windows = {};
+	/** @type {SubWindow} */
 	draggingWindow = null;
+	/** @type {SubWindow} */
 	resizingWindow = null;
 	tempFrontAppName = null;
 	transitionsDuration = 400;
@@ -272,9 +285,10 @@ class AppsManager {
 
 		const {
 			minWidth, minHeight, maxWidth, maxHeight, initWidth, initHeight,
-			initTop, initLeft, canFullScreen
+			initTop, initLeft, canFullScreen, autoSized
 		} = this.appsConfig[appName];
 
+		this.windows[appName].autoSized = autoSized;
 		this.windows[appName].canFullScreen = canFullScreen;
 		this.windows[appName].minSize.width = minWidth;
 		this.windows[appName].minSize.height = minHeight;
@@ -422,28 +436,29 @@ class AppsManager {
 		const appName = subWindow.element.dataset.appName;
 		this.setFrontWindow(appName);
 
-		/*const clickX = e.clientX - subWindow.element.offsetLeft;
-		const clickY = e.clientY - subWindow.element.offsetTop;
-		const isTheRightBottomCorner = clickX > subWindow.element.offsetWidth - 10 && clickY > subWindow.element.offsetHeight - 10;
-		if (isTheRightBottomCorner) {
-			console.log('clickX:', clickX, 'clickY:', clickY);
-			subWindow.element.style.pointerEvents = 'none';
+		if (e.target.classList.contains('title-bar')) {
+			e.preventDefault();
+			this.draggingWindow = subWindow;
+			subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
+			subWindow.dragStart.y = e.clientY - subWindow.element.offsetTop;
+			subWindow.element.classList.add('dragging');
+		}
+
+		if (e.target.classList.contains('resize-button')) {
+			e.preventDefault();
 			this.resizingWindow = subWindow;
-			return;
-		}*/
-
-		if (!e.target.classList.contains('title-bar')) return;
-
-		e.preventDefault();
-		this.draggingWindow = subWindow;
-		subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
-		subWindow.dragStart.y = e.clientY - subWindow.element.offsetTop;
-		subWindow.element.classList.add('dragging');
+			subWindow.resizeStart.x = e.clientX;
+			subWindow.resizeStart.y = e.clientY;
+			subWindow.resizeStart.width = subWindow.element.offsetWidth;
+			subWindow.resizeStart.height = subWindow.element.offsetHeight;
+			subWindow.element.classList.add('resizing');
+		}
 	}
 	moveWindowHandler(e) {
 		const subWindow = this.draggingWindow;
 		if (!subWindow) return;
 		
+		e.preventDefault();
 		const maxLeft = this.windowsWrap.offsetWidth - 50;
 		const minTop = this.windowsWrap.offsetHeight - 32;
 		const left = Math.max(0, e.clientX - subWindow.dragStart.x);
@@ -451,9 +466,27 @@ class AppsManager {
 		subWindow.element.style.left = Math.min(left, maxLeft) + 'px';
 		subWindow.element.style.top = Math.min(top, minTop) + 'px';
 	}
+	moveResizeHandler(e) {
+		const subWindow = this.resizingWindow;
+		if (!subWindow) return;
+
+		e.preventDefault();
+		const minWidth = subWindow.minSize.width || 100;
+		const minHeight = subWindow.minSize.height || 100;
+		const maxWidth = subWindow.maxSize.width || window.innerWidth;
+		const maxHeight = subWindow.maxSize.height || window.innerHeight;
+
+		const cursorHorizontalDiff = e.clientX - subWindow.resizeStart.x;
+		const cursorVerticalDiff = e.clientY - subWindow.resizeStart.y;
+
+		const newWidth = Math.min(maxWidth, Math.max(minWidth, subWindow.resizeStart.width + cursorHorizontalDiff));
+		const newHeight = Math.min(maxHeight, Math.max(minHeight, subWindow.resizeStart.height + cursorVerticalDiff));
+		subWindow.element.style.width = newWidth + 'px';
+		subWindow.element.style.height = newHeight + 'px';
+	}
 	releaseWindowHandler(e) {
 		if (this.resizingWindow) {
-			this.resizingWindow.element.style.pointerEvents = 'auto';
+			this.resizingWindow.element.classList.remove('resizing');
 			this.resizingWindow = null;
 			return;
 		}

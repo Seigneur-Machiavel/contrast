@@ -444,11 +444,11 @@ export class Transaction_Builder {
         return Transaction(inputs, outputs, transaction.id, witnesses, transaction.version);
     }
     // Multi-functions methods
-    /** @param {Account} senderAccount @param {number} amount @param {string} recipientAddress */
-    static async createAndSignTransfer(senderAccount, amount, recipientAddress) {
+    /** @param {Account} senderAccount @param {number} amount @param {string} recipientAddress @param {number} [feePerByte] */
+    static async createAndSignTransfer(senderAccount, amount, recipientAddress, feePerByte = undefined) {
         try {
             const transfer = { recipientAddress, amount };
-            const transaction = await Transaction_Builder.createTransfer(senderAccount, [transfer]);
+            const transaction = await Transaction_Builder.createTransfer(senderAccount, [transfer], feePerByte);
             const signedTx = await senderAccount.signTransaction(transaction);
 
             return { signedTx, error: false };

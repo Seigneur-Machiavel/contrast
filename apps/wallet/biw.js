@@ -84,10 +84,20 @@ class BoardInternalWallet {
     }
     animations = {};
     eHTML = {
+        container: document.getElementById('biw-container'),
         spendableBalanceStr: document.getElementById('biw-spendableBalanceStr'),
         stakedStr: document.getElementById('biw-stakedStr'),
         accountsWrap: document.getElementById('biw-accountsWrap'),
         newAddressBtn: document.getElementById('biw-newAddressBtn'),
+
+        buttonBar: {
+            element: document.getElementsByClassName('biw-buttonBar')[0],
+            send: document.getElementById('biw-buttonBarSend'),
+            swap: document.getElementById('biw-buttonBarSwap'),
+            stake: document.getElementById('biw-buttonBarStake'),
+            special: document.getElementById('biw-buttonBarSpecial'),
+        },
+
         sendBtn: document.getElementById('biw-sendBtn'),
         swapBtn: document.getElementById('biw-swapBtn'),
         stakeBtn: document.getElementById('biw-stakeBtn'),
@@ -99,7 +109,9 @@ class BoardInternalWallet {
             textInfo: document.getElementById('biw-spendMiniForm').getElementsByClassName('biw-textInfo')[0],
             senderAddress: document.getElementById('biw-spendMiniForm').getElementsByClassName('biw-senderAddress')[0],
             amount: document.getElementById('biw-spendMiniForm').getElementsByTagName('input')[0],
-            address: document.getElementById('biw-spendMiniForm').getElementsByTagName('input')[1],
+            toAddress: document.getElementById('biw-spendMiniForm').getElementsByTagName('input')[1],
+            txFee: document.getElementById('biw-spendMiniForm').getElementsByClassName('biw-txFee')[0],
+            totalSpent: document.getElementById('biw-spendMiniForm').getElementsByClassName('biw-totalSpent')[0],
             confirmBtn: document.getElementById('biw-spendMiniForm').getElementsByTagName('button')[1]
         },
         stake: {
@@ -107,10 +119,11 @@ class BoardInternalWallet {
             foldBtn: document.getElementById('biw-stakeMiniForm').getElementsByTagName('button')[0],
             textInfo: document.getElementById('biw-stakeMiniForm').getElementsByClassName('biw-textInfo')[0],
             senderAddress: document.getElementById('biw-stakeMiniForm').getElementsByClassName('biw-senderAddress')[0],
-            stakingAddress: document.getElementById('biw-stakeMiniForm').getElementsByClassName('biw-destAddress')[0],
-            amount: document.getElementById('biw-stakeMiniForm').getElementsByTagName('input')[0],
-            stakingFee: document.getElementById('biw-stakingFee'),
-            address: document.getElementById('biw-stakeMiniForm').getElementsByTagName('input')[1],
+            toAddress: document.getElementById('biw-stakeMiniForm').getElementsByTagName('input')[0],
+            amount: document.getElementById('biw-stakeMiniForm').getElementsByTagName('input')[1],
+            txFee: document.getElementById('biw-stakeMiniForm').getElementsByClassName('biw-txFee')[0],
+            stakingFee: document.getElementById('biw-stakeMiniForm').getElementsByClassName('biw-stakingFee')[0],
+            totalSpent: document.getElementById('biw-stakeMiniForm').getElementsByClassName('biw-totalSpent')[0],
             confirmBtn: document.getElementById('biw-stakeMiniForm').getElementsByTagName('button')[1]
         },
 
@@ -121,7 +134,9 @@ class BoardInternalWallet {
 
     activeAddressPrefix = null;
     activeAccountIndexByPrefix = { "W": 0, "C": 0, "P": 0, "U": 0 };
-    activeMiniFold = null;
+    generationTimeTextPerType = { "W": '~2sec', "C": '~30sec', "P": '~8min', "U": '~9.5h' }
+    standardFeePerByte = { "fast": 12, "average": 5, "slow": 2 };
+    activeMiniForm = null;
     currentTextInfo = '';
     ready = false;
 
@@ -201,13 +216,13 @@ class BoardInternalWallet {
                     // txId: data.txId, consumedAnchors: data.consumedAnchors, senderAddress: data.senderAddress,
                     // error: data.error, success: data.success});
 
-                    const textInfoElement = this.eHTML[this.activeMiniFold]?.textInfo || this.eHTML.globalTextInfo;
+                    const textInfoElement = this.eHTML[this.activeMiniForm]?.textInfo || this.eHTML.globalTextInfo;
                     if (data.error) {
-                        this.textInfo(textInfoElement, data.error, 8000);
+                        this.textInfo(textInfoElement, data.error.replace(' | ', '\n'), 7000, true);
                     } else {
                         const textStr = `Transaction broadcasted!
-                        TxId: ${data.txId} (pending confirmation)`;
-                        this.textInfo(textInfoElement, textStr, 8000);
+                        TxId: ${data.txId} (pending confirmation ~2min)`;
+                        this.textInfo(textInfoElement, textStr, 7000, true);
                     }
                     break;
                 case 'subscribed_balance_update':
@@ -294,19 +309,19 @@ class BoardInternalWallet {
                     if (target.innerHTML !== '+') { console.log('Already generating new address'); return; }
         
                     this.newAddressBtnLoadingToggle();
-                    this.textInfo(this.eHTML.globalTextInfo, 'Generating new address... (~1min)', 7000);
+                    this.textInfo(this.eHTML.globalTextInfo, `Generating new address... (${this.generationTimeTextPerType[this.activeAddressPrefix]})`, 7000);
                     ipcRenderer.send('generate-new-address', this.activeAddressPrefix);
                     break;
                 case 'biw-buttonBarSend':
                     console.log('buttonBarSpend');
-                    this.toggleMiniForm(this.eHTML.send.miniForm);
+                    this.toggleMiniForm('send');
                     break;
                 case 'biw-buttonBarSwap':
                     console.log('buttonBarSwap');
                     break;
                 case 'biw-buttonBarStake':
                     console.log('buttonBarStake');
-                    this.toggleMiniForm(this.eHTML.stake.miniForm);
+                    this.toggleMiniForm('stake');
                     break;
                 case 'biw-buttonBarSpecial':
                     console.log('buttonBarSpecial');
@@ -320,9 +335,6 @@ class BoardInternalWallet {
                 case 'biw-accountImgWrap':
                     this.selectAccountLabel(target.parentElement);
                     break;
-                case 'biw-foldBtn':
-                    this.toggleMiniForm(target.parentElement);
-                    break;
             }
         });
 
@@ -332,24 +344,26 @@ class BoardInternalWallet {
             const senderAccount = this.wallet.accounts[this.activeAddressPrefix][activeAccountIndex];
             let amount;
             let receiverAddress;
+            let feePerByte = this.standardFeePerByte.fast;
         
             switch (e.target.className) {
                 case 'biw-sendBtn biw-holdBtn':
                     if (this.eHTML.send.amount.value === '') { this.textInfo(this.eHTML.send.textInfo, 'Amount is empty'); return; }
-                    if (this.eHTML.send.address.value === '') { this.textInfo(this.eHTML.send.textInfo, 'Address is empty'); return; }
+                    if (this.eHTML.send.toAddress.value === '') { this.textInfo(this.eHTML.send.textInfo, 'Address is empty'); return; }
                     if (this.animations.sendBtn) { this.animations.sendBtn.pause(); }
         
                     try { // Inform if address is invalid and avoid further processing
-                        window.addressUtils.conformityCheck(this.eHTML.send.address.value);
+                        window.addressUtils.conformityCheck(this.eHTML.send.toAddress.value);
                     } catch (error) { this.textInfo(this.eHTML.send.textInfo, error.message); return; }
         
                     this.animations.sendBtn = this.holdBtnMouseDownAnimation(e.target, async () => {
                         amount = parseInt(this.eHTML.send.amount.value.replace(",","").replace(".",""));
-                        receiverAddress = this.eHTML.send.address.value;
-                        const createdSignedTx = await window.Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress);
+                        receiverAddress = this.eHTML.send.toAddress.value;
+
+                        const createdSignedTx = await window.Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress, feePerByte);
                         if (!createdSignedTx.signedTx) {
                             console.error('Transaction creation failed', createdSignedTx.error);
-                            this.textInfo(this.eHTML.send.textInfo, createdSignedTx.error.message);
+                            this.textInfo(this.eHTML.send.textInfo, createdSignedTx.error.message.replace(' | ', '\n'), 7000, true);
                             return;
                         }
                         
@@ -366,13 +380,15 @@ class BoardInternalWallet {
                         console.log('stakeBtn');
                             amount = parseInt(this.eHTML.stake.amount.value.replace(",","").replace(".",""));
                             try {
-                                const validatorAddress = this.wallet.accounts['C'][0].address;
-                                const createdTx = await window.Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amount);
+                                const stakeOnAddress = this.eHTML.stake.toAddress.value;
+                                window.addressUtils.conformityCheck(stakeOnAddress);
+
+                                const createdTx = await window.Transaction_Builder.createStakingVss(senderAccount, stakeOnAddress, amount, feePerByte);
                                 const signedTx = await senderAccount.signTransaction(createdTx);
                                 console.log('transaction:', signedTx);
                                 this.fetcher.send({ type: 'broadcast_transaction', data: { transaction: signedTx, senderAddress: senderAccount.address } });
                             } catch (error) {
-                                this.textInfo(this.eHTML.stake.textInfo, error.message, 7000);
+                                this.textInfo(this.eHTML.stake.textInfo, error.message.replace(' | ', '\n'), 7000, true);
                             }
                             
                             this.animations.stakeBtn = null;
@@ -402,25 +418,41 @@ class BoardInternalWallet {
         document.addEventListener('input', async (event) => {
             if (event.target.classList.contains('biw-amountInput')) {
                 event.target.value = event.target.value.replace(/[^\d.]/g, '');
-                //const nbOfDecimals = event.target.value.split('.')[1] ? event.target.value.split('.')[1].length : 0;
-                //if (nbOfDecimals > 6) { event.target.value = parseFloat(event.target.value).toFixed(6); }
+            }
+            if (event.target === this.eHTML.send.toAddress
+            || event.target === this.eHTML.stake.toAddress) {
+                try {
+                    window.addressUtils.conformityCheck(event.target.value);
+                    event.target.classList.remove('invalid');
+                } catch (error) { event.target.classList.add('invalid'); }
             }
         });
         document.addEventListener('focusin', async (event) => {
             if (event.target.classList.contains('biw-amountInput')) event.target.value = '';
-            if (event.target.classList.contains('biw-stakingInput')) this.eHTML.stake.stakingFee.innerText = '0.000000c';
+            if (event.target.classList.contains('biw-stakingInput')) this.eHTML.stake.stakingFee.innerText = '0.000000';
         });
         document.addEventListener('focusout', async (event) => {
             if (event.target.classList.contains('biw-amountInput')) {
+                const foldName = event.target.parentElement.parentElement.dataset.foldname;
+
                 if (isNaN(parseFloat(event.target.value))) { event.target.value = ''; return; }
                 event.target.value = parseFloat(event.target.value).toFixed(6);
-        
+                
+                // update amount with currency format
                 const amountMicro = parseInt(event.target.value.replace('.',''));
                 const formatedValue = window.convert.formatNumberAsCurrency(amountMicro);
                 event.target.value = formatedValue;
-                if (!event.target.classList.contains('biw-stakingInput')) return;
-
-                this.eHTML.stake.stakingFee.innerText = `${formatedValue}c`;
+                
+                // update totalSpent
+                let totalSpentMicro = amountMicro;
+                totalSpentMicro += parseInt(this.eHTML[foldName].txFee.innerText.replace('.',''));
+                if (foldName === 'send') {
+                } else if (foldName === 'stake') {
+                    this.eHTML.stake.stakingFee.innerText = `${formatedValue}`;
+                    totalSpentMicro += amountMicro;
+                }
+                
+                this.eHTML[foldName].totalSpent.innerText = window.convert.formatNumberAsCurrency(totalSpentMicro);
             }
         });
         document.addEventListener('mouseover', (event) => {
@@ -442,7 +474,9 @@ class BoardInternalWallet {
         this.activeAddressPrefix = addressPrefix;
         this.#setAccountPrefixButtonActive(addressPrefix);
         this.updateAccountsLabels();
-        this.updateActiveAccountLabel();
+
+        const accountLabelToSelect = this.eHTML.accountsWrap.getElementsByClassName('biw-accountLabel')[this.activeAccountIndexByPrefix[addressPrefix] || 0];
+        this.selectAccountLabel(accountLabelToSelect);
         this.updateTotalBalances();
     }
     async refreshActiveAccounts() {
@@ -543,25 +577,17 @@ class BoardInternalWallet {
     
         return accountLabel;
     }
-    /** @param {HTMLInputElement} input */
+    /** @param {HTMLInputElement} accountLabel */
     selectAccountLabel(accountLabel) {
         const accountIndex = Array.from(accountLabel.parentElement.children).indexOf(accountLabel);
         this.activeAccountIndexByPrefix[this.activeAddressPrefix] = accountIndex;
-        this.updateActiveAccountLabel();
+        this.#updateActiveAccountLabel();
         this.#updateMiniFormsInfoRelatedToActiveAccount();
 
         const address = this.wallet.accounts[this.activeAddressPrefix][accountIndex].address;
         this.fetcher.send({ type: 'get_address_exhaustive_data', data: address });
     }
-    #updateMiniFormsInfoRelatedToActiveAccount() {
-        const activeAccount = this.wallet.accounts[this.activeAddressPrefix][this.activeAccountIndexByPrefix[this.activeAddressPrefix]];
-        this.eHTML.send.senderAddress.innerText = activeAccount.address;
-        this.eHTML.stake.senderAddress.innerText = activeAccount.address;
-
-        const validatorAddress = this.wallet.accounts['C'][0].address;
-        this.eHTML.stake.stakingAddress.innerText = validatorAddress;
-    }
-    updateActiveAccountLabel() {
+    #updateActiveAccountLabel() {
         const accountLabels = this.eHTML.accountsWrap.getElementsByClassName('biw-accountLabel');
         if (accountLabels.length === 0) { return; }
     
@@ -571,6 +597,15 @@ class BoardInternalWallet {
             if (i !== activeAccountIndex) { continue; }
             accountLabels[i].classList.add('active');
         }
+    }
+    #updateMiniFormsInfoRelatedToActiveAccount() {
+        const activeAccount = this.wallet.accounts[this.activeAddressPrefix][this.activeAccountIndexByPrefix[this.activeAddressPrefix]];
+        this.eHTML.send.senderAddress.innerText = activeAccount.address;
+        this.eHTML.stake.senderAddress.innerText = activeAccount.address;
+
+        if (this.eHTML.stake.toAddress.value !== '') return;
+        const validatorAddress = this.wallet.accounts['C'][0].address;
+        this.eHTML.stake.toAddress.value = validatorAddress;
     }
     updateAccountsLabels() {
         /** @type {Account[]} */
@@ -658,7 +693,7 @@ class BoardInternalWallet {
             walletTotalStakedBalance += totalStakedBalance;
         }
     
-        this.eHTML.spendableBalanceStr.innerText = window.convert.formatNumberAsCurrency(walletTotalBalance);
+        this.eHTML.spendableBalanceStr.innerText = window.convert.formatNumberAsCurrency(walletTotalSpendableBalance);
         this.eHTML.stakedStr.innerText = window.convert.formatNumberAsCurrency(walletTotalStakedBalance);
     
         //console.log(`[POPUP] totalBalances updated: ${walletTotalBalance}c, from ${this.wallet.accounts[this.activeAddressPrefix].length} accounts`);
@@ -737,40 +772,31 @@ class BoardInternalWallet {
 
         return { balance, spendableBalance, stakedBalance, spendableUTXOs };
     }
-    /** @param {HTMLElement} miniFormElmnt */
-    toggleMiniForm(miniFormElmnt) {
+    /** @param {string | boolean} foldName - false to close all */
+    #setButtonBarActiveButton(foldName = "send") {
+        const buttons = this.eHTML.buttonBar.element.getElementsByTagName('button');
+        for (const button of buttons) button.classList.remove('active');
+
+        if (!foldName) { return; }
+
+        this.eHTML.buttonBar[foldName].classList.add('active');
+    }
+    /** @param {HTMLElement} foldName */
+    toggleMiniForm(foldName = "send") {
         this.#updateMiniFormsInfoRelatedToActiveAccount();
-        const isFold = miniFormElmnt.classList.contains('biw-miniFold');
-        if (this.animations[miniFormElmnt.id]) { this.animations[miniFormElmnt.id].pause(); }
-    
-        // fold : transform: rotateY(60deg) translateX(-160%);
-        miniFormElmnt.style.opacity = isFold ? '0' : '1';
-        miniFormElmnt.style.filter = isFold ? 'blur(10px)' : 'blur(0px)';
-        miniFormElmnt.style.transform = isFold ? 'rotateY(60deg) translateX(-160%)' : 'rotateY(0deg) translateX(0%)';
-        if (isFold) {
-            this.activeMiniFold = miniFormElmnt.dataset.foldname;
-            this.animations[miniFormElmnt.id] = anime({
-                targets: miniFormElmnt,
-                translateX: '0%',
-                rotateY: '0deg',
-                opacity: 1,
-                filter: 'blur(0px)',
-                duration: 260,
-                easing: 'easeInOutQuad',
-                complete: () => { miniFormElmnt.classList.remove('biw-miniFold'); }
-            });
+
+        this.eHTML.send.miniForm.classList.remove('active');
+        this.eHTML.stake.miniForm.classList.remove('active');
+
+        if (this.activeMiniForm === foldName) {
+            this.#setButtonBarActiveButton(false);
+            this.activeMiniForm = null;
+            this.eHTML.container.classList.remove('expand');
         } else {
-            this.activeMiniFold = null;
-            this.animations[miniFormElmnt.id] = anime({
-                targets: miniFormElmnt,
-                translateX: '-160%',
-                rotateY: '60deg',
-                opacity: 0,
-                filter: 'blur(10px)',
-                duration: 260,
-                easing: 'easeInOutQuad',
-                complete: () => { miniFormElmnt.classList.add('biw-miniFold'); }
-            });
+            this.#setButtonBarActiveButton(foldName);
+            this.activeMiniForm = foldName;
+            this.eHTML[foldName].miniForm.classList.add('active');
+            this.eHTML.container.classList.add('expand');
         }
     }
 }

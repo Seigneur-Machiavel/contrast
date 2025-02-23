@@ -90,12 +90,17 @@ class Assistant {
     }
 
     requestNewPassword(failureMsg = false) {
-        if (failureMsg === false) this.sendMessage('Welcome to Contrast, setup process take a few minutes...');
+        if (failureMsg === false) {
+            this.sendMessage('Welcome to Contrast app, this open-source software is still in the experimental stage, and no one can be held responsible in case of difficulty or bugs.');
+            setTimeout(() => this.sendMessage('Join the community on Discord to discuss the project, get help, and make suggestions, which helps improve Contrast: https://discord.gg/4RzGEgUE7R.'), 2000);
+            setTimeout(() => this.sendMessage('Setup process take a few minutes...'), 4000);
+        }
+
         setTimeout(() => {
             this.onResponse = this.#verifyNewPassword;
             this.sendMessage(`(1) ${failureMsg || 'Please enter a new password or press enter to skip (less secure)'}:`);
             this.#setActiveInput('password', 'Your new password...', true);
-        }, failureMsg ? 0 : 600);
+        }, failureMsg ? 0 : 5000);
     }
     #verifyNewPassword(password = 'toto') {
         if (password === '') {

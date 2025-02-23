@@ -105,7 +105,7 @@ window.addEventListener('click', (e) => {
 window.addEventListener('mouseover', (e) => { appsManager.hoverAppButtonsHandler(e); });
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
 document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
-document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); });
+document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); appsManager.moveResizeHandler(e); });
 document.addEventListener('mouseup', (e) => { appsManager.releaseWindowHandler(e); });
 document.addEventListener('change', (event) => {
 	switch(event.target.id) {

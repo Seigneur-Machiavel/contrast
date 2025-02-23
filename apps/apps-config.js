@@ -2,6 +2,7 @@
  * @typedef {Object} AppConfig
  * @property {string} [preload] - default false
  * @property {boolean} disableOnLock - default true
+ * @property {boolean} [autoSized] - default false
  * @property {number} [minWidth]
  * @property {number} [minHeight]
  * @property {number} [maxWidth]
@@ -27,6 +28,7 @@ const AppConfig = (appName, appConfig) => {
 	return {
 		preload: appConfig.preload || false,
 		disableOnLock: appConfig.disableOnLock === false ? false : true,
+		autoSized: appConfig.autoSized || false,
 		minWidth: appConfig.minWidth || undefined,
 		minHeight: appConfig.minHeight || undefined,
 		maxWidth: appConfig.maxWidth || undefined,
@@ -63,10 +65,11 @@ const appsConfig = {
 	wallet: {
 		preload: true,
 		disableOnLock: true,
-		minWidth: 322,
+		autoSized: true,
+		/*minWidth: 322,
 		minHeight: 472,
 		maxWidth: 322,
-		maxHeight: 472,
+		maxHeight: 472,*/
 		canFullScreen: false,
 		title: '- )( - WALLET ___\\',
 		url_or_file: '../../apps/wallet/biw-content.html',
@@ -93,7 +96,7 @@ const appsConfig = {
 		disableOnLock: true,
 		minWidth: 420,
 		minHeight: 300,
-		initHeight: 572,
+		initHeight: 540,
 		initTop: 0,
 		iconWidth: '69%',
 		title: '~~ DASHBOARD ___\\',
