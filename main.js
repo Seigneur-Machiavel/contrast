@@ -117,8 +117,9 @@ ipcMain.on('set-password', async (event, password) => {
 ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());
 ipcMain.on('set-private-key-and-start-node', (event, privateKey) => dashboardWorker.setPrivateKeyAndStartNode(privateKey));
 ipcMain.on('extract-private-key', async (event, password) => {
-    const extracted = await dashboardWorker.extractPrivateKeyAndWaitResult(password);
-    event.reply('assistant-message', extracted);
+    const extracted = await dashboardWorker.extractPrivateKeyAndWaitResult(password === '' ? 'fingerPrint' : password);
+    event.reply('assistant-message', 'Your private key will be show in 5s, do not reveal it to anyone!');
+    setTimeout(() => event.reply('assistant-message', extracted), 5000);
 });
 ipcMain.on('set-auto-launch', async (event, value) => {
     const isEnabled = await myAppAutoLauncher.isEnabled();
