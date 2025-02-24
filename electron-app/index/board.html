@@ -2,7 +2,8 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="
+    <meta http-equiv="Content-Security-Policy"
+    content="
         default-src 'self';
         style-src 'self' 'unsafe-inline';
         frame-src http://localhost:27270 http://localhost:27271;
@@ -39,8 +40,13 @@
     </label>
 
     <div id="board-windows-wrap"></div>
-    <button id="board-info-panel-button"><img src="../img/info64.png"></button>
-    <div id="board-info-panel"></div>
+    <button id="board-info-panel-button" data-infokey="infoButton"><img src="../img/info64.png"></button>
+    <div id="board-info-panel">
+        <h3>Info panel</h3>
+        <p>This is the info panel. It will display information about the element under the cursor.</p>
+        <p>Using this component we hope to provide a more interactive experience, and clarify some of the complexitites</p>
+        <p>Participate in the development of this project on by asking questions, they can evolve into new info in this panel.</p>
+    </div>
     <div id="board-bottom-buttons-bar"></div>
 </body>
 </html>

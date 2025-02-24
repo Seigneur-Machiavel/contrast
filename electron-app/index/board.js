@@ -8,7 +8,8 @@ const { FrontStorage } = require('../../utils/front-storage.js');
 const boardStorage = new FrontStorage('board');
 (() => { // loadUserPreferences
 	const darkModeState = boardStorage.load('darkModeState');
-	if (darkModeState !== null) document.body.classList.add('dark-mode');
+	if (darkModeState === true) document.body.classList.add('dark-mode');
+	if (darkModeState === false) document.body.classList.remove('dark-mode');
 })();
 
 const path = require('path');

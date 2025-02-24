@@ -1416,6 +1416,8 @@ document.addEventListener('keyup', (event) => {
 });
 // event hover
 document.addEventListener('mouseover', (event) => {
+    if (event.target.dataset.infokey) window.parent.postMessage({ eventType: 'mouseHover', infokey: event.target.dataset.infokey }, '*');
+
     /** @type {BlockExplorerWidget} */
     const blockExplorerWidget = window.blockExplorerWidget;
     if (!blockExplorerWidget) { return; }
