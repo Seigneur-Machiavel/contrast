@@ -4,6 +4,13 @@ if (false) { // For better completion
 	//const { Assistant } = require('../../apps/assistant/board-assistant.mjs');
 }
 
+const { FrontStorage } = require('../../utils/front-storage.js');
+const boardStorage = new FrontStorage('board');
+(() => { // loadUserPreferences
+	const darkModeState = boardStorage.load('darkModeState');
+	if (darkModeState !== null) document.body.classList.add('dark-mode');
+})();
+
 const path = require('path');
 window.path = path;
 const fs = require('fs');
@@ -11,17 +18,13 @@ window.fs = fs;
 const url = require('url');
 window.url = url;
 
-const { BrowserWindow, ipcRenderer } = require('electron');
+const { ipcRenderer } = require('electron');
 window.ipcRenderer = ipcRenderer;
 
+const { InfoManager } = require('./info-manager.js');
 const { AppsManager } = require('./apps-manager.js');
 const { Assistant } = require('../../apps/assistant/board-assistant.js');
 const { BoardInternalWallet } = require('../../apps/wallet/biw.js');
-
-/*let BoardInternalWallet;
-import("../../apps/wallet/biw.mjs").then((module) => {
-    BoardInternalWallet = module.BoardInternalWallet;
-}).catch(err => console.error(err));*/
 
 /** @type {Assistant} */
 let assistant;
@@ -82,6 +85,7 @@ ipcRenderer.on('window-to-front', (event, ...args) => appsManager.setFrontWindow
 
 const windowsWrap = document.getElementById('board-windows-wrap');
 const bottomButtonsBar = document.getElementById('board-bottom-buttons-bar');
+const infoManager = new InfoManager();
 const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
 appsManager.initApps();
 window.appsManager = appsManager;
@@ -98,6 +102,7 @@ function clickTitleBarButtonsHandler(e) {
 	}
 }
 window.addEventListener('click', (e) => {
+	infoManager.clickInfoButtonHandler(e);
 	clickTitleBarButtonsHandler(e);
 	appsManager.clickAppButtonsHandler(e);
 	appsManager.clickWindowHandler(e);
@@ -115,10 +120,13 @@ document.addEventListener('change', (event) => {
 			for (const app in appsManager.windows) {
 				const iframe = appsManager.windows[app].contentElement.querySelector('iframe');
 				if (!iframe) continue;
-
+				
 				iframe.contentWindow.postMessage({ type: 'darkMode', value: darkModeState }, appsManager.windows[app].origin);
-				console.log('darkMode msg sent:', darkModeState);
+				//console.log('darkMode msg sent:', darkModeState);
 			}
+			
+			//if (!window.modulesLoaded) break;
+			boardStorage.save('darkModeState', darkModeState);
 			break;
 	}
 });
@@ -128,6 +136,7 @@ window.addEventListener('resize', function() {
 		appsManager.windows[app].element.style.maxHeight = Math.min(appsManager.windows[app].element.style.maxHeight, window.innerHeight) + 'px';
 	}
 });
+
 window.addEventListener('message', function(e) {
 	if (e.data.type && e.data.type === 'iframeClick') {
 		for (const app in appsManager.windows) {

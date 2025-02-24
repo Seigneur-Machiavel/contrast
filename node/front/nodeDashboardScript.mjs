@@ -222,7 +222,7 @@ function displayNodeInfo(data) {
     eHTML.minerAddress.textContent = data.minerAddress ? data.minerAddress : '';
     eHTML.minerBalance.textContent = convert.formatNumberAsCurrency(minerBalance);
     eHTML.minerHeight.textContent = data.bestCandidateIndex || 0;
-    eHTML.minerLegitimacy.textContent = data.bestCandidateLegitimacy || 0;
+    eHTML.minerLegitimacy.textContent = `Legitimacy: ${data.bestCandidateLegitimacy || 0}`;
     eHTML.hashRate.textContent = data.minerHashRate ? data.minerHashRate.toFixed(2) : 0;
     eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 0;
     updateMinerThreadsDisabledButtons();

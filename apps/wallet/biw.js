@@ -73,7 +73,65 @@ class WalletDataFetcher {
     }
 }
 
+class InstructionsReader {
+    validChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    constructor() {}
+
+    #isSafe(str = '') {
+        if (typeof str !== 'string') return false;
+        str = str.trim();
+        for (let i = 0; i < str.length; i++) {
+            if (!this.validChars.includes(str[i])) { return false; }
+        }
+
+        return true;
+    }
+    #parseIntIfSafe(value) {
+        if (typeof value !== 'string') return false;
+        if (value.length > 14) return false;
+        for (let i = 0; i < value.length; i++) {
+            if (!'0123456789'.includes(value[i])) return false;
+        }
+
+        return parseInt(value);
+    }
+    /** @param {string} instructionsStr */
+    read(instructionsStr) {
+        if (!this.#isSafe()) { return 'Invalid instructions'; }
+
+        try {
+            const instructions = instructionsStr.split(' ');
+            const action = instructions[0].toUpperCase();
+            let amount;
+            let inscription;
+            let address;
+            switch (action) {
+                case 'SEND':
+                case 'STAKE':
+                    amount = this.#parseIntIfSafe(instructions[1]);
+                    if (!amount) { return `Invalid amount: ${instructions[1]}`; }
+                    break;
+                case 'INSCRIBE':
+                    inscription = instructions[1];
+                    break;
+                default:
+                    return `Invalid action: ${action}`;
+            }
+            
+            if (instructions[2] && instructions[2].toUpperCase() === 'TO') {
+                try {
+                    window.addressUtils.conformityCheck(instructions[3]);
+                    address = instructions[3];
+                } catch (error) { return `Invalid address: ${instructions[3]}`; }
+            }
+    
+            return { action, amount, inscription, address };
+        } catch (error) { return 'Invalid instructions'; }
+    }
+}
+
 class BoardInternalWallet {
+    instructionsReader = new InstructionsReader();
     /** @type {Wallet} */
     wallet;
     /** @type {WalletDataFetcher} */
@@ -101,7 +159,11 @@ class BoardInternalWallet {
         sendBtn: document.getElementById('biw-sendBtn'),
         swapBtn: document.getElementById('biw-swapBtn'),
         stakeBtn: document.getElementById('biw-stakeBtn'),
-        specialBtn: document.getElementById('biw-specialBtn'),
+        
+        specialBtn: document.getElementById('biw-buttonBarSpecial'),
+        specialMenu: document.getElementById('biw-specialMenu'),
+        instructionsBtn: document.getElementById('biw-buttonBarInstructions'),
+        claimBtn: document.getElementById('biw-buttonBarSpecialClaim'),
 
         send: {
             miniForm: document.getElementById('biw-spendMiniForm'),
@@ -126,6 +188,13 @@ class BoardInternalWallet {
             totalSpent: document.getElementById('biw-stakeMiniForm').getElementsByClassName('biw-totalSpent')[0],
             confirmBtn: document.getElementById('biw-stakeMiniForm').getElementsByTagName('button')[1]
         },
+        instructions: {
+            miniForm: document.getElementById('biw-instructionsMiniForm'),
+            foldBtn: document.getElementById('biw-instructionsMiniForm').getElementsByTagName('button')[0],
+            textInfo: document.getElementById('biw-instructionsMiniForm').getElementsByClassName('biw-textInfo')[0],
+            input: document.getElementById('biw-instructionsMiniForm').getElementsByTagName('input')[0],
+            confirmBtn: document.getElementById('biw-instructionsMiniForm').getElementsByTagName('button')[0]
+        },
 
         buttonRefresh: document.getElementById('biw-buttonRefresh'),
         addressTypeList: document.getElementById('biw-addressTypeList'),
@@ -138,6 +207,8 @@ class BoardInternalWallet {
     standardFeePerByte = { "fast": 12, "average": 5, "slow": 2 };
     activeMiniForm = null;
     currentTextInfo = '';
+    textInfoTimeout1 = null;
+    textInfoTimeout2 = null;
     ready = false;
 
 	constructor(privateKey) {
@@ -324,7 +395,15 @@ class BoardInternalWallet {
                     this.toggleMiniForm('stake');
                     break;
                 case 'biw-buttonBarSpecial':
-                    console.log('buttonBarSpecial');
+                    this.toggleMiniForm('special');
+                    e.preventDefault();
+                    break;
+                case 'biw-buttonBarInstructions':
+                    console.log('buttonBarInstructions');
+                    this.toggleMiniForm('instructions');
+                    break;
+                case 'biw-buttonBarSpecialClaim':
+                    console.log('buttonBarSpecialClaim');
                     break;
             }
 
@@ -334,6 +413,9 @@ class BoardInternalWallet {
                     break;
                 case 'biw-accountImgWrap':
                     this.selectAccountLabel(target.parentElement);
+                    break;
+                case 'biw-followInstructionsBtn':
+                    this.#followInstructionsFromInput();
                     break;
             }
         });
@@ -355,7 +437,8 @@ class BoardInternalWallet {
                     try { // Inform if address is invalid and avoid further processing
                         window.addressUtils.conformityCheck(this.eHTML.send.toAddress.value);
                     } catch (error) { this.textInfo(this.eHTML.send.textInfo, error.message); return; }
-        
+                    
+                    this.refreshActiveAccounts();
                     this.animations.sendBtn = this.holdBtnMouseDownAnimation(e.target, async () => {
                         amount = parseInt(this.eHTML.send.amount.value.replace(",","").replace(".",""));
                         receiverAddress = this.eHTML.send.toAddress.value;
@@ -376,6 +459,7 @@ class BoardInternalWallet {
                     if (this.eHTML.stake.amount.value === '') { this.textInfo(this.eHTML.stake.textInfo, 'Amount is empty'); return; }
                     if (this.animations.stakeBtn) { this.animations.stakeBtn.pause(); this.animations.sendBtn = null; }
                     
+                    this.refreshActiveAccounts();
                     this.animations.stakeBtn = this.holdBtnMouseDownAnimation(e.target, async () => {
                         console.log('stakeBtn');
                             amount = parseInt(this.eHTML.stake.amount.value.replace(",","").replace(".",""));
@@ -427,40 +511,110 @@ class BoardInternalWallet {
                 } catch (error) { event.target.classList.add('invalid'); }
             }
         });
+        document.addEventListener('keydown', (event) => {
+            const target = event.target;
+            if (event.key === 'Enter') {
+                switch (target) {
+                    case this.eHTML.instructions.input:
+                        event.preventDefault();
+                        this.#followInstructionsFromInput();
+                        break;
+                }
+            }
+        });
+        document.addEventListener('paste', (event) => {
+            const target = event.target;
+            if (target === this.eHTML.instructions.input) {
+                setTimeout(() => this.#followInstructionsFromInput(), 10);
+            }
+        });
         document.addEventListener('focusin', async (event) => {
             if (event.target.classList.contains('biw-amountInput')) event.target.value = '';
             if (event.target.classList.contains('biw-stakingInput')) this.eHTML.stake.stakingFee.innerText = '0.000000';
         });
         document.addEventListener('focusout', async (event) => {
-            if (event.target.classList.contains('biw-amountInput')) {
-                const foldName = event.target.parentElement.parentElement.dataset.foldname;
-
-                if (isNaN(parseFloat(event.target.value))) { event.target.value = ''; return; }
-                event.target.value = parseFloat(event.target.value).toFixed(6);
-                
-                // update amount with currency format
-                const amountMicro = parseInt(event.target.value.replace('.',''));
-                const formatedValue = window.convert.formatNumberAsCurrency(amountMicro);
-                event.target.value = formatedValue;
-                
-                // update totalSpent
-                let totalSpentMicro = amountMicro;
-                totalSpentMicro += parseInt(this.eHTML[foldName].txFee.innerText.replace('.',''));
-                if (foldName === 'send') {
-                } else if (foldName === 'stake') {
-                    this.eHTML.stake.stakingFee.innerText = `${formatedValue}`;
-                    totalSpentMicro += amountMicro;
-                }
-                
-                this.eHTML[foldName].totalSpent.innerText = window.convert.formatNumberAsCurrency(totalSpentMicro);
-            }
+            const target = event.target;
+            if (target.classList.contains('biw-amountInput')) this.#updateAmountAndFeesRelatedToInput(target);
         });
         document.addEventListener('mouseover', (event) => {
-            const parent = event.target.parentElement;
-            if (event.target === this.eHTML.addressTypeList || parent === this.eHTML.addressTypeList) {
+            const target = event.target;
+            const parent = target.parentElement;
+            if (target.id === 'biw-addressTypeList' || parent.id === 'biw-addressTypeList') {
                 this.eHTML.addressTypeList.classList.add('expand');
             } else { this.eHTML.addressTypeList.classList.remove('expand'); }
+
+            switch (target.id) {
+                case 'biw-buttonBarSpecial':
+                    this.eHTML.specialMenu.classList.add('open');
+                    this.eHTML.specialBtn.classList.add('open');
+                    break;
+                case 'specialMenu':
+                    break;
+                case 'biw-buttonBarInstructions':
+                    break;
+                case 'biw-buttonBarSpecialClaim':
+                    break;
+                default:
+                    this.eHTML.specialMenu.classList.remove('open');
+                    this.eHTML.specialBtn.classList.remove('open');
+                    break;
+            }
         });
+    }
+    #updateAmountAndFeesRelatedToInput(target) {
+        const foldName = target.parentElement.parentElement.dataset.foldname;
+
+        if (isNaN(parseFloat(target.value))) { target.value = ''; return; }
+        target.value = parseFloat(target.value).toFixed(6);
+        
+        // update amount with currency format
+        const amountMicro = parseInt(target.value.replace('.',''));
+        const formatedValue = window.convert.formatNumberAsCurrency(amountMicro);
+        target.value = formatedValue;
+        
+        // update totalSpent
+        let totalSpentMicro = amountMicro;
+        totalSpentMicro += parseInt(this.eHTML[foldName].txFee.innerText.replace('.',''));
+        if (foldName === 'send') {
+        } else if (foldName === 'stake') {
+            this.eHTML.stake.stakingFee.innerText = `${formatedValue}`;
+            totalSpentMicro += amountMicro;
+        }
+        
+        this.eHTML[foldName].totalSpent.innerText = window.convert.formatNumberAsCurrency(totalSpentMicro);
+    }
+    #followInstructionsFromInput() {
+        const instructions = this.instructionsReader.read(this.eHTML.instructions.input.value);
+        this.eHTML.instructions.input.value = '';
+
+        if (typeof instructions === 'string') {
+            this.textInfo(this.eHTML.instructions.textInfo, instructions, 7000, true);
+            return;
+        }
+
+        switch (instructions.action) {
+            case 'SEND':
+                if (!instructions.address) { this.textInfo(this.eHTML.instructions.textInfo, 'No address provided'); return; }
+                if (!instructions.amount) { this.textInfo(this.eHTML.instructions.textInfo, 'No amount provided'); return; }
+                this.eHTML.send.toAddress.value = instructions.address;
+                this.eHTML.send.amount.value = instructions.amount;
+                this.toggleMiniForm('send');
+                this.#updateAmountAndFeesRelatedToInput(this.eHTML.send.amount);
+                this.textInfo(this.eHTML.send.textInfo, 'Read carefully the instructions result!', 3000, true);
+                break;
+            case 'STAKE':
+                if (!instructions.address) { this.textInfo(this.eHTML.instructions.textInfo, 'No address provided'); return; }
+                if (!instructions.amount) { this.textInfo(this.eHTML.instructions.textInfo, 'No amount provided'); return; }
+                this.eHTML.stake.toAddress.value = instructions.address;
+                this.eHTML.stake.amount.value = instructions.amount;
+                this.toggleMiniForm('stake');
+                this.#updateAmountAndFeesRelatedToInput(this.eHTML.stake.amount);
+                this.textInfo(this.eHTML.stake.textInfo, 'Read carefully the instructions result!', 3000, true);
+                break;
+            case 'INSCRIBE':
+                console.log('INSCRIBE');
+                break;
+        }
     }
     #setAccountPrefixButtonActive(prefix = "C") {
         const buttons = this.eHTML.addressTypeList.getElementsByTagName('button');
@@ -524,18 +678,22 @@ class BoardInternalWallet {
             }
         });
     }
-    textInfo(infoElmnt, text, timeout = 3000, eraseAnyCurrentTextInfo = false) {
+    textInfo(infoElmnt, text, timeout = 3000, eraseAnyCurrentTextInfo = false, important = false) {
         if (!eraseAnyCurrentTextInfo && this.currentTextInfo) { return; }
 
         this.currentTextInfo = text;
         infoElmnt.innerText = text;
         infoElmnt.style.opacity = '1';
+        if (important) { infoElmnt.classList.add('important'); }
 
-        setTimeout(() => {
+        if (this.textInfoTimeout1) { clearTimeout(this.textInfoTimeout1); }
+        if (this.textInfoTimeout2) { clearTimeout(this.textInfoTimeout2); }
+        this.textInfoTimeout1 = setTimeout(() => {
             this.currentTextInfo = null;
             infoElmnt.style.opacity = '0';
-            setTimeout(() => { infoElmnt.innerText = ""; }, 200);
+            infoElmnt.classList.remove('important');
         }, timeout);
+        this.textInfoTimeout2 = setTimeout(() => { infoElmnt.innerText = ""; }, timeout + 200);
     }  
     #createAccountLabel(name, address, amount = 0) {
         const accountLabel = document.createElement('div');
@@ -777,9 +935,13 @@ class BoardInternalWallet {
         const buttons = this.eHTML.buttonBar.element.getElementsByTagName('button');
         for (const button of buttons) button.classList.remove('active');
 
-        if (!foldName) { return; }
+        if (!foldName) return;
 
-        this.eHTML.buttonBar[foldName].classList.add('active');
+        let targetBtnName = foldName;
+        if (targetBtnName === 'instructions') targetBtnName = 'special';
+        if (targetBtnName === 'claim') targetBtnName = 'special';
+
+        this.eHTML.buttonBar[targetBtnName].classList.add('active');
     }
     /** @param {HTMLElement} foldName */
     toggleMiniForm(foldName = "send") {
@@ -787,6 +949,15 @@ class BoardInternalWallet {
 
         this.eHTML.send.miniForm.classList.remove('active');
         this.eHTML.stake.miniForm.classList.remove('active');
+        this.eHTML.instructions.miniForm.classList.remove('active');
+
+        if (foldName === 'special') {
+            if (!this.activeMiniForm) return;
+            this.#setButtonBarActiveButton(false);
+            this.activeMiniForm = null;
+            this.eHTML.container.classList.remove('expand');
+            return;
+        }
 
         if (this.activeMiniForm === foldName) {
             this.#setButtonBarActiveButton(false);

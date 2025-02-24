@@ -97,7 +97,8 @@ export const PATH = {
     BLOCKS_INFO: path.join(basePath.storagePath, 'blocks-info'),
     SNAPSHOTS: path.join(basePath.storagePath, 'snapshots'),
     CHECKPOINTS: path.join(basePath.storagePath, 'checkpoints'),
-    TEST_STORAGE: path.join(basePath.storagePath, 'test')
+    TEST_STORAGE: path.join(basePath.storagePath, 'test'),
+    //APPS_STORAGE: path.join(basePath.storagePath, 'apps'),
 }
 if (isProductionEnv) { delete PATH.TEST_STORAGE; delete PATH.JSON_BLOCKS; }
 // create the storage folder if it doesn't exist, and any other subfolder

@@ -123,6 +123,7 @@ body {
 }
 
 #board-windows-wrap {
+    user-select: none;
     position: relative;
     overflow: hidden;
     height: calc(100vh - 30px - 1px);
@@ -133,6 +134,47 @@ body {
     border-top-left-radius: 10px;
     /*box-shadow: 0px 0px 10px -8px black;*/
 }
+#board-info-panel-button {
+    position: absolute;
+    top: 30.8px;
+    left: 12px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 25%;
+    background: var(--color1);
+    box-shadow: inset 0 0 0 2px var(--color1);
+    transition: transform .12s ease, box-shadow .12s ease;
+}
+#board-info-panel-button:hover {
+    box-shadow: inset 0 0 0 2px var(--color3);
+}
+#board-info-panel-button.active {
+    box-shadow: inset 0 0 0 2px var(--color2);
+}
+#board-info-panel-button img {
+    pointer-events: none;
+    width: 100%;
+    transform: scale(.6);
+    filter: invert(var(--dark-mode-boolean));
+}
+#board-info-panel {
+    position: fixed;
+    z-index: 1;
+    bottom: 0;
+    right: 0;
+    background: var(--color1_1);
+    border-left: solid 1px var(--color1_3);
+    box-shadow: 100px 0 0 0 var(--color1_1);
+    height: calc(100vh - 30px - 1px);
+    width: 300px;
+    transform: translateX(100%);
+    transition: transform .3s cubic-bezier(0.68, -0.35, 0.27, 1.25);
+}
+#board-info-panel.active {
+    transform: translateX(0%);
+}
+
 #board-bottom-buttons-bar {
     pointer-events: none;
     position: fixed;
@@ -142,7 +184,7 @@ body {
     justify-content: flex-start;
     bottom: 0;
     width: var(--buttons-bar-width);
-    height: calc(100% - 64px - 1px);
+    height: calc(100% - 80px);
     background-color: var(--color1_1);
     box-shadow: 0px -11px 0px -10px var(--color1_2);
     /*border-right: solid 1px var(--color1_3);*/
@@ -226,7 +268,7 @@ body {
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 23px;
+    width: 22px;
     background: var(--color1_1);
     color: var(--color1_3);
     transform: rotate(45deg);

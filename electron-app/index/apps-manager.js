@@ -483,6 +483,11 @@ class AppsManager {
 		const newHeight = Math.min(maxHeight, Math.max(minHeight, subWindow.resizeStart.height + cursorVerticalDiff));
 		subWindow.element.style.width = newWidth + 'px';
 		subWindow.element.style.height = newHeight + 'px';
+
+		subWindow.resizeStart.x = e.clientX;
+		subWindow.resizeStart.y = e.clientY;
+		subWindow.resizeStart.width = newWidth;
+		subWindow.resizeStart.height = newHeight;
 	}
 	releaseWindowHandler(e) {
 		if (this.resizingWindow) {

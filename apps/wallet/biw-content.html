@@ -2,7 +2,7 @@
 
 <div id="biw-container" class="biw-container">
     <div class="biw-miniFormsWrap">
-        <div id="biw-spendMiniForm" data-foldName="send">
+        <div id="biw-spendMiniForm" class="biw-miniForm" data-foldName="send">
             <div class="biw-flexWrap">
                 <div class="biw-spaced">
                     <h3>Sender</h3>
@@ -14,7 +14,7 @@
 
                 <div class="biw-spaced thinBottomBorder" style="margin-top: 40px !important;">
                     <h3>Transaction fee:</h3>
-                    <h3>~<span class="biw-txFee">0.001000</span>c</h3>
+                    <h3>~<span class="biw-txFee">0.002000</span>c</h3>
                 </div>
                 <div class="biw-spaced thinBottomBorder">
                     <h3>Total spent:</h3>
@@ -25,7 +25,7 @@
             <p class="biw-textInfo"></p>
             <button class="biw-sendBtn biw-holdBtn"><div>Send</div></button>
         </div>
-        <div id="biw-stakeMiniForm" data-foldName="stake">
+        <div id="biw-stakeMiniForm" class="biw-miniForm" data-foldName="stake">
             <div class="biw-flexWrap">
                 <div class="biw-spaced">
                     <h3>Sender</h3>
@@ -57,6 +57,15 @@
             <p class="biw-textInfo"></p>
             <button class="biw-stakeBtn biw-holdBtn"><div>Stake</div></button>
         </div>
+        <div id="biw-instructionsMiniForm" class="biw-miniForm" data-foldName="instructions">
+            <div class="biw-flexWrap">
+                <h3>Write/paste instructions here</h3>
+                <input type="text" class="biw-instructionsInput"></input>
+            </div>
+
+            <p class="biw-textInfo"></p>
+            <button class="biw-followInstructionsBtn">Follow Instructions</button>
+        </div>
     </div>
 
     <div id="biw-mainForm">
@@ -74,7 +83,11 @@
             <button id="biw-buttonBarSend"><img src="../../apps/wallet/img/send32.png" alt="Send">Send</button>
             <button id="biw-buttonBarStake"><img src="../../apps/wallet/img/stake64.png" alt="Stake">Stake</button>
             <button id="biw-buttonBarSwap" class="disabled"><img src="../../apps/wallet/img/swap32.png" alt="Swap">Swap</button>
-            <button id="biw-buttonBarSpecial" class="disabled"><img src="../../apps/wallet/img/specialtx64.png" alt="Swap">Special</button>
+            <button id="biw-buttonBarSpecial"><img src="../../apps/wallet/img/category64.png" alt="Special">Special</button>
+            <div id="biw-specialMenu">
+                <button id="biw-buttonBarInstructions">Instructions<img src="../../apps/wallet/img/instructions64.png" alt="Instructions"></button>
+                <button id="biw-buttonBarSpecialClaim" class="disabled">Claim<img src="../../apps/wallet/img/claim64.png" alt="Claim"></button>
+            </div>
         </div>
         <div class="wrap">
             <div id="biw-accountsWrap-box"></div>

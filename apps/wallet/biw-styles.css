@@ -92,7 +92,31 @@
     background: var(--color1);
     animation: textColorBlink 1s infinite;
 }
+.biw-textInfo.important {
+    color: orange !important;
+    
+    animation: importantTextBlink 1s infinite;
+}
+@keyframes importantTextBlink {
+    0% {
+        transform: scale(1);
+        color: orange;
+    }
+    10% {
+        transform: scale(1.4);
+        color: red;
+    }
+    40% {
+        transform: scale(1.2);
+        color: orange;
+    }
+    100% {
+        transform: scale(1);
+        color: orange;
+    }
+}
 .biw-buttonBar {
+    position: relative;
     display: flex;
     justify-content: space-between;
     width: 84%;
@@ -112,7 +136,7 @@
     font-size: small;
     border-style: none;
     cursor: pointer;
-    transition: background .06s ease-in-out, color .06s .06s;
+    transition: background .06s ease-in-out, color .06s .06s, border-radius .06s ease-in-out;
     padding: 0;
     font-weight: bold;
 
@@ -125,9 +149,9 @@
     color: var(--color2);
 }
 .biw-buttonBar button.active {
-    box-shadow: inset 0px 0px 0px 3px var(--color2);
-    background: var(--color1);
-    color: var(--color2);
+    box-shadow: inset 0px 0px 0px 3px var(--color2) !important;
+    background: var(--color1) !important;
+    color: var(--color2) !important;
 }
 .biw-buttonBar button.disabled {
     opacity: .6;
@@ -146,7 +170,61 @@
     transition: filter .06s .06s ease-in-out;
 }
 
-#biw-spendMiniForm, #biw-stakeMiniForm {
+#biw-buttonBarSpecial:hover, #biw-buttonBarSpecial.open {
+    box-shadow: none;
+    background: var(--color2);
+    color: var(--color1);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+#biw-buttonBarSpecial:not(.active):hover img, #biw-buttonBarSpecial:not(.active).open img {
+    filter: invert(var(--dark-mode-boolean));
+    /*transition: none;*/
+}
+#biw-specialMenu {
+    pointer-events: none;
+    z-index: 2;
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    right: 0;
+    top: calc(100% - 10px);
+    background: var(--color2);
+    color: var(--color1);
+    opacity: 0;
+    transition: opacity .06s ease-in-out;
+    border-radius: 10px 0 10px 10px;
+}
+#biw-specialMenu.open {
+    pointer-events: all;
+    opacity: 1;
+    transition: opacity .06s .06s ease-in-out;
+}
+#biw-specialMenu button {
+    height: 0px;
+    width: 200px;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 0px 20px;
+    align-items: baseline;
+    border-bottom: solid 0px var(--color2_3);
+    border-radius: 20px;
+    transition: height .06s ease-in-out, border .06s ease-in-out;
+}
+#biw-specialMenu.open button {
+    height: 36px;
+    border-radius: 0px;
+    border-bottom: solid 1px var(--color2_3);
+    transition: height .06s .06s ease-in-out, border .12s .06s ease-in-out;
+}
+#biw-specialMenu button:first-child {
+    border-top-left-radius: 10px !important;
+}
+#biw-specialMenu button:last-child {
+    border-bottom-left-radius: 10px !important;
+    border-bottom-right-radius: 10px !important;
+}
+.biw-miniForm {
     pointer-events: all;
     position: absolute;
     top: 0;
@@ -157,7 +235,7 @@
     background-color: var(--color1);
     box-shadow: inset 4px 0 4px -4px var(--color1_3);
 }
-#biw-spendMiniForm.active, #biw-stakeMiniForm.active {
+.biw-miniForm.active {
     z-index: 1;
     opacity: 1;
 }
@@ -216,20 +294,20 @@
     font-weight: bold !important;
     color: var(--color1_3) !important;
 }
-#biw-spendMiniForm button, #biw-stakeMiniForm button {
+.biw-miniForm button {
     font-weight: bold;
     font-size: 1em;
     margin: 10px 0 !important;
     background: linear-gradient(90deg, var(--color1) 0%, var(--color2) 0%);
     transition: background 0.24s ease-in-out;
 }
-#biw-spendMiniForm .biw-holdBtn, #biw-stakeMiniForm .biw-holdBtn {
+.biw-miniForm .biw-holdBtn, .biw-miniForm .biw-followInstructionsBtn {
     position: absolute;
     bottom: 23px;
     left: 50%;
     transform: translateX(-50%);
 }
-#biw-spendMiniForm .biw-textInfo, #biw-stakeMiniForm .biw-textInfo {
+.biw-miniForm .biw-textInfo {
     position: absolute;
     bottom: calc(42px + 23px + 10px + 10px);
     opacity: 0;
@@ -238,6 +316,12 @@
     left: 50%;
     transform: translateX(-50%);
     transition: opacity 0.2s ease-in-out;
+}
+.biw-instructionsInput {
+    margin: 0;
+    width: 80%;
+    text-align: left;
+    margin-top: 50px;
 }
 
 #biw-buttonRefresh {

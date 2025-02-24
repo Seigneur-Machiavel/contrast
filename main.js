@@ -1,14 +1,29 @@
 if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // For better completion
 
 /**
+ * @typedef {import('./utils/storage-manager.mjs').Storage} Storage
+ * 
  * @typedef {Object} WindowOptions
  * @property {boolean} nodeIntegration
  * @property {boolean} contextIsolation
  * @property {string} url_or_file
  * @property {number} width
  * @property {number} height
+ * @property {number} [minWidth]
+ * @property {number} [minHeight]
+ * @property {number} [x]
+ * @property {number} [y]
+ * @property {boolean} [fullScreen] - default false
+ * @property {boolean} [maximized] - default false
  * @property {boolean} [startHidden] - default true
  * @property {boolean} [isMainWindow] - default false */
+
+/** @type {Storage} */
+let mainStorage;
+(async () => {
+    const { Storage } = await import('./utils/storage-manager.mjs');
+    mainStorage = Storage;
+})();
 
 const fs = require('fs');
 const path = require('path');
@@ -25,6 +40,7 @@ log.info('--- Test log ---');
 autoUpdater.logger = log;*/
 
 // GLOBAL VARIABLES
+let userPreferences = {};
 const isDev = !app.isPackaged;
 const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
 const mainLogger = new MiniLogger('main');
@@ -40,9 +56,43 @@ const windowsOptions = {
     },
     boardWindow: {
         nodeIntegration: true, contextIsolation: false, url_or_file: './electron-app/index/board.html',
-        width: 1366, height: 800, startHidden: false, isMainWindow: true
+        width: 1366, height: 800, startHidden: false, isMainWindow: true,
+        //preload: path.join(__dirname, 'electron-app', 'index', 'modulesLoader.mjs')
     }
 };
+async function loadUserPreferences() {
+    while (!mainStorage) await new Promise(resolve => setTimeout(resolve, 10)); // wait for storage to be loaded
+    const loaded = mainStorage.loadJSON('main-user-preferences', 'darkModeState');
+    if (!loaded) return;
+
+    userPreferences = loaded;
+    if (userPreferences.boardWindowWidth) windowsOptions.boardWindow.width = userPreferences.boardWindowWidth;
+    if (userPreferences.boardWindowHeight) windowsOptions.boardWindow.height = userPreferences.boardWindowHeight;
+    if (userPreferences.boardWindowPositionX) windowsOptions.boardWindow.x = userPreferences.boardWindowPositionX;
+    if (userPreferences.boardWindowPositionY) windowsOptions.boardWindow.y = userPreferences.boardWindowPositionY;
+    if (userPreferences.boardWindowFullScreen) windowsOptions.boardWindow.fullScreen = userPreferences.boardWindowFullScreen;
+    if (userPreferences.boardWindowMaximized) windowsOptions.boardWindow.maximized = userPreferences.boardWindowMaximized;
+
+    console.log('User preferences loaded:', userPreferences);
+}
+let saveUserPreferencesTimeout = null;
+function saveUserPreferencesAfterTimeout() {
+    if (saveUserPreferencesTimeout) clearTimeout(saveUserPreferencesTimeout);
+    saveUserPreferencesTimeout = setTimeout(() => {
+        const [parentX, parentY] = windows.boardWindow.getPosition();
+        const [width, height] = windows.boardWindow.getSize();
+        userPreferences.boardWindowFullScreen = windows.boardWindow.isFullScreen();
+        userPreferences.boardWindowMaximized = windows.boardWindow.isMaximized();
+        userPreferences.boardWindowPositionX = parentX;
+        userPreferences.boardWindowPositionY = parentY;
+        userPreferences.boardWindowWidth = width;
+        userPreferences.boardWindowHeight = height;
+
+        mainStorage.saveJSON('main-user-preferences', userPreferences);
+        console.log('User preferences saved:', userPreferences);
+    }, 1000);
+}
+
 /** @type {NodeAppWorker} */
 let dashboardWorker;
 
@@ -55,11 +105,12 @@ async function randomRestartTest() { // DEV FUNCTION
         dashboardWorker.restart();
     }
 }
+
 /** @param {WindowOptions} options */
 async function createWindow(options, parentWindow) {
     const {
         nodeIntegration = false, contextIsolation = true, url_or_file,
-        width, height, minWidth, minHeight,
+        width, height, minWidth, minHeight, x, y, fullScreen, maximized,
         startHidden = true, isMainWindow = false, preload
     } = options;
 
@@ -68,12 +119,13 @@ async function createWindow(options, parentWindow) {
         additionalArguments: [`--csp="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';"`],
         show: !startHidden,
         parent: parentWindow,
-        width, height, minWidth, minHeight,
+        width, height, minWidth, minHeight, x, y, fullScreen,
         icon: 'electron-app/img/icon_256.png',
         titleBarStyle: isMainWindow ? 'hidden' : 'default',
         webPreferences: { preload, nodeIntegration, contextIsolation }
     });
 
+    if (maximized) window.maximize();
     if (isMainWindow) window.on('close', () => { if (!isQuiting) app.quit(); });
     else window.on('close', (e) => { if (!isQuiting) { e.preventDefault(); window.hide() } });
 
@@ -136,20 +188,25 @@ ipcMain.on('generate-new-address', async (event, prefix) => {
 });
 
 // APP EVENTS
-app.on('before-quit', () => { isQuiting = true; globalShortcut.unregisterAll(); if (dashboardWorker) dashboardWorker.stop(); });
-app.on('will-quit', async () => { await new Promise(resolve => setTimeout(resolve, 10000)) }); // let time for the node to stop properly
+app.on('before-quit', () => {
+    isQuiting = true;
+    globalShortcut.unregisterAll();
+    if (dashboardWorker) dashboardWorker.stop();
+});
+app.on('will-quit', async () => await new Promise(resolve => setTimeout(resolve, 10000))); // let time for the node to stop properly
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 app.on('ready', async () => {
     if (!isDev) autoUpdater.checkForUpdatesAndNotify();
+    await loadUserPreferences();
 
     windows.boardWindow = await createWindow(windowsOptions.boardWindow);
     if (isDev) windows.boardWindow.webContents.toggleDevTools(); // dev tools on start
 
+    windows.boardWindow.on('move', () => saveUserPreferencesAfterTimeout());
+    windows.boardWindow.on('resize', () => saveUserPreferencesAfterTimeout());
+    windows.boardWindow.on('enter-full-screen', () => saveUserPreferencesAfterTimeout());
+    windows.boardWindow.on('leave-full-screen', () => saveUserPreferencesAfterTimeout());
+
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.boardWindow);
-
-    /*windows.boardWindow.on('move', () => {
-        const [parentX, parentY] = windows.boardWindow.getPosition();
-        console.log(`Main window moved to: ${parentX}, ${parentY}`);
-    });*/
 });

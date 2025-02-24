@@ -66,10 +66,6 @@ const appsConfig = {
 		preload: true,
 		disableOnLock: true,
 		autoSized: true,
-		/*minWidth: 322,
-		minHeight: 472,
-		maxWidth: 322,
-		maxHeight: 472,*/
 		canFullScreen: false,
 		title: '- )( - WALLET ___\\',
 		url_or_file: '../../apps/wallet/biw-content.html',
