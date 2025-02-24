@@ -516,6 +516,7 @@ export class ObserverWsApp {
             
             this.app.get('/', (req, res) => { res.sendFile(APPS_VARS.__nodeDir + '/front/explorer.html'); });
         }
+        
         const server = this.app.listen(this.port, () => { console.log(`Server running on http://${'???'}:${this.port}`); });
         
         this.wss = new WebSocketServer({ server });
@@ -634,8 +635,6 @@ export class ObserverWsApp {
                 case 'address_utxos':
                     ws.send(JSON.stringify({ type: 'address_utxos_requested', data: { address: data, UTXOs: this.node.getAddressUtxos(data) } }));
                 case 'get_transaction_by_reference':
-                    //console.log('get_transaction_by_reference: DISABLED');
-                    //break;
                     const resTx = this.node.getTransactionByReference(data);
                     if (!resTx) { console.error(`[OBSERVER] Transaction not found: ${data}`); return; }
                     ws.send(JSON.stringify({ type: 'transaction_requested', data: resTx.transaction }));

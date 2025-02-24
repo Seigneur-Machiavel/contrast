@@ -404,7 +404,7 @@ export class BlockExplorerWidget {
                 this.navigationTarget.txId = anchor.split(':')[1];
                 this.navigationTarget.outputIndex = Number(anchor.split(':')[2]);
 
-                if (this.getBlockDataFromMemoryOrSendRequest(this.navigationTarget.blockReference) === 'request sent') { return; }
+                if (this.getBlockDataFromMemoryOrSendRequest(this.navigationTarget.blockReference) === 'request sent') return;
 
                 this.navigateUntilTarget(true);
             },

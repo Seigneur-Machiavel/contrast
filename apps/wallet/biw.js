@@ -86,7 +86,7 @@ class InstructionsReader {
 
         return true;
     }
-    #parseIntIfSafe(value) {
+    #parseIntIfSafe(value) { // DEPRECATED
         if (typeof value !== 'string') return false;
         if (value.length > 14) return false;
         for (let i = 0; i < value.length; i++) {
@@ -94,6 +94,18 @@ class InstructionsReader {
         }
 
         return parseInt(value);
+    }
+    #parseFloatIfSafeAndValidContrastAmount(value) {
+        if (typeof value !== 'string') return false;
+        if (value.length > 14) return false;
+        for (let i = 0; i < value.length; i++) {
+            if (!'0123456789.'.includes(value[i])) return false;
+        }
+
+        // no more than 6 decimals
+        if (value.includes('.') && value.split('.')[1].length > 6) return false;
+
+        return parseFloat(value);
     }
     /** @param {string} instructionsStr */
     read(instructionsStr) {
@@ -108,7 +120,7 @@ class InstructionsReader {
             switch (action) {
                 case 'SEND':
                 case 'STAKE':
-                    amount = this.#parseIntIfSafe(instructions[1]);
+                    amount = this.#parseFloatIfSafeAndValidContrastAmount(instructions[1]);
                     if (!amount) { return `Invalid amount: ${instructions[1]}`; }
                     break;
                 case 'INSCRIBE':
@@ -570,6 +582,7 @@ class BoardInternalWallet {
         // update amount with currency format
         const amountMicro = parseInt(target.value.replace('.',''));
         const formatedValue = window.convert.formatNumberAsCurrency(amountMicro);
+        console.log(`formated ${amountMicro} to ${formatedValue}`);
         target.value = formatedValue;
         
         // update totalSpent
@@ -598,6 +611,7 @@ class BoardInternalWallet {
                 if (!instructions.amount) { this.textInfo(this.eHTML.instructions.textInfo, 'No amount provided'); return; }
                 this.eHTML.send.toAddress.value = instructions.address;
                 this.eHTML.send.amount.value = instructions.amount;
+                console.log(`instructions.amount: ${instructions.amount}`);
                 this.toggleMiniForm('send');
                 this.#updateAmountAndFeesRelatedToInput(this.eHTML.send.amount);
                 this.textInfo(this.eHTML.send.textInfo, 'Read carefully the instructions result!', 3000, true);
