@@ -143,11 +143,11 @@ class P2PNetwork extends EventEmitter {
                 consInfo[peerIdStr].count++;
             });
 
-            console.log(`[CONTROL] Total of disconnections: ${this.totalOfDisconnections} -------`);
+            /*console.log(`[CONTROL] Total of disconnections: ${this.totalOfDisconnections} -------`);
             for (const peerIdStr in consInfo) {
                 const { ip, count } = consInfo[peerIdStr];
                 console.log(`Peer ${readableId(peerIdStr)} | IP ${ip} | Connections: ${count}`);
-            }
+            }*/
         }
     }
     async #heartBeat() {

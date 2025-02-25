@@ -485,7 +485,7 @@ export class ObserverWsApp {
         /** @type {WebSocketServer} */
         this.wss =  null;
         this.wssClientsIPs = {};
-        this.maxConnectionsPerIP = 3;
+        this.maxConnectionsPerIP = 5;
 
         this.readableNow = () => { return `${new Date().toLocaleTimeString()}:${new Date().getMilliseconds()}` };
         this.init();
@@ -530,6 +530,7 @@ export class ObserverWsApp {
         const clientIp = req.socket.remoteAddress === '::1' ? 'localhost' : req.socket.remoteAddress;
         if (this.wssClientsIPs[clientIp] && this.wssClientsIPs[clientIp] >= this.maxConnectionsPerIP) {
             console.log(`[OBSERVER] ${this.readableNow()} Client max connection reached: ${clientIp} (${this.wssClientsIPs[clientIp]}/${this.maxConnectionsPerIP})`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
             ws.close(undefined, 'Max connections per IP reached');
             this.wssClientsIPs[clientIp] -= 1;
             return;

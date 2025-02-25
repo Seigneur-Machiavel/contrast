@@ -18,6 +18,9 @@ const relatedInfos = {
     circulatingSupply: '<h3>Circulating Supply</h3><p>The number of contrast currently in circulation; this number increases with each block depending on the number of newly created tokens.</p>',
     lastBlocktime: '<h3>Last Blocktime</h3><p>The time between the last block and the preceding block.</p>',
     targetBlockday: '<h3>Target Blockday</h3><p>The target number of blocks per day.</p><p>With 120 seconds per block:</p><p> --> 86400/120 = 720.</p>',
+
+    // WALLET
+    addressTypes: '<h3>Address Types</h3><p>There are four types of addresses:</p><p> - Weak: No condition</p><p> - Contrast: 16 times harder to generate</p><p> - Secure: 256 times harder to generate</p><p> - Powerful: 4096 times harder to generate</p><p> - Ultimate: 65536 times harder to generate</p><p> The more difficult the address is to generate, the more secure it is to secure your fund over long period of time.</p>',
 }
 
 class InfoManager {

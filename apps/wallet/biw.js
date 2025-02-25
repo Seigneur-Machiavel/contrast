@@ -735,9 +735,9 @@ class BoardInternalWallet {
         h2.innerText = name;
         accountLabelNameAndValueWrap.appendChild(h2);
     
-        const h3 = document.createElement('h3');
-        h3.innerText = `${window.convert.formatNumberAsCurrency(amount)}c`;
-        accountLabelNameAndValueWrap.appendChild(h3);
+        const h3SpendableBalance = document.createElement('h3');
+        h3SpendableBalance.innerText = `${window.convert.formatNumberAsCurrency(amount)}c`;
+        accountLabelNameAndValueWrap.appendChild(h3SpendableBalance);
     
         const accountLabelAddress = document.createElement('div');
         accountLabelAddress.classList.add('biw-accountLabelAddress');
@@ -829,7 +829,7 @@ class BoardInternalWallet {
                 continue;
             }
     
-            const accountLabel = this.#createAccountLabel(accountName, account.address, account.balance);
+            const accountLabel = this.#createAccountLabel(accountName, account.address, account.spendableBalance);
             this.eHTML.accountsWrap.insertBefore(accountLabel, this.eHTML.newAddressBtn);
         }
     }
@@ -846,13 +846,13 @@ class BoardInternalWallet {
     
             //const amount = accountLabels[i].getElementsByClassName('biw-accountLabelNameAndValueWrap')[0].getElementsByTagName('h3')[0];
             const amount = h3[i * 2];
-            amount.innerText = `${window.convert.formatNumberAsCurrency(account.balance)}c`;
+            amount.innerText = `${window.convert.formatNumberAsCurrency(account.spendableBalance)}c`;
             labelUpdated = true;
             break;
         }
         
         if (!labelUpdated) {
-            const accountLabel = this.#createAccountLabel(`Account ${i + 1}`, account.address, account.balance);
+            const accountLabel = this.#createAccountLabel(`Account ${i + 1}`, account.address, account.spendableBalance);
             this.eHTML.accountsWrap.insertBefore(accountLabel, this.eHTML.newAddressBtn);
         }
     
@@ -875,7 +875,7 @@ class BoardInternalWallet {
             walletTotalStakedBalance += totalStakedBalance;
         }
     
-        this.eHTML.spendableBalanceStr.innerText = window.convert.formatNumberAsCurrency(walletTotalSpendableBalance);
+        this.eHTML.spendableBalanceStr.innerText = window.convert.formatNumberAsCurrency(walletTotalBalance);
         this.eHTML.stakedStr.innerText = window.convert.formatNumberAsCurrency(walletTotalStakedBalance);
     
         //console.log(`[POPUP] totalBalances updated: ${walletTotalBalance}c, from ${this.wallet.accounts[this.activeAddressPrefix].length} accounts`);
