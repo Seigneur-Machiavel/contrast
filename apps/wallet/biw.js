@@ -746,6 +746,16 @@ class BoardInternalWallet {
         const h3Address = document.createElement('h3');
         h3Address.innerText = address;
         accountLabelAddress.appendChild(h3Address);
+
+        const copyAddressBtn = document.createElement('button');
+        const btnImg = document.createElement('img');
+        btnImg.src = '../../apps/wallet/img/copy64.png';
+        copyAddressBtn.appendChild(btnImg);
+        copyAddressBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(address);
+            this.textInfo(this.eHTML.globalTextInfo, 'Address copied to clipboard', 2000);
+        });
+        accountLabelAddress.appendChild(copyAddressBtn);
     
         return accountLabel;
     }

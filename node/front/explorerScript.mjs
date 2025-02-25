@@ -78,48 +78,6 @@ function onClose(url = '') {
 function onError(error) {
     console.info('WebSocket error: ' + error);
 }
-function setup_ws(url = 'http://localhost:27270/') { // SIMPLE FOR DISCORD BOT
-    let lastKnownHeight = -1;
-    ws = new WebSocket(url);
-
-    ws.onmessage = (event) => { onMessage(event); };
-    async function onMessage(event) {
-
-    const message = JSON.parse(event.data);
-    const trigger = message.trigger;
-    const data = message.data;
-
-    switch (message.type) {
-        case 'current_height':
-            if (lastKnownHeight === data) { return; }
-            console.info(`new current_height #${lastKnownHeight} => #${data}`);
-            lastKnownHeight = data;
-            ws.send(JSON.stringify({ type: 'get_blocks_data_by_height', data }));
-            break;
-        case 'blocks_data_requested':
-            if (!data) { return; }
-            const block = data[0];
-            console.log(block);
-            console.log(`minerAddress ?: ${block.Txs[0].outputs[0].address}`);
-            console.log(`validatorAddress ?: ${data.Txs[1].inputs[0].split(':')[0]}`);
-            break;
-        default:
-            console.log('Unknown message type:', message.type);
-            break;
-        }
-    }
-
-    async function getHeightsLoop() {
-        while (true) {
-            await new Promise((resolve) => { setTimeout(() => { resolve(); }, 2000); });
-            if (!ws || ws.readyState !== 1) { continue; }
-            try { ws.send(JSON.stringify({ type: 'get_height', data: Date.now() })) } catch (error) { };
-        }
-    }; getHeightsLoop();
-
-    ws.onclose = () => { console.error('Connection closed'); };
-    ws.onerror = (error) => { console.error('WebSocket error:', error); };
-}
 async function onMessage(event) {
     if (!pageFocused) { return; }
     const message = JSON.parse(event.data);

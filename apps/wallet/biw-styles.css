@@ -608,18 +608,36 @@
 }
 .biw-accountLabelAddress {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
 }
 .biw-accountLabelAddress h3 {
     pointer-events: all;
+    font-size: .9em;
     color: var(--color2);
     text-align: right;
-    font-size: medium;
     margin: 0 0 4px 0;
     opacity: .6;
 }
-.biw-accountLabel.active .biw-accountLabelAddress h3 {
+.biw-accountLabelAddress button {
+    pointer-events: all;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    background: none;
+    border-radius: 50%;
+    opacity: .6;
+    transition: opacity .24s;
+}
+.biw-accountLabel.active .biw-accountLabelAddress h3, .biw-accountLabel.active .biw-accountLabelAddress button {
     opacity: .8;
+}
+.biw-accountLabelAddress button:hover {
+    opacity: .9 !important;
+}
+.biw-accountLabelAddress button img {
+    pointer-events: none;
+    width: 100%;
+    filter: invert(calc(1 - var(--dark-mode-boolean)));
 }
 #biw-newAddressBtn {
     position: relative;
