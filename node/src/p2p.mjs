@@ -110,7 +110,16 @@ class P2PNetwork extends EventEmitter {
                 modules: { dht: kadDHT() },
                 config: {
                     autoNat: { enabled: true },
-                    dht: { enabled: true },
+                    //dht: { enabled: true },
+                    dht: { 
+                        enabled: true,
+                        randomWalk: {
+                            enabled: true,
+                            interval: 300e3, // 5 minutes
+                            timeout: 10e3,   // 10 seconds
+                        },
+                        clientMode: false, 
+                    },
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
                         hop: {
