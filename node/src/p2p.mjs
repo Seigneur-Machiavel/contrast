@@ -106,9 +106,10 @@ class P2PNetwork extends EventEmitter {
                 addresses: { listen: this.options.listenAddresses },
                 transports: [tcp()],
                 streamMuxers: [yamux()],
-                //modules: { dht: kadDHT() },
+                modules: { dht: kadDHT() },
                 //config: { dht: { enabled: true } },
                 config: {
+                    dht: { enabled: true },
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
                         hop: {
