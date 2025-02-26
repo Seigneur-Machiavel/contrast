@@ -108,7 +108,6 @@ class P2PNetwork extends EventEmitter {
                 transports: [tcp()],
                 streamMuxers: [yamux()],
                 modules: { dht: kadDHT() },
-                //config: { dht: { enabled: true } },
                 config: {
                     autoNat: { enabled: true },
                     dht: { enabled: true },
