@@ -8,6 +8,7 @@ import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
 import { circuitRelayTransport, circuitRelayServer } from "@libp2p/circuit-relay-v2";
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { dcutr } from '@libp2p/dcutr';
 import { autoNAT } from '@libp2p/autonat';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
@@ -135,7 +136,8 @@ class P2PNetwork extends EventEmitter {
                     identify: identify(),
                     pubsub: gossipsub(),
                     autoNAT: autoNAT(),
-                    circuitRelay: circuitRelayServer()
+                    circuitRelay: circuitRelayServer(),
+                    dcutr: dcutr()
                 },
                 peerDiscovery
             });

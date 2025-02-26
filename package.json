@@ -17,6 +17,7 @@
     "@libp2p/autonat": "^2.0.24",
     "@libp2p/bootstrap": "^11.0.13",
     "@libp2p/circuit-relay-v2": "^3.2.4",
+    "@libp2p/dcutr": "^2.0.23",
     "@libp2p/identify": "^3.0.12",
     "@libp2p/kad-dht": "^14.2.9",
     "@libp2p/mdns": "^11.0.13",
