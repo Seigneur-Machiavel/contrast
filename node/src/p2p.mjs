@@ -6,6 +6,7 @@ import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
+import { circuitRelayTransport } from "@libp2p/circuit-relay-v2";
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { autoNAT } from '@libp2p/autonat';
 import { noise } from '@chainsafe/libp2p-noise';
@@ -105,7 +106,7 @@ class P2PNetwork extends EventEmitter {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
                 addresses: { listen: this.options.listenAddresses },
-                transports: [tcp()],
+                transports: [circuitRelayTransport(), tcp()],
                 streamMuxers: [yamux()],
                 modules: { dht: kadDHT() },
                 config: {
