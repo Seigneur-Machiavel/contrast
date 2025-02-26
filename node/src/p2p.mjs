@@ -7,6 +7,7 @@ import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
+import { autoNAT } from '@libp2p/autonat';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { bootstrap } from '@libp2p/bootstrap';
@@ -109,6 +110,7 @@ class P2PNetwork extends EventEmitter {
                 modules: { dht: kadDHT() },
                 //config: { dht: { enabled: true } },
                 config: {
+                    autoNat: { enabled: true },
                     dht: { enabled: true },
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
@@ -119,7 +121,7 @@ class P2PNetwork extends EventEmitter {
                     },
                 },
                 connectionEncrypters: [noise()],
-                services: { identify: identify(), pubsub: gossipsub() },
+                services: { identify: identify(), pubsub: gossipsub(), autoNAT: autoNAT() },
                 peerDiscovery
             });
 
@@ -362,7 +364,7 @@ class P2PNetwork extends EventEmitter {
         if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
 
         this.peers[peerIdStr] = updatedPeer;
-        this.miniLogger.log(`Peer ${readableId(peerIdStr)} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`--{ Peer } ${readableId(peerIdStr)} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
     }
     /** @param {string} identifier - peerIdStr or ip */
     async disconnectPeer(identifier) {

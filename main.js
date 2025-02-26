@@ -34,6 +34,7 @@ const { autoUpdater } = require('electron-updater');
 const setShortcuts = require('./electron-app/shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
 const AutoLaunch = require('auto-launch');
+
 /*const log = require('electron-log');
 log.transports.file.level = 'info';
 log.info('--- Test log ---');
