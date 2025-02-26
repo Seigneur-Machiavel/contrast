@@ -5,7 +5,7 @@ import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
-import { kadDHT } from '@libp2p/kad-dht';
+//import { kadDHT } from '@libp2p/kad-dht';
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
@@ -106,8 +106,17 @@ class P2PNetwork extends EventEmitter {
                 addresses: { listen: this.options.listenAddresses },
                 transports: [tcp()],
                 streamMuxers: [yamux()],
-                modules: { dht: kadDHT() },
-                config: { dht: { enabled: true } },
+                //modules: { dht: kadDHT() },
+                //config: { dht: { enabled: true } },
+                config: {
+                    relay: {
+                        enabled: true, // Enable circuit relay dialer and listener (STOP)
+                        hop: {
+                            enabled: true, // Make this node a relay
+                            active: true, // Allow other nodes to dial through this node
+                        },
+                    },
+                },
                 connectionEncrypters: [noise()],
                 services: { identify: identify(), pubsub: gossipsub() },
                 peerDiscovery

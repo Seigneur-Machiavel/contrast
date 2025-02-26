@@ -373,9 +373,11 @@ export class BlockExplorerWidget {
                     const modalContentWrap = this.cbeHTML.modalContentWrap();
                     const blockIndex = modalContentWrap.getElementsByClassName('cbe-blockIndex')[0].textContent.replace('#', '');
                     const blockData = this.blocksDataByIndex[blockIndex];
-        
+                    
+                    /** @type {HTMLDivElement} */
                     const rowElement = event.target.closest('.cbe-TxRow');
-                    const txIndex = Number(rowElement.querySelector('td').textContent);
+                    const td = rowElement.querySelector('td');
+                    const txIndex = Number(td.textContent.split(' ')[0]);
                     const tx = blockData.Txs[txIndex];
                     console.log('tx', tx);
         
