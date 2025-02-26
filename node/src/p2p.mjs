@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
-import { circuitRelayTransport } from "@libp2p/circuit-relay-v2";
+import { circuitRelayTransport, circuitRelayServer } from "@libp2p/circuit-relay-v2";
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { autoNAT } from '@libp2p/autonat';
 import { noise } from '@chainsafe/libp2p-noise';
@@ -126,11 +126,17 @@ class P2PNetwork extends EventEmitter {
                         hop: {
                             enabled: true, // Make this node a relay
                             active: true, // Allow other nodes to dial through this node
-                        },
+                        }
                     },
                 },
                 connectionEncrypters: [noise()],
-                services: { identify: identify(), pubsub: gossipsub(), autoNAT: autoNAT() },
+                connectionGater: { denyDialMultiaddr: () => false },
+                services: {
+                    identify: identify(),
+                    pubsub: gossipsub(),
+                    autoNAT: autoNAT(),
+                    circuitRelay: circuitRelayServer()
+                },
                 peerDiscovery
             });
 
