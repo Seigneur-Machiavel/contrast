@@ -117,12 +117,13 @@ class P2PNetwork extends EventEmitter {
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
-                streamMuxers: [mplex()], // [yamux()],
+                streamMuxers: [mplex(), yamux()],
                 connectionEncrypters: [noise()],
                 transports: [ webRTCDirect(), tcp(), circuitRelayTransport() ],
                 addresses: {
                     listen: [
                         '/ip4/0.0.0.0/udp/0/webrtc-direct',
+                        '/ip4/0.0.0.0/udp/27260/webrtc-direct',
                         '/ip4/0.0.0.0/tcp/27260',
                         '/ip4/0.0.0.0/tcp/0',
                     ]
@@ -134,8 +135,10 @@ class P2PNetwork extends EventEmitter {
                     identify: identify(),
                     dht: kadDHT(),
                     circuitRelay: circuitRelayServer(),
+                    dcutr: dcutr()
                 },
                 config: {
+                    autoNat: { enabled: true },
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
                         hop: {
@@ -166,7 +169,7 @@ class P2PNetwork extends EventEmitter {
         }
 
         this.#bootstrapsReconnectLoop();
-        this.#controlLoop();
+        //this.#controlLoop();
         //this.#tryConnectFromDHT();
 
         return;
@@ -208,76 +211,6 @@ class P2PNetwork extends EventEmitter {
         }, 10000);
     }
 
-    /** @param {string} uniqueHash - A unique 32 bytes hash to generate the private key from. */
-    async startOLD(uniqueHash) { // DEPRECATED
-        const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
-        const hashUint8Array = convert.hex.toUint8Array(hash);
-        const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
-        const peerDiscovery = [mdns()];
-        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
-        
-        //this.options.listenAddresses.push(
-        //    '/dns4/wrtc-star1.par.dwebops.pub/tcp/443/wss/p2p-webrtc-star/',
-        //    '/dns4/wrtc-star2.sjc.dwebops.pub/tcp/443/wss/p2p-webrtc-star/');
-
-        try {
-            const p2pNode = await createLibp2p({
-                privateKey: privateKeyObject,
-                addresses: { listen: this.options.listenAddresses },
-                transports: [circuitRelayTransport(), tcp()],
-                streamMuxers: [yamux()],
-                //modules: { dht: kadDHT() },
-                config: {
-                    autoNat: { enabled: true },
-                    dht: new kadDHT(),
-                    //dht: { enabled: true },
-                    /*dht: { 
-                        enabled: true,
-                        randomWalk: {
-                            enabled: true,
-                            interval: 300e3, // 5 minutes
-                            timeout: 10e3,   // 10 seconds
-                        },
-                        clientMode: false, 
-                    },*/
-                    relay: {
-                        enabled: true, // Enable circuit relay dialer and listener (STOP)
-                        hop: {
-                            enabled: true, // Make this node a relay
-                            active: true, // Allow other nodes to dial through this node
-                        }
-                    },
-                },
-                connectionEncrypters: [noise()],
-                connectionGater: { denyDialMultiaddr: () => false },
-                services: {
-                    identify: identify(),
-                    pubsub: gossipsub(),
-                    autoNAT: autoNAT(),
-                    circuitRelay: circuitRelayServer(),
-                    dcutr: dcutr()
-                },
-                peerDiscovery
-            });
-
-            await p2pNode.start();
-            this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
-            
-            p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
-            p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
-            p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
-            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
-            this.p2pNode = p2pNode;
-        } catch (error) {
-            this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
-            this.miniLogger.log(error.stack, (m) => { console.error(m); });
-            throw error;
-        }
-
-        this.#bootstrapsReconnectLoop();
-        //this.#controlLoop();
-        //this.#heartBeat();
-    }
     async #controlLoop() {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 5000));
