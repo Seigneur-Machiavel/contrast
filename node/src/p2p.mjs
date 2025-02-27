@@ -439,7 +439,9 @@ class P2PNetwork extends EventEmitter {
         const connectedBootstraps = Object.keys(this.connectedBootstrapNodes).length;
         let totalBootstraps = iAmBootstrap ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length;
         this.connexionResume = { totalPeers, connectedBootstraps, totalBootstraps };
-        this.miniLogger.log(`Connected to ${totalPeers} peers (${connectedBootstraps}/${totalBootstraps} bootstrap nodes)`, (m) => { console.info(m); });
+
+        const allPeers = await this.p2pNode.peerStore.all();
+        this.miniLogger.log(`Connected to ${totalPeers} peers (${connectedBootstraps}/${totalBootstraps} bootstrap nodes) | ${allPeers.length} peers in peerStore`, (m) => { console.info(m); });
     }
     async stop() {
         if (this.p2pNode) { await this.p2pNode.stop(); }
