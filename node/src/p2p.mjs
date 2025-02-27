@@ -20,6 +20,7 @@ import { dcutr } from '@libp2p/dcutr';
 import { autoNAT } from '@libp2p/autonat';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
+import { mplex } from '@libp2p/mplex';
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
@@ -116,7 +117,7 @@ class P2PNetwork extends EventEmitter {
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
-                streamMuxers: [yamux()],
+                streamMuxers: [mplex()], // [yamux()],
                 connectionEncrypters: [noise()],
                 transports: [ webRTCDirect(), tcp(), circuitRelayTransport() ],
                 addresses: {
