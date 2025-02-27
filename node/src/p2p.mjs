@@ -116,7 +116,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 transports: [ webRTCDirect(), tcp() ],
-                addresses: { listen: [ '/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/udp/0/webrtc-direct' ] },
+                addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct', '/ip4/0.0.0.0/tcp/27260' ] },
                 // connectionGater: { denyDialMultiaddr: () => false },
                 services: { pubsub: gossipsub(), identify: identify() },
                 peerDiscovery
@@ -281,6 +281,9 @@ class P2PNetwork extends EventEmitter {
         const peerId = event.detail.id;
         const peerIdStr = peerId.toString();
         const connections = this.p2pNode.getConnections(peerIdStr);
+        if (event.detail.multiaddrs.length === 0) { 
+            console.log('No multiaddrs', peerIdStr); return;
+        }
         if (connections.length > 0) { return; }
 
         try {
