@@ -120,7 +120,7 @@ class P2PNetwork extends EventEmitter {
                 connectionEncrypters: [noise()],
                 transports: [ webRTCDirect(), tcp(), circuitRelayTransport() ],
                 addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct', '/ip4/0.0.0.0/tcp/27260' ] },
-                // connectionGater: { denyDialMultiaddr: () => false },
+                connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
