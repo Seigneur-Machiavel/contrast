@@ -148,7 +148,7 @@ class P2PNetwork extends EventEmitter {
 
         this.#bootstrapsReconnectLoop();
         this.#controlLoop();
-        this.#shareDiscoveryLoop();
+        this.#tryConnectFromDHT();
 
         return;
 
@@ -285,14 +285,14 @@ class P2PNetwork extends EventEmitter {
             this.broadcast('heartbeat', { time: this.timeSynchronizer.getCurrentTime() });
         }
     }
-    async #shareDiscoveryLoop() {
+    async #tryConnectFromDHT() {
         // actively shares discovery with all peers
         while(true) {
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            if (!this.iAmBootstrap) { continue; }
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            if (this.iAmBootstrap) { continue; }
 
-            const allPeers = await this.p2pNode.peerStore.all();
-            for (const peer of allPeers) await this.p2pNode.peerRouting.provide(peer.id);
+            //const allPeers = await this.p2pNode.peerStore.all();
+            //for (const peer of allPeers) await this.p2pNode.peerRouting.getClosestPeers
         }
     }
     #handlePeerDiscovery = async (event) => {
