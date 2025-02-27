@@ -137,6 +137,7 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
             p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
             p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+
             p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
 
             this.p2pNode = p2pNode;
@@ -256,7 +257,7 @@ class P2PNetwork extends EventEmitter {
         }
 
         this.#bootstrapsReconnectLoop();
-        this.#controlLoop();
+        //this.#controlLoop();
         //this.#heartBeat();
     }
     async #controlLoop() {
@@ -300,14 +301,14 @@ class P2PNetwork extends EventEmitter {
             }*/
         }
     }
-    async #heartBeat() {
+    async #heartBeat() { // DEPRECATED
         // ping all peers through the pubsub
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 2000));
             this.broadcast('heartbeat', { time: this.timeSynchronizer.getCurrentTime() });
         }
     }
-    async #tryConnectFromDHT() {
+    async #tryConnectFromDHT() { // DEPRECATED
         // actively shares discovery with all peers
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 10000));
@@ -353,16 +354,11 @@ class P2PNetwork extends EventEmitter {
         }
             
         let multiAddressesToDial = tcpMultiAddresses.concat(webrtcMultiAddresses);
-
-        if (isYoga) {
-            console.log('YOGA', peerIdStr);
-        }
+        if (isYoga) console.log('YOGA', peerIdStr);
 
         if (connections.length > 0) { return; }
-
         try {
-            if (isYoga)
-                multiAddressesToDial = tcpMultiAddresses; // should not work
+            //if (isYoga) multiAddressesToDial = tcpMultiAddresses; // should not work
             const con = await this.p2pNode.dial(multiAddressesToDial, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
