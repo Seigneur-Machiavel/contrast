@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 
 import { tcp } from '@libp2p/tcp';
-import { kadDHT } from '@libp2p/kad-dht';
+import { kadDHT, KadDHT } from '@libp2p/kad-dht';
 
 //const wrtc = await import('wrtc').then(m => m.default);
 //const WebRTCStarModule = await import('libp2p-webrtc-star').then(m => m.default);
@@ -43,6 +43,8 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 64 * 1024; // 64 KB
     static maxStreamBytes = 1024 * 1024 * 1024; // 1 GB
+    /** @type {KadDHT} */
+    dht = new kadDHT({clientMode: false});
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
@@ -122,7 +124,7 @@ class P2PNetwork extends EventEmitter {
                 services: {
                     pubsub: gossipsub(),
                     identify: identify(),
-                    dht: kadDHT({})
+                    dht: this.dht,
                 },
                 peerDiscovery
             });
@@ -281,9 +283,17 @@ class P2PNetwork extends EventEmitter {
             this.broadcast('heartbeat', { time: this.timeSynchronizer.getCurrentTime() });
         }
     }
+    #shareDiscoveryLoop() {
+        // share discovery with all peers
+        while(true) {
+            //const dht = this.p2pNode.contentRouting.provide;
+        }
+    }
     #handlePeerDiscovery = async (event) => {
         /** @type {PeerId} */
         const peerId = event.detail.id;
+        this.dht.provide(peerId, event.detail.multiaddrs);
+        
         const peerIdStr = peerId.toString();
         const connections = this.p2pNode.getConnections(peerIdStr);
         if (event.detail.multiaddrs.length === 0) { 
@@ -291,12 +301,31 @@ class P2PNetwork extends EventEmitter {
 
             const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId);
             console.info(peerInfo) // peer id, multiaddrs
-
+            
             return;
         }
+        const allPeers = await this.p2pNode.peerStore.all();
+        console.log(allPeers)
+
+        const tcpMultiAddresses = [];
+        const webrtcMultiAddresses = [];
+        const isYoga = false; // testing variable
+        for (const addr of event.detail.multiaddrs) {
+            if (addr.toString().includes('192.168.4.23')) isYoga = true;
+            if (addr.toString().includes('webrtc-direct')) webrtcMultiAddresses.push(addr);
+            else tcpMultiAddresses.push(addr);
+        }
+            
+        let multiAddressesToDial = tcpMultiAddresses.concat(webrtcMultiAddresses);
+
+        if (isYoga) {
+            
+        }
+
         if (connections.length > 0) { return; }
 
         try {
+            //if (isYoga) multiAddressesToDial = tcpMultiAddresses; // should not work
             const con = await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
@@ -392,7 +421,12 @@ class P2PNetwork extends EventEmitter {
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                 })
                 .catch(err => {
-                    if (err.message === 'Can not dial self') { this.myAddr = addr; iAmBootstrap = true; }
+                    if (err.message === 'Can not dial self') {
+                        this.myAddr = addr;
+                        iAmBootstrap = true;
+                        // set dht server state
+                        // {clientMode: false, enabled: true}
+                    }
                     //this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                 })
             );
