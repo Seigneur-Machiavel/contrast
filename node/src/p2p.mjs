@@ -119,7 +119,13 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 transports: [ webRTCDirect(), tcp(), circuitRelayTransport() ],
-                addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct', '/ip4/0.0.0.0/tcp/27260' ] },
+                addresses: {
+                    listen: [
+                        '/ip4/0.0.0.0/udp/0/webrtc-direct',
+                        '/ip4/0.0.0.0/tcp/27260',
+                        '/ip4/0.0.0.0/tcp/0',
+                    ]
+                },
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     autoNAT: autoNAT(),
@@ -300,6 +306,8 @@ class P2PNetwork extends EventEmitter {
                     console.info(peerInfo) // peer id, multiaddrs
             } catch (error) { console.error(error.message); }
 
+
+            return;
             try {
                 //await this.p2pNode.peerStore.
                 // try dial /ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g
