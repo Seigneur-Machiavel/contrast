@@ -118,13 +118,23 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
-                transports: [ webRTCDirect(), tcp() ],
+                transports: [ webRTCDirect(), tcp(), circuitRelayTransport() ],
                 addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct', '/ip4/0.0.0.0/tcp/27260' ] },
                 // connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT(),
+                    circuitRelay: circuitRelayServer(),
+                },
+                config: {
+                    relay: {
+                        enabled: true, // Enable circuit relay dialer and listener (STOP)
+                        hop: {
+                            enabled: true, // Make this node a relay
+                            active: true, // Allow other nodes to dial through this node
+                        }
+                    },
                 },
                 peerDiscovery
             });
@@ -149,7 +159,7 @@ class P2PNetwork extends EventEmitter {
 
         this.#bootstrapsReconnectLoop();
         this.#controlLoop();
-        this.#tryConnectFromDHT();
+        //this.#tryConnectFromDHT();
 
         return;
 
@@ -263,12 +273,30 @@ class P2PNetwork extends EventEmitter {
     async #controlLoop() {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 5000));
+            // TESTS
 
+            //12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp
             try {
-                const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
+                const searchPeerId = peerIdFromString('12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp'); // ALEX
+                
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
                 if (peerInfo.multiaddrs.length !== 0)
-                    console.info('**PEER FIND** * findPeer() *')
+                    console.info('**PEER FIND ALEX** * findPeer() *')
+                    console.info(peerInfo) // peer id, multiaddrs
+
+                    // try connect -> result: yes we can dial, //TODO: try implement relay
+                    //const con = await this.p2pNode.dial(searchPeerId, { signal: AbortSignal.timeout(3000) });
+                    //const stream = await con.newStream(P2PNetwork.SYNC_PROTOCOL);
+
+                    //console.info('**PEER FIND ALEX** * dial() *')
+            } catch (error) { console.error(error.message); }
+             
+            try {
+                const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
+                
+                const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
+                if (peerInfo.multiaddrs.length !== 0)
+                    console.info('**PEER FIND YOGA** * findPeer() *')
                     console.info(peerInfo) // peer id, multiaddrs
             } catch (error) { console.error(error.message); }
 
@@ -279,8 +307,8 @@ class P2PNetwork extends EventEmitter {
                 const ma1 = multiaddr('/ip4/10.5.0.2/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
                 const ma2 = multiaddr('/ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
                 const ma3 = multiaddr('/ip4/127.0.0.1/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
-                
-                const con = await this.p2pNode.dial([ma1, ma2, ma3], { signal: AbortSignal.timeout(3000) });
+                const ma4 = multiaddr('/ip4/192.168.4.23/tcp/27260');
+                const con = await this.p2pNode.dial([ma4], { signal: AbortSignal.timeout(3000) });
                 await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             
             } catch (error) { console.error(error);}
@@ -336,6 +364,14 @@ class P2PNetwork extends EventEmitter {
         const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
         console.info(peerInfo) // peer id, multiaddrs*/
 
+        if (peerIdStr.includes('JM29sadqienY')) { // ALEX
+            console.log('ALEX CONNECTED', peerIdStr);
+        }
+
+        if (peerIdStr.includes('RwDMmqPkdxg2))')) { // YOGA
+            console.log('YOGA CONNECTED', peerIdStr);
+        }
+
         if (event.detail.multiaddrs.length === 0) {
             console.log('No multiaddrs', peerIdStr);
             return;
@@ -343,23 +379,19 @@ class P2PNetwork extends EventEmitter {
         const allPeers = await this.p2pNode.peerStore.all();
         console.log(`-------- DISCOVERY: ${allPeers.length} peers --------`);
 
-        const tcpMultiAddresses = [];
+        /*const tcpMultiAddresses = [];
         const webrtcMultiAddresses = [];
-        const isYoga = false; // testing variable
         for (const addr of event.detail.multiaddrs) {
             const addrStr = addr.toString();
-            if (addrStr.includes('192.168.4.23')) isYoga = true;
             if (addrStr.includes('webrtc-direct')) webrtcMultiAddresses.push(addr);
             else tcpMultiAddresses.push(addr);
         }
             
-        let multiAddressesToDial = tcpMultiAddresses.concat(webrtcMultiAddresses);
-        if (isYoga) console.log('YOGA', peerIdStr);
+        let multiAddressesToDial = tcpMultiAddresses.concat(webrtcMultiAddresses);*/
 
         if (connections.length > 0) { return; }
         try {
-            //if (isYoga) multiAddressesToDial = tcpMultiAddresses; // should not work
-            const con = await this.p2pNode.dial(multiAddressesToDial, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const con = await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
         } catch (err) {
@@ -377,6 +409,9 @@ class P2PNetwork extends EventEmitter {
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
+        if (peerIdStr.includes('JM29sadqienY')) { // ALEX
+            console.log('ALEX CONNECTED', peerIdStr);
+        }
         this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
     };
     /** @param {CustomEvent} event */
