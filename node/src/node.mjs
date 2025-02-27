@@ -111,7 +111,15 @@ export class Node {
             observer: ['new_transaction', 'new_block_finalized', 'new_block_candidate']
         }
         const topicsToSubscribe = [];
-        for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
+        //for (const role of roles) { topicsToSubscribe.push(...rolesTopics[role]); }
+        // method avoiding duplicates
+        for (const role of roles) {
+            const topics = rolesTopics[role];
+            for (const topic of topics) {
+                if (topicsToSubscribe.includes(topic)) { continue; }
+                topicsToSubscribe.push(topic);
+            }
+        }
         return [...new Set(topicsToSubscribe)];
     }
     #loadBootstrapNodesList() {

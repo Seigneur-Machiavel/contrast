@@ -4,8 +4,15 @@ import { serializer } from '../../utils/serializer.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
+
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
+
+//const wrtc = await import('wrtc').then(m => m.default);
+//const WebRTCStarModule = await import('libp2p-webrtc-star').then(m => m.default);
+//import { webRTCStar } from '@libp2p/webrtc-star'
+import { webRTCDirect } from '@libp2p/webrtc';
+
 import { circuitRelayTransport, circuitRelayServer } from "@libp2p/circuit-relay-v2";
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { dcutr } from '@libp2p/dcutr';
@@ -96,8 +103,8 @@ class P2PNetwork extends EventEmitter {
         });
     }
 
-    /** @param {string} uniqueHash - A unique hash of 32 bytes to generate the private key from. */
-    async start(uniqueHash) {
+    /** @param {string} uniqueHash - A unique 32 bytes hash to generate the private key from. */
+    async start(uniqueHash) { // WebRTC
         const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
         const hashUint8Array = convert.hex.toUint8Array(hash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
@@ -106,14 +113,94 @@ class P2PNetwork extends EventEmitter {
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
+                streamMuxers: [yamux()],
+                connectionEncrypters: [noise()],
+                transports: [ webRTCDirect(), tcp() ],
+                addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct' ] },
+                // connectionGater: { denyDialMultiaddr: () => false },
+                services: { pubsub: gossipsub(), identify: identify() },
+                peerDiscovery
+            });
+
+            await p2pNode.start();
+            // this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
+            this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
+
+            p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
+            p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
+            p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+
+            this.p2pNode = p2pNode;
+        } catch (error) {
+            this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
+            this.miniLogger.log(error.stack, (m) => { console.error(m); });
+            throw error;
+        }
+
+        return;
+
+        // TEST DIAL
+        setTimeout(async () => {
+            const testHash = mining.generateRandomNonce(32).Hex;
+            const testHashUint8Array = convert.hex.toUint8Array(testHash);
+            const testPrivateKeyObject = await generateKeyPairFromSeed("Ed25519", testHashUint8Array);
+            for (let i = 0; i < 10; i++) {
+                try {
+                    const ma = this.p2pNode.getMultiaddrs()[i];
+                    if (!ma) { throw new Error('None of the multiaddrs are available'); }
+                    console.log('----  -- - Dialing', ma.toString())
+
+                    const dialer = await createLibp2p({
+                        privateKey: testPrivateKeyObject,
+                        streamMuxers: [yamux()],
+                        connectionEncrypters: [noise()],
+                        transports: [ webRTCDirect() ],
+                        services: { pubsub: gossipsub(), identify: identify() },
+                        connectionGater: { denyDialMultiaddr: () => false }
+                    })
+        
+                    await dialer.start()
+                    
+                    //const stream = await dialer.dialProtocol(ma, [P2PNetwork.SYNC_PROTOCOL])
+                    const con = await dialer.dial(ma, { signal: AbortSignal.timeout(10_000) })
+                    const stream = await con.newStream(P2PNetwork.SYNC_PROTOCOL);
+                    console.log('Dialer connected to listener')
+                    console.log('Dialer stream', stream)
+                } catch (error) {
+                    if (error.message === 'None of the multiaddrs are available') { console.error(error.message); break; }
+                    console.error(error)
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }, 10000);
+    }
+
+    /** @param {string} uniqueHash - A unique 32 bytes hash to generate the private key from. */
+    async startOLD(uniqueHash) { // DEPRECATED
+        const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
+        const hashUint8Array = convert.hex.toUint8Array(hash);
+        const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
+        const peerDiscovery = [mdns()];
+        if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
+        
+        //this.options.listenAddresses.push(
+        //    '/dns4/wrtc-star1.par.dwebops.pub/tcp/443/wss/p2p-webrtc-star/',
+        //    '/dns4/wrtc-star2.sjc.dwebops.pub/tcp/443/wss/p2p-webrtc-star/');
+
+        try {
+            const p2pNode = await createLibp2p({
+                privateKey: privateKeyObject,
                 addresses: { listen: this.options.listenAddresses },
                 transports: [circuitRelayTransport(), tcp()],
                 streamMuxers: [yamux()],
-                modules: { dht: kadDHT() },
+                //modules: { dht: kadDHT() },
                 config: {
                     autoNat: { enabled: true },
+                    dht: new kadDHT(),
                     //dht: { enabled: true },
-                    dht: { 
+                    /*dht: { 
                         enabled: true,
                         randomWalk: {
                             enabled: true,
@@ -121,7 +208,7 @@ class P2PNetwork extends EventEmitter {
                             timeout: 10e3,   // 10 seconds
                         },
                         clientMode: false, 
-                    },
+                    },*/
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
                         hop: {

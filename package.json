@@ -22,6 +22,7 @@
     "@libp2p/kad-dht": "^14.2.9",
     "@libp2p/mdns": "^11.0.13",
     "@libp2p/tcp": "^10.0.13",
+    "@libp2p/webrtc": "^5.2.5",
     "@multiformats/multiaddr": "^12.3.3",
     "adm-zip": "^0.5.16",
     "argon2": "^0.41.1",
@@ -30,7 +31,7 @@
     "electron-log": "^5.2.4",
     "electron-updater": "^6.3.9",
     "express": "^4.21.2",
-    "libp2p": "^2.7.2",
+    "libp2p": "^2.7.4",
     "node-machine-id": "^1.1.12",
     "ntp-client": "^0.5.3",
     "ws": "^8.18.0"
