@@ -43,6 +43,7 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 64 * 1024; // 64 KB
     static maxStreamBytes = 1024 * 1024 * 1024; // 1 GB
+    iAmBootstrap = false;
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
@@ -147,6 +148,7 @@ class P2PNetwork extends EventEmitter {
 
         this.#bootstrapsReconnectLoop();
         this.#controlLoop();
+        this.#shareDiscoveryLoop();
 
         return;
 
@@ -283,10 +285,14 @@ class P2PNetwork extends EventEmitter {
             this.broadcast('heartbeat', { time: this.timeSynchronizer.getCurrentTime() });
         }
     }
-    #shareDiscoveryLoop() {
-        // share discovery with all peers
+    async #shareDiscoveryLoop() {
+        // actively shares discovery with all peers
         while(true) {
-            //const dht = this.p2pNode.contentRouting.provide;
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            if (!this.iAmBootstrap) { continue; }
+
+            const allPeers = await this.p2pNode.peerStore.all();
+            for (const peer of allPeers) await this.p2pNode.peerRouting.provide(peer.id);
         }
     }
     #handlePeerDiscovery = async (event) => {
@@ -401,11 +407,9 @@ class P2PNetwork extends EventEmitter {
         }
     }
     async #connectToBootstrapNodes() {
-        let iAmBootstrap = false;
-        
         const promises = [];
         for (const addr of this.options.bootstrapNodes) {
-            if (this.myAddr === addr) { iAmBootstrap = true; continue; } // Skip if recognize as myself
+            if (this.myAddr === addr) { this.iAmBootstrap = true; continue; } // Skip if recognize as myself
             if (this.#isBootstrapNodeAlreadyConnected(addr)) { continue; } // Skip if already connected
 
             const ma = multiaddr(addr);
@@ -421,7 +425,7 @@ class P2PNetwork extends EventEmitter {
                 .catch(async err => {
                     if (err.message === 'Can not dial self') {
                         this.myAddr = addr;
-                        iAmBootstrap = true;
+                        this.iAmBootstrap = true;
 
                         await this.p2pNode.services.dht.setMode('server');
                         this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
@@ -437,7 +441,7 @@ class P2PNetwork extends EventEmitter {
 
         const totalPeers = Object.keys(this.peers).length;
         const connectedBootstraps = Object.keys(this.connectedBootstrapNodes).length;
-        let totalBootstraps = iAmBootstrap ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length;
+        let totalBootstraps = this.iAmBootstrap ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length;
         this.connexionResume = { totalPeers, connectedBootstraps, totalBootstraps };
 
         const allPeers = await this.p2pNode.peerStore.all();
