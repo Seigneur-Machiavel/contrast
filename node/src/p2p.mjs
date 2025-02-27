@@ -122,12 +122,14 @@ class P2PNetwork extends EventEmitter {
                 services: {
                     pubsub: gossipsub(),
                     identify: identify(),
-                    dht: kadDHT({clientMode: false}),
+                    //dht: kadDHT({clientMode: false, enabled: true}),
+                    dht: new kadDHT(),
                 },
                 peerDiscovery
             });
 
             await p2pNode.start();
+
             // this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
             this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
 
@@ -301,7 +303,7 @@ class P2PNetwork extends EventEmitter {
             return;
         }
         const allPeers = await this.p2pNode.peerStore.all();
-        console.log(allPeers)
+        console.log(`-------- DISCOVERY: ${allPeers.length} peers --------`);
 
         const tcpMultiAddresses = [];
         const webrtcMultiAddresses = [];
@@ -416,12 +418,15 @@ class P2PNetwork extends EventEmitter {
                     const peerIdStr = con.remotePeer.toString();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                 })
-                .catch(err => {
+                .catch(async err => {
                     if (err.message === 'Can not dial self') {
                         this.myAddr = addr;
                         iAmBootstrap = true;
-                        // set dht server state
-                        // {clientMode: false, enabled: true}
+
+                        await this.p2pNode.services.dht.setMode('server');
+                        this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
+                        this.miniLogger.log(`]]] I AM BOOTSTRAP! DHT SERVER ENABLED [[[`, (m) => { console.info(m); });
+                        this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
                     }
                     //this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                 })
