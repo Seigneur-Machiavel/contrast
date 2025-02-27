@@ -267,6 +267,7 @@ class P2PNetwork extends EventEmitter {
                 const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
                 if (peerInfo.multiaddrs.length !== 0)
+                    console.info('**PEER FIND** * findPeer() *')
                     console.info(peerInfo) // peer id, multiaddrs
             } catch (error) { console.error(error.message); }
 
