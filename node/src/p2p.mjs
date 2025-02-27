@@ -110,8 +110,6 @@ class P2PNetwork extends EventEmitter {
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
         const peerDiscovery = [mdns()];
         if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
-        // add kadDHT to discover other peers
-        peerDiscovery.push(kadDHT());
         
         try {
             const p2pNode = await createLibp2p({
@@ -121,7 +119,11 @@ class P2PNetwork extends EventEmitter {
                 transports: [ webRTCDirect(), tcp() ],
                 addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct', '/ip4/0.0.0.0/tcp/27260' ] },
                 // connectionGater: { denyDialMultiaddr: () => false },
-                services: { pubsub: gossipsub(), identify: identify() },
+                services: {
+                    pubsub: gossipsub(),
+                    identify: identify(),
+                    dht: kadDHT({})
+                },
                 peerDiscovery
             });
 
@@ -285,7 +287,12 @@ class P2PNetwork extends EventEmitter {
         const peerIdStr = peerId.toString();
         const connections = this.p2pNode.getConnections(peerIdStr);
         if (event.detail.multiaddrs.length === 0) { 
-            console.log('No multiaddrs', peerIdStr); return;
+            console.log('No multiaddrs', peerIdStr);
+
+            const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId);
+            console.info(peerInfo) // peer id, multiaddrs
+
+            return;
         }
         if (connections.length > 0) { return; }
 
