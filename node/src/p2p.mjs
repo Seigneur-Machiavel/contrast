@@ -290,8 +290,6 @@ class P2PNetwork extends EventEmitter {
     #handlePeerDiscovery = async (event) => {
         /** @type {PeerId} */
         const peerId = event.detail.id;
-        this.dht.provide(peerId, event.detail.multiaddrs);
-        
         const peerIdStr = peerId.toString();
         const connections = this.p2pNode.getConnections(peerIdStr);
         if (event.detail.multiaddrs.length === 0) { 
