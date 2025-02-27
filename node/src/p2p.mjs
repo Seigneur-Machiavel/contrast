@@ -110,6 +110,9 @@ class P2PNetwork extends EventEmitter {
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
         const peerDiscovery = [mdns()];
         if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
+        // add kadDHT to discover other peers
+        peerDiscovery.push(kadDHT());
+        
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
