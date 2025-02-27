@@ -6,7 +6,7 @@ import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 
 import { tcp } from '@libp2p/tcp';
-import { kadDHT, KadDHT } from '@libp2p/kad-dht';
+import { kadDHT } from '@libp2p/kad-dht';
 
 //const wrtc = await import('wrtc').then(m => m.default);
 //const WebRTCStarModule = await import('libp2p-webrtc-star').then(m => m.default);
@@ -43,8 +43,6 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 64 * 1024; // 64 KB
     static maxStreamBytes = 1024 * 1024 * 1024; // 1 GB
-    /** @type {KadDHT} */
-    dht = new kadDHT({clientMode: false});
     myAddr;
     timeSynchronizer;
     fastConverter = new FastConverter();
@@ -124,7 +122,7 @@ class P2PNetwork extends EventEmitter {
                 services: {
                     pubsub: gossipsub(),
                     identify: identify(),
-                    dht: this.dht,
+                    dht: kadDHT({clientMode: false}),
                 },
                 peerDiscovery
             });
@@ -325,8 +323,8 @@ class P2PNetwork extends EventEmitter {
         if (connections.length > 0) { return; }
 
         try {
-            //if (isYoga) multiAddressesToDial = tcpMultiAddresses; // should not work
-            const con = await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            if (isYoga) multiAddressesToDial = tcpMultiAddresses; // should not work
+            const con = await this.p2pNode.dial(multiAddressesToDial, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
         } catch (err) {
