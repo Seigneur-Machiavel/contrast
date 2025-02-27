@@ -122,6 +122,7 @@ class P2PNetwork extends EventEmitter {
                 addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct', '/ip4/0.0.0.0/tcp/27260' ] },
                 // connectionGater: { denyDialMultiaddr: () => false },
                 services: {
+                    autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT(),
@@ -278,17 +279,16 @@ class P2PNetwork extends EventEmitter {
             //12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp
             try {
                 const searchPeerId = peerIdFromString('12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp'); // ALEX
-                
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
                 if (peerInfo.multiaddrs.length !== 0)
                     console.info('**PEER FIND ALEX** * findPeer() *')
                     console.info(peerInfo) // peer id, multiaddrs
 
-                    // try connect -> result: yes we can dial, //TODO: try implement relay
-                    //const con = await this.p2pNode.dial(searchPeerId, { signal: AbortSignal.timeout(3000) });
-                    //const stream = await con.newStream(P2PNetwork.SYNC_PROTOCOL);
+                    // try connect -> result: yes we can dial if bootstrap, //TODO: try implement relay
+                    const con = await this.p2pNode.dial(searchPeerId, { signal: AbortSignal.timeout(3000) });
+                    const stream = await con.newStream(P2PNetwork.SYNC_PROTOCOL);
 
-                    //console.info('**PEER FIND ALEX** * dial() *')
+                    console.info('**PEER FIND ALEX** * dial() *')
             } catch (error) { console.error(error.message); }
              
             try {
@@ -304,13 +304,13 @@ class P2PNetwork extends EventEmitter {
                 //await this.p2pNode.peerStore.
                 // try dial /ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g
                 
+                //const ma0 = multiaddr('/ip4/192.168.4.23/tcp/27260');
                 const ma1 = multiaddr('/ip4/10.5.0.2/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
                 const ma2 = multiaddr('/ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
                 const ma3 = multiaddr('/ip4/127.0.0.1/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
-                const ma4 = multiaddr('/ip4/192.168.4.23/tcp/27260');
-                const con = await this.p2pNode.dial([ma4], { signal: AbortSignal.timeout(3000) });
+                const con = await this.p2pNode.dial([ma1, ma2, ma3], { signal: AbortSignal.timeout(3000) });
                 await con.newStream(P2PNetwork.SYNC_PROTOCOL);
-            
+                console.info('**DIAL** * dial() *')
             } catch (error) { console.error(error);}
 
             /*const consInfo = {};
