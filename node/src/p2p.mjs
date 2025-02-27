@@ -138,6 +138,9 @@ class P2PNetwork extends EventEmitter {
             throw error;
         }
 
+        this.#bootstrapsReconnectLoop();
+        this.#controlLoop();
+
         return;
 
         // TEST DIAL
