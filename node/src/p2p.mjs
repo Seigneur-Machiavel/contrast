@@ -116,7 +116,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 transports: [ webRTCDirect(), tcp() ],
-                addresses: { listen: [ '/ip4/0.0.0.0/udp/0/webrtc-direct' ] },
+                addresses: { listen: [ '/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/udp/0/webrtc-direct' ] },
                 // connectionGater: { denyDialMultiaddr: () => false },
                 services: { pubsub: gossipsub(), identify: identify() },
                 peerDiscovery
