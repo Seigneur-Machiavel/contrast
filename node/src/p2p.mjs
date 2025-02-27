@@ -125,7 +125,7 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     //dht: kadDHT({clientMode: false, enabled: true}),
-                    dht: new kadDHT(),
+                    dht: kadDHT(),
                 },
                 peerDiscovery
             });
@@ -262,12 +262,21 @@ class P2PNetwork extends EventEmitter {
     }
     async #controlLoop() {
         while(true) {
-            await new Promise(resolve => setTimeout(resolve, 5000));
-
-            const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
-            const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
-            if (peerInfo.multiaddrs.length === 0) continue;
-            console.info(peerInfo) // peer id, multiaddrs
+            try {
+                await new Promise(resolve => setTimeout(resolve, 5000));
+    
+                // try dial /ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g
+                
+                //const ma = multiaddr('/ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
+                const ma = multiaddr('/ip4/10.5.0.2/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g')
+                const con = await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(3000) });
+                await con.newStream(P2PNetwork.SYNC_PROTOCOL);
+                
+                const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
+                const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
+                if (peerInfo.multiaddrs.length === 0) continue;
+                console.info(peerInfo) // peer id, multiaddrs
+            } catch (error) { console.error(error);}
 
             /*const consInfo = {};
             this.p2pNode.getConnections().forEach(connection => {
