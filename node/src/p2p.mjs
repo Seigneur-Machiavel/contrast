@@ -4,6 +4,7 @@ import { serializer } from '../../utils/serializer.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
+import { peerIdFromString } from '@libp2p/peer-id';
 
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
@@ -262,14 +263,20 @@ class P2PNetwork extends EventEmitter {
     async #controlLoop() {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 5000));
-            const consInfo = {};
+
+            const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
+            const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
+            if (peerInfo.multiaddrs.length === 0) continue;
+            console.info(peerInfo) // peer id, multiaddrs
+
+            /*const consInfo = {};
             this.p2pNode.getConnections().forEach(connection => {
                 const peerIdStr = connection.remotePeer.toString();
                 const ip = connection.remoteAddr.nodeAddress().address;
 
                 if (!consInfo[peerIdStr]) consInfo[peerIdStr] = { ip, count: 0 };
                 consInfo[peerIdStr].count++;
-            });
+            });*/
 
             /*console.log(`[CONTROL] Total of disconnections: ${this.totalOfDisconnections} -------`);
             for (const peerIdStr in consInfo) {
@@ -291,6 +298,12 @@ class P2PNetwork extends EventEmitter {
             await new Promise(resolve => setTimeout(resolve, 10000));
             if (this.iAmBootstrap) { continue; }
 
+            //const test = await this.p2pNode.peerRouting.getClosestPeers(this.p2pNode.peerId);
+            //console.log('TEST', test)
+
+            /*for await (const peer of this.p2pNode.peerRouting.getClosestPeers(this.p2pNode.peerId)) {
+                console.log(peer.id, peer.multiaddrs)
+            }*/ // -> Nope
             //const allPeers = await this.p2pNode.peerStore.all();
             //for (const peer of allPeers) await this.p2pNode.peerRouting.getClosestPeers
         }
@@ -300,12 +313,15 @@ class P2PNetwork extends EventEmitter {
         const peerId = event.detail.id;
         const peerIdStr = peerId.toString();
         const connections = this.p2pNode.getConnections(peerIdStr);
-        if (event.detail.multiaddrs.length === 0) { 
-            console.log('No multiaddrs', peerIdStr);
 
-            const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId);
-            console.info(peerInfo) // peer id, multiaddrs
-            
+        // TESTS
+        // build peerId from peerIdStr
+        /*const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
+        const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
+        console.info(peerInfo) // peer id, multiaddrs*/
+
+        if (event.detail.multiaddrs.length === 0) {
+            console.log('No multiaddrs', peerIdStr);
             return;
         }
         const allPeers = await this.p2pNode.peerStore.all();
@@ -315,21 +331,23 @@ class P2PNetwork extends EventEmitter {
         const webrtcMultiAddresses = [];
         const isYoga = false; // testing variable
         for (const addr of event.detail.multiaddrs) {
-            if (addr.toString().includes('192.168.4.23')) isYoga = true;
-            if (addr.toString().includes('webrtc-direct')) webrtcMultiAddresses.push(addr);
+            const addrStr = addr.toString();
+            if (addrStr.includes('192.168.4.23')) isYoga = true;
+            if (addrStr.includes('webrtc-direct')) webrtcMultiAddresses.push(addr);
             else tcpMultiAddresses.push(addr);
         }
             
         let multiAddressesToDial = tcpMultiAddresses.concat(webrtcMultiAddresses);
 
         if (isYoga) {
-            
+            console.log('YOGA', peerIdStr);
         }
 
         if (connections.length > 0) { return; }
 
         try {
-            if (isYoga) multiAddressesToDial = tcpMultiAddresses; // should not work
+            if (isYoga)
+                multiAddressesToDial = tcpMultiAddresses; // should not work
             const con = await this.p2pNode.dial(multiAddressesToDial, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
