@@ -124,7 +124,6 @@ class P2PNetwork extends EventEmitter {
                 services: {
                     pubsub: gossipsub(),
                     identify: identify(),
-                    //dht: kadDHT({clientMode: false, enabled: true}),
                     dht: kadDHT(),
                 },
                 peerDiscovery
@@ -262,20 +261,26 @@ class P2PNetwork extends EventEmitter {
     }
     async #controlLoop() {
         while(true) {
+            await new Promise(resolve => setTimeout(resolve, 5000));
+
             try {
-                await new Promise(resolve => setTimeout(resolve, 5000));
-    
+                const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
+                const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
+                if (peerInfo.multiaddrs.length !== 0)
+                    console.info(peerInfo) // peer id, multiaddrs
+            } catch (error) { console.error(error.message); }
+
+            try {
+                //await this.p2pNode.peerStore.
                 // try dial /ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g
                 
-                //const ma = multiaddr('/ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
-                const ma = multiaddr('/ip4/10.5.0.2/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g')
-                const con = await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(3000) });
-                await con.newStream(P2PNetwork.SYNC_PROTOCOL);
+                const ma1 = multiaddr('/ip4/10.5.0.2/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
+                const ma2 = multiaddr('/ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
+                const ma3 = multiaddr('/ip4/127.0.0.1/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g');
                 
-                const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
-                const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
-                if (peerInfo.multiaddrs.length === 0) continue;
-                console.info(peerInfo) // peer id, multiaddrs
+                const con = await this.p2pNode.dial([ma1, ma2, ma3], { signal: AbortSignal.timeout(3000) });
+                await con.newStream(P2PNetwork.SYNC_PROTOCOL);
+            
             } catch (error) { console.error(error);}
 
             /*const consInfo = {};
