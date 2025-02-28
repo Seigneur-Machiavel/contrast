@@ -565,6 +565,7 @@ class P2PNetwork extends EventEmitter {
                     await con.newStream(P2PNetwork.SYNC_PROTOCOL);
                     const peerIdStr = con.remotePeer.toString();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
+                    console.log('--- CONNECT TO BOOTSTRAP ---> ', addr.toString());
 
                     // try to init relay transport
                     try {
@@ -572,7 +573,7 @@ class P2PNetwork extends EventEmitter {
                         const multiaddrs = connections.map(con => con.remoteAddr);
                         console.log('MULTIADDRS', multiaddrs.map(addr => addr.toString()));
                         await this.p2pNode.dial(multiaddrs);
-                        console.log('--- RELAY DIALED ---> ', relayAddr.toString());
+                        console.log('--- RELAY DIALED ---> ', multiaddrs[0].toString());
                     } catch (error) {
                         console.error(error.message);
                     }
