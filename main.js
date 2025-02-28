@@ -3,14 +3,22 @@ if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.m
 const natUpnp = require('nat-upnp');
 const client = natUpnp.createClient();
 const portToOpen = 27260;
-const GATEWAY = '192.168.1.1';
 
 // PORT OPENNING METHOD 1: NAT-UPNP
+/*client.portUnmapping({ public: portToOpen }, (err) => {
+    if (err) {
+        windows.boardWindow.webContents.send('assistant-message', 'Error while closing the port');
+        windows.boardWindow.webContents.send('assistant-message', err.message);
+        if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
+    }
+    windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} Opened successfully !`);
+});*/
+
 setTimeout(() => {
     client.getMappings(function(err, results) {
         if (err) {
-            console.error('Erreur lors de la récupération des mappings :', err);
-            windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de la récupération des mappings');
+            console.error('Error while getting mappings :', err);
+            windows.boardWindow.webContents.send('assistant-message', 'Error while getting mappings');
             windows.boardWindow.webContents.send('assistant-message', err.message);
             if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
             return;
@@ -19,9 +27,8 @@ setTimeout(() => {
         console.log('Mappings actuels :', results);
         for (const result of results) {
             if (result.public.port === portToOpen) {
-                console.log(`Le port ${portToOpen} est déjà ouvert !`);
-                console.log(`IP interne : ${result.private.host}`);
-                windows.boardWindow.webContents.send('assistant-message', `Le port ${portToOpen} est déjà ouvert, IP interne : ${result.private.host}`);
+                console.log(`Port ${portToOpen} already open, asssociated internal IP : ${result.private.host}`);
+                windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} already open, asssociated internal IP : ${result.private.host}`);
                 return;
             }
         }
@@ -34,81 +41,28 @@ setTimeout(() => {
             ttl: 3600           // Durée en secondes (ici 1 heure)
         }, (err) => {
         if (err) {
-            console.error('Erreur lors de l\'ouverture du port :', err);
-            windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de l\'ouverture du port');
+            console.error('Error while opening the port :', err);
+            windows.boardWindow.webContents.send('assistant-message', 'Error while opening the port');
             windows.boardWindow.webContents.send('assistant-message', err.message);
             if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
             return;
         }
-        console.log(`Port ${portToOpen} ouvert avec succès !`);
-            windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} ouvert avec succès !`);
+        console.log(`Port ${portToOpen} Opened successfully !`);
+        windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} Opened successfully !`);
         
         // Récupérer l'IP publique pour vérification
         client.externalIp((err, ip) => {
             if (err) {
-            console.error('Erreur lors de la récupération de l\'IP :', err);
-                windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de la récupération de l\'IP');
-            return;
+                console.error('Error while getting the IP :', err);
+                windows.boardWindow.webContents.send('assistant-message', 'Error while getting the IP');
+                return;
             }
-            console.log(`Ton IP publique est : ${ip}`);
-                windows.boardWindow.webContents.send('assistant-message', `Ton IP publique est : ${ip}`);
+            console.log(`Your public IP is : ${ip}`);
+            windows.boardWindow.webContents.send('assistant-message', `Your public IP is : ${ip}`);
             });
         });
     });
 }, 10000);
-
-// PORT OPENNING METHOD 2: VANILLA (PMP)
-const dgram = require('dgram');
-function openPortNatPmp(port, callback) {
-    const socket = dgram.createSocket('udp4');
-    const request = Buffer.from([
-      0, // Version
-      1, // Opcode : Map TCP
-      0, 0, // Réservé
-      port >> 8, port & 0xff, // Port interne
-      port >> 8, port & 0xff, // Port externe
-      0, 0, 0, 60 // Lifetime : 60s
-    ]);
-  
-    socket.on('error', (err) => {
-      callback(err);
-      socket.close();
-    });
-  
-    socket.on('message', (msg) => {
-      if (msg[1] === 129) { // Réponse succès
-        console.log(`[VANILLA] Port ${port} ouvert via NAT-PMP`);
-        callback(null);
-      } else {
-        callback(new Error('NAT-PMP a échoué'));
-      }
-      socket.close();
-    });
-  
-    socket.send(request, 5351, GATEWAY, (err) => {
-      if (err) {
-        callback(err);
-        socket.close();
-      }
-    });
-
-    setTimeout(() => {
-        if (socket.address()) { // Vérifie si le socket est encore ouvert
-          console.log('Timeout : aucune réponse du routeur');
-          socket.close();
-          callback(new Error('Timeout NAT-PMP'));
-        }
-    }, 10000);
-}
-
-openPortNatPmp(portToOpen, (err) => {
-    if (err) {
-      console.error('Échec ouverture port :', err.message);
-      console.log('Ouvre manuellement le port', PORT, 'sur ton routeur.');
-      return;
-    }
-    console.log('[VANILLA] Port ouvert avec succès !');
-});
 
 /**
  * @typedef {import('./utils/storage-manager.mjs').Storage} Storage

@@ -1,6 +1,6 @@
 {
   "name": "contrast",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "All-in-one Contrast application",
   "main": "main.js",
   "scripts": {
@@ -30,7 +30,6 @@
     "argon2": "^0.41.1",
     "auto-launch": "^5.0.6",
     "cors": "^2.8.5",
-    "dgram": "^1.0.1",
     "electron-log": "^5.2.4",
     "electron-updater": "^6.3.9",
     "express": "^4.21.2",
