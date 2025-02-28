@@ -1,6 +1,6 @@
 if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // For better completion
 
-/*const natUpnp = require('nat-upnp');
+const natUpnp = require('nat-upnp');
 const client = natUpnp.createClient();
 const portToOpen = 27260;
 
@@ -26,7 +26,7 @@ client.portMapping({
     }
     console.log(`Ton IP publique est : ${ip}`);
     });
-});*/
+});
 
 /**
  * @typedef {import('./utils/storage-manager.mjs').Storage} Storage
