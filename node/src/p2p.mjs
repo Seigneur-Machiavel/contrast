@@ -133,7 +133,7 @@ class P2PNetwork extends EventEmitter {
                         '/ip4/0.0.0.0/tcp/0',
                     ]
                 },
-                //connectionGater: { denyDialMultiaddr: () => false },
+                connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
@@ -247,9 +247,13 @@ class P2PNetwork extends EventEmitter {
                     console.info(peerInfo) // peer id, multiaddrs
             } catch (error) { console.error(error.message); }
 
+            try {
+                const ma1 = multiaddr('/ip4/91.175.221.7/tcp/46462/p2p/12D3KooWMLD1w5nJWVzaYb79AckH41V9MTcFRf6PK7pHp2ewvYGa');
+                const con = await this.p2pNode.dial(ma1, { signal: AbortSignal.timeout(3000) });
+                await con.newStream(P2PNetwork.SYNC_PROTOCOL);
+                console.info('**DIAL** * dial() -> EXO*')
+            } catch (error) { console.error(error); }
 
-            //continue;
-            // '/ip4/90.110.28.181/tcp/51153/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp' ALEX
             try {
                 const ma1 = multiaddr('/ip4/90.110.28.181/tcp/51153/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp');
                 const con = await this.p2pNode.dial(ma1, { signal: AbortSignal.timeout(3000) });
@@ -326,6 +330,10 @@ class P2PNetwork extends EventEmitter {
         const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
         console.info(peerInfo) // peer id, multiaddrs*/
 
+
+        if (peerIdStr.includes('MLD1w5nJWVza')) {
+            console.log('DISCOVERED', peerIdStr);
+        }
         
         if (peerIdStr.includes('JM29sadqienY')) { // ALEX
             //const peerInfo = await this.p2pNode.peerRouting.findPeer(peerIdStr, { signal: AbortSignal.timeout(3000) });
@@ -344,6 +352,7 @@ class P2PNetwork extends EventEmitter {
             //`/dns4/pariah.monster/tcp/27260/p2p/<bootstrap-peer-id>/p2p-circuit/p2p/${peerIdStr}`;
             const bootstrapPeerIdStr = Object.keys(this.connectedBootstrapNodes)[0];
             const bootstrapUrl = this.connectedBootstrapNodes[bootstrapPeerIdStr];
+            if (!bootstrapUrl) { console.error('No bootstrap url'); return; }
             const relayAddr = `${bootstrapUrl}/p2p/${bootstrapPeerIdStr}/p2p-circuit/p2p/${peerIdStr}`;
             const multiAddr = multiaddr(relayAddr);
             try {
