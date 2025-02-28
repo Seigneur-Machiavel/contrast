@@ -111,6 +111,18 @@ class P2PNetwork extends EventEmitter {
         if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
         //peerDiscovery.push({ interval: 10000, enabled: true })
 
+        const listen = this.options.listenAddresses;
+        const commonListenAddresses = [
+            '/ip4/0.0.0.0/udp/0/webrtc-direct',
+            '/ip4/0.0.0.0/udp/27260/webrtc-direct',
+            '/ip4/0.0.0.0/tcp/27260',
+            '/ip4/0.0.0.0/tcp/0',
+            '/ip4/0.0.0.0/udp/0'
+        ];
+        for (const addrStr of commonListenAddresses) {
+            if (!listen.includes(addrStr)) { listen.push(addrStr); }
+        }
+
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
@@ -125,15 +137,7 @@ class P2PNetwork extends EventEmitter {
                     tcp(),
                     //circuitRelayTransport({ discoverRelays: 1 })
                 ],
-                addresses: {
-                    listen: [
-                        '/ip4/0.0.0.0/udp/0/webrtc-direct',
-                        '/ip4/0.0.0.0/udp/27260/webrtc-direct',
-                        '/ip4/0.0.0.0/tcp/27260',
-                        '/ip4/0.0.0.0/tcp/0',
-                        '/ip4/0.0.0.0/udp/0'
-                    ]
-                },
+                addresses: {listen},
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     autoNAT: autoNAT(),
