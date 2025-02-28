@@ -1,6 +1,6 @@
 {
   "name": "contrast",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "description": "All-in-one Contrast application",
   "main": "main.js",
   "scripts": {
@@ -23,6 +23,7 @@
     "@libp2p/mdns": "^11.0.13",
     "@libp2p/mplex": "^11.0.28",
     "@libp2p/tcp": "^10.0.13",
+    "@libp2p/upnp-nat": "^3.1.7",
     "@libp2p/webrtc": "^5.2.5",
     "@multiformats/multiaddr": "^12.3.3",
     "adm-zip": "^0.5.16",

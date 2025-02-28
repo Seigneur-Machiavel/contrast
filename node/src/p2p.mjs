@@ -5,6 +5,7 @@ import { mining } from '../../utils/mining-functions.mjs';
 import { EventEmitter } from 'events';
 import { createLibp2p } from 'libp2p';
 import { peerIdFromString } from '@libp2p/peer-id';
+import { uPnPNAT } from '@libp2p/upnp-nat';
 
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
@@ -140,6 +141,7 @@ class P2PNetwork extends EventEmitter {
                 addresses: {listen},
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
+                    uPnPNAT: uPnPNAT(),
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
