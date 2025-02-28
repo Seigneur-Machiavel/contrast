@@ -364,7 +364,9 @@ class P2PNetwork extends EventEmitter {
             const addrStr = addr.toString();
             return !addrStr.includes('127.0.0.1') && !addrStr.includes('192.168.') && (addrStr.includes('p2p-circuit') || addrStr.includes('webrtc-direct'));
         });*/
-        if (multiaddrs.length === 0) {
+        const multiAddrsToTry = discoveryMultiaddrs.concat(multiaddrs);
+
+        if (multiAddrsToTry.length === 0) {
             //`/dns4/pariah.monster/tcp/27260/p2p/<bootstrap-peer-id>/p2p-circuit/p2p/${peerIdStr}`;
             /*const bootstrapPeerIdStr = Object.keys(this.connectedBootstrapNodes)[0];
             const bootstrapUrl = this.connectedBootstrapNodes[bootstrapPeerIdStr];
@@ -394,7 +396,7 @@ class P2PNetwork extends EventEmitter {
 
         if (connections.length > 0) { await this.#updateConnexionResume(); return; }
         try {
-            const con = await this.p2pNode.dial(multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const con = await this.p2pNode.dial(multiAddrsToTry, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
         } catch (err) {
