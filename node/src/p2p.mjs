@@ -314,11 +314,11 @@ class P2PNetwork extends EventEmitter {
             console.log('YOGA CONNECTED', peerIdStr);
         }
 
-        const dialableAddrs = event.detail.multiaddrs.filter(addr => {
+        /*const dialableAddrs = event.detail.multiaddrs.filter(addr => {
             const addrStr = addr.toString();
             return !addrStr.includes('127.0.0.1') && !addrStr.includes('192.168.') && (addrStr.includes('p2p-circuit') || addrStr.includes('webrtc-direct'));
-        });
-        if (dialableAddrs.length === 0) {
+        });*/
+        if (event.detail.multiaddrs.length === 0) {
             console.log('No multiaddrs', peerIdStr);
             return;
         }
@@ -337,7 +337,7 @@ class P2PNetwork extends EventEmitter {
 
         if (connections.length > 0) { return; }
         try {
-            const con = await this.p2pNode.dial(dialableAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const con = await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
         } catch (err) {
