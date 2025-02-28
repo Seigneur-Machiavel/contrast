@@ -410,7 +410,7 @@ class P2PNetwork extends EventEmitter {
         /** @type {PeerId} */
         const peerId = event.detail;
         const peerIdStr = peerId.toString();
-        this.miniLogger.log(`(Connect) Dialed peer ${readableId(peerIdStr)}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`(Connect) dial from peer ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
 
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
@@ -421,12 +421,25 @@ class P2PNetwork extends EventEmitter {
         }
 
         const connections = this.p2pNode.getConnections(peerIdStr);
-        if (!connections) { console.error('No connections'); return; }
-
         const multiaddrs = connections.map(con => con.remoteAddr);
         if (!multiaddrs) { console.error('No multiaddrs'); return; }
 
         for (const addr of multiaddrs) {
+            const addrIp = addr.toString().split('/')[2];
+            for (const bootstrapAddr of this.options.bootstrapNodes) {
+                const bootAddrIp = bootstrapAddr.split('/')[2];
+                if (addrIp !== bootAddrIp) continue;
+                this.connectedBootstrapNodes[peerIdStr] = bootstrapAddr;
+            }
+        }
+
+        try {
+            const con = await this.p2pNode.dial(peerId, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            await con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            this.miniLogger.log(`(Connect) dial to peer ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
+        } catch (error) { console.error(error); }
+
+        /*for (const addr of multiaddrs) {
             const addrIp = addr.toString().split('/')[2];
             for (const bootstrapAddr of this.options.bootstrapNodes) {
                 const bootAddrIp = bootstrapAddr.split('/')[2];
@@ -442,7 +455,7 @@ class P2PNetwork extends EventEmitter {
 
                 break;
             }
-        }
+        }*/
 
         this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
         await this.#updateConnexionResume();
@@ -645,7 +658,7 @@ class P2PNetwork extends EventEmitter {
     }
     /** @param {string} peerIdStr @param {string} reason */
     async closeConnection(peerIdStr, reason) {
-        const message = `Closing connection to ${peerIdStr}${reason ? ` for reason: ${reason}` : ''}`;
+        const message = `Closing connection to ${readableId(peerIdStr)}${reason ? ` for reason: ${reason}` : ''}`;
         this.miniLogger.log(message, (m) => { console.debug(m); });
         this.p2pNode.components.connectionManager.closeConnections(peerIdStr);
     }
