@@ -158,13 +158,13 @@ class P2PNetwork extends EventEmitter {
 
             await p2pNode.start();
 
-            p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
+            /*p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
                 console.log('------');
                 console.log('------');
                 console.log('New relay reservation:', evt.detail);
                 console.log('------');
                 console.log('------');
-              });
+              });*/
 
             // this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
             this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
