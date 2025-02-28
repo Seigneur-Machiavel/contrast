@@ -131,6 +131,7 @@ class P2PNetwork extends EventEmitter {
                         '/ip4/0.0.0.0/udp/27260/webrtc-direct',
                         '/ip4/0.0.0.0/tcp/27260',
                         '/ip4/0.0.0.0/tcp/0',
+                        '/ip4/0.0.0.0/udp/0'
                     ]
                 },
                 connectionGater: { denyDialMultiaddr: () => false },
@@ -156,6 +157,7 @@ class P2PNetwork extends EventEmitter {
             });
 
             await p2pNode.start();
+
             p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
                 console.log('------');
                 console.log('------');
@@ -231,7 +233,7 @@ class P2PNetwork extends EventEmitter {
             try {
                 const searchPeerId = peerIdFromString('12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp'); // ALEX
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
-                if (peerInfo.multiaddrs.length !== 0)
+                if (peerInfo.multiaddrs.length !== 0) {
                     console.info('**PEER FIND ALEX** * findPeer() *')
                     console.info(peerInfo) // peer id, multiaddrs
 
@@ -240,15 +242,17 @@ class P2PNetwork extends EventEmitter {
                     const stream = await con.newStream(P2PNetwork.SYNC_PROTOCOL);
 
                     console.info('**PEER FIND ALEX** * dial() *')
+                }
             } catch (error) { console.error(error.message); }
              
             try {
                 const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
                 
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
-                if (peerInfo.multiaddrs.length !== 0)
+                if (peerInfo.multiaddrs.length !== 0) {
                     console.info('**PEER FIND YOGA** * findPeer() *')
                     console.info(peerInfo) // peer id, multiaddrs
+                }
             } catch (error) { console.error(error.message); }
 
             try {
@@ -369,6 +373,14 @@ class P2PNetwork extends EventEmitter {
         }
         const allPeers = await this.p2pNode.peerStore.all();
         console.log(`-------- DISCOVERY: ${allPeers.length} peers --------`);
+
+        // if one address contains "p2p/" it can be added to p2pDiscoveryArray
+        for (const addr of discoveryMultiaddrs) {
+            if (!addr.toString().includes('p2p/')) continue;
+            
+            await this.p2pNode.peerStore.save(peerId, { multiaddrs: discoveryMultiaddrs });
+            break;
+        }
 
         if (connections.length > 0) { await this.#updateConnexionResume(); return; }
         try {
