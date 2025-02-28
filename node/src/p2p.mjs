@@ -117,7 +117,11 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [mplex(), yamux()],
                 connectionEncrypters: [noise()],
                 transports: [
-                    webRTCDirect({ stun: ['stun:stun.l.google.com:19302'] }),
+                    webRTCDirect({ stun: [
+                        'stun:stun.l.google.com:19302',
+                        'stun1.l.google.com:19302',
+                        'stun2.l.google.com:19302'
+                    ] }),
                     tcp(),
                     circuitRelayTransport()
                 ],
@@ -170,7 +174,7 @@ class P2PNetwork extends EventEmitter {
         }
 
         this.#bootstrapsReconnectLoop();
-        this.#controlLoop();
+        //this.#controlLoop();
         //this.#tryConnectFromDHT();
 
         return;
@@ -241,7 +245,7 @@ class P2PNetwork extends EventEmitter {
             } catch (error) { console.error(error.message); }
 
 
-            continue;
+            //continue;
             try {
                 //await this.p2pNode.peerStore.
                 // try dial /ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g
