@@ -4,44 +4,52 @@ const natUpnp = require('nat-upnp');
 const client = natUpnp.createClient();
 const portToOpen = 27260;
 
-client.getMappings(function(err, results) {
-    if (err) {
-        console.error('Erreur lors de la récupération des mappings :', err);
-        return;
-    }
-
-    console.log('Mappings actuels :', results);
-    for (const result of results) {
-        if (result.public.port === portToOpen) {
-            console.log(`Le port ${portToOpen} est déjà ouvert !`);
-            console.log(`IP interne : ${result.private.host}`);
+setTimeout(() => {
+    client.getMappings(function(err, results) {
+        if (err) {
+            console.error('Erreur lors de la récupération des mappings :', err);
+            windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de la récupération des mappings');
             return;
         }
-    }
 
-    client.portMapping({
-      public: portToOpen, // Port externe visible depuis l'extérieur
-      private: portToOpen, // Port interne sur ta machine
-      protocol: 'TCP',    // TCP ou UDP selon ton besoin
-      description: 'Test Node.js UPnP', // Description pour le mapping
-      ttl: 3600           // Durée en secondes (ici 1 heure)
-    }, (err) => {
-      if (err) {
-        console.error('Erreur lors de l\'ouverture du port :', err);
-        return;
-      }
-      console.log(`Port ${portToOpen} ouvert avec succès !`);
-    
-      // Récupérer l'IP publique pour vérification
-      client.externalIp((err, ip) => {
-        if (err) {
-          console.error('Erreur lors de la récupération de l\'IP :', err);
-          return;
+        console.log('Mappings actuels :', results);
+        for (const result of results) {
+            if (result.public.port === portToOpen) {
+                console.log(`Le port ${portToOpen} est déjà ouvert !`);
+                console.log(`IP interne : ${result.private.host}`);
+                windows.boardWindow.webContents.send('assistant-message', `Le port ${portToOpen} est déjà ouvert, IP interne : ${result.private.host}`);
+                return;
+            }
         }
-        console.log(`Ton IP publique est : ${ip}`);
+
+        client.portMapping({
+        public: portToOpen, // Port externe visible depuis l'extérieur
+        private: portToOpen, // Port interne sur ta machine
+        protocol: 'TCP',    // TCP ou UDP selon ton besoin
+        description: 'Test Node.js UPnP', // Description pour le mapping
+        ttl: 3600           // Durée en secondes (ici 1 heure)
+        }, (err) => {
+        if (err) {
+            console.error('Erreur lors de l\'ouverture du port :', err);
+            windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de l\'ouverture du port');
+            return;
+        }
+        console.log(`Port ${portToOpen} ouvert avec succès !`);
+            windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} ouvert avec succès !`);
+        
+        // Récupérer l'IP publique pour vérification
+        client.externalIp((err, ip) => {
+            if (err) {
+            console.error('Erreur lors de la récupération de l\'IP :', err);
+                windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de la récupération de l\'IP');
+            return;
+            }
+            console.log(`Ton IP publique est : ${ip}`);
+                windows.boardWindow.webContents.send('assistant-message', `Ton IP publique est : ${ip}`);
+            });
         });
     });
-});
+}, 10000);
 
 /**
  * @typedef {import('./utils/storage-manager.mjs').Storage} Storage
