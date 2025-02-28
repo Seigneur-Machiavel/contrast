@@ -362,27 +362,31 @@ class P2PNetwork extends EventEmitter {
         });*/
         if (multiaddrs.length === 0) {
             //`/dns4/pariah.monster/tcp/27260/p2p/<bootstrap-peer-id>/p2p-circuit/p2p/${peerIdStr}`;
-            const bootstrapPeerIdStr = Object.keys(this.connectedBootstrapNodes)[0];
+            /*const bootstrapPeerIdStr = Object.keys(this.connectedBootstrapNodes)[0];
             const bootstrapUrl = this.connectedBootstrapNodes[bootstrapPeerIdStr];
             if (!bootstrapUrl) { console.error('No bootstrap url'); return; }
             const relayAddr = `${bootstrapUrl}/p2p/${bootstrapPeerIdStr}/p2p-circuit/p2p/${peerIdStr}`;
-            const multiAddr = multiaddr(relayAddr);
+            const multiAddr = multiaddr(relayAddr);*/
+            
             try {
-                const con = await this.p2pNode.dial(multiAddr, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                const peerInfo = await this.p2pNode.peerRouting.findPeer(peerIdStr, { signal: AbortSignal.timeout(3000) });
+                const multiAddrs = peerInfo.multiaddrs;
+                if (multiAddrs.length === 0) { console.error('No multiaddrs', peerIdStr); return; }
+                const con = await this.p2pNode.dial(multiAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 await con.newStream(P2PNetwork.SYNC_PROTOCOL);
                 this.miniLogger.log(`(Discovery) Dialed relay node ${relayAddr}`, (m) => { console.debug(m); });
-            } catch (error) { console.error(error); }
+            } catch (error) { console.error(error.message); }
             console.log('No multiaddrs', peerIdStr);
             return;
         }
 
         // if one address contains "p2p/" it can be added to p2pDiscoveryArray
-        for (const addr of discoveryMultiaddrs) {
+        /*for (const addr of discoveryMultiaddrs) {
             if (!addr.toString().includes('p2p/')) continue;
             
             await this.p2pNode.peerStore.save(peerId, { multiaddrs: discoveryMultiaddrs });
             break;
-        }
+        }*/
 
         if (connections.length > 0) { await this.#updateConnexionResume(); return; }
         try {
@@ -410,8 +414,6 @@ class P2PNetwork extends EventEmitter {
             console.log('ALEX CONNECTED', peerIdStr);
         }
 
-        this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
-
         const connections = this.p2pNode.getConnections(peerIdStr);
         if (!connections) { console.error('No connections'); return; }
 
@@ -431,10 +433,12 @@ class P2PNetwork extends EventEmitter {
 
                     this.connectedBootstrapNodes[peerIdStr] = bootstrapAddr;
                 } catch (error) { console.error(error); }
+
                 break;
             }
         }
 
+        this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
         await this.#updateConnexionResume();
     };
     /** @param {CustomEvent} event */
@@ -530,12 +534,14 @@ class P2PNetwork extends EventEmitter {
                         this.myAddr = addr;
                         this.iAmBootstrap = true;
 
-                        await this.p2pNode.services.dht.setMode('server');
+                        setTimeout(async () => await this.p2pNode.services.dht.setMode('server'), 10000);
                         this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
                         this.miniLogger.log(`]]] I AM BOOTSTRAP! DHT SERVER ENABLED [[[`, (m) => { console.info(m); });
                         this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
+                    } else {
+                        console.error(err.message);
+                        //this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                     }
-                    //this.miniLogger.log(`Failed to connect to bootstrap node ${addr}`, (m) => { console.error(m); });
                 })
             );
         }
