@@ -9,6 +9,8 @@ setTimeout(() => {
         if (err) {
             console.error('Erreur lors de la récupération des mappings :', err);
             windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de la récupération des mappings');
+            windows.boardWindow.webContents.send('assistant-message', err.message);
+            if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
             return;
         }
 
@@ -23,15 +25,17 @@ setTimeout(() => {
         }
 
         client.portMapping({
-        public: portToOpen, // Port externe visible depuis l'extérieur
-        private: portToOpen, // Port interne sur ta machine
-        protocol: 'TCP',    // TCP ou UDP selon ton besoin
-        description: 'Test Node.js UPnP', // Description pour le mapping
-        ttl: 3600           // Durée en secondes (ici 1 heure)
+            public: portToOpen, // Port externe visible depuis l'extérieur
+            private: portToOpen, // Port interne sur ta machine
+            protocol: 'TCP',    // TCP ou UDP selon ton besoin
+            description: 'Contrast node', // Description pour le mapping
+            ttl: 3600           // Durée en secondes (ici 1 heure)
         }, (err) => {
         if (err) {
             console.error('Erreur lors de l\'ouverture du port :', err);
             windows.boardWindow.webContents.send('assistant-message', 'Erreur lors de l\'ouverture du port');
+            windows.boardWindow.webContents.send('assistant-message', err.message);
+            if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
             return;
         }
         console.log(`Port ${portToOpen} ouvert avec succès !`);
