@@ -235,11 +235,12 @@ function displayNodeInfo(data) {
     eHTML.peerId.textContent = data.peerId ? data.peerId.replace('12D3KooW', '') : 'No Peer ID';
     eHTML.nodeState.textContent = data.nodeState ? data.nodeState : 'No State';
     if (Array.isArray(data.listenAddress) && data.listenAddress.length > 0) {
-        const cleanedAddresses = [];
+        let cleanedAddresses = [];
         for (const address of data.listenAddress) {
             cleanedAddresses.push(`<li>${address.split('/').slice(0, -1).join('/')}</li>`);
         }
-        eHTML.listenAddress.innerHTML = cleanedAddresses.join('');
+        cleanedAddresses = cleanedAddresses.join('').split('certhash/').join('certhash/\n');
+        eHTML.listenAddress.innerHTML = cleanedAddresses;
         //eHTML.listenAddress.innerHTML = data.listenAddress.map(address => `<li>${address}</li>`).join('');
     } else {
         eHTML.listenAddress.innerHTML = '<li>No Listen Address</li>';

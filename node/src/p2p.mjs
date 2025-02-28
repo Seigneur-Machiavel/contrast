@@ -8,12 +8,7 @@ import { peerIdFromString } from '@libp2p/peer-id';
 
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
-
-//const wrtc = await import('wrtc').then(m => m.default);
-//const WebRTCStarModule = await import('libp2p-webrtc-star').then(m => m.default);
-//import { webRTCStar } from '@libp2p/webrtc-star'
 import { webRTCDirect } from '@libp2p/webrtc';
-
 import { circuitRelayTransport, circuitRelayServer } from "@libp2p/circuit-relay-v2";
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { dcutr } from '@libp2p/dcutr';
@@ -21,6 +16,7 @@ import { autoNAT } from '@libp2p/autonat';
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
 import { mplex } from '@libp2p/mplex';
+
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
 import { mdns } from '@libp2p/mdns';
@@ -113,13 +109,18 @@ class P2PNetwork extends EventEmitter {
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
         const peerDiscovery = [mdns()];
         if (this.options.bootstrapNodes.length > 0) {peerDiscovery.push(bootstrap({ list: this.options.bootstrapNodes }));}
-        
+        //peerDiscovery.push({ interval: 10000, enabled: true })
+
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
                 streamMuxers: [mplex(), yamux()],
                 connectionEncrypters: [noise()],
-                transports: [ webRTCDirect(), tcp(), circuitRelayTransport() ],
+                transports: [
+                    webRTCDirect({ stun: ['stun:stun.l.google.com:19302'] }),
+                    tcp(),
+                    circuitRelayTransport()
+                ],
                 addresses: {
                     listen: [
                         '/ip4/0.0.0.0/udp/0/webrtc-direct',
@@ -216,7 +217,6 @@ class P2PNetwork extends EventEmitter {
             await new Promise(resolve => setTimeout(resolve, 5000));
             // TESTS
 
-            //12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp
             try {
                 const searchPeerId = peerIdFromString('12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp'); // ALEX
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId, { signal: AbortSignal.timeout(3000) });
@@ -314,7 +314,11 @@ class P2PNetwork extends EventEmitter {
             console.log('YOGA CONNECTED', peerIdStr);
         }
 
-        if (event.detail.multiaddrs.length === 0) {
+        const dialableAddrs = event.detail.multiaddrs.filter(addr => {
+            const addrStr = addr.toString();
+            return !addrStr.includes('127.0.0.1') && !addrStr.includes('192.168.') && (addrStr.includes('p2p-circuit') || addrStr.includes('webrtc-direct'));
+        });
+        if (dialableAddrs.length === 0) {
             console.log('No multiaddrs', peerIdStr);
             return;
         }
@@ -333,7 +337,7 @@ class P2PNetwork extends EventEmitter {
 
         if (connections.length > 0) { return; }
         try {
-            const con = await this.p2pNode.dial(event.detail.multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const con = await this.p2pNode.dial(dialableAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
         } catch (err) {
