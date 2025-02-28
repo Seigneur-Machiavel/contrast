@@ -123,7 +123,7 @@ class P2PNetwork extends EventEmitter {
                         'stun2.l.google.com:19302'
                     ] }),
                     tcp(),
-                    circuitRelayTransport({ discoverRelays: 1 })
+                    //circuitRelayTransport({ discoverRelays: 1 })
                 ],
                 addresses: {
                     listen: [
@@ -140,8 +140,8 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
-                    dcutr: dcutr()
+                    //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
+                    //dcutr: dcutr()
                 },
                 config: {
                     autoNat: { enabled: true },
@@ -263,7 +263,8 @@ class P2PNetwork extends EventEmitter {
             } catch (error) { console.error(error); }
 
             try {
-                const ma1 = multiaddr('/ip4/90.110.28.181/tcp/51153/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp');
+                //const ma1 = multiaddr('/ip4/90.110.28.181/tcp/51153/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp');
+                const ma1 = multiaddr('/ip4/192.168.1.62/udp/57025/webrtc-direct/certhash/uEiALAUuqrLqu9vv6EWMHsm1tEBqkzNUyEKloXQWJ86E6nQ');
                 const con = await this.p2pNode.dial(ma1, { signal: AbortSignal.timeout(3000) });
                 await con.newStream(P2PNetwork.SYNC_PROTOCOL);
                 console.info('**DIAL** * dial() -> ALEX*')
@@ -332,6 +333,9 @@ class P2PNetwork extends EventEmitter {
         const multiaddrs = connections.map(con => con.remoteAddr);
         if (!multiaddrs) { console.error('No multiaddrs'); return; }
 
+        const allPeers = await this.p2pNode.peerStore.all();
+        const allPeersIdStr = allPeers.map(peer => peer.id.toString());
+        console.log(`-------- DISCOVERY: ${allPeers.length} peers --------`);
         // TESTS
         // build peerId from peerIdStr
         /*const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
@@ -340,7 +344,7 @@ class P2PNetwork extends EventEmitter {
 
 
         if (peerIdStr.includes('MLD1w5nJWVza')) {
-            console.log('DISCOVERED', peerIdStr);
+            console.log('EXO DISCOVERED', peerIdStr);
         }
         
         if (peerIdStr.includes('JM29sadqienY')) { // ALEX
@@ -371,8 +375,6 @@ class P2PNetwork extends EventEmitter {
             console.log('No multiaddrs', peerIdStr);
             return;
         }
-        const allPeers = await this.p2pNode.peerStore.all();
-        console.log(`-------- DISCOVERY: ${allPeers.length} peers --------`);
 
         // if one address contains "p2p/" it can be added to p2pDiscoveryArray
         for (const addr of discoveryMultiaddrs) {
@@ -498,6 +500,7 @@ class P2PNetwork extends EventEmitter {
         this.connexionResume = { totalPeers, connectedBootstraps, totalBootstraps };
 
         const allPeers = await this.p2pNode.peerStore.all();
+        const allPeersIdStr = allPeers.map(peer => peer.id.toString());
         this.miniLogger.log(`Connected to ${totalPeers} peers (${connectedBootstraps}/${totalBootstraps} bootstrap nodes) | ${allPeers.length} peers in peerStore`, (m) => { console.info(m); });
     }
     #isBootstrapNodeAlreadyConnected(addr) {
