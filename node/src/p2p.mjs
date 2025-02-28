@@ -564,9 +564,18 @@ class P2PNetwork extends EventEmitter {
                 .then(async con => {
                     await con.newStream(P2PNetwork.SYNC_PROTOCOL);
                     const peerIdStr = con.remotePeer.toString();
-                    //await new Promise(resolve => setTimeout(resolve, 2000));
-                    //const allPeers = await this.p2pNode.peerStore.all();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
+
+                    // try to init relay transport
+                    try {
+                        const connections = this.p2pNode.getConnections(peerIdStr);
+                        const multiaddrs = connections.map(con => con.remoteAddr);
+                        console.log('MULTIADDRS', multiaddrs.map(addr => addr.toString()));
+                        await this.p2pNode.dial(multiaddrs);
+                        console.log('--- RELAY DIALED ---> ', relayAddr.toString());
+                    } catch (error) {
+                        console.error(error.message);
+                    }
                 })
                 .catch(async err => {
                     if (err.message === 'Can not dial self') {

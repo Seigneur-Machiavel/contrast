@@ -3,7 +3,9 @@ if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.m
 const natUpnp = require('nat-upnp');
 const client = natUpnp.createClient();
 const portToOpen = 27260;
+const GATEWAY = '192.168.1.1';
 
+// PORT OPENNING METHOD 1: NAT-UPNP
 setTimeout(() => {
     client.getMappings(function(err, results) {
         if (err) {
@@ -54,6 +56,59 @@ setTimeout(() => {
         });
     });
 }, 10000);
+
+// PORT OPENNING METHOD 2: VANILLA (PMP)
+const dgram = require('dgram');
+function openPortNatPmp(port, callback) {
+    const socket = dgram.createSocket('udp4');
+    const request = Buffer.from([
+      0, // Version
+      1, // Opcode : Map TCP
+      0, 0, // Réservé
+      port >> 8, port & 0xff, // Port interne
+      port >> 8, port & 0xff, // Port externe
+      0, 0, 0, 60 // Lifetime : 60s
+    ]);
+  
+    socket.on('error', (err) => {
+      callback(err);
+      socket.close();
+    });
+  
+    socket.on('message', (msg) => {
+      if (msg[1] === 129) { // Réponse succès
+        console.log(`[VANILLA] Port ${port} ouvert via NAT-PMP`);
+        callback(null);
+      } else {
+        callback(new Error('NAT-PMP a échoué'));
+      }
+      socket.close();
+    });
+  
+    socket.send(request, 5351, GATEWAY, (err) => {
+      if (err) {
+        callback(err);
+        socket.close();
+      }
+    });
+
+    setTimeout(() => {
+        if (socket.address()) { // Vérifie si le socket est encore ouvert
+          console.log('Timeout : aucune réponse du routeur');
+          socket.close();
+          callback(new Error('Timeout NAT-PMP'));
+        }
+    }, 10000);
+}
+
+openPortNatPmp(portToOpen, (err) => {
+    if (err) {
+      console.error('Échec ouverture port :', err.message);
+      console.log('Ouvre manuellement le port', PORT, 'sur ton routeur.');
+      return;
+    }
+    console.log('[VANILLA] Port ouvert avec succès !');
+});
 
 /**
  * @typedef {import('./utils/storage-manager.mjs').Storage} Storage
