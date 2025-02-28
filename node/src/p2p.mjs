@@ -129,7 +129,7 @@ class P2PNetwork extends EventEmitter {
                         '/ip4/0.0.0.0/tcp/0',
                     ]
                 },
-                connectionGater: { denyDialMultiaddr: () => false },
+                //connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
@@ -170,7 +170,7 @@ class P2PNetwork extends EventEmitter {
         }
 
         this.#bootstrapsReconnectLoop();
-        //this.#controlLoop();
+        this.#controlLoop();
         //this.#tryConnectFromDHT();
 
         return;
@@ -241,7 +241,7 @@ class P2PNetwork extends EventEmitter {
             } catch (error) { console.error(error.message); }
 
 
-            return;
+            continue;
             try {
                 //await this.p2pNode.peerStore.
                 // try dial /ip4/192.168.4.23/udp/55259/webrtc-direct/certhash/uEiDtDTw1kK3L-WtHwGJxZ75SzoCwysg29XhC2Gxp-j5f8g
@@ -358,7 +358,16 @@ class P2PNetwork extends EventEmitter {
         if (peerIdStr.includes('JM29sadqienY')) { // ALEX
             console.log('ALEX CONNECTED', peerIdStr);
         }
+
         this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
+
+        // check if peer is bootstrap node
+        for (const addr of this.options.bootstrapNodes) {
+            const ip = multiaddr(addr).nodeAddress().address;
+            const addrIp = addr.split('/')[2];
+            if (ip !== addrIp) continue;
+            this.connectedBootstrapNodes[peerIdStr] = addr;
+        }
     };
     /** @param {CustomEvent} event */
     #handlePeerDisconnect = async (event) => {
