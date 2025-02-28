@@ -364,7 +364,13 @@ class P2PNetwork extends EventEmitter {
             const addrStr = addr.toString();
             return !addrStr.includes('127.0.0.1') && !addrStr.includes('192.168.') && (addrStr.includes('p2p-circuit') || addrStr.includes('webrtc-direct'));
         });*/
-        const multiAddrsToTry = discoveryMultiaddrs.concat(multiaddrs);
+        const multiAddrsToTry = [];
+        for (const addr of discoveryMultiaddrs) {
+            if (!multiAddrsToTry.includes(addr)) multiAddrsToTry.push(addr);
+        }
+        for (const addr of multiaddrs) {
+            if (!multiAddrsToTry.includes(addr)) multiAddrsToTry.push(addr);
+        }
 
         if (multiAddrsToTry.length === 0) {
             //`/dns4/pariah.monster/tcp/27260/p2p/<bootstrap-peer-id>/p2p-circuit/p2p/${peerIdStr}`;
@@ -394,7 +400,7 @@ class P2PNetwork extends EventEmitter {
             break;
         }*/
 
-        if (connections.length > 0) { await this.#updateConnexionResume(); return; }
+        if (connections.length > 1) { await this.#updateConnexionResume(); return; }
         try {
             const con = await this.p2pNode.dial(multiAddrsToTry, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await con.newStream(P2PNetwork.SYNC_PROTOCOL);
@@ -432,6 +438,12 @@ class P2PNetwork extends EventEmitter {
                 this.connectedBootstrapNodes[peerIdStr] = bootstrapAddr;
             }
         }
+
+        try {
+            const isDialable = await this.p2pNode.isDialable(multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            if (isDialable) console.log('Dialable', readableId(peerIdStr));
+        } catch (error) {}
+
 
         try {
             const con = await this.p2pNode.dial(peerId, { signal: AbortSignal.timeout(this.options.dialTimeout) });
@@ -546,6 +558,8 @@ class P2PNetwork extends EventEmitter {
                 .then(async con => {
                     await con.newStream(P2PNetwork.SYNC_PROTOCOL);
                     const peerIdStr = con.remotePeer.toString();
+                    //await new Promise(resolve => setTimeout(resolve, 2000));
+                    //const allPeers = await this.p2pNode.peerStore.all();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                 })
                 .catch(async err => {
@@ -553,7 +567,8 @@ class P2PNetwork extends EventEmitter {
                         this.myAddr = addr;
                         this.iAmBootstrap = true;
 
-                        setTimeout(async () => await this.p2pNode.services.dht.setMode('server'), 10000);
+                        await this.p2pNode.services.dht.setMode('server');
+                        //setTimeout(async () => await this.p2pNode.services.dht.setMode('server'), 10000);
                         this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
                         this.miniLogger.log(`]]] I AM BOOTSTRAP! DHT SERVER ENABLED [[[`, (m) => { console.info(m); });
                         this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
