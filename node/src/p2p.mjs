@@ -145,7 +145,7 @@ class P2PNetwork extends EventEmitter {
                 addresses: {
                     listen,
                     //appendAnnounce: ['/ip4/0.0.0.0/udp/0/webrtc-direct']
-                    appendAnnounce: listen,
+                    //appendAnnounce: listen,
                 },
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
@@ -605,13 +605,23 @@ class P2PNetwork extends EventEmitter {
 
                     // try to init relay transport
                     try {
+                        const peer = await this.p2pNode.peerStore.get(con.remotePeer); // TODO LOOK THIS
+                        const webRtcAddrs = [];
+                        for (const addrObj of peer.addresses) {
+                            if (!addrObj.isCertified) continue; // Skip non-certified addresses
+                            if (!addrObj.multiaddr.toString().includes('webrtc-direct')) continue; // Skip non-webrtc addresses
+                            webRtcAddrs.push(addrObj.multiaddr);
+                        }
+                        
+                        if (webRtcAddrs.length === 0) { throw new Error('No webrtc addrs'); }
+                        await this.p2pNode.dial(webRtcAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                        console.log('--- RELAY DIALED ON WEBRTC ADDRS ---> ', webRtcAddrs.map(addr => addr.toString()));
+
                         const connections = this.p2pNode.getConnections(peerIdStr);
                         const multiaddrs = connections.map(con => con.remoteAddr);
                         console.log('MULTIADDRS', multiaddrs.map(addr => addr.toString()));
                         await this.p2pNode.dial(multiaddrs);
                         //const uma = this.p2pNode.getConnections(peerIdStr).map(con => con.remoteAddr);
-                        const peer = await this.p2pNode.peerStore.get(con.remotePeer); // TODO LOOK THIS
-                        const webRtcAddrCount = peer.addresses.filter(addr => addr.multiaddr.toString().includes('webrtc-direct')).length;
                         console.log(`--- RELAY DIALED (${webRtcAddrCount}webrtc addrs) ---> `, multiaddrs[0].toString());
                     } catch (error) {
                         console.error(error.message);
