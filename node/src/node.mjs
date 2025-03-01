@@ -56,7 +56,7 @@ export class Node {
     bootstrapNodes = [
         '/dns4/pinkparrot.science/tcp/27260',
         '/dns4/pinkparrot.observer/tcp/27261',
-        //'/dns4/contrast.observer/tcp/27260',
+        '/dns4/contrast.observer/tcp/27260',
         '/dns4/pariah.monster/tcp/27260'
     ];
     memPool = new MemPool();
