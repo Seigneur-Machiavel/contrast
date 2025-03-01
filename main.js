@@ -1,9 +1,14 @@
 if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // For better completion
 
+const fs = require('fs');
+const path = require('path');
+const { app, BrowserWindow, Menu, globalShortcut, dialog, ipcMain } = require('electron');
+Menu.setApplicationMenu(null); // remove the window top menu
+const isDev = !app.isPackaged;
 const natUpnp = require('nat-upnp');
 const client = natUpnp.createClient();
 const portToOpen = 27260;
-const closePort = false;
+const closePort = isDev;
 
 // PORT OPENNING METHOD 1: NAT-UPNP
 setTimeout(() => {
@@ -96,11 +101,6 @@ let mainStorage;
     mainStorage = Storage;
 })();
 
-const fs = require('fs');
-const path = require('path');
-const { app, BrowserWindow, Menu, globalShortcut, dialog, ipcMain } = require('electron');
-Menu.setApplicationMenu(null); // remove the window top menu
-
 const { autoUpdater } = require('electron-updater');
 const setShortcuts = require('./electron-app/shortcuts.js');
 const { MiniLogger } = require('./miniLogger/mini-logger.js');
@@ -113,7 +113,6 @@ autoUpdater.logger = log;*/
 
 // GLOBAL VARIABLES
 let userPreferences = {};
-const isDev = !app.isPackaged;
 const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
 const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });

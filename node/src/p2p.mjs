@@ -143,7 +143,6 @@ class P2PNetwork extends EventEmitter {
                     webSockets(),
                     webRTC(),
                     circuitRelayTransport(),
-                    //WebRTCStar,
                     //webRTCDirect(),
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
@@ -181,6 +180,7 @@ class P2PNetwork extends EventEmitter {
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
+                p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
                 return;
                 const before = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
                 const relayAddresses = p2pNode.getMultiaddrs();
@@ -367,7 +367,6 @@ class P2PNetwork extends EventEmitter {
 
         const discoveryMultiaddrs = event.detail.multiaddrs;
         const multiaddrs = connections.map(con => con.remoteAddr);
-        if (!multiaddrs) { console.error('No multiaddrs'); return; }
 
         const allPeers = await this.p2pNode.peerStore.all();
         const allPeersIdStr = allPeers.map(peer => peer.id.toString());
@@ -403,6 +402,7 @@ class P2PNetwork extends EventEmitter {
             const addrStr = addr.toString();
             return !addrStr.includes('127.0.0.1') && !addrStr.includes('192.168.') && (addrStr.includes('p2p-circuit') || addrStr.includes('webrtc-direct'));
         });*/
+
         const multiAddrsToTry = [];
         for (const addr of discoveryMultiaddrs) {
             const matStr = multiAddrsToTry.map(addr => addr.toString());
@@ -610,7 +610,7 @@ class P2PNetwork extends EventEmitter {
                     const peerIdStr = con.remotePeer.toString();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                     console.log('--- CONNECT TO BOOTSTRAP ---> ', addr.toString());
-
+                    return;
                     // try to init relay transport
                     try {
                         await new Promise(resolve => setTimeout(resolve, 5000));
