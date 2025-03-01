@@ -8,7 +8,7 @@ const isDev = !app.isPackaged;
 const natUpnp = require('nat-upnp');
 const client = natUpnp.createClient();
 const portToOpen = 27260;
-const closePort = isDev;
+const closePort = true;
 
 // PORT OPENNING METHOD 1: NAT-UPNP
 setTimeout(() => {

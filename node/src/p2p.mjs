@@ -160,9 +160,9 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
-                    relay: circuitRelayServer()
+                    relay: circuitRelayServer(),
+                    dcutr: dcutr()
                     //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
-                    //dcutr: dcutr()
                 },
                 config: {
                     autoNat: { enabled: true },
