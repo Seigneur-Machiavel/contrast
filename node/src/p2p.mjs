@@ -7,9 +7,10 @@ import { createLibp2p } from 'libp2p';
 import { peerIdFromString } from '@libp2p/peer-id';
 import { uPnPNAT } from '@libp2p/upnp-nat';
 
+import { webSockets } from '@libp2p/websockets';
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
-import { webRTCDirect } from '@libp2p/webrtc';
+import { webRTCDirect, webRTC } from '@libp2p/webrtc';
 import { circuitRelayTransport, circuitRelayServer } from "@libp2p/circuit-relay-v2";
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { dcutr } from '@libp2p/dcutr';
@@ -114,7 +115,10 @@ class P2PNetwork extends EventEmitter {
 
         const listen = this.options.listenAddresses;
         const commonListenAddresses = [
-            '/ip4/0.0.0.0/udp/0/webrtc-direct',
+            '/ip4/0.0.0.0/tcp/0/ws', // Listen on WebSocket for incoming connections and as a relay server
+            '/p2p-circuit', // Permit the node to use relays for incoming/outgoing connections
+            '/webrtc'
+            //'/ip4/0.0.0.0/udp/0/webrtc-direct',
             //'/dns4/contrast.observer/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/udp/0/webrtc-direct',
@@ -136,7 +140,11 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 transports: [
-                    webRTCDirect(),
+                    webSockets(),
+                    webRTC(),
+                    circuitRelayTransport(),
+                    //WebRTCStar,
+                    //webRTCDirect(),
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
@@ -152,6 +160,7 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
+                    relay: circuitRelayServer()
                     //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
                     //dcutr: dcutr()
                 },
