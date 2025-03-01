@@ -115,10 +115,10 @@ class P2PNetwork extends EventEmitter {
         const listen = this.options.listenAddresses;
         const commonListenAddresses = [
             '/ip4/0.0.0.0/udp/0/webrtc-direct',
-            '/ip4/0.0.0.0/udp/27260/webrtc-direct',
-            '/ip4/0.0.0.0/tcp/27260',
-            '/ip4/0.0.0.0/tcp/0',
-            '/ip4/0.0.0.0/udp/0'
+            //'/ip4/0.0.0.0/udp/27260/webrtc-direct',
+            //'/ip4/0.0.0.0/tcp/27260',
+            //'/ip4/0.0.0.0/tcp/0',
+            //'/ip4/0.0.0.0/udp/0'
         ];
         for (const addrStr of commonListenAddresses) {
             if (!listen.includes(addrStr)) { listen.push(addrStr); }
