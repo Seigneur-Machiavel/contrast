@@ -19,7 +19,7 @@ setTimeout(() => {
                 windows.boardWindow.webContents.send('assistant-message', err.message);
                 if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
             }
-            windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} Opened successfully !`);
+            windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} Closed successfully !`);
         });
 
         return;

@@ -155,14 +155,14 @@ class P2PNetwork extends EventEmitter {
                 },
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
+                    //dcutr: dcutr()
                     //uPnPNAT: uPnPNAT(),
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
                     relay: circuitRelayServer(),
-                    dcutr: dcutr()
-                    //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
+                    //circuitRelay: circuitRelayServer(), // { reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }
                 },
                 config: {
                     autoNat: { enabled: true },
@@ -181,8 +181,28 @@ class P2PNetwork extends EventEmitter {
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
-                p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
-                return;
+                //p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
+                //return;
+                const before = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
+                const relayAddresses = p2pNode.getMultiaddrs();
+                
+                const addressesToPublish = [];
+                for (const multiAddr of relayAddresses) {
+                    const isRelayed = multiAddr.toString().split('/').pop() === 'p2p-circuit';
+                    if (!isRelayed) continue;
+                    if (addr.toString().includes('webrtc-direct')) addressesToPublish.push(multiAddr);
+                }
+
+                if (!addressesToPublish.length) return;
+                await p2pNode.peerStore.merge(p2pNode.peerId, { multiaddrs: addressesToPublish });
+
+                const after = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
+                console.log(`From ${before} to ${after} addresses`)
+            });
+
+            /*p2pNode.addEventListener('self:peer:update', async (evt) => { // WEBRTC-DIRECT FORCING
+                //p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
+                //return;
                 const before = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
                 const relayAddresses = p2pNode.getMultiaddrs();
                 const relayAddr = relayAddresses[0].toString();
@@ -197,15 +217,15 @@ class P2PNetwork extends EventEmitter {
                 const after = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
                 console.log(`From ${before} to ${after} addresses`)
                 console.log(`Advertising with a relay address of ${relayAddr}`)
-            });
+            });*/
 
-            /*p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
+            p2pNode.services.relay.addEventListener('reservation', (evt) => {
                 console.log('------');
                 console.log('------');
                 console.log('New relay reservation:', evt.detail);
                 console.log('------');
                 console.log('------');
-            });*/
+            });
 
             // this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
             this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
@@ -372,37 +392,6 @@ class P2PNetwork extends EventEmitter {
         const allPeers = await this.p2pNode.peerStore.all();
         const allPeersIdStr = allPeers.map(peer => peer.id.toString());
         console.log(`-------- DISCOVERY: ${allPeers.length} peers --------`);
-        // TESTS
-        // build peerId from peerIdStr
-        /*const searchPeerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
-        const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
-        console.info(peerInfo) // peer id, multiaddrs*/
-
-        if (peerIdStr === '12D3KooWLGvSnnLSf4EAJqAtWJ2eKJEN1Sjo1o8ELt6bpE1kWGs6') {
-            console.log('webDirectPeer DISCOVERED', peerIdStr);
-        }
-
-        if (peerIdStr.includes('MLD1w5nJWVza')) {
-            console.log('EXO DISCOVERED', peerIdStr);
-        }
-        
-        if (peerIdStr.includes('JM29sadqienY')) { // ALEX
-            //const peerInfo = await this.p2pNode.peerRouting.findPeer(peerIdStr, { signal: AbortSignal.timeout(3000) });
-            console.log('ALEX DISCOVERED', peerIdStr);
-        }
-
-        if (peerIdStr.includes('RwDMmqPkdxg2')) { // YOGA
-            console.log('YOGA DISCOVERED', peerIdStr);
-        }
-
-        if (peerIdStr === '12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX') { // CONOB
-            console.log('CONOB DISCOVERED', peerIdStr);
-        }
-
-        /*const dialableAddrs = event.detail.multiaddrs.filter(addr => {
-            const addrStr = addr.toString();
-            return !addrStr.includes('127.0.0.1') && !addrStr.includes('192.168.') && (addrStr.includes('p2p-circuit') || addrStr.includes('webrtc-direct'));
-        });*/
 
         const multiAddrsToTry = [];
         for (const addr of discoveryMultiaddrs) {
@@ -415,13 +404,6 @@ class P2PNetwork extends EventEmitter {
         }
 
         if (multiAddrsToTry.length === 0) {
-            //`/dns4/pariah.monster/tcp/27260/p2p/<bootstrap-peer-id>/p2p-circuit/p2p/${peerIdStr}`;
-            /*const bootstrapPeerIdStr = Object.keys(this.connectedBootstrapNodes)[0];
-            const bootstrapUrl = this.connectedBootstrapNodes[bootstrapPeerIdStr];
-            if (!bootstrapUrl) { console.error('No bootstrap url'); return; }
-            const relayAddr = `${bootstrapUrl}/p2p/${bootstrapPeerIdStr}/p2p-circuit/p2p/${peerIdStr}`;
-            const multiAddr = multiaddr(relayAddr);*/
-            
             try {
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(peerIdStr, { signal: AbortSignal.timeout(3000) });
                 const multiAddrs = peerInfo.multiaddrs;
@@ -465,13 +447,6 @@ class P2PNetwork extends EventEmitter {
         const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
-
-        if (peerIdStr === '12D3KooWLGvSnnLSf4EAJqAtWJ2eKJEN1Sjo1o8ELt6bpE1kWGs6') {
-            console.log('webDirectPeer CONNECTED', peerIdStr);
-        }
-        if (peerIdStr.includes('JM29sadqienY')) { // ALEX
-            console.log('ALEX CONNECTED', peerIdStr);
-        }
 
         const connections = this.p2pNode.getConnections(peerIdStr);
         const multiaddrs = connections.map(con => con.remoteAddr);
@@ -611,8 +586,18 @@ class P2PNetwork extends EventEmitter {
                     const peerIdStr = con.remotePeer.toString();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                     console.log('--- CONNECT TO BOOTSTRAP ---> ', addr.toString());
-                    return;
                     // try to init relay transport
+                    
+                    const peerId = peerIdFromString(peerIdStr);
+                    const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3000) });
+                    const relayAddresses = peerInfo.multiaddrs.filter(addr => addr.toString().split('/').pop() === 'p2p-circuit');
+                    if (relayAddresses.length === 0) { throw new Error('No relay addresses'); }
+                    
+                    this.p2pNode.dial(relayAddresses, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    console.log('--- RELAY DIALED ON ADDRS ---> ', relayAddresses.map(addr => addr.toString()));
+                    
+                    return;
+                    // try to init webrtc direct
                     try {
                         await new Promise(resolve => setTimeout(resolve, 5000));
                         const connections = this.p2pNode.getConnections(peerIdStr);
