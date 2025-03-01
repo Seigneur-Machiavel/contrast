@@ -144,7 +144,7 @@ class P2PNetwork extends EventEmitter {
                 ],
                 addresses: {
                     listen,
-                    appendAnnounce: ['/ip4/0.0.0.0/udp/0/webrtc-direct']
+                    //appendAnnounce: ['/ip4/0.0.0.0/udp/0/webrtc-direct']
                     //appendAnnounce: listen,
                 },
                 connectionGater: { denyDialMultiaddr: () => false },
@@ -609,7 +609,7 @@ class P2PNetwork extends EventEmitter {
                         await new Promise(resolve => setTimeout(resolve, 5000));
                         const connections = this.p2pNode.getConnections(peerIdStr);
                         const multiaddrs = connections.map(con => con.remoteAddr);
-
+                        
                         const peer = await this.p2pNode.peerStore.get(con.remotePeer); // TODO LOOK THIS
                         const webRtcAddrs = [];
                         for (const addrObj of peer.addresses) {
@@ -619,7 +619,7 @@ class P2PNetwork extends EventEmitter {
                             const protocol = splitWebRtcAdd[1]; // probably ip4
                             
                             const usableConAddr = multiaddrs.find(addr => addr.toString().includes(protocol));
-                            if (!usableConAddr) return;
+                            if (!usableConAddr) break;
 
                             const splitConAdd = usableConAddr.toString().split('/');
                             splitWebRtcAdd[2] = splitConAdd[2]; // replace ip
