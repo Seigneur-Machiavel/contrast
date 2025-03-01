@@ -63,48 +63,63 @@ node.addEventListener('peer:discovery', (event) => {
 const relayCon = await node.dial(multiaddr(relayAddr));
 console.log(`Connected to the relay ${relayCon.remotePeer.toString()}`);
 
-const conn = await node.dial(multiaddr(targetAddr));
-console.log(`Connected to the target ${conn.remoteAddr.toString()}`);
+//const conn = await node.dial(multiaddr(targetAddr));
+//console.log(`Connected to the target ${conn.remoteAddr.toString()}`);
 
 //await new Promise(resolve => setTimeout(resolve, 10000));
 
 // try init more peer connexions trough the relay
+
+async function dialNewPeersThroughRelay() {
+	const allPeers = await node.peerStore.all();
+	for (const peer of allPeers) {
+		const relayPeerIdStr = peer.id.toString();
+
+		const targetsMultiAddrs = {};
+		for (const addrObj of peer.addresses) {
+			if (!addrObj.isCertified) continue;
+			const maStr = addrObj.multiaddr.toString();
+			if (!maStr.split('p2p/')[1]) continue;
+			const targetPeerIdStr = maStr.split('p2p/')[1].split('/')[0];
+			if (relayPeerIdStr === targetPeerIdStr) continue;
+
+			if (!targetsMultiAddrs[targetPeerIdStr]) targetsMultiAddrs[targetPeerIdStr] = [];
+
+			//const isWebRtc = maStr.split('/').pop() === 'webrtc';
+			//if (isWebRtc) targetsMultiAddrs[targetPeerIdStr].push(addrObj.multiaddr);
+
+			if (maStr.split('/').pop() !== 'p2p-circuit') continue;
+
+			const targetAddrTroughRelay = maStr + '/p2p/' + relayPeerIdStr;
+			targetsMultiAddrs[targetPeerIdStr].push(multiaddr(targetAddrTroughRelay));
+		}
+
+		for (const targetPeerIdStr in targetsMultiAddrs) {
+			try {
+				const addrs = targetsMultiAddrs[targetPeerIdStr]; // [multiaddr(targetAddrTroughRelay)];
+				if (!addrs) continue;
+
+				const targetPeerId = peerIdFromString(targetPeerIdStr);
+				const targetExistingCons = node.getConnections(targetPeerId);
+				if (targetExistingCons.length > 0) continue;
+				
+				const targetCon = await node.dial(addrs, { signal: AbortSignal.timeout(10_000) });
+				console.log(`Connected to the target: ${targetPeerIdStr}
+trough: ${targetCon.remoteAddr.toString()}`);
+
+				await new Promise(resolve => setTimeout(resolve, 1000));
+
+				const peerInfo = await node.peerRouting.findPeer(targetPeerId, { signal: AbortSignal.timeout(3_000) });
+				console.log('Found peer:', peerInfo.id.toString());
+				//knownPeersIdStr = (await node.peerStore.all()).map(peer => peer.id.toString());
+			} catch (error) { console.error(error.message); }
+		}
+	}
+}
 (async () => {
     while (true) {
 		await new Promise(resolve => setTimeout(resolve, 1000));
-		const allConPeersIdStr = node.getPeers().map(peer => peer.toString());
-		const allPeers = await node.peerStore.all();
-		let knownPeersIdStr = (await node.peerStore.all()).map(peer => peer.id.toString());
-		for (const peer of allPeers) {
-			const relayPeerId = peer.id;
-			for (const addrObj of peer.addresses) {
-				if (!addrObj.isCertified) continue;
-				//const isRelayed = addrObj.multiaddr.toString().includes('p2p-circuit');
-				//if (!isRelayed) continue;
-				const isRelayed = addrObj.multiaddr.toString().split('/').pop() === 'p2p-circuit';
-				if (!isRelayed) continue;
-
-				const protocol = addrObj.multiaddr.toString().split('/')[1];
-				if (protocol !== 'ip4') continue;
-
-				const targetPeerId = addrObj.multiaddr.toString().split('p2p/')[1].split('/')[0];
-				if (relayPeerId === targetPeerId) continue;
-				if (knownPeersIdStr.includes(targetPeerId)) continue;
-
-				const targetAddrTroughRelay = addrObj.multiaddr.toString() + '/p2p/' + relayPeerId;
-				try {
-					const con = await node.dial(multiaddr(targetAddrTroughRelay), { signal: AbortSignal.timeout(3_000) });
-					console.log(`Connected to the target ${con.remoteAddr.toString()}`);
-
-					await new Promise(resolve => setTimeout(resolve, 1000));
-
-					const peerId = peerIdFromString(targetPeerId);
-					const peerInfo = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
-					console.log('Found peer:', peerInfo.id.toString());
-					knownPeersIdStr = (await node.peerStore.all()).map(peer => peer.id.toString());
-				} catch (error) { console.error(error.message); }
-			}
-		}
+		await dialNewPeersThroughRelay();
     }
 })();
 

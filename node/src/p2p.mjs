@@ -142,7 +142,7 @@ class P2PNetwork extends EventEmitter {
                 connectionEncrypters: [ noise() ],
                 transports: [
                     webSockets(),
-                    webRTC(),
+                    //webRTC(),
                     circuitRelayTransport(),
                     //webRTCDirect(),
                     //circuitRelayTransport({ discoverRelays: 1 }),
@@ -164,7 +164,7 @@ class P2PNetwork extends EventEmitter {
                     circuitRelay: circuitRelayServer(),
                     //circuitRelay: circuitRelayServer(), // { reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }
                 },
-                config: {
+                /*config: {
                     autoNat: { enabled: true },
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
@@ -173,7 +173,7 @@ class P2PNetwork extends EventEmitter {
                             active: true, // Allow other nodes to dial through this node
                         }
                     },
-                },
+                },*/
                 peerDiscovery
             });
 
@@ -422,14 +422,14 @@ class P2PNetwork extends EventEmitter {
             }
         }
 
-        try {
+        /*try {
             const isDialable = await this.p2pNode.isDialable(multiaddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             if (isDialable) {
                 console.log('Dialable', readableId(peerIdStr));
                 this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
                 return;
             }
-        } catch (error) {}
+        } catch (error) {}*/
 
 
         try {
@@ -438,23 +438,32 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`(Connect) dial to peer ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
         } catch (error) { console.error(error.message); }
 
-        /*for (const addr of multiaddrs) {
+        const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3000) });
+
+        for (const addr of multiaddrs) {
             const addrIp = addr.toString().split('/')[2];
             for (const bootstrapAddr of this.options.bootstrapNodes) {
                 const bootAddrIp = bootstrapAddr.split('/')[2];
                 if (addrIp !== bootAddrIp) continue;
 
-                try {
-                    const con = await this.p2pNode.dial(addr, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                    await con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                    this.miniLogger.log(`(Bootstrap) Dialed bootstrap node ${addr}`, (m) => { console.debug(m); });
+                this.connectedBootstrapNodes[peerIdStr] = bootstrapAddr;
 
-                    this.connectedBootstrapNodes[peerIdStr] = bootstrapAddr;
-                } catch (error) { console.error(error); }
+                try {
+                    //const con = await this.p2pNode.dial(addr, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    //await con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    //this.miniLogger.log(`(Bootstrap) Dialed bootstrap node ${addr}`, (m) => { console.debug(m); });
+                    
+                    const relayAddresses = peerInfo.multiaddrs.filter(addr => addr.toString().split('/').pop() === 'p2p-circuit');
+                    if (relayAddresses.length === 0) { throw new Error('No relay addresses'); }
+
+                    const con = await this.p2pNode.dial(relayAddresses, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    await con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    this.miniLogger.log(`(Bootstrap) Dialed relay node ${relayAddresses[0]}`, (m) => { console.debug(m); });
+                } catch (error) { console.error(error.message); }
 
                 break;
             }
-        }*/
+        }
 
         this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
         await this.#updateConnexionResume();
