@@ -141,7 +141,7 @@ class P2PNetwork extends EventEmitter {
                     tcp()
                 ],
                 addresses: { listen },
-                connectionGater: { denyDialMultiaddr: () => false },
+                //connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     //uPnPNAT: uPnPNAT(),
                     //autoNAT: autoNAT(),
