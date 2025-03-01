@@ -131,12 +131,12 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 transports: [
-                    webRTCDirect(),
-                    /*webRTCDirect({ stun: [
+                    //webRTCDirect(),
+                    webRTCDirect({ stun: [
                         'stun:stun.l.google.com:19302',
                         'stun1.l.google.com:19302',
                         'stun2.l.google.com:19302'
-                    ] }),*/
+                    ] }),
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
@@ -367,6 +367,10 @@ class P2PNetwork extends EventEmitter {
 
         if (peerIdStr.includes('RwDMmqPkdxg2')) { // YOGA
             console.log('YOGA DISCOVERED', peerIdStr);
+        }
+
+        if (peerIdStr === '12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX') { // CONOB
+            console.log('CONOB DISCOVERED', peerIdStr);
         }
 
         /*const dialableAddrs = event.detail.multiaddrs.filter(addr => {
