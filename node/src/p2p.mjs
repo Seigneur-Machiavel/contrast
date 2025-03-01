@@ -172,12 +172,21 @@ class P2PNetwork extends EventEmitter {
             console.log('Listening on:')
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
 
-            p2pNode.addEventListener('self:peer:update', (evt) => {
-                // Updated self multiaddrs?
-                const relayAddr = p2pNode.getMultiaddrs()[0].toString();
+            p2pNode.addEventListener('self:peer:update', async (evt) => {
+                const before = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
+                const relayAddresses = p2pNode.getMultiaddrs();
+                const relayAddr = relayAddresses[0].toString();
+
+                const addressesToPublish = [];
+                for (const addr of relayAddresses) {
+                    if (addr.toString().includes('webrtc-direct')) addressesToPublish.push(addr);
+                }
+
+                await p2pNode.peerStore.merge(p2pNode.peerId, { multiaddrs: addressesToPublish });
+
+                const after = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
+                console.log(`From ${before} to ${after} addresses`)
                 console.log(`Advertising with a relay address of ${relayAddr}`)
-                // add relayAddr to the 
-                //p2pNode.
             });
 
             /*p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
