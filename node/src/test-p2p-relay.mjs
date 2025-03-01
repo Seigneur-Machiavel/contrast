@@ -117,7 +117,7 @@ async function dialNewPeersThroughRelay() {
 				const targetExistingCons = node.getConnections(targetPeerId);
 				if (targetExistingCons.length > 0) continue;
 				
-				const targetCon = await node.dial(addrs, { signal: AbortSignal.timeout(3_000) });
+				const targetCon = await node.dial(addrs, { signal: AbortSignal.timeout(30_000) });
 				await targetCon.newStream(P2PNetwork.SYNC_PROTOCOL);
 				console.log(`Connected to the target: ${targetPeerIdStr}
 trough: ${targetCon.remoteAddr.toString()}`);
