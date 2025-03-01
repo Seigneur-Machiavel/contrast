@@ -161,7 +161,7 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
-                    relay: circuitRelayServer(),
+                    circuitRelay: circuitRelayServer(),
                     //circuitRelay: circuitRelayServer(), // { reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }
                 },
                 config: {
@@ -219,7 +219,7 @@ class P2PNetwork extends EventEmitter {
                 console.log(`Advertising with a relay address of ${relayAddr}`)
             });*/
 
-            p2pNode.services.relay.addEventListener('reservation', (evt) => {
+            p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
                 console.log('------');
                 console.log('------');
                 console.log('New relay reservation:', evt.detail);
