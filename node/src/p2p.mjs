@@ -133,7 +133,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 transports: [
-                    webRTCDirect(),
+                    //webRTCDirect(),
                     webRTCDirect({ stun: [
                         'stun:stun.l.google.com:19302',
                         'stun1.l.google.com:19302',
