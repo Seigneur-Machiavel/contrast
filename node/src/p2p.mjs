@@ -115,6 +115,7 @@ class P2PNetwork extends EventEmitter {
 
         const listen = this.options.listenAddresses;
         const commonListenAddresses = [
+            '/ip4/0.0.0.0/tcp/0',
             '/ip4/0.0.0.0/tcp/0/ws', // Listen on WebSocket for incoming connections and as a relay server
             '/p2p-circuit', // Permit the node to use relays for incoming/outgoing connections
             '/webrtc'

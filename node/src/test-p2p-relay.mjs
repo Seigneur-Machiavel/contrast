@@ -67,16 +67,18 @@ const conn = await node.dial(multiaddr(targetAddr));
 console.log(`Connected to the target ${conn.remoteAddr.toString()}`)
 
 // THIS IS THE WORKING PROCEDURE
-const peerId = peerIdFromString('12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp') // ALEX
-//const peerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7') // YOGA
-const peerInfo = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(10_000) });
+//const peerId = peerIdFromString('12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp'); // ALEX
+//const peerId = peerIdFromString('12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'); // YOGA
+//const peerId = peerIdFromString('12D3KooWJRAvHUPuQZ5GDPZgLJ9bFZ7jYWrR5R2hYudjA65eMqx1'); // JRAv ?
+const peerId = peerIdFromString('12D3KooWEAKsyqsmPqSd4k3jniBkuciJYhBvNs9BqA1449CxP3hN'); // EAKs ?
+const peerInfo = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(20_000) });
 console.log('Found peer:', peerInfo.id.toString());
 
 const con = await node.dial(peerId, { signal: AbortSignal.timeout(10_000) });
 console.log(`Connected to the target ${con.remoteAddr.toString()}`)
 // ----------------------------
 
-while (true) {
+/*while (true) {
     const connections = node.getConnections();
   
     if (connections.find(conn => conn.limits == null)) {
@@ -88,7 +90,7 @@ while (true) {
       // wait a few seconds to see if it's succeeded yet
     }
     await new Promise(resolve => setTimeout(resolve, 5000))
-  }
+  }*/
 
 let peerStored = 0;
 while(true) {
