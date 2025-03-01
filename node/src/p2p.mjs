@@ -150,7 +150,7 @@ class P2PNetwork extends EventEmitter {
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     //uPnPNAT: uPnPNAT(),
-                    //autoNAT: autoNAT(),
+                    autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
