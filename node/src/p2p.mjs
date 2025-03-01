@@ -142,7 +142,10 @@ class P2PNetwork extends EventEmitter {
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
-                addresses: { listen },
+                addresses: {
+                    listen,
+                    appendAnnounce: listen,
+                },
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     //uPnPNAT: uPnPNAT(),
@@ -171,7 +174,10 @@ class P2PNetwork extends EventEmitter {
 
             p2pNode.addEventListener('self:peer:update', (evt) => {
                 // Updated self multiaddrs?
-                console.log(`Advertising with a relay address of ${p2pNode.getMultiaddrs()[0].toString()}`)
+                const relayAddr = p2pNode.getMultiaddrs()[0].toString();
+                console.log(`Advertising with a relay address of ${relayAddr}`)
+                // add relayAddr to the 
+                //p2pNode.
             });
 
             /*p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
