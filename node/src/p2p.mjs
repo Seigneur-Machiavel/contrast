@@ -114,7 +114,8 @@ class P2PNetwork extends EventEmitter {
 
         const listen = this.options.listenAddresses;
         const commonListenAddresses = [
-            '/ip4/0.0.0.0/udp/0/webrtc-direct',
+            '/ip4/0.0.0.0/tcp/0/webrtc-direct',
+            //'/ip4/0.0.0.0/udp/0/webrtc-direct',
             //'/ip4/0.0.0.0/udp/27260/webrtc-direct',
             //'/ip4/0.0.0.0/tcp/27260',
             //'/ip4/0.0.0.0/tcp/0',
@@ -133,12 +134,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 transports: [
-                    //webRTCDirect(),
-                    webRTCDirect({ stun: [
-                        'stun:stun.l.google.com:19302',
-                        'stun1.l.google.com:19302',
-                        'stun2.l.google.com:19302'
-                    ] }),
+                    webRTCDirect(),
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
