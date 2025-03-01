@@ -157,7 +157,7 @@ class P2PNetwork extends EventEmitter {
                     //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
                     //dcutr: dcutr()
                 },
-                /*config: {
+                config: {
                     autoNat: { enabled: true },
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
@@ -166,7 +166,7 @@ class P2PNetwork extends EventEmitter {
                             active: true, // Allow other nodes to dial through this node
                         }
                     },
-                },*/
+                },
                 peerDiscovery
             });
 
@@ -615,16 +615,20 @@ class P2PNetwork extends EventEmitter {
                         for (const addrObj of peer.addresses) {
                             if (!addrObj.isCertified) continue; // Skip non-certified addresses
                             if (!addrObj.multiaddr.toString().includes('webrtc-direct')) continue; // Skip non-webrtc addresses
-                            const splitWebRtcAdd = addrObj.multiaddr.toString().split('/');
-                            const protocol = splitWebRtcAdd[1]; // probably ip4
+                            //const splitWebRtcAdd = addrObj.multiaddr.toString().split('/');
+                            //const protocol = splitWebRtcAdd[1]; // probably ip4
                             
-                            const usableConAddr = multiaddrs.find(addr => addr.toString().includes(protocol));
-                            if (!usableConAddr) break;
+                            //const usableConAddr = multiaddrs.find(addr => addr.toString().includes(protocol));
+                            //if (!usableConAddr) break;
 
-                            const splitConAdd = usableConAddr.toString().split('/');
-                            splitWebRtcAdd[2] = splitConAdd[2]; // replace ip
+                            //const splitConAdd = usableConAddr.toString().split('/');
+                            //splitWebRtcAdd[2] = splitConAdd[2]; // replace ip
 
-                            const publicRtcAddr = splitWebRtcAdd.join('/');
+                            const splitConAdd = multiaddrs[0].toString().split('/');
+                            const splitStoreAdd = addrObj.multiaddr.toString().split('/');
+                            splitStoreAdd[1] = splitConAdd[1]; // replace protocol
+                            splitStoreAdd[2] = splitConAdd[2]; // replace ip
+                            const publicRtcAddr = splitStoreAdd.join('/');
                             webRtcAddrs.push(multiaddr(publicRtcAddr));
                         }
 
