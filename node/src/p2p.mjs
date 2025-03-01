@@ -134,11 +134,11 @@ class P2PNetwork extends EventEmitter {
                 connectionEncrypters: [ noise() ],
                 transports: [
                     webRTCDirect(),
-                    /*webRTCDirect({ stun: [
+                    webRTCDirect({ stun: [
                         'stun:stun.l.google.com:19302',
                         'stun1.l.google.com:19302',
                         'stun2.l.google.com:19302'
-                    ] }),*/
+                    ] }),
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
