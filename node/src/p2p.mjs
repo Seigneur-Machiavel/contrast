@@ -174,6 +174,7 @@ class P2PNetwork extends EventEmitter {
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
+                return;
                 const before = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
                 const relayAddresses = p2pNode.getMultiaddrs();
                 const relayAddr = relayAddresses[0].toString();
@@ -611,6 +612,10 @@ class P2PNetwork extends EventEmitter {
                             if (!addrObj.isCertified) continue; // Skip non-certified addresses
                             if (!addrObj.multiaddr.toString().includes('webrtc-direct')) continue; // Skip non-webrtc addresses
                             webRtcAddrs.push(addrObj.multiaddr);
+                        }
+
+                        if (peerIdStr === '12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX') {
+                            console.log('conOB DIALING WEBRTC', peerIdStr);
                         }
                         
                         if (webRtcAddrs.length === 0) { throw new Error('No webrtc addrs'); }
