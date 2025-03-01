@@ -123,9 +123,9 @@ class P2PNetwork extends EventEmitter {
         for (const addrStr of commonListenAddresses) {
             if (!listen.includes(addrStr)) { listen.push(addrStr); }
         }
-        //listen.push('/dns4/pinkparrot.science/tcp/27260');
+        //listen.push('/ip4/141.8.119.6/tcp/0');
         //listen.push('/dns4/contrast.observer/tcp/27260');
-        listen.push('/ip4/62.72.22.165/tcp/27260');
+        //listen.push('/ip4/62.72.22.165/tcp/27260');
 
         try {
             const p2pNode = await createLibp2p({
@@ -143,7 +143,7 @@ class P2PNetwork extends EventEmitter {
                     tcp()
                 ],
                 addresses: { listen },
-                //connectionGater: { denyDialMultiaddr: () => false },
+                connectionGater: { denyDialMultiaddr: () => false },
                 services: {
                     //uPnPNAT: uPnPNAT(),
                     //autoNAT: autoNAT(),
