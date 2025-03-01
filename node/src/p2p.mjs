@@ -139,7 +139,7 @@ class P2PNetwork extends EventEmitter {
                         'stun1.l.google.com:19302',
                         'stun2.l.google.com:19302'
                     ] }),
-                    //circuitRelayTransport({ discoverRelays: 1 }),
+                    circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
                 addresses: {
@@ -154,7 +154,7 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
-                    //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
+                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
                     //dcutr: dcutr()
                 },
                 /*config: {
