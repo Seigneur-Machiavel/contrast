@@ -115,10 +115,10 @@ class P2PNetwork extends EventEmitter {
 
         const listen = this.options.listenAddresses;
         const commonListenAddresses = [
-            '/ip4/0.0.0.0/tcp/0',
+            //'/ip4/0.0.0.0/tcp/0',
             '/ip4/0.0.0.0/tcp/0/ws', // Listen on WebSocket for incoming connections and as a relay server
             '/p2p-circuit', // Permit the node to use relays for incoming/outgoing connections
-            '/webrtc'
+            //'/webrtc'
             //'/ip4/0.0.0.0/udp/0/webrtc-direct',
             //'/dns4/contrast.observer/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/tcp/27260/http/p2p-webrtc-direct'
@@ -181,16 +181,14 @@ class P2PNetwork extends EventEmitter {
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
-                //p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
-                //return;
                 const before = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
                 const relayAddresses = p2pNode.getMultiaddrs();
                 
                 const addressesToPublish = [];
                 for (const multiAddr of relayAddresses) {
-                    const isRelayed = multiAddr.toString().split('/').pop() === 'p2p-circuit';
-                    if (!isRelayed) continue;
-                    if (addr.toString().includes('webrtc-direct')) addressesToPublish.push(multiAddr);
+                    //const isRelayed = multiAddr.toString().split('/').pop() === 'p2p-circuit';
+                    //if (!isRelayed) continue;
+                    addressesToPublish.push(multiAddr);
                 }
 
                 if (!addressesToPublish.length) return;
@@ -346,7 +344,7 @@ class P2PNetwork extends EventEmitter {
         /** @type {PeerId} */
         const peerId = event.detail.id;
         const peerIdStr = peerId.toString();
-        const connections = this.p2pNode.getConnections(peerIdStr);
+        const connections = this.p2pNode.getConnections(peerId); //? NOT PeerID ?
 
         const discoveryMultiaddrs = event.detail.multiaddrs;
         const multiaddrs = connections.map(con => con.remoteAddr);
@@ -390,7 +388,7 @@ class P2PNetwork extends EventEmitter {
         if (nbOfOutboundConnections > 0) { await this.#updateConnexionResume(); return; }
         try {
             await this.p2pNode.dial(multiAddrsToTry, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            const connectionsUpdated = this.p2pNode.getConnections(peerIdStr);
+            const connectionsUpdated = this.p2pNode.getConnections(peerId);
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
         } catch (err) {
             this.miniLogger.log(`(Discovery) Failed to dial peer ${readableId(peerIdStr)}`, (m) => { console.error(m); });
@@ -409,7 +407,7 @@ class P2PNetwork extends EventEmitter {
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
-        const connections = this.p2pNode.getConnections(peerIdStr);
+        const connections = this.p2pNode.getConnections(peerId);
         const multiaddrs = connections.map(con => con.remoteAddr);
         if (!multiaddrs) { console.error('No multiaddrs'); return; }
 
@@ -560,8 +558,8 @@ class P2PNetwork extends EventEmitter {
 
                     await new Promise(resolve => setTimeout(resolve, 5000)); // time to get the relay addresses
                     
+                    const peerId = peerIdFromString(peerIdStr);
                     try {
-                        const peerId = peerIdFromString(peerIdStr);
                         const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3000) });
                         const relayAddresses = peerInfo.multiaddrs.filter(addr => addr.toString().split('/').pop() === 'p2p-circuit');
                         if (relayAddresses.length === 0) { throw new Error('No relay addresses'); }
@@ -574,7 +572,7 @@ class P2PNetwork extends EventEmitter {
                     // try to init webrtc direct
                     try {
                         await new Promise(resolve => setTimeout(resolve, 5000));
-                        const connections = this.p2pNode.getConnections(peerIdStr);
+                        const connections = this.p2pNode.getConnections(peerId);
                         const multiaddrs = connections.map(con => con.remoteAddr);
                         
                         const peer = await this.p2pNode.peerStore.get(con.remotePeer); // TODO LOOK THIS
@@ -607,7 +605,7 @@ class P2PNetwork extends EventEmitter {
 
                         console.log('MULTIADDRS', multiaddrs.map(addr => addr.toString()));
                         await this.p2pNode.dial(multiaddrs);
-                        //const uma = this.p2pNode.getConnections(peerIdStr).map(con => con.remoteAddr);
+                        //const uma = this.p2pNode.getConnections(peerId).map(con => con.remoteAddr);
                     } catch (error) {
                         console.error(error.message);
                     }

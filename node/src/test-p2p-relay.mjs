@@ -57,19 +57,29 @@ node.addEventListener('self:peer:update', (evt) => {
 });
 node.addEventListener('peer:discovery', (event) => {
   const peerId = event.detail.id;
+  const discoveryMultiaddrs = event.detail.multiaddrs;
+  const multiaddrs = node.getConnections(peerId).map(con => con.remoteAddr);
   console.log('Discovered:', peerId.toString());
+});
+node.addEventListener('peer:connect', async (event) => {
+	const peerId = event.detail;
+	const peerIdStr = peerId.toString();
+
+	const con = await node.dial(peerId, { signal: AbortSignal.timeout(3_000) });
+	await con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+	console.log(`peer:connect: ${peerIdStr} with ${node.getConnections(peerId).length} connections`);
 });
 
 const relayCon = await node.dial(multiaddr(relayAddr));
+await relayCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
 console.log(`Connected to the relay ${relayCon.remotePeer.toString()}`);
 
-//const conn = await node.dial(multiaddr(targetAddr));
-//console.log(`Connected to the target ${conn.remoteAddr.toString()}`);
+const conn = await node.dial(multiaddr(targetAddr));
+console.log(`Connected to the target ${conn.remoteAddr.toString()}`);
 
 //await new Promise(resolve => setTimeout(resolve, 10000));
 
 // try init more peer connexions trough the relay
-
 async function dialNewPeersThroughRelay() {
 	const allPeers = await node.peerStore.all();
 	for (const peer of allPeers) {
@@ -103,13 +113,12 @@ async function dialNewPeersThroughRelay() {
 				const targetExistingCons = node.getConnections(targetPeerId);
 				if (targetExistingCons.length > 0) continue;
 				
-				const targetCon = await node.dial(addrs, { signal: AbortSignal.timeout(10_000) });
+				const targetCon = await node.dial(addrs, { signal: AbortSignal.timeout(3_000) });
+				await targetCon.newStream(P2PNetwork.SYNC_PROTOCOL);
 				console.log(`Connected to the target: ${targetPeerIdStr}
 trough: ${targetCon.remoteAddr.toString()}`);
 
-				await new Promise(resolve => setTimeout(resolve, 1000));
-
-				const peerInfo = await node.peerRouting.findPeer(targetPeerId, { signal: AbortSignal.timeout(3_000) });
+				const peerInfo = await node.peerRouting.findPeer(targetPeerId, { signal: AbortSignal.timeout(10_000) });
 				console.log('Found peer:', peerInfo.id.toString());
 				//knownPeersIdStr = (await node.peerStore.all()).map(peer => peer.id.toString());
 			} catch (error) { console.error(error.message); }
