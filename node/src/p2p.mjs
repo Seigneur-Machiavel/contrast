@@ -133,13 +133,13 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 transports: [
-                    //webRTCDirect(),
-                    webRTCDirect({ stun: [
+                    webRTCDirect(),
+                    /*webRTCDirect({ stun: [
                         'stun:stun.l.google.com:19302',
                         'stun1.l.google.com:19302',
                         'stun2.l.google.com:19302'
-                    ] }),
-                    circuitRelayTransport({ discoverRelays: 1 }),
+                    ] }),*/
+                    //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
                 addresses: {
@@ -154,7 +154,7 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
+                    //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
                     //dcutr: dcutr()
                 },
                 /*config: {
@@ -609,9 +609,10 @@ class P2PNetwork extends EventEmitter {
                         const multiaddrs = connections.map(con => con.remoteAddr);
                         console.log('MULTIADDRS', multiaddrs.map(addr => addr.toString()));
                         await this.p2pNode.dial(multiaddrs);
-                        const uma = this.p2pNode.getConnections(peerIdStr).map(con => con.remoteAddr);
-                        const peer = await this.p2pNode.peerStore.get(con.remotePeer);
-                        console.log('--- RELAY DIALED ---> ', multiaddrs[0].toString());
+                        //const uma = this.p2pNode.getConnections(peerIdStr).map(con => con.remoteAddr);
+                        const peer = await this.p2pNode.peerStore.get(con.remotePeer); // TODO LOOK THIS
+                        const webRtcAddrCount = peer.addresses.filter(addr => addr.multiaddr.toString().includes('webrtc-direct')).length;
+                        console.log(`--- RELAY DIALED (${webRtcAddrCount}webrtc addrs) ---> `, multiaddrs[0].toString());
                     } catch (error) {
                         console.error(error.message);
                     }
