@@ -124,6 +124,8 @@ class P2PNetwork extends EventEmitter {
             if (!listen.includes(addrStr)) { listen.push(addrStr); }
         }
         //listen.push('/dns4/pinkparrot.science/tcp/27260');
+        //listen.push('/dns4/contrast.observer/tcp/27260');
+        listen.push('/ip4/62.72.22.165/tcp/27260');
 
         try {
             const p2pNode = await createLibp2p({
