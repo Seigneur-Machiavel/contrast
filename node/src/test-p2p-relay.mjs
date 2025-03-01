@@ -38,7 +38,7 @@ const node = await createLibp2p({
   services: {
     identify: identify(),
     dht: kadDHT(),
-    //dcutr: dcutr()
+    dcutr: dcutr()
   },
   //connectionGater: { denyDialMultiaddr: () => false },
 })
