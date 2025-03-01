@@ -119,7 +119,7 @@ class P2PNetwork extends EventEmitter {
             '/ip4/0.0.0.0/tcp/0/ws', // Listen on WebSocket for incoming connections and as a relay server
             '/p2p-circuit', // Permit the node to use relays for incoming/outgoing connections
             //'/webrtc'
-            //'/ip4/0.0.0.0/udp/0/webrtc-direct',
+            '/ip4/0.0.0.0/udp/0/webrtc-direct',
             //'/dns4/contrast.observer/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/udp/0/webrtc-direct',
@@ -144,7 +144,7 @@ class P2PNetwork extends EventEmitter {
                     webSockets(),
                     //webRTC(),
                     circuitRelayTransport(),
-                    //webRTCDirect(),
+                    webRTCDirect(),
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],

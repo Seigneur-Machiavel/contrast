@@ -75,9 +75,13 @@ await relayCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout
 console.log(`Connected to the relay ${relayCon.remotePeer.toString()}`);
 
 const conn = await node.dial(multiaddr(targetAddr));
-console.log(`Connected to the target ${conn.remoteAddr.toString()}`);
+console.log(`Connected to the target 12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ`);
 
-//await new Promise(resolve => setTimeout(resolve, 10000));
+await new Promise(resolve => setTimeout(resolve, 10000));
+
+//const targetPeerIdFromStr = peerIdFromString('12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ');
+//const tpInfo = await node.peerRouting.findPeer(targetPeerIdFromStr, { signal: AbortSignal.timeout(10_000) });
+//console.log('Found target peer:', tpInfo.id.toString());
 
 // try init more peer connexions trough the relay
 async function dialNewPeersThroughRelay() {
@@ -117,7 +121,7 @@ async function dialNewPeersThroughRelay() {
 				await targetCon.newStream(P2PNetwork.SYNC_PROTOCOL);
 				console.log(`Connected to the target: ${targetPeerIdStr}
 trough: ${targetCon.remoteAddr.toString()}`);
-
+				
 				const peerInfo = await node.peerRouting.findPeer(targetPeerId, { signal: AbortSignal.timeout(10_000) });
 				console.log('Found peer:', peerInfo.id.toString());
 				//knownPeersIdStr = (await node.peerStore.all()).map(peer => peer.id.toString());
