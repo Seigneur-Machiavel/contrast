@@ -114,8 +114,8 @@ class P2PNetwork extends EventEmitter {
 
         const listen = this.options.listenAddresses;
         const commonListenAddresses = [
-            //'/ip4/0.0.0.0/tcp/0/webrtc-direct',
-            '/dns4/contrast.observer/tcp/27260/http/p2p-webrtc-direct'
+            '/ip4/0.0.0.0/tcp/0/webrtc-direct',
+            //'/dns4/contrast.observer/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/udp/0/webrtc-direct',
             //'/ip4/0.0.0.0/udp/27260/webrtc-direct',
