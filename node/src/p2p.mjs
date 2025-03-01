@@ -133,18 +133,18 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 transports: [
-                    //webRTCDirect(),
-                    webRTCDirect({ stun: [
+                    webRTCDirect(),
+                    /*webRTCDirect({ stun: [
                         'stun:stun.l.google.com:19302',
                         'stun1.l.google.com:19302',
                         'stun2.l.google.com:19302'
-                    ] }),
+                    ] }),*/
                     //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
                 addresses: {
                     listen,
-                    appendAnnounce: listen,
+                    //appendAnnounce: listen,
                 },
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
@@ -456,6 +456,9 @@ class P2PNetwork extends EventEmitter {
         this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
+        if (peerIdStr === '12D3KooWLGvSnnLSf4EAJqAtWJ2eKJEN1Sjo1o8ELt6bpE1kWGs6') {
+            console.log('webDirectPeer CONNECTED', peerIdStr);
+        }
         if (peerIdStr.includes('JM29sadqienY')) { // ALEX
             console.log('ALEX CONNECTED', peerIdStr);
         }
@@ -606,6 +609,7 @@ class P2PNetwork extends EventEmitter {
                         console.log('MULTIADDRS', multiaddrs.map(addr => addr.toString()));
                         await this.p2pNode.dial(multiaddrs);
                         const uma = this.p2pNode.getConnections(peerIdStr).map(con => con.remoteAddr);
+                        const peer = await this.p2pNode.peerStore.get(con.remotePeer);
                         console.log('--- RELAY DIALED ---> ', multiaddrs[0].toString());
                     } catch (error) {
                         console.error(error.message);
