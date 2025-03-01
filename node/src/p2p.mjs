@@ -123,33 +123,35 @@ class P2PNetwork extends EventEmitter {
         for (const addrStr of commonListenAddresses) {
             if (!listen.includes(addrStr)) { listen.push(addrStr); }
         }
+        //listen.push('/dns4/pinkparrot.science/tcp/27260');
 
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
-                streamMuxers: [mplex(), yamux()],
-                connectionEncrypters: [noise()],
+                streamMuxers: [ yamux() ],
+                connectionEncrypters: [ noise() ],
                 transports: [
-                    webRTCDirect({ stun: [
+                    webRTCDirect(),
+                    /*webRTCDirect({ stun: [
                         'stun:stun.l.google.com:19302',
                         'stun1.l.google.com:19302',
                         'stun2.l.google.com:19302'
-                    ] }),
-                    circuitRelayTransport({ discoverRelays: 1 }),
+                    ] }),*/
+                    //circuitRelayTransport({ discoverRelays: 1 }),
                     tcp()
                 ],
-                addresses: {listen},
+                addresses: { listen },
                 connectionGater: { denyDialMultiaddr: () => false },
                 services: {
-                    uPnPNAT: uPnPNAT(),
-                    autoNAT: autoNAT(),
+                    //uPnPNAT: uPnPNAT(),
+                    //autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
-                    dht: kadDHT({ enabled: true }),
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
+                    //dht: kadDHT({ enabled: true }),
+                    //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
                     //dcutr: dcutr()
                 },
-                config: {
+                /*config: {
                     autoNat: { enabled: true },
                     relay: {
                         enabled: true, // Enable circuit relay dialer and listener (STOP)
@@ -158,19 +160,25 @@ class P2PNetwork extends EventEmitter {
                             active: true, // Allow other nodes to dial through this node
                         }
                     },
-                },
+                },*/
                 peerDiscovery
             });
 
-            await p2pNode.start();
+            console.log('Listening on:')
+            p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
 
-            p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
+            p2pNode.addEventListener('self:peer:update', (evt) => {
+                // Updated self multiaddrs?
+                console.log(`Advertising with a relay address of ${p2pNode.getMultiaddrs()[0].toString()}`)
+            });
+
+            /*p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
                 console.log('------');
                 console.log('------');
                 console.log('New relay reservation:', evt.detail);
                 console.log('------');
                 console.log('------');
-            });
+            });*/
 
             // this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
             this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
@@ -189,7 +197,7 @@ class P2PNetwork extends EventEmitter {
         }
 
         this.#bootstrapsReconnectLoop();
-        this.#controlLoop();
+        //this.#controlLoop();
         //this.#tryConnectFromDHT();
 
         return;
@@ -344,6 +352,9 @@ class P2PNetwork extends EventEmitter {
         const peerInfo = await this.p2pNode.peerRouting.findPeer(searchPeerId);
         console.info(peerInfo) // peer id, multiaddrs*/
 
+        if (peerIdStr === '12D3KooWLGvSnnLSf4EAJqAtWJ2eKJEN1Sjo1o8ELt6bpE1kWGs6') {
+            console.log('webDirectPeer DISCOVERED', peerIdStr);
+        }
 
         if (peerIdStr.includes('MLD1w5nJWVza')) {
             console.log('EXO DISCOVERED', peerIdStr);

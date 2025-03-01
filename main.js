@@ -3,18 +3,23 @@ if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.m
 const natUpnp = require('nat-upnp');
 const client = natUpnp.createClient();
 const portToOpen = 27260;
+const closePort = false;
 
 // PORT OPENNING METHOD 1: NAT-UPNP
-/*client.portUnmapping({ public: portToOpen }, (err) => {
-    if (err) {
-        windows.boardWindow.webContents.send('assistant-message', 'Error while closing the port');
-        windows.boardWindow.webContents.send('assistant-message', err.message);
-        if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
-    }
-    windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} Opened successfully !`);
-});*/
-
 setTimeout(() => {
+    if (closePort) {
+        client.portUnmapping({ public: portToOpen }, (err) => {
+            if (err) {
+                windows.boardWindow.webContents.send('assistant-message', 'Error while closing the port');
+                windows.boardWindow.webContents.send('assistant-message', err.message);
+                if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
+            }
+            windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} Opened successfully !`);
+        });
+
+        return;
+    }
+
     client.getMappings(function(err, results) {
         if (err) {
             console.error('Error while getting mappings :', err);
@@ -32,6 +37,8 @@ setTimeout(() => {
                 return;
             }
         }
+
+        windows.boardWindow.webContents.send('assistant-message', `Existing mappings : ${JSON.stringify(results)}`);
 
         client.portMapping({
             public: portToOpen, // Port externe visible depuis l'extérieur
