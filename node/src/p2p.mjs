@@ -147,7 +147,7 @@ class P2PNetwork extends EventEmitter {
                     //autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
-                    //dht: kadDHT({ enabled: true }),
+                    dht: kadDHT({ enabled: true }),
                     //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }),
                     //dcutr: dcutr()
                 },
@@ -584,6 +584,8 @@ class P2PNetwork extends EventEmitter {
                         const multiaddrs = connections.map(con => con.remoteAddr);
                         console.log('MULTIADDRS', multiaddrs.map(addr => addr.toString()));
                         await this.p2pNode.dial(multiaddrs);
+                        const uma = this.p2pNode.getConnections(peerIdStr).map(con => con.remoteAddr);
+                        const updatedMultiAddrs = await this.p2pNode.peerStore.get(peerIdStr).multiaddrs;
                         console.log('--- RELAY DIALED ---> ', multiaddrs[0].toString());
                     } catch (error) {
                         console.error(error.message);
