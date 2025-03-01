@@ -144,6 +144,7 @@ class P2PNetwork extends EventEmitter {
                 ],
                 addresses: {
                     listen,
+                    appendAnnounce: ['/ip4/0.0.0.0/udp/0/webrtc-direct']
                     //appendAnnounce: listen,
                 },
                 connectionGater: { denyDialMultiaddr: () => false },
