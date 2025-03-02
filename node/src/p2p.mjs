@@ -91,7 +91,7 @@ class P2PNetwork extends EventEmitter {
         maxPeers: 12,
         logLevel: 'info',
         logging: true,
-        listenAddresses: ['/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0'],
+        listenAddresses: ['/ip4/0.0.0.0/tcp/0'],
         dialTimeout: 3000, //3000,
         reputationOptions: {}, // Options for ReputationManager
     };
@@ -118,7 +118,9 @@ class P2PNetwork extends EventEmitter {
         const hashUint8Array = convert.hex.toUint8Array(hash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
         const peerDiscovery = [mdns()];
-        if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );        const listen = this.options.listenAddresses;
+        if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
+        
+        const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
 
@@ -149,8 +151,12 @@ class P2PNetwork extends EventEmitter {
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
             p2pNode.handle(P2PNetwork.RELAY_SHARE_PROTOCOL, this.#handleRelayShare.bind(this));
 
-            p2pNode.addEventListener('self:peer:update', async (evt) => { // DEPRECATED
-                return;
+            p2pNode.addEventListener('self:peer:update', async (evt) => {
+                console.log('\n -- selfPeerUpdate:');
+                for (const addr of p2pNode.getMultiaddrs()) console.log(addr.toString());
+            });
+
+            /*p2pNode.addEventListener('self:peer:update', async (evt) => { // DEPRECATED
                 const peers = await p2pNode.peerStore.all();
                 for (const peer of peers) {
                     const peerId = peer.id;
@@ -163,7 +169,7 @@ class P2PNetwork extends EventEmitter {
                         await p2pNode.peerStore.save(peerId, { multiaddrs });
                     } catch (error) {}
                 }
-            });
+            });*/
             p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
                 console.log('------');
                 console.log('New relay reservation:', evt.detail);
@@ -189,7 +195,7 @@ class P2PNetwork extends EventEmitter {
         this.#bootstrapsReconnectLoop();
     }
     
-    async #handleRelayShare(lstream) {
+    async #handleRelayShare(lstream) { // PROBABLY FUCKED UP!!
         console.log('RELAY SHARE');
         /** @type {Stream} */
         const stream = lstream.stream;
@@ -212,7 +218,7 @@ class P2PNetwork extends EventEmitter {
             if (P2PNetwork.DIRECT_PORTS.includes(targetPort))
                 targetMaStr = maStr; // direct connection
             else if (con.remotePeer.toString() === targetPeerIdStr)
-                targetMaStr = maStr + '/p2p/' + this.p2pNode.peerId.toString(); // relayed connection
+                targetMaStr = maStr + '/p2p-circuit/p2p/' + this.p2pNode.peerId.toString(); // relayed connection
             
             if (!targetMaStr) continue;
 

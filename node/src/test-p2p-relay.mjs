@@ -24,13 +24,12 @@ import { P2PNetwork } from './p2p.mjs';
  * @typedef {Object<string, sharedPeerUrls>} sharedPeers // peerIdStr -> sharedPeerUrls
  */
 
-//const bootAddr = '/ip4/192.168.56.1/tcp/27260'
-//const bootAddr = '/ip4/62.72.22.165/udp/51617/webrtc-direct/certhash/uEiCg_AihbA_0jtnov1q3upeyeDGB0_lWedpcJ17MJlV5kQ'
-//const bootAddr = '/dns4/pinkparrot.observer/tcp/27261';
-const bootAddr = '/dns4/pinkparrot.science/tcp/27260/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B'; // PINKPARROT: DaPq...
+const bootAddr = '/dns4/contrast.observer/tcp/27260';
+//const bootAddr = '/dns4/pinkparrot.science/tcp/27260'; // PINKPARROT
+//const bootAddr = '/ip4/192.168.4.22/tcp/27260' // PINKPARROT LOCAL
+//const bootAddr = '/dns4/pinkparrot.science/tcp/27260/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B'; // PINKPARROT: DaPq...
 if (!bootAddr) throw new Error('the bootAddr address needs to be specified as a parameter');
 
-//const webRtcDirectAddr = '/ip4/192.168.4.22/udp/27260/webrtc-direct/certhash/uEiBjpylsi3kVKQ9EfFQDDnfa22cKQZ6YueyQ4tMMAk-jcQ/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B';
 //const targetAddr = '/ip4/192.168.4.26/tcp/45521/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7/p2p-circuit/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B'; // WOKRS
 //const targetAddr = '/ip4/90.110.28.181/tcp/50913/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp/p2p-circuit/webrtc';
 const targetAddr = '/ip4/90.110.28.181/tcp/50913/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp/p2p-circuit/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B';
@@ -40,11 +39,12 @@ if (!targetAddr) throw new Error('the target address needs to be specified as a 
 
 //process.env.DEBUG = 'libp2p:dcutr*';
 process.env.DEBUG = 'libp2p:*,libp2p:identify*,libp2p:dcutr*';
-const DIAL_THROUGH_RELAY = true;
+const DIAL_THROUGH_RELAY = false;
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 const node = await createLibp2p({
 	privateKey: privateKeyObject,
+	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'] },
 	transports: [circuitRelayTransport(), tcp()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
@@ -67,8 +67,8 @@ node.handle('/blockchain-sync/1.0.0', async ({ stream }) => {
 	console.log('Received a message', read)
 });
 node.addEventListener('self:peer:update', (evt) => {
-	for (const addr of node.getMultiaddrs()) console.log('selfPeerUpdate:', addr.toString());
-	//console.log(`selfPeerUpdate: ${evt.detail.toString()}`);
+	console.log('\n -- selfPeerUpdate:');
+	for (const addr of node.getMultiaddrs()) console.log(addr.toString());
 });
 node.addEventListener('peer:discovery', (event) => {
 	const peerId = event.detail.id;
@@ -87,10 +87,10 @@ node.addEventListener('peer:connect', async (event) => {
 const initCon = await node.dial(multiaddr(bootAddr));
 //await initCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
 //console.log(`Connected init -> ${initCon.remoteAddr.toString()}`);
+//await node.dialProtocol(multiaddr(bootAddr), '/ipfs/id/1.0.0', { signal: AbortSignal.timeout(3_000) });
+//await node.dialProtocol(multiaddr(bootAddr), '/libp2p/dcutr', { signal: AbortSignal.timeout(3_000) });
 const stream = await initCon.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
-initCon.streams.forEach(stream => {
-	console.log(`Active protocol: ${stream.protocol}`);
-});
+initCon.streams.forEach(stream => console.log(`Active protocol: ${stream.protocol}`));
 
 const readResult = await P2PNetwork.streamRead(stream);
 /** @type {sharedPeerUrls} */
@@ -130,23 +130,25 @@ async function dialNewPeersThroughRelay() {
 		/** @type {sharedPeerUrls} */
 		const sharedPeerUrls = relayShareResponse[peerIdStr];
 		if (sharedPeerUrls.direct.length !== 0) { // try direct connection
-			const multiaddrs = sharedPeerUrls.direct.map(addr => multiaddr(addr));
-			const directStream = await node.dialProtocol(multiaddrs, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
-			//const directCon = await node.dial(multiaddrs, { signal: AbortSignal.timeout(3_000) });
-			//await directCon.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
-			const readResult = await P2PNetwork.streamRead(directStream);
-			const deserialized = serializer.deserialize.rawData(readResult.data);
-			console.log('Received a message', deserialized);
 			continue;
+			const multiaddrs = sharedPeerUrls.direct.map(addr => multiaddr(addr));
+			try {
+				const directStream = await node.dialProtocol(multiaddrs, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+				const readResult = await P2PNetwork.streamRead(directStream);
+				const deserialized = serializer.deserialize.rawData(readResult.data);
+				console.log('Received a message', deserialized);
+				continue;
+			} catch (error) {
+				console.error(error.message);
+			}
 		}
 
 		if (sharedPeerUrls.relayed.length !== 0) {
 			const multiaddrs = sharedPeerUrls.relayed.map(addr => multiaddr(addr));
 			//await node.peerStore.save(multiaddrs, { peerId: multiaddrs });
 			const relayedCon = await node.dial(multiaddrs, { signal: AbortSignal.timeout(3_000) });
-			relayedCon.streams.forEach(stream => {
-				console.log(`Active protocol: ${stream.protocol}`);
-			});
+			relayedCon.streams.forEach(stream => console.log(`Active protocol: ${stream.protocol}`));
+
 			await relayedCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
 			await new Promise(resolve => setTimeout(resolve, 2000)); //? useless
 			//await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
@@ -205,8 +207,9 @@ trough: ${targetCon.remoteAddr.toString()}`);
 }
 (async () => {
 	while (DIAL_THROUGH_RELAY) {
-		await new Promise(resolve => setTimeout(resolve, 1000));
+		await new Promise(resolve => setTimeout(resolve, 5000));
 		await dialNewPeersThroughRelay();
+		await new Promise(resolve => setTimeout(resolve, 30000));
 	}
 })();
 
