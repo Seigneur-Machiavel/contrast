@@ -232,7 +232,8 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`Connected to ${totalPeers} peers (${connectedBootstraps}/${totalBootstraps} bootstrap nodes) | ${allPeers.length} peers in peerStore`, (m) => { console.info(m); });
     }
     #handlePeerDiscovery = async (event) => {
-        const peerId = event.detail.id;
+        const discoveredPeerId = event.detail.id;
+        const discoveredPeerIdStr = discoveredPeerId.toString();
         const discoveryMultiaddrs = event.detail.multiaddrs;
         if (discoveryMultiaddrs.length === 0) return;
     
@@ -243,7 +244,7 @@ class P2PNetwork extends EventEmitter {
             const con = await this.p2pNode.dial(notRelayedAddrs, { signal: AbortSignal.timeout(3_000) });
             const stream = await con.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
             const readResult = await P2PNetwork.streamRead(stream);
-            console.log(`peer:discovery => ${peerId.toString()} successfully dialed RELAY_SHARE_PROTOCOL`);
+            console.log(`peer:discovery => ${discoveredPeerId.toString()} successfully dialed RELAY_SHARE_PROTOCOL`);
     
             /** @type {string[]} */
             const sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
@@ -286,11 +287,11 @@ class P2PNetwork extends EventEmitter {
 
         // the end tasks
         try {
-            await this.p2pNode.dialProtocol(multiAddrsToTry, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            const connectionsUpdated = this.p2pNode.getConnections(peerId);
-            this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
+            await this.p2pNode.dialProtocol(discoveredPeerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const connectionsUpdated = this.p2pNode.getConnections(discoveredPeerId);
+            this.#updatePeer(discoveredPeerIdStr, { dialable: true, id: discoveredPeerId }, 'discovered');
         } catch (err) {
-            this.miniLogger.log(`(Discovery) Failed to dial peer ${readableId(peerIdStr)}`, (m) => { console.error(m); });
+            this.miniLogger.log(`(Discovery) Failed to dial peer ${readableId(discoveredPeerIdStr)}`, (m) => { console.error(m); });
         }
 
         await this.#updateConnexionResume();
