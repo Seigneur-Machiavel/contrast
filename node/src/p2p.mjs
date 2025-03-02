@@ -260,6 +260,7 @@ class P2PNetwork extends EventEmitter {
                 try {
                     await this.p2pNode.dial(multiAddr, { signal: AbortSignal.timeout(3_000) });
                     console.log(`Dialed ${peerIdStr} trough the relay ${relayAddr}`);
+                    this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
                     continue;
                 } catch (error) {
                     console.error(`Failed to dial ${peerIdStr} trough the relay ${relayAddr}`, error.message);
