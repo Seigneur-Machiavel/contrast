@@ -174,9 +174,38 @@ class P2PNetwork extends EventEmitter {
         }
 
         this.#bootstrapsReconnectLoop();
-        //this.#peers
+        this.#tryConnectMorePeersLoop();
     }
     
+    async #tryConnectMorePeersLoop() {
+        while(true) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            let dialablePeersCount = Object.values(this.peers).filter(peer => peer.dialable).length;
+            if (dialablePeersCount >= this.options.maxPeers) continue;
+            
+            const allPeers = await this.p2pNode.peerStore.all();
+            const myPeerIdStr = this.p2pNode.peerId.toString();
+            for (const peer of allPeers) {
+                //if (!peer.addresses || peer.addresses.length === 0) continue;
+                const peerIdStr = peer.id.toString();
+                if (peerIdStr === myPeerIdStr) continue;
+                if (this.peers[peerIdStr] && this.peers[peerIdStr].dialable) continue;
+                if (dialablePeersCount >= this.options.maxPeers) break;
+
+                try {
+                    const peerInfo = await this.p2pNode.peerRouting.findPeer(peer.id, { signal: AbortSignal.timeout(3000) });
+                    //let multiAddrs = peerInfo.multiaddrs.filter(ma => ma.toString().endsWith('webrtc') === false);
+                    //multiAddrs = multiAddrs.filter(ma => ma.toString().endsWith('p2p-circuit') === false);
+                    //if (multiAddrs.length === 0) throw new Error('No multiaddrs');
+                    await this.p2pNode.dialProtocol(peerInfo.multiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    this.#updatePeer(peerIdStr, { dialable: true, id: peer.id }, 'discovered');
+                    dialablePeersCount++;
+                } catch (error) {
+                    console.error(`Failed to dial ${peerIdStr} from peerInfo`, error.message);
+                }
+            }
+        }
+    }
     async #handleRelayShare(lstream) { // PROBABLY FUCKED UP!!
         console.log('RELAY SHARE');
         /** @type {Stream} */
@@ -256,10 +285,10 @@ class P2PNetwork extends EventEmitter {
     
                 try {
                     const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3000) });
-                    let multiaddrs = peerInfo.multiaddrs.filter(ma => ma.toString().endsWith('webrtc') === false);
-                    multiaddrs = multiaddrs.filter(ma => ma.toString().endsWith('p2p-circuit') === false);
-                    if (multiaddrs.length === 0) throw new Error('No multiaddrs');
-                    await this.p2pNode.dialProtocol(multiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    //let multiaddrs = peerInfo.multiaddrs.filter(ma => ma.toString().endsWith('webrtc') === false);
+                    //multiaddrs = multiaddrs.filter(ma => ma.toString().endsWith('p2p-circuit') === false);
+                    //if (multiaddrs.length === 0) throw new Error('No multiaddrs');
+                    await this.p2pNode.dialProtocol(peerInfo.multiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                     this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
                 } catch (error) {
                     console.error(`Failed to dial ${peerIdStr} from peerId`, error.message);
