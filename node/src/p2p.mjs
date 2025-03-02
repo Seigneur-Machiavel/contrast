@@ -214,13 +214,6 @@ class P2PNetwork extends EventEmitter {
         console.info(sharedPeerIdsStr);
         await P2PNetwork.streamWrite(stream, serializedMessage);
     }
-    /** @param {PeerId} peerId */
-    async sendRelayShareRequest(peerId) {
-        stream = await this.p2pNet.p2pNode.dialProtocol(peerId, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3000) });
-        const readResult = await P2PNetwork.streamRead(stream);
-
-        // relay/p2p-circuit/p2p/target
-    }
     async #updateConnexionResume() {
         const totalPeers = Object.keys(this.peers).length || 0;
         const connectedBootstraps = Object.values(this.connectedBootstrapNodes).filter(addr => addr !== null).length;
@@ -371,7 +364,9 @@ class P2PNetwork extends EventEmitter {
             await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             this.miniLogger.log(`(Connect) dial to peer ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
             this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
-        } catch (error) { this.#updatePeer(peerIdStr, { dialable: false, id: peerId }, 'connected'); }
+        } catch (error) { this.miniLogger.log(`(Connect) Failed to dial peer ${readableId(peerIdStr)}`, (m) => { console.error(m); }); }
+            
+        //this.#updatePeer(peerIdStr, { dialable: false, id: peerId }, 'connected');
 
         await this.#updateConnexionResume();
     };
