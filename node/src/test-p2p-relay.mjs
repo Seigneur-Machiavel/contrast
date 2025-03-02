@@ -37,7 +37,7 @@ const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 const node = await createLibp2p({
 	privateKey: privateKeyObject,
 	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'] },
-	transports: [circuitRelayTransport(), tcp(), webSockets()],
+	transports: [circuitRelayTransport(), tcp()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {

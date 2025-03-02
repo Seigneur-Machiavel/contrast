@@ -112,7 +112,7 @@ class P2PNetwork extends EventEmitter {
         const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
-        if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
+        //if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
 
         try {
             const p2pNode = await createLibp2p({
@@ -123,7 +123,7 @@ class P2PNetwork extends EventEmitter {
                 transports: [
                     circuitRelayTransport({ discoverRelays: 3 }),
                     tcp(),
-                    webSockets()
+                    //webSockets()
                 ],
                 addresses: { listen },
                 services: {
