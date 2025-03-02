@@ -9,6 +9,7 @@ import { uPnPNAT } from '@libp2p/upnp-nat';
 
 import { webSockets } from '@libp2p/websockets';
 import { tcp } from '@libp2p/tcp';
+import { mdns } from '@libp2p/mdns';
 import { kadDHT } from '@libp2p/kad-dht';
 import { webRTCDirect, webRTC } from '@libp2p/webrtc';
 import { circuitRelayTransport, circuitRelayServer } from "@libp2p/circuit-relay-v2";
@@ -21,7 +22,6 @@ import { mplex } from '@libp2p/mplex';
 
 import { bootstrap } from '@libp2p/bootstrap';
 import { identify } from '@libp2p/identify';
-import { mdns } from '@libp2p/mdns';
 import { multiaddr } from '@multiformats/multiaddr';
 import ReputationManager from './peers-reputation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';

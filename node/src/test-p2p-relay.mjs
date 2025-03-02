@@ -7,6 +7,7 @@ import { peerIdFromString } from '@libp2p/peer-id';
 import { serializer } from '../../utils/serializer.mjs';
 import { webSockets } from '@libp2p/websockets';
 import { tcp } from '@libp2p/tcp';
+import { mdns } from '@libp2p/mdns';
 import { kadDHT } from '@libp2p/kad-dht';
 import { autoNAT } from '@libp2p/autonat';
 import { multiaddr } from '@multiformats/multiaddr';
@@ -34,7 +35,9 @@ process.env.DEBUG = 'libp2p:*,libp2p:identify*,libp2p:dcutr*';
 const DIAL_THROUGH_RELAY = true;
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
+const dhtService = kadDHT({ enabled: true, randomWalk: true });
 const node = await createLibp2p({
+	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'] },
 	transports: [circuitRelayTransport(), tcp()],
@@ -42,12 +45,12 @@ const node = await createLibp2p({
 	streamMuxers: [yamux()],
 	services: {
 		identify: identify(),
-		dht: kadDHT(),
+		dht: dhtService,
 		dcutr: dcutr(),
 		autoNAT: autoNAT(),
 		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 6, reservationTtl: 60_000 } })
 	},
-	connectionGater: { denyDialMultiaddr: () => false },
+	peerDiscovery: [mdns(), dhtService]
 })
 await node.start();
 console.log(`Node started with id ${node.peerId.toString()}`)
