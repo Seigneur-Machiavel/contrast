@@ -115,10 +115,9 @@ class P2PNetwork extends EventEmitter {
 
         const listen = this.options.listenAddresses;
         const commonListenAddresses = [
-            //'/ip4/0.0.0.0/tcp/0',
-            '/ip4/0.0.0.0/tcp/0/ws', // Listen on WebSocket for incoming connections and as a relay server
             '/p2p-circuit', // Permit the node to use relays for incoming/outgoing connections
-            '/webrtc'
+            '/ip4/0.0.0.0/tcp/0',
+            //'/webrtc'
             //'/ip4/0.0.0.0/udp/0/webrtc-direct',
             //'/dns4/contrast.observer/tcp/27260/http/p2p-webrtc-direct'
             //'/ip4/0.0.0.0/tcp/27260/http/p2p-webrtc-direct'
@@ -140,29 +139,27 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
+                connectionGater: { denyDialMultiaddr: () => false },
                 transports: [
-                    webSockets(),
-                    webRTC(),
-                    circuitRelayTransport(),
+                    circuitRelayTransport({ discoverRelays: 1 }),
+                    tcp(),
+                    //webSockets(),
+                    //webRTC(),
                     //webRTCDirect(),
-                    //circuitRelayTransport({ discoverRelays: 1 }),
-                    tcp()
                 ],
                 addresses: {
                     listen,
                     //appendAnnounce: ['/ip4/0.0.0.0/udp/0/webrtc-direct']
                     //appendAnnounce: listen,
                 },
-                connectionGater: { denyDialMultiaddr: () => false },
                 services: {
-                    dcutr: dcutr(),
                     //uPnPNAT: uPnPNAT(),
+                    dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
-                    circuitRelay: circuitRelayServer(),
-                    //circuitRelay: circuitRelayServer(), // { reservations: { maxReservations: 100, reservationTtl: 60 * 1000 } }
+                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 6, reservationTtl: 60_000 } })
                 },
                 /*config: {
                     autoNat: { enabled: true },
@@ -195,6 +192,14 @@ class P2PNetwork extends EventEmitter {
                 }
             });
 
+            p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
+                console.log('------');
+                console.log('------');
+                console.log('New relay reservation:', evt.detail);
+                console.log('------');
+                console.log('------');
+            });
+
             /*p2pNode.addEventListener('self:peer:update', async (evt) => {
                 const before = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses.length;
                 const relayAddresses = p2pNode.getMultiaddrs();
@@ -224,14 +229,6 @@ class P2PNetwork extends EventEmitter {
                 console.log(`From ${before} to ${after} addresses`)
                 console.log(`Advertising with a relay address of ${relayAddr}`)
             });*/
-
-            p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
-                console.log('------');
-                console.log('------');
-                console.log('New relay reservation:', evt.detail);
-                console.log('------');
-                console.log('------');
-            });
 
             // this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} | Listen addresses ${this.options.listenAddresses}`, (m) => { console.info(m); });
             this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
@@ -417,7 +414,8 @@ class P2PNetwork extends EventEmitter {
 
         const connections = this.p2pNode.getConnections(peerId);
         const multiaddrs = connections.map(con => con.remoteAddr);
-        if (!multiaddrs) { console.error('No multiaddrs'); return; }
+        if (!multiaddrs) {
+            console.error('No multiaddrs'); return; }
 
         //if (!this.connectedBootstrapNodes[peerIdStr]) this.connectedBootstrapNodes[peerIdStr] = multiaddrs.toString().split('/p2p/')[0];
 

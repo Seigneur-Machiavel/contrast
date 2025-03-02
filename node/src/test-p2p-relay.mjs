@@ -1,12 +1,13 @@
 import { noise } from '@chainsafe/libp2p-noise';
 import { yamux } from '@chainsafe/libp2p-yamux';
-import { circuitRelayTransport } from '@libp2p/circuit-relay-v2';
+import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2';
 import { identify } from '@libp2p/identify';
 import { peerIdFromString } from '@libp2p/peer-id';
 
 import { webSockets } from '@libp2p/websockets';
 import { tcp } from '@libp2p/tcp';
 import { kadDHT } from '@libp2p/kad-dht';
+import { autoNAT } from '@libp2p/autonat';
 import { multiaddr } from '@multiformats/multiaddr';
 import { createLibp2p } from 'libp2p';
 import { webRTCDirect, webRTC } from '@libp2p/webrtc';
@@ -31,35 +32,37 @@ if (!targetAddr) throw new Error('the target address needs to be specified as a 
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 const node = await createLibp2p({
-  privateKey: privateKeyObject,
-  transports: [webSockets(), webRTC(), circuitRelayTransport(), tcp()],
-  connectionEncrypters: [noise()],
-  streamMuxers: [yamux()],
-  services: {
-    identify: identify(),
-    dht: kadDHT(),
-    dcutr: dcutr()
-  },
-  //connectionGater: { denyDialMultiaddr: () => false },
+	privateKey: privateKeyObject,
+	transports: [circuitRelayTransport(), tcp()],
+	connectionEncrypters: [noise()],
+	streamMuxers: [yamux()],
+	services: {
+		identify: identify(),
+		dht: kadDHT(),
+		dcutr: dcutr(),
+		autoNAT: autoNAT(),
+		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 6, reservationTtl: 60_000 } })
+	},
+	//connectionGater: { denyDialMultiaddr: () => false },
 })
 
 console.log(`Node started with id ${node.peerId.toString()}`)
 
 node.handle('/blockchain-sync/1.0.0', async ({ stream }) => {
-  console.log('Received a stream')
+	console.log('Received a stream')
 
-  const read = await P2PNetwork.streamRead(stream);
-  console.log('Received a message', read)
+	const read = await P2PNetwork.streamRead(stream);
+	console.log('Received a message', read)
 });
 node.addEventListener('self:peer:update', (evt) => {
-  for (const addr of node.getMultiaddrs()) console.log('selfPeerUpdate:', addr.toString());
-  //console.log(`selfPeerUpdate: ${evt.detail.toString()}`);
+	for (const addr of node.getMultiaddrs()) console.log('selfPeerUpdate:', addr.toString());
+	//console.log(`selfPeerUpdate: ${evt.detail.toString()}`);
 });
 node.addEventListener('peer:discovery', (event) => {
-  const peerId = event.detail.id;
-  const discoveryMultiaddrs = event.detail.multiaddrs;
-  const multiaddrs = node.getConnections(peerId).map(con => con.remoteAddr);
-  console.log('Discovered:', peerId.toString());
+	const peerId = event.detail.id;
+	const discoveryMultiaddrs = event.detail.multiaddrs;
+	const multiaddrs = node.getConnections(peerId).map(con => con.remoteAddr);
+	console.log('Discovered:', peerId.toString());
 });
 node.addEventListener('peer:connect', async (event) => {
 	const peerId = event.detail;
@@ -116,12 +119,12 @@ async function dialNewPeersThroughRelay() {
 				const targetPeerId = peerIdFromString(targetPeerIdStr);
 				const targetExistingCons = node.getConnections(targetPeerId);
 				if (targetExistingCons.length > 0) continue;
-				
+
 				const targetCon = await node.dial(addrs, { signal: AbortSignal.timeout(30_000) });
 				await targetCon.newStream(P2PNetwork.SYNC_PROTOCOL);
 				console.log(`Connected to the target: ${targetPeerIdStr}
 trough: ${targetCon.remoteAddr.toString()}`);
-				
+
 				const peerInfo = await node.peerRouting.findPeer(targetPeerId, { signal: AbortSignal.timeout(10_000) });
 				console.log('Found peer:', peerInfo.id.toString());
 				//knownPeersIdStr = (await node.peerStore.all()).map(peer => peer.id.toString());
@@ -130,10 +133,10 @@ trough: ${targetCon.remoteAddr.toString()}`);
 	}
 }
 (async () => {
-    while (true) {
+	while (true) {
 		await new Promise(resolve => setTimeout(resolve, 1000));
 		await dialNewPeersThroughRelay();
-    }
+	}
 })();
 
 // THIS IS THE WORKING PROCEDURE
@@ -150,28 +153,28 @@ trough: ${targetCon.remoteAddr.toString()}`);
 // ----------------------------
 
 /*while (true) {
-    const connections = node.getConnections();
+	const connections = node.getConnections();
   
-    if (connections.find(conn => conn.limits == null)) {
-      console.info('have direct connection')
-      break
-    } else {
-      console.info('have relayed connection')
+	if (connections.find(conn => conn.limits == null)) {
+	  console.info('have direct connection')
+	  break
+	} else {
+	  console.info('have relayed connection')
   
-      // wait a few seconds to see if it's succeeded yet
-    }
-    await new Promise(resolve => setTimeout(resolve, 5000))
+	  // wait a few seconds to see if it's succeeded yet
+	}
+	await new Promise(resolve => setTimeout(resolve, 5000))
   }*/
 
 (async () => {
-  let peerStored = 0;
-  while (true) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const allPeers = await node.peerStore.all();
-    const allPeersIdStr = allPeers.map(peer => peer.id.toString());
-    if (allPeersIdStr.length > peerStored) {
-      console.log('All peers:', allPeersIdStr);
-      peerStored = allPeersIdStr.length;
-    }
-  }
+	let peerStored = 0;
+	while (true) {
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		const allPeers = await node.peerStore.all();
+		const allPeersIdStr = allPeers.map(peer => peer.id.toString());
+		if (allPeersIdStr.length > peerStored) {
+			console.log('All peers:', allPeersIdStr);
+			peerStored = allPeersIdStr.length;
+		}
+	}
 })();
