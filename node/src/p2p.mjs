@@ -106,7 +106,9 @@ class P2PNetwork extends EventEmitter {
         const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
         const hashUint8Array = convert.hex.toUint8Array(hash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
-        const peerDiscovery = [mdns(), kadDHT({ enabled: true, randomWalk: true })];
+
+        const dhtService = kadDHT({ enabled: true, randomWalk: true });
+        const peerDiscovery = [mdns(), dhtService];
         if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
         const listen = this.options.listenAddresses;
@@ -132,7 +134,7 @@ class P2PNetwork extends EventEmitter {
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
                     identify: identify(),
-                    dht: kadDHT({ enabled: true }),
+                    dht: dhtService,
                     circuitRelay: circuitRelayServer({ reservations: { maxReservations: 12, reservationTtl: 60_000 } })
                 },
                 peerDiscovery
