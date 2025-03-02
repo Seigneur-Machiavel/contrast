@@ -131,7 +131,7 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     identify: identify(),
                     dht: kadDHT({ enabled: true }),
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 6, reservationTtl: 60_000 } })
+                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 12, reservationTtl: 60_000 } })
                 },
                 peerDiscovery
             });
