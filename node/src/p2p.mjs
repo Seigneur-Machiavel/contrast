@@ -282,7 +282,7 @@ class P2PNetwork extends EventEmitter {
                 }
             }
         } catch (error) {
-            console.error(`peer:discovery => ${peerId.toString()} =>`, error.message);
+            console.error(`peer:discovery => ${discoveredPeerId.toString()} =>`, error.message);
         }
 
         // the end tasks
