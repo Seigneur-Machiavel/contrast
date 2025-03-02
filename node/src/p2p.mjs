@@ -212,7 +212,7 @@ class P2PNetwork extends EventEmitter {
             if (P2PNetwork.DIRECT_PORTS.includes(targetPort))
                 targetMaStr = maStr; // direct connection
             else if (con.remotePeer.toString() === targetPeerIdStr)
-                targetMaStr = maStr + '/p2p-circuit/p2p/' + this.p2pNode.peerId.toString(); // relayed connection
+                targetMaStr = maStr + '/p2p/' + this.p2pNode.peerId.toString(); // relayed connection
             
             if (!targetMaStr) continue;
 
@@ -230,9 +230,7 @@ class P2PNetwork extends EventEmitter {
     /** @param {PeerId} peerId */
     async sendRelayShareRequest(peerId) {
         stream = await this.p2pNet.p2pNode.dialProtocol(peerId, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3000) });
-        
         const readResult = await P2PNetwork.streamRead(stream);
-        
     }
     async #updateConnexionResume() {
         const totalPeers = Object.keys(this.peers).length || 0;
