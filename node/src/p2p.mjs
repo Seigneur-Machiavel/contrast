@@ -33,17 +33,6 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
  * @typedef {import("@libp2p/interface").PeerId} PeerId
  * @typedef {import("@libp2p/interface").Stream} Stream
- * 
- * @typedef {Object} Peer
- * @property {PeerId} id
- * @property {boolean} dialable
- * @property {number} lastSeen
- * 
- * @typedef {Object} sharedPeerUrls
- * @property {string[]} direct
- * @property {string[]} relayed
- * 
- * @typedef {Object<string, sharedPeerUrls>} sharedPeers // peerIdStr -> sharedPeerUrls
  */
 
 class P2PNetwork extends EventEmitter {
@@ -202,41 +191,29 @@ class P2PNetwork extends EventEmitter {
         if (!stream) { return; }
         await stream.closeRead(); // nothing to read
 
-        /** @type {sharedPeers} */
-        const sharedPeerUrls = {};
+        const sharedPeerIdsStr = [];
         const cons = this.p2pNode.getConnections();
         for (const con of cons) {
             const maStr = con.remoteAddr.toString();
             if (maStr.includes('p2p-circuit')) continue; // Skip relayed connections
-            if (!maStr.split('p2p/')[1]) continue;
-            if (!maStr.split('tcp/')[1]) continue;
-    
-            const targetPeerIdStr = maStr.split('p2p/')[1].split('/')[0];
-            const targetPort = maStr.split('tcp/')[1].split('/')[0];
-
-            let targetMaStr = null;
-            if (P2PNetwork.DIRECT_PORTS.includes(targetPort))
-                targetMaStr = maStr; // direct connection
-            else if (con.remotePeer.toString() === targetPeerIdStr)
-                targetMaStr = maStr + '/p2p-circuit/p2p/' + this.p2pNode.peerId.toString(); // relayed connection
+            //if (!maStr.split('p2p/')[1]) continue; //? useless
+            //if (!maStr.split('tcp/')[1]) continue; //? useless
             
-            if (!targetMaStr) continue;
-
-            if (!sharedPeerUrls[targetPeerIdStr]) sharedPeerUrls[targetPeerIdStr] = { direct: [], relayed: [] };
-
-            const type = targetMaStr.includes('p2p-circuit') ? 'relayed' : 'direct';
-            sharedPeerUrls[targetPeerIdStr][type].push(targetMaStr);
+			if (sharedPeerIdsStr.includes(con.remotePeer.toString())) continue; // Skip already shared peers
+			sharedPeerIdsStr.push(con.remotePeer.toString());
         }
 
-        const serializedMessage = serializer.serialize.rawData(sharedPeerUrls);
+        const serializedMessage = serializer.serialize.rawData(sharedPeerIdsStr);
         console.info('SENDING RELAY SHARE RESPONSE:');
-        console.info(sharedPeerUrls);
+        console.info(sharedPeerIdsStr);
         await P2PNetwork.streamWrite(stream, serializedMessage);
     }
     /** @param {PeerId} peerId */
     async sendRelayShareRequest(peerId) {
         stream = await this.p2pNet.p2pNode.dialProtocol(peerId, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3000) });
         const readResult = await P2PNetwork.streamRead(stream);
+
+        // relay/p2p-circuit/p2p/target
     }
     async #updateConnexionResume() {
         const totalPeers = Object.keys(this.peers).length || 0;
