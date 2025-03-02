@@ -80,7 +80,7 @@ class P2PNetwork extends EventEmitter {
         maxPeers: 12,
         logLevel: 'info',
         logging: true,
-        listenAddresses: ['/ip4/0.0.0.0/tcp/0'],
+        listenAddresses: ['/ip4/0.0.0.0/tcp/0', '/p2p-circuit'],
         dialTimeout: 3000, //3000,
         reputationOptions: {}, // Options for ReputationManager
     };
@@ -112,6 +112,7 @@ class P2PNetwork extends EventEmitter {
         const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
+        if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
 
         try {
             const p2pNode = await createLibp2p({
@@ -120,8 +121,9 @@ class P2PNetwork extends EventEmitter {
                 connectionEncrypters: [ noise() ],
                 connectionGater: { denyDialMultiaddr: () => false },
                 transports: [
-                    circuitRelayTransport({ discoverRelays: 1 }),
+                    circuitRelayTransport({ discoverRelays: 3 }),
                     tcp(),
+                    webSockets()
                 ],
                 addresses: { listen },
                 services: {
@@ -135,6 +137,8 @@ class P2PNetwork extends EventEmitter {
                 },
                 peerDiscovery
             });
+
+            await p2pNode.start();
 
             console.log('Listening on:')
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
@@ -401,7 +405,10 @@ class P2PNetwork extends EventEmitter {
 
             promises.push(this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) })
                 .then(async con => {
-                    await con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    //const peerId = peerIdFromString(peerIdStr);
+                    const peerId = con.remotePeer;
+                    await this.p2pNode.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    //await con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                     const peerIdStr = con.remotePeer.toString();
                     this.connectedBootstrapNodes[peerIdStr] = addr;
                     console.log('--- CONNECT TO BOOTSTRAP ---> ', addr.toString());
@@ -409,7 +416,6 @@ class P2PNetwork extends EventEmitter {
 
                     await new Promise(resolve => setTimeout(resolve, 5000)); // time to get the relay addresses
                     
-                    const peerId = peerIdFromString(peerIdStr);
                     try {
                         const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3000) });
                         const relayAddresses = peerInfo.multiaddrs.filter(addr => addr.toString().split('/').pop() === 'p2p-circuit');

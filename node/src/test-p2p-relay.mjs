@@ -37,7 +37,7 @@ const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 const node = await createLibp2p({
 	privateKey: privateKeyObject,
 	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'] },
-	transports: [circuitRelayTransport(), tcp()],
+	transports: [circuitRelayTransport(), tcp(), webSockets()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -49,14 +49,20 @@ const node = await createLibp2p({
 	},
 	connectionGater: { denyDialMultiaddr: () => false },
 })
-
+await node.start();
 console.log(`Node started with id ${node.peerId.toString()}`)
 
-node.handle('/blockchain-sync/1.0.0', async ({ stream }) => {
-	console.log('Received a stream')
+
+node.handle(P2PNetwork.SYNC_PROTOCOL, async ({ stream }) => {
+	await new Promise(resolve => setTimeout(resolve, 3000));
+	console.log('Received a stream: SYNC_PROTOCOL')
 
 	const read = await P2PNetwork.streamRead(stream);
 	console.log('Received a message', read)
+});
+node.handle(P2PNetwork.RELAY_SHARE_PROTOCOL, async ({ stream }) => {
+	await new Promise(resolve => setTimeout(resolve, 3000));
+	console.log('Received a stream: RELAY_SHARE_PROTOCOL')
 });
 node.addEventListener('self:peer:update', (evt) => {
 	//console.log('\n -- selfPeerUpdate:');
@@ -66,6 +72,14 @@ node.addEventListener('peer:discovery', async (event) => {
 	const peerId = event.detail.id;
 	const multiaddrs = node.getConnections(peerId).map(con => con.remoteAddr);
 	
+	let routingPeer;
+	try {
+		routingPeer = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
+		console.log(`peer:discovery => ${peerId.toString()}`);
+	} catch (error) {
+		console.error(`peer:discovery => ${peerId.toString()} failed to find the peer`, error.message);
+	}
+
 	const discoveryMultiaddrs = event.detail.multiaddrs;
 	if (discoveryMultiaddrs.length === 0) return;
 
@@ -86,7 +100,7 @@ node.addEventListener('peer:connect', async (event) => {
 });
 
 const initCon = await node.dial(multiaddr(bootAddr));
-//await initCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+await initCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
 //console.log(`Connected init -> ${initCon.remoteAddr.toString()}`);
 //await node.dialProtocol(multiaddr(bootAddr), '/ipfs/id/1.0.0', { signal: AbortSignal.timeout(3_000) });
 //await node.dialProtocol(multiaddr(bootAddr), '/libp2p/dcutr', { signal: AbortSignal.timeout(3_000) });
@@ -139,11 +153,17 @@ async function dialNewPeersThroughRelay() {
 		try {
 			await node.dial(multiAddr, { signal: AbortSignal.timeout(3_000) });
 			console.log(`Dialed ${peerIdStr} trough the relay ${relayAddr}`);
-			await new Promise(resolve => setTimeout(resolve, 10000));
+			//await new Promise(resolve => setTimeout(resolve, 10000));
+		} catch (error) {
+			console.error(`Failed to dial ${peerIdStr} trough the relay ${relayAddr}`, error.message);
+			continue;
+		}
+		
+		try {
 			const relayedPeer = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
 			console.log('Found peer:', relayedPeer.id.toString());
 		} catch (error) {
-			console.error(`Failed to dial ${peerIdStr} trough the relay ${relayAddr}`, error.message);
+			console.error(`Failed to find peer ${peerIdStr} trough the relay ${relayAddr}`, error.message);
 		}
 	}
 
