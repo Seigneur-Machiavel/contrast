@@ -253,7 +253,7 @@ class P2PNetwork extends EventEmitter {
             const readResult = await P2PNetwork.streamRead(stream);
             sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
             if (!sharedPeerIdsStr || sharedPeerIdsStr.length === 0) return;
-        } catch (error) { this.miniLogger.log(`Failed to get peersShared`, (m) => { console.error(m); }); }
+        } catch (error) { this.miniLogger.log(`Failed to get peersShared: ${error.message}`, (m) => { console.error(m); }); }
 
         const relayAddrsStr = multiAddrs.map(addr => addr.toString());
         for (const sharedPeerIdStr of sharedPeerIdsStr) {
@@ -268,7 +268,7 @@ class P2PNetwork extends EventEmitter {
             try {
                 //await node.dialProtocol(relaydMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
                 await this.p2pNode.dial(relaydMultiAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                await this.p2pNode.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
+                //await this.p2pNode.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
             } catch (error) {}
         }
     }
@@ -290,10 +290,14 @@ class P2PNetwork extends EventEmitter {
 
         try {
             const directAddrs = event.detail.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
-            await this.#dialSharedPeersFromRelay(directAddrs);
-            //const discoveryMultiaddrs = event.detail.multiaddrs;
-            //const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail.id, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
-            //const multiAddrs = peerInfo.multiaddrs;
+            if (directAddrs.length > 0) { await this.#dialSharedPeersFromRelay(directAddrs); return; }
+            
+            await new Promise(resolve => setTimeout(resolve, 10000)); // wait for DHT to update
+            const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail.id, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
+            
+            const multiAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+            if (multiAddrs.length === 0) throw new Error('No direct multiaddrs found');
+            await this.#dialSharedPeersFromRelay(multiAddrs);
         } catch (error) { }
     }
     /** @param {CustomEvent} event */
@@ -308,8 +312,10 @@ class P2PNetwork extends EventEmitter {
 
         try {
             if (directCons.length === 0) { // try to upgrade to direct connection (from DHT)
+                await new Promise(resolve => setTimeout(resolve, 10000)); // wait for DHT to update
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
                 const directMultiAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+                if (directMultiAddrs.length === 0) throw new Error('No direct multiaddrs found');
                 await this.p2pNode.dialProtocol(directMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             } else { // try to discover more peers from the relay
                 const directAddrs = directCons.map(con => con.remoteAddr);
@@ -348,22 +354,23 @@ class P2PNetwork extends EventEmitter {
     }
     async #connectToBootstrapNodes() {
         for (const addr of this.options.bootstrapNodes) {
-            if (this.myAddr === addr) { this.iAmBootstrap = true; continue; } // Skip if recognize as myself
+            const ipAddr = addr.split('/p2p/').pop();
+            if (this.myAddr === ipAddr) { this.iAmBootstrap = true; continue; } // Skip if recognize as myself
             if (this.#isBootstrapNodeAlreadyConnected(addr)) { continue; } // Skip if already connected
 
             const connectedBootstraps = Object.values(this.connectedBootstrapNodes).filter(addr => addr !== null).length;
             if (connectedBootstraps >= this.targetBootstrapNodes) { break; } // Stop if reached the target
 
             const ma = multiaddr(addr);
-            const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
+            //const isBanned = this.reputationManager.isPeerBanned({ ip: ma.toString() });
             //this.miniLogger.log(`Connecting to bootstrap node ${addr}`, (m) => { console.info(m); });
 
             try {
                 const con = await this.p2pNode.dial(ma, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                this.connectedBootstrapNodes[con.remotePeer.toString()] = addr;
+                this.connectedBootstrapNodes[con.remotePeer.toString()] = ipAddr;
             } catch (err) {
                 if (err.message === 'Can not dial self') {
-                    this.myAddr = addr;
+                    this.myAddr = ipAddr;
                     this.iAmBootstrap = true;
 
                     await this.p2pNode.services.dht.setMode('server'); // Ensure DHT is enabled as server

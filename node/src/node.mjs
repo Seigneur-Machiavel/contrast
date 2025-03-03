@@ -55,8 +55,10 @@ export class Node {
     nbOfWorkers = 4;
     bootstrapNodes = [
         '/dns4/pinkparrot.science/tcp/27260',
-        '/dns4/pinkparrot.observer/tcp/27261',
-        '/dns4/contrast.observer/tcp/27260',
+        //'/dns4/pinkparrot.observer/tcp/27261',
+        '/dns4/pinkparrot.observer/tcp/27261/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7',
+        //'/dns4/contrast.observer/tcp/27260',
+        '/dns4/contrast.observer/tcp/27260/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX',
         '/dns4/pariah.monster/tcp/27260'
     ];
     memPool = new MemPool();
@@ -132,8 +134,8 @@ export class Node {
         const startTime = performance.now();
         this.updateState("starting");
 
-        this.#loadBootstrapNodesList();
-        Storage.saveJSON('bootstrapNodes', this.bootstrapNodes);
+        //this.#loadBootstrapNodesList();
+        //Storage.saveJSON('bootstrapNodes', this.bootstrapNodes);
         this.p2pNetwork.options.bootstrapNodes = this.bootstrapNodes;
 
         await this.timeSynchronizer.syncTimeWithRetry(5, 500);
