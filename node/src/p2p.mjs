@@ -123,7 +123,7 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
-                //connectionGater: { denyDialMultiaddr: () => false },
+                connectionGater: { denyDialMultiaddr: () => false },
                 transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTCDirect()],
                 addresses: { listen },
                 services: {
@@ -226,6 +226,7 @@ class P2PNetwork extends EventEmitter {
         await stream.closeRead(); // nothing to read
 
         const sharedPeerIdsStr = [];
+        //const allPeers = await this.p2pNode.peerStore.all();
         const cons = this.p2pNode.getConnections();
         for (const con of cons) {
             const maStr = con.remoteAddr.toString();
@@ -257,16 +258,17 @@ class P2PNetwork extends EventEmitter {
         const relayAddrsStr = multiAddrs.map(addr => addr.toString());
         for (const sharedPeerIdStr of sharedPeerIdsStr) {
             if (sharedPeerIdStr === this.p2pNode.peerId.toString()) continue; // not myself
-            if (this.p2pNode.getConnections().map(con => con.remotePeer.toString()).includes(sharedPeerIdStr)) continue;
+            const sharedPeerId = peerIdFromString(sharedPeerIdStr)
+            const peerConnections = this.p2pNode.getConnections(sharedPeerId);
+            if (peerConnections.length > 0) continue; // already connected
     
             const relaydMultiAddrs = []; // all possibles relayed addresses to reach the shared peer
             for (const addrStr of relayAddrsStr) relaydMultiAddrs.push(multiaddr(`${addrStr}/p2p-circuit/p2p/${sharedPeerIdStr}`));
 
             try {
-                await this.p2pNode.dial(relaydMultiAddrs, { signal: AbortSignal.timeout(3_000) });
-                const sharedPeerId = peerIdFromString(sharedPeerIdStr);
-                await this.p2pNode.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary but can help
-                //await node.dialProtocol(sharedPeerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+                //await node.dialProtocol(relaydMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+                await this.p2pNode.dial(relaydMultiAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                await this.p2pNode.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
             } catch (error) {}
         }
     }

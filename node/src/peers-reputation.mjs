@@ -329,12 +329,12 @@ class ReputationManager extends EventEmitter {
      * @param {boolean} permanent
      */
     banIdentifier(identifier, permanent = false) {
-        console.log(
+        /*console.log(
             `Banning identifier ${identifier} ${
                 permanent ? 'permanently' : 'temporarily'
             }`
         );
-        console.log(`Score: ${this.identifierScores.get(identifier)}`);
+        console.log(`Score: ${this.identifierScores.get(identifier)}`);*/
         const existingBan = this.identifierBans.get(identifier);
         if (!existingBan || (!existingBan.permanent && permanent)) {
             if (permanent) {
