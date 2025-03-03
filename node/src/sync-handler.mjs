@@ -262,8 +262,7 @@ export class SyncHandler {
         const msg = { type: 'getStatus' };
         const promises = [];
         for (const peerIdStr of peersToSync) {
-            const peer = this.p2pNet.peers[peerIdStr];
-            if (!peer || !peer.dialable) { return false; } // only try to sync status with dialable peers
+            if (!this.p2pNet.peers[peerIdStr].dialable) continue;
             promises.push(this.#sendSyncRequest(peerIdStr, msg, 1));
         }
 
