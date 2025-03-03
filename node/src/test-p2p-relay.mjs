@@ -39,7 +39,7 @@ const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'] },
-	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp()],
+	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTC()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -48,6 +48,15 @@ const node = await createLibp2p({
 		dcutr: dcutr(),
 		autoNAT: autoNAT(),
 		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
+	},
+	config: {
+		peerDiscovery:
+			{ autoDial: true, mdns: { enabled: true, interval: 10_000 } },
+		relay: {
+			enabled: true,
+			hop: { enabled: true, active: true },
+			autoRelay: { enabled: true, maxListeners: 20 },
+		},
 	},
 	peerDiscovery: [mdns(), dhtService]
 })

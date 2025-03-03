@@ -123,7 +123,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 //connectionGater: { denyDialMultiaddr: () => false },
-                transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp()],
+                transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTC()],
                 addresses: { listen },
                 services: {
                     //uPnPNAT: uPnPNAT(),
