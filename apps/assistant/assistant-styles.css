@@ -22,6 +22,8 @@
     height: -webkit-fill-available;
 }
 #board-messages-container .message {
+    user-select: text;
+    pointer-events: all;
     margin: 5px 40px 5px 10px;
     padding: 10px;
     border-radius: 5px;
