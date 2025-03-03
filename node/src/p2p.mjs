@@ -134,6 +134,15 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
                 },
+                config: {
+                    peerDiscovery:
+                        { autoDial: true, mdns: { enabled: true, interval: 10_000 } },
+                    relay: {
+                        enabled: true,
+                        hop: { enabled: true, active: true },
+                        autoRelay: { enabled: true, maxListeners: 20 },
+                    },
+                },
                 peerDiscovery
             });
 
