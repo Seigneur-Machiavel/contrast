@@ -32,7 +32,6 @@ const targetAddr = '/ip4/90.110.28.181/tcp/50913/p2p/12D3KooWJM29sadqienYmVvA7Gy
 if (!targetAddr) throw new Error('the target address needs to be specified as a parameter');
 
 //process.env.DEBUG = 'libp2p:dcutr*';
-const DIAL_THROUGH_RELAY = false; // general test, DEPRECATED
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 const dhtService = kadDHT({ enabled: true, randomWalk: true });
@@ -92,8 +91,8 @@ async function askRelayShare(multiAddrs) {
 		return sharedPeerIdsStr;
 	} catch (error) { console.log(`Failed to get peersShared`) }
 }
-/** @param {string[]} peerIdsStr */
-async function tryToDialPeerIdsStr(peerIdsStr) {
+/** @param {multiaddr[]} relayAddrs @param {string[]} peerIdsStr */
+async function tryToDialPeerIdsStr(relayAddrs, peerIdsStr) {
 	if (!peerIdsStr || peerIdsStr.length === 0) return;
 	let result = { success: 0, failed: 0, peersDialed: [] };
 	const allCons = node.getConnections();
@@ -102,10 +101,17 @@ async function tryToDialPeerIdsStr(peerIdsStr) {
 		if (sharedPeerIdStr === node.peerId.toString()) continue; // not myself
 		if (connectedPeerIdsStr.includes(sharedPeerIdStr)) continue;
 
+		// relayAddrs[0] is the one that discovered the peer
+		const relaydMultiAddrs = [];
+		for (const addr of relayAddrs) {
+			const relaydAddr = `${addr.toString()}/p2p-circuit/p2p/${sharedPeerIdStr}`;
+			relaydMultiAddrs.push(multiaddr(relaydAddr));
+		}
 		try {
 			const sharedPeerId = peerIdFromString(sharedPeerIdStr);
+			await node.dial(relaydMultiAddrs, { signal: AbortSignal.timeout(3_000) });
 			await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary
-			await node.dial(sharedPeerId, { signal: AbortSignal.timeout(3_000) });
+			//await node.dialProtocol(sharedPeerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
 			result.success++;
 			result.peersDialed.push(sharedPeerIdStr);
 		} catch (error) { result.failed++ }
@@ -119,11 +125,10 @@ node.addEventListener('peer:discovery', async (event) => {
 
 	//await new Promise(resolve => setTimeout(resolve, 10000)); //? useless
 	
-	//const discoveryMultiaddrs = event.detail.multiaddrs;
-	//const notRelayedAddrs = discoveryMultiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
-	//const sharedPeerIdsStr = await askRelayShare(notRelayedAddrs);
-	const sharedPeerIdsStr = await askRelayShare(event.detail.multiaddrs);
-	await tryToDialPeerIdsStr(sharedPeerIdsStr);
+	const notRelayedAddrs = event.detail.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+	const sharedPeerIdsStr = await askRelayShare(notRelayedAddrs);
+	//const sharedPeerIdsStr = await askRelayShare(event.detail.multiaddrs);
+	await tryToDialPeerIdsStr(notRelayedAddrs, sharedPeerIdsStr);
 });
 node.addEventListener('peer:disconnect', async (event) => {
 	console.log(`peer:disconnect => ${event.detail.toString()}`);

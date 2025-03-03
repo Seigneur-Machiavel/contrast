@@ -209,13 +209,11 @@ class P2PNetwork extends EventEmitter {
             for (const peerIdStr in this.peers) {
                 if (this.peers[peerIdStr].dialable) continue;
 
-                const notRelayedCons = this.p2pNode.getConnections(peerIdStr).filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
-                if (notRelayedCons.length === 0) continue;
+                const peerId = peerIdFromString(peerIdStr);
+                const directCons = this.p2pNode.getConnections(peerId).filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
+                if (directCons.length === 0) continue;
 
                 this.#updatePeer(peerIdStr, { dialable: true }, 'directConnectionUpgraded');
-
-                //const sharedPeerIdsStr = await this.#askRelayShare(notRelayedCons.map(con => con.remoteAddr));
-                //await this.#tryToDialPeerIdsStr(sharedPeerIdsStr);
             }
         }
     }
@@ -244,36 +242,32 @@ class P2PNetwork extends EventEmitter {
         await P2PNetwork.streamWrite(stream, serializedMessage);
     }
     /** @param {Multiaddr[]} multiAddrs */
-    async #askRelayShare(multiAddrs) {
+    async #dialSharedPeersFromRelay(multiAddrs) {
+        /** @type {string[]} */
+        let sharedPeerIdsStr;
+
         try {
             const stream = await this.p2pNode.dialProtocol(multiAddrs, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             const readResult = await P2PNetwork.streamRead(stream);
-            /** @type {string[]} */
-            const sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
-            return sharedPeerIdsStr;
+            sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
+            if (!sharedPeerIdsStr || sharedPeerIdsStr.length === 0) return;
         } catch (error) { this.miniLogger.log(`Failed to get peersShared`, (m) => { console.error(m); }); }
-    }
-    /** @param {string[]} peerIdsStr */
-    async #tryToDialPeerIdsStr(peerIdsStr) {
-        if (!peerIdsStr || peerIdsStr.length === 0) return;
 
-        let result = { success: 0, failed: 0 };
-        const allCons = this.p2pNode.getConnections();
-        for (const sharedPeerIdStr of peerIdsStr) {
+        const relayAddrsStr = multiAddrs.map(addr => addr.toString());
+        for (const sharedPeerIdStr of sharedPeerIdsStr) {
             if (sharedPeerIdStr === this.p2pNode.peerId.toString()) continue; // not myself
+            if (this.p2pNode.getConnections().map(con => con.remotePeer.toString()).includes(sharedPeerIdStr)) continue;
+    
+            const relaydMultiAddrs = []; // all possibles relayed addresses to reach the shared peer
+            for (const addrStr of relayAddrsStr) relaydMultiAddrs.push(multiaddr(`${addrStr}/p2p-circuit/p2p/${sharedPeerIdStr}`));
 
-            const connectedPeerIdsStr = allCons.map(con => con.remotePeer.toString());
-            if (connectedPeerIdsStr.includes(sharedPeerIdStr)) continue;
-    
             try {
-                const peerId = peerIdFromString(sharedPeerIdStr);
-                //const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) }); //? not necessary
-                await this.p2pNode.dial(peerId, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                result.success++;
-            } catch (error) { result.failed++ }
+                await this.p2pNode.dial(relaydMultiAddrs, { signal: AbortSignal.timeout(3_000) });
+                const sharedPeerId = peerIdFromString(sharedPeerIdStr);
+                await this.p2pNode.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary but can help
+                //await node.dialProtocol(sharedPeerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+            } catch (error) {}
         }
-    
-        console.log(`--- Dialed ${result.success} peers, failed ${result.failed} ---`);
     }
     async #updateConnexionResume() {
         const totalPeers = Object.keys(this.peers).length || 0;
@@ -291,13 +285,12 @@ class P2PNetwork extends EventEmitter {
 
         //await new Promise(resolve => setTimeout(resolve, 3000)); //? not necessary
 
-        try { // ensure DHT updated
+        try {
+            const directAddrs = event.detail.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+            await this.#dialSharedPeersFromRelay(directAddrs);
             //const discoveryMultiaddrs = event.detail.multiaddrs;
             //const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail.id, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
             //const multiAddrs = peerInfo.multiaddrs;
-            //const notRelayedAddrs = multiAddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
-            const sharedPeerIdsStr = await this.#askRelayShare(event.detail.multiaddrs);
-            await this.#tryToDialPeerIdsStr(sharedPeerIdsStr);
         } catch (error) { }
     }
     /** @param {CustomEvent} event */
@@ -306,17 +299,21 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`(peer:connect) incoming dial ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
         
         // confirm connection type: direct(dialable) or relayed
-        const cons = this.p2pNode.getConnections(peerIdStr);
+        const cons = this.p2pNode.getConnections(event.detail);
         const directCons = cons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
         this.#updatePeer(peerIdStr, { dialable: directCons.length > 0 ? true : false, id: event.detail }, directCons.length > 0 ? 'directly connected' : 'connected trough relay');
-        //this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'directly connected');
 
-        // try to get shared peers
-        try { // ensure DHT updated
-            const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
-            const sharedPeerIdsStr = await this.#askRelayShare(peerInfo.multiaddrs); // directCons.map(con => con.remoteAddr));
-            await this.#tryToDialPeerIdsStr(sharedPeerIdsStr);
-            //this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay'); 
+        try {
+            if (directCons.length === 0) { // try to upgrade to direct connection (from DHT)
+                const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
+                const directMultiAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+                await this.p2pNode.dialProtocol(directMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            } else { // try to discover more peers from the relay
+                const directAddrs = directCons.map(con => con.remoteAddr);
+                await this.#dialSharedPeersFromRelay(directAddrs);
+            }
+
+            this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay'); 
         } catch (error) {}
         await this.#updateConnexionResume();
     }
