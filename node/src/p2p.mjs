@@ -122,7 +122,7 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
-                connectionGater: { denyDialMultiaddr: () => false },
+                //connectionGater: { denyDialMultiaddr: () => false },
                 transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp()],
                 addresses: { listen },
                 services: {
