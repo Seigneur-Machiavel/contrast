@@ -294,9 +294,15 @@ class P2PNetwork extends EventEmitter {
         const peerIdStr = event.detail.toString();
         this.miniLogger.log(`(peer:connect) dial from peer ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
         
+        // confirm connection
         const cons = this.p2pNode.getConnections(peerIdStr);
         const directCons = cons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
         this.#updatePeer(peerIdStr, { dialable: directCons.length > 0 ? true : false, id: event.detail }, 'connected');
+
+        // try to get shared peers
+        const sharedPeerIdsStr = await this.#askRelayShare(notRelayedAddrs);
+        await this.#tryToDialPeerIdsStr(sharedPeerIdsStr);
+        this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'connected');
         await this.#updateConnexionResume();
     }
     /** @param {CustomEvent} event */
