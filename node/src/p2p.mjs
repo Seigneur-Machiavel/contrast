@@ -126,7 +126,7 @@ class P2PNetwork extends EventEmitter {
                 transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTC()],
                 addresses: { listen },
                 services: {
-                    //uPnPNAT: uPnPNAT(),
+                    uPnPNAT: uPnPNAT(),
                     identify: identify(),
                     dht: dhtService,
                     dcutr: dcutr(),

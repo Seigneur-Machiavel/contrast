@@ -8,6 +8,7 @@ import { serializer } from '../../utils/serializer.mjs';
 import { webSockets } from '@libp2p/websockets';
 import { tcp } from '@libp2p/tcp';
 import { mdns } from '@libp2p/mdns';
+import { uPnPNAT } from '@libp2p/upnp-nat';
 import { kadDHT } from '@libp2p/kad-dht';
 import { autoNAT } from '@libp2p/autonat';
 import { multiaddr } from '@multiformats/multiaddr';
@@ -43,6 +44,7 @@ const node = await createLibp2p({
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
+		uPnPNAT: uPnPNAT(),
 		identify: identify(),
 		dht: dhtService,
 		dcutr: dcutr(),
