@@ -38,8 +38,8 @@ const dhtService = kadDHT({ enabled: true, randomWalk: true });
 const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
-	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'] },
-	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTC()],
+	addresses: { listen: ['/p2p-circuit', '/webrtc-direct', '/ip4/0.0.0.0/tcp/0'] },
+	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTCDirect()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -48,9 +48,9 @@ const node = await createLibp2p({
 		dht: dhtService,
 		dcutr: dcutr(),
 		autoNAT: autoNAT(),
-		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
+		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24, reservationTtl: 60_000 } })
 	},
-	config: {
+	/*config: {
 		peerDiscovery:
 			{ autoDial: true, mdns: { enabled: true, interval: 10_000 } },
 		relay: {
@@ -58,7 +58,7 @@ const node = await createLibp2p({
 			hop: { enabled: true, active: true },
 			autoRelay: { enabled: true, maxListeners: 20 },
 		},
-	},
+	},*/
 	peerDiscovery: [mdns(), dhtService]
 })
 await node.start();

@@ -115,6 +115,7 @@ class P2PNetwork extends EventEmitter {
         const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
+        if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
         //if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
 
         try {
@@ -123,7 +124,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 //connectionGater: { denyDialMultiaddr: () => false },
-                transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTC()],
+                transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTCDirect()],
                 addresses: { listen },
                 services: {
                     uPnPNAT: uPnPNAT(),
@@ -134,7 +135,7 @@ class P2PNetwork extends EventEmitter {
                     pubsub: gossipsub(),
                     circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
                 },
-                config: {
+                /*config: {
                     peerDiscovery:
                         { autoDial: true, mdns: { enabled: true, interval: 10_000 } },
                     relay: {
@@ -142,7 +143,7 @@ class P2PNetwork extends EventEmitter {
                         hop: { enabled: true, active: true },
                         autoRelay: { enabled: true, maxListeners: 20 },
                     },
-                },
+                },*/
                 peerDiscovery
             });
 
