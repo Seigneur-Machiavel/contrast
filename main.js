@@ -15,8 +15,8 @@ setTimeout(() => {
     if (closePort) {
         client.portUnmapping({ public: portToOpen }, (err) => {
             if (err) {
-                windows.boardWindow.webContents.send('assistant-message', 'Error while closing the port');
-                windows.boardWindow.webContents.send('assistant-message', err.message);
+                windows.boardWindow.webContents.send('assistant-message', "Can't close the port using upnp");
+                //windows.boardWindow.webContents.send('assistant-message', err.message);
                 if (err.cause) windows.boardWindow.webContents.send('assistant-message', err.cause);
             }
             windows.boardWindow.webContents.send('assistant-message', `Port ${portToOpen} Closed successfully !`);

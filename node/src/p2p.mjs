@@ -216,6 +216,17 @@ class P2PNetwork extends EventEmitter {
 
                 this.#updatePeer(peerIdStr, { dialable: true }, 'directConnectionUpgraded');
             }
+
+            const allPeers = await this.p2pNode.peerStore.all();
+            for (const peer of allPeers) {
+                const peerIdStr = peer.id.toString();
+                if (this.peers[peerIdStr] && this.peers[peerIdStr].dialable) continue;
+
+                try {
+                    await this.p2pNode.dialProtocol(peer.id, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    this.#updatePeer(peerIdStr, { dialable: true, id: peer.id }, 'relayedConnectionUpgraded');
+                } catch (error) {}
+            }
         }
     }
     async #handleRelayShare(lstream) {
@@ -294,11 +305,20 @@ class P2PNetwork extends EventEmitter {
             
             await new Promise(resolve => setTimeout(resolve, 10000)); // wait for DHT to update
             const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail.id, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
+            const relayMultiAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().endsWith('p2p-circuit'));
+            if (relayMultiAddrs === 0) throw new Error('No relay multiaddrs found from routing to reach peer');
             
-            const multiAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
-            if (multiAddrs.length === 0) throw new Error('No direct multiaddrs found');
-            await this.#dialSharedPeersFromRelay(multiAddrs);
-        } catch (error) { }
+            const relayedMultiAddrs = []; // all possibles relayed addresses to reach the discovered peer
+            for (const addr of relayMultiAddrs) relayedMultiAddrs.push(multiaddr(`${addr.toString()}/p2p/${event.detail.id.toString()}`));
+            // no direct connexion initially, but now we have multiaddrs, we can try to dial directly/trough relay
+            //? just dial() ?
+            await this.p2pNode.dial(relayedMultiAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const peerCons = this.p2pNode.getConnections(event.detail.id);
+            if (this.peers[event.detail.id.toString()]) return; // no need to update if already in peers list (dialable false)
+            this.#updatePeer(event.detail.id.toString(), { dialable: false, id: event.detail.id }, 'from discovery trough relay');
+            //await this.#dialSharedPeersFromRelay(multiAddrs);
+        } catch (error) {
+            console.error(error.message); }
     }
     /** @param {CustomEvent} event */
     #handlePeerConnect = async (event) => {
