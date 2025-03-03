@@ -300,7 +300,7 @@ class P2PNetwork extends EventEmitter {
         this.#updatePeer(peerIdStr, { dialable: directCons.length > 0 ? true : false, id: event.detail }, 'connected');
 
         // try to get shared peers
-        const sharedPeerIdsStr = await this.#askRelayShare(notRelayedAddrs);
+        const sharedPeerIdsStr = await this.#askRelayShare(directCons.map(con => con.remoteAddr));
         await this.#tryToDialPeerIdsStr(sharedPeerIdsStr);
         this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'connected');
         await this.#updateConnexionResume();
