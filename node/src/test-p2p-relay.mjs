@@ -39,7 +39,7 @@ const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'] },
-	transports: [circuitRelayTransport(), tcp()],
+	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -47,7 +47,7 @@ const node = await createLibp2p({
 		dht: dhtService,
 		dcutr: dcutr(),
 		autoNAT: autoNAT(),
-		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 6, reservationTtl: 60_000 } })
+		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
 	},
 	peerDiscovery: [mdns(), dhtService]
 })
@@ -92,8 +92,9 @@ async function tryToDialPeerIdsStr(peerIdsStr) {
 		if (connectedPeerIdsStr.includes(sharedPeerIdStr)) continue;
 
 		try {
-			//await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary
-			await node.dial(peerIdFromString(sharedPeerIdStr), { signal: AbortSignal.timeout(3_000) });
+			const sharedPeerId = peerIdFromString(sharedPeerIdStr);
+			await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary
+			await node.dial(sharedPeerId, { signal: AbortSignal.timeout(3_000) });
 			result.success++;
 			result.peersDialed.push(sharedPeerIdStr);
 		} catch (error) { result.failed++ }
@@ -106,9 +107,11 @@ node.addEventListener('peer:discovery', async (event) => {
 	console.log(`peer:discovery => ${event.detail.id.toString()}`);
 
 	//await new Promise(resolve => setTimeout(resolve, 10000)); //? useless
-	const discoveryMultiaddrs = event.detail.multiaddrs;
-	const notRelayedAddrs = discoveryMultiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
-	const sharedPeerIdsStr = await askRelayShare(notRelayedAddrs);
+	
+	//const discoveryMultiaddrs = event.detail.multiaddrs;
+	//const notRelayedAddrs = discoveryMultiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+	//const sharedPeerIdsStr = await askRelayShare(notRelayedAddrs);
+	const sharedPeerIdsStr = await askRelayShare(event.detail.multiaddrs);
 	await tryToDialPeerIdsStr(sharedPeerIdsStr);
 });
 node.addEventListener('peer:disconnect', async (event) => {

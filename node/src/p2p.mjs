@@ -123,20 +123,16 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 connectionGater: { denyDialMultiaddr: () => false },
-                transports: [
-                    circuitRelayTransport({ discoverRelays: 3 }),
-                    tcp(),
-                    //webSockets()
-                ],
+                transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp()],
                 addresses: { listen },
                 services: {
                     //uPnPNAT: uPnPNAT(),
+                    identify: identify(),
+                    dht: dhtService,
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
-                    identify: identify(),
-                    dht: dhtService,
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 12, reservationTtl: 60_000 } })
+                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
                 },
                 peerDiscovery
             });
@@ -300,21 +296,19 @@ class P2PNetwork extends EventEmitter {
         const peerIdStr = event.detail.toString();
         this.miniLogger.log(`(peer:connect) incoming dial ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
         
-        // confirm connection
-        //const cons = this.p2pNode.getConnections(peerIdStr);
-        //const directCons = cons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
-        //this.#updatePeer(peerIdStr, { dialable: directCons.length > 0 ? true : false, id: event.detail }, directCons.length > 0 ? 'directly connected' : 'connected trough relay');
-        this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'directly connected');
+        // confirm connection type: direct(dialable) or relayed
+        const cons = this.p2pNode.getConnections(peerIdStr);
+        const directCons = cons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
+        this.#updatePeer(peerIdStr, { dialable: directCons.length > 0 ? true : false, id: event.detail }, directCons.length > 0 ? 'directly connected' : 'connected trough relay');
+        //this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'directly connected');
 
         // try to get shared peers
-        //setTimeout(async () => {
-            try { // ensure DHT updated
-                const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
-                const sharedPeerIdsStr = await this.#askRelayShare(peerInfo.multiaddrs); // directCons.map(con => con.remoteAddr));
-                await this.#tryToDialPeerIdsStr(sharedPeerIdsStr);
-                //this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay'); 
-            } catch (error) {}
-        //}, 7000);
+        try { // ensure DHT updated
+            const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
+            const sharedPeerIdsStr = await this.#askRelayShare(peerInfo.multiaddrs); // directCons.map(con => con.remoteAddr));
+            await this.#tryToDialPeerIdsStr(sharedPeerIdsStr);
+            //this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay'); 
+        } catch (error) {}
         await this.#updateConnexionResume();
     }
     /** @param {CustomEvent} event */
