@@ -81,7 +81,8 @@ class P2PNetwork extends EventEmitter {
         logLevel: 'info',
         logging: true,
         listenAddresses: ['/ip4/0.0.0.0/tcp/0', '/p2p-circuit'],
-        dialTimeout: 3000, //3000,
+        dialTimeout: 5000, //3000,
+        findPeerTimeout: 10000,
         reputationOptions: {}, // Options for ReputationManager
     };
     
@@ -102,7 +103,7 @@ class P2PNetwork extends EventEmitter {
     }
 
     /** @param {string} uniqueHash - A unique 32 bytes hash to generate the private key from. */
-    async start(uniqueHash) { // WebRTC
+    async start(uniqueHash) {
         const hash = uniqueHash ? uniqueHash : mining.generateRandomNonce(32).Hex;
         const hashUint8Array = convert.hex.toUint8Array(hash);
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
@@ -193,7 +194,7 @@ class P2PNetwork extends EventEmitter {
                 if (dialablePeersCount >= this.options.maxPeers) break;
 
                 try {
-                    const peerInfo = await this.p2pNode.peerRouting.findPeer(peer.id, { signal: AbortSignal.timeout(3000) });
+                    const peerInfo = await this.p2pNode.peerRouting.findPeer(peer.id, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
                     //let multiAddrs = peerInfo.multiaddrs.filter(ma => ma.toString().endsWith('webrtc') === false);
                     //multiAddrs = multiAddrs.filter(ma => ma.toString().endsWith('p2p-circuit') === false);
                     //if (multiAddrs.length === 0) throw new Error('No multiaddrs');
@@ -240,68 +241,12 @@ class P2PNetwork extends EventEmitter {
         const allPeersIdStr = allPeers.map(peer => peer.id.toString());
         this.miniLogger.log(`Connected to ${totalPeers} peers (${connectedBootstraps}/${totalBootstraps} bootstrap nodes) | ${allPeers.length} peers in peerStore`, (m) => { console.info(m); });
     }
-    #handlePeerDiscovery = async (event) => {
+    #handlePeerDiscoveryOLD = async (event) => {
         const discoveredPeerId = event.detail.id;
         const discoveredPeerIdStr = discoveredPeerId.toString();
-        const discoveryMultiaddrs = event.detail.multiaddrs;
-        if (discoveryMultiaddrs.length === 0) return;
-    
-        try {
-            const notRelayedAddrs = discoveryMultiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
-            if (notRelayedAddrs.length === 0) return; //TODO can try a simple dial SYNC_PROTOCOL
-    
-            const con = await this.p2pNode.dial(notRelayedAddrs, { signal: AbortSignal.timeout(3_000) });
-            const stream = await con.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
-            const readResult = await P2PNetwork.streamRead(stream);
-            console.log(`peer:discovery => ${discoveredPeerId.toString()} successfully dialed RELAY_SHARE_PROTOCOL`);
-    
-            /** @type {string[]} */
-            const sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
-            const relayAddr = con.remoteAddr.toString();
-    
-            // TRY DIAL ANY NEW PEER THROUGH THE RELAY
-            const myPeerIdStr = this.p2pNode.peerId.toString();
-            for (const peerIdStr of sharedPeerIdsStr) {
-                if (peerIdStr === myPeerIdStr) continue;
-                if (this.peers[peerIdStr] && this.peers[peerIdStr].dialable) continue;
 
-                const dialablePeersCount = Object.values(this.peers).filter(peer => peer.dialable).length;
-                if (dialablePeersCount >= this.options.maxPeers) break;
-                
-                const peerId = peerIdFromString(peerIdStr);
-                const relayedAddr = relayAddr + '/p2p-circuit/p2p/' + peerIdStr;
-                const multiAddr = multiaddr(relayedAddr);
-    
-                try {
-                    await this.p2pNode.dial(multiAddr, { signal: AbortSignal.timeout(3_000) });
-                    console.log(`Dialed ${peerIdStr} trough the relay ${relayAddr}`);
-                    this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
-                    continue;
-                } catch (error) {
-                    console.error(`Failed to dial ${peerIdStr} trough the relay ${relayAddr}`, error.message);
-                }
-    
-                await new Promise(resolve => setTimeout(resolve, 1000));
-    
-                try {
-                    const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3000) });
-                    //let multiaddrs = peerInfo.multiaddrs.filter(ma => ma.toString().endsWith('webrtc') === false);
-                    //multiaddrs = multiaddrs.filter(ma => ma.toString().endsWith('p2p-circuit') === false);
-                    //if (multiaddrs.length === 0) throw new Error('No multiaddrs');
-                    await this.p2pNode.dialProtocol(peerInfo.multiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-                    this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
-                } catch (error) {
-                    console.error(`Failed to dial ${peerIdStr} from peerId`, error.message);
-                }
-            }
-        } catch (error) {
-            console.error(`peer:discovery => ${discoveredPeerId.toString()} =>`, error.message);
-        }
-
-        // the end tasks
         try {
             await this.p2pNode.dialProtocol(discoveredPeerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            const connectionsUpdated = this.p2pNode.getConnections(discoveredPeerId);
             this.#updatePeer(discoveredPeerIdStr, { dialable: true, id: discoveredPeerId }, 'discovered');
         } catch (err) {
             this.miniLogger.log(`(Discovery) Failed to dial peer ${readableId(discoveredPeerIdStr)}`, (m) => { console.error(m); });
@@ -309,7 +254,7 @@ class P2PNetwork extends EventEmitter {
 
         await this.#updateConnexionResume();
     }
-    #handlePeerDiscoveryOLD = async (event) => { // DEPRECATED
+    #handlePeerDiscovery = async (event) => { // DEPRECATED
         /** @type {PeerId} */
         const peerId = event.detail.id;
         const peerIdStr = peerId.toString();
@@ -334,7 +279,7 @@ class P2PNetwork extends EventEmitter {
 
         if (multiAddrsToTry.length === 0) {
             try {
-                const peerInfo = await this.p2pNode.peerRouting.findPeer(peerIdStr, { signal: AbortSignal.timeout(3000) });
+                const peerInfo = await this.p2pNode.peerRouting.findPeer(peerIdStr, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
                 const multiAddrs = peerInfo.multiaddrs;
                 if (multiAddrs.length === 0) { console.error('No multiaddrs', peerIdStr); return; }
                 const con = await this.p2pNode.dial(multiAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
@@ -368,23 +313,79 @@ class P2PNetwork extends EventEmitter {
     /** @param {CustomEvent} event */
     #handlePeerConnect = async (event) => {
         /** @type {PeerId} */
-        const peerId = event.detail;
-        const peerIdStr = peerId.toString();
-        this.miniLogger.log(`(Connect) dial from peer ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
+        const connectionPeerId = event.detail;
+        const connectionPeerIdStr = connectionPeerId.toString();
+        this.miniLogger.log(`(Connect) dial from peer ${readableId(connectionPeerIdStr)} success`, (m) => { console.debug(m); });
 
-        const isBanned = this.reputationManager.isPeerBanned({ peerId: peerIdStr });
-        this.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
+        const isBanned = this.reputationManager.isPeerBanned({ peerId: connectionPeerIdStr });
+        this.reputationManager.recordAction({ peerId: connectionPeerIdStr }, ReputationManager.GENERAL_ACTIONS.CONNECTION_ESTABLISHED);
         //if (isBanned) { this.closeConnection(peerIdStr, 'Banned peer'); return; }
 
+        
+
         try {
-            const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3000) });
+            const peerInfo = await this.p2pNode.peerRouting.findPeer(connectionPeerId, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
             let multiaddrs = peerInfo.multiaddrs.filter(ma => ma.toString().endsWith('webrtc') === false);
             multiaddrs = multiaddrs.filter(ma => ma.toString().endsWith('p2p-circuit') === false);
             if (multiaddrs.length === 0) throw new Error('No multiaddrs');
             await this.p2pNode.dialProtocol(multiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'connected');
+            this.#updatePeer(connectionPeerIdStr, { dialable: true, id: connectionPeerId }, 'connected');
         } catch (error) { 
-            this.miniLogger.log(`(Connect) Failed to dial peer ${readableId(peerIdStr)}`, (m) => { console.error(m); }); }
+            this.miniLogger.log(`(Connect) Failed to dial peer ${readableId(connectionPeerIdStr)}`, (m) => { console.error(m); });
+        }
+        try {
+            let connectionMultiAddrs = this.p2pNode.getConnections(connectionPeerId).map(con => con.remoteAddr);
+            //const notRelayedAddrs = connectionMultiAddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+            //if (notRelayedAddrs.length === 0) return; //TODO can try a simple dial SYNC_PROTOCOL
+            if (connectionMultiAddrs.length === 0) return;
+            const con = await this.p2pNode.dial(connectionMultiAddrs, { signal: AbortSignal.timeout(3_000) });
+            const stream = await con.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+            const readResult = await P2PNetwork.streamRead(stream);
+            console.log(`peer:connect => ${connectionPeerId.toString()} successfully dialed RELAY_SHARE_PROTOCOL`);
+    
+            /** @type {string[]} */
+            const sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
+            const relayAddr = con.remoteAddr.toString();
+    
+            // TRY DIAL ANY NEW PEER THROUGH THE RELAY
+            const myPeerIdStr = this.p2pNode.peerId.toString();
+            for (const peerIdStr of sharedPeerIdsStr) {
+                if (peerIdStr === myPeerIdStr) continue;
+                if (this.peers[peerIdStr] && this.peers[peerIdStr].dialable) continue;
+
+                const dialablePeersCount = Object.values(this.peers).filter(peer => peer.dialable).length;
+                if (dialablePeersCount >= this.options.maxPeers) break;
+                
+                const peerId = peerIdFromString(peerIdStr);
+                const relayedAddr = relayAddr + '/p2p-circuit/p2p/' + peerIdStr;
+                const multiAddr = multiaddr(relayedAddr);
+    
+                try {
+                    await this.p2pNode.dialProtocol(multiAddr, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+                    //await this.p2pNode.dial(multiAddr, { signal: AbortSignal.timeout(3_000) });
+                    console.log(`Dialed ${peerIdStr} trough the relay ${relayAddr}`);
+                    this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
+                    continue;
+                } catch (error) {
+                    console.error(`Failed to dial ${peerIdStr} trough the relay ${relayAddr}`, error.message);
+                }
+    
+                await new Promise(resolve => setTimeout(resolve, 1000));
+    
+                try {
+                    const peerInfo = await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
+                    //let multiaddrs = peerInfo.multiaddrs.filter(ma => ma.toString().endsWith('webrtc') === false);
+                    //multiaddrs = multiaddrs.filter(ma => ma.toString().endsWith('p2p-circuit') === false);
+                    //if (multiaddrs.length === 0) throw new Error('No multiaddrs');
+                    await this.p2pNode.dialProtocol(peerInfo.multiaddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    this.#updatePeer(peerIdStr, { dialable: true, id: peerId }, 'discovered');
+                } catch (error) {
+                    console.error(`Failed to dial ${peerIdStr} from peerId`, error.message);
+                }
+            }
+        } catch (error) {
+            console.error(`peer:connect => ${connectionPeerIdStr} =>`, error.message);
+        }
 
         await this.#updateConnexionResume();
     };
@@ -398,43 +399,6 @@ class P2PNetwork extends EventEmitter {
         if (this.peers[peerIdStr]) delete this.peers[peerIdStr];
         this.connectedBootstrapNodes[peerIdStr] = null;
     };
-    /** @param {CustomEvent} event */
-    #handlePubsubMessage = async (event) => {
-        const { topic, data, from } = event.detail;
-        this.reputationManager.recordAction({ peerId: from }, ReputationManager.GENERAL_ACTIONS.PUBSUB_RECEIVED + topic);
-        if (!this.#validateTopic(topic)) { return; }
-        if (!this.#validateTopicData(topic, data)) { return; }
-
-        try {
-            const deserializationFnc = this.topicsTreatment[topic].deserialize || serializer.deserialize.rawData;
-            const content = deserializationFnc(data);
-            const message = { content, from, byteLength: data.byteLength };
-            this.emit(topic, message);
-        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); }
-    }
-    /** Validates a pubsub topic against the allowed topics. @param {string} topic - The topic to validate. */
-    #validateTopic(topic) {
-        if (typeof topic !== 'string') {
-            this.miniLogger.log(`Invalid topic type ${topic}, reason: Topic must be a string`, (m) => { console.warn(m); });
-            return false;
-        }
-        if (P2PNetwork.ALLOWED_TOPICS.has(topic)) { return true; }
-
-        this.miniLogger.log(`Topic not allowed ${topic}`, (m) => { console.warn(m); });
-        return false;
-    }
-    /** Validates the data of a pubsub message. @param {string} topic @param {Uint8Array} data */
-    #validateTopicData(topic, data, verifySize = true) {
-        if (!(data instanceof Uint8Array)) {
-            this.miniLogger.log(`Received non-binary data dataset: ${data} topic: ${topic}`, (m) => { console.error(m); });
-            return false;
-        }
-
-        if (!verifySize || data.byteLength <= this.topicsTreatment[topic].maxSize) { return true; }
-        
-        this.miniLogger.log(`Message size exceeds maximum allowed size, topic: ${topic}`, (m) => { console.error(m); });
-        return false;
-    }
 
     async #bootstrapsReconnectLoop() {
         while(true) {
@@ -494,6 +458,19 @@ class P2PNetwork extends EventEmitter {
         this.miniLogger.log(`P2P network ${this.p2pNode.peerId.toString()} stopped`, (m) => { console.info(m); });
         await this.reputationManager.shutdown();
     }
+    /** @param {string} peerIdStr @param {Object} data @param {string} [reason] */
+    #updatePeer(peerIdStr, data, reason) {
+        const updatedPeer = this.peers[peerIdStr] || {};
+        updatedPeer.id = data.id || updatedPeer.id;
+        updatedPeer.lastSeen = this.timeSynchronizer.getCurrentTime();
+        if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
+        if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
+
+        this.peers[peerIdStr] = updatedPeer;
+        this.miniLogger.log(`--{ Peer } ${readableId(peerIdStr)} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
+    }
+    
+    // STATIC STREAM FUNCTIONS
     static async streamWrite(stream, serializedMessage, maxChunkSize = P2PNetwork.maxChunkSize) {
         // limit the speed of sending chunks, at 64 KB/chunk, 1 GB would take:
         // 1 GB / 64 KB = 16384 chunks => 16384 * 2 ms = 32.768 more seconds
@@ -518,6 +495,7 @@ class P2PNetwork extends EventEmitter {
         const data = new Uint8Array(Buffer.concat(dataChunks));
         return { data, nbChunks: dataChunks.length };
     }
+
     // PUBSUB
     /** @param {string} topic @param {Function} [callback] */
     subscribe(topic, callback) {
@@ -537,6 +515,43 @@ class P2PNetwork extends EventEmitter {
         this.subscriptions.delete(topic);
         this.miniLogger.log(`Unsubscribed from topic ${topic}`, (m) => { console.debug(m); });
     }
+    /** Validates a pubsub topic against the allowed topics. @param {string} topic - The topic to validate. */
+    #validateTopic(topic) {
+        if (typeof topic !== 'string') {
+            this.miniLogger.log(`Invalid topic type ${topic}, reason: Topic must be a string`, (m) => { console.warn(m); });
+            return false;
+        }
+        if (P2PNetwork.ALLOWED_TOPICS.has(topic)) { return true; }
+
+        this.miniLogger.log(`Topic not allowed ${topic}`, (m) => { console.warn(m); });
+        return false;
+    }
+    /** Validates the data of a pubsub message. @param {string} topic @param {Uint8Array} data */
+    #validateTopicData(topic, data, verifySize = true) {
+        if (!(data instanceof Uint8Array)) {
+            this.miniLogger.log(`Received non-binary data dataset: ${data} topic: ${topic}`, (m) => { console.error(m); });
+            return false;
+        }
+
+        if (!verifySize || data.byteLength <= this.topicsTreatment[topic].maxSize) { return true; }
+        
+        this.miniLogger.log(`Message size exceeds maximum allowed size, topic: ${topic}`, (m) => { console.error(m); });
+        return false;
+    }
+    /** @param {CustomEvent} event */
+    #handlePubsubMessage = async (event) => {
+        const { topic, data, from } = event.detail;
+        this.reputationManager.recordAction({ peerId: from }, ReputationManager.GENERAL_ACTIONS.PUBSUB_RECEIVED + topic);
+        if (!this.#validateTopic(topic)) { return; }
+        if (!this.#validateTopicData(topic, data)) { return; }
+
+        try {
+            const deserializationFnc = this.topicsTreatment[topic].deserialize || serializer.deserialize.rawData;
+            const content = deserializationFnc(data);
+            const message = { content, from, byteLength: data.byteLength };
+            this.emit(topic, message);
+        } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); }
+    }
     /** @param {string} topic */
     async broadcast(topic, message) {
         //this.miniLogger.log(`Broadcasting message on topic ${topic}`, (m) => { console.debug(m); });
@@ -551,17 +566,6 @@ class P2PNetwork extends EventEmitter {
             this.miniLogger.log(`Broadcast error on topic **${topic}**`, (m) => { console.error(m); });
             this.miniLogger.log(error, (m) => { console.error(m); });
         }
-    }
-    /** @param {string} peerIdStr @param {Object} data @param {string} [reason] */
-    #updatePeer(peerIdStr, data, reason) {
-        const updatedPeer = this.peers[peerIdStr] || {};
-        updatedPeer.id = data.id || updatedPeer.id;
-        updatedPeer.lastSeen = this.timeSynchronizer.getCurrentTime();
-        if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
-        if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
-
-        this.peers[peerIdStr] = updatedPeer;
-        this.miniLogger.log(`--{ Peer } ${readableId(peerIdStr)} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
     }
     /** @param {string} identifier - peerIdStr or ip */
     async disconnectPeer(identifier) {

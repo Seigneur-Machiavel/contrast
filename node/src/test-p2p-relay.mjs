@@ -31,7 +31,6 @@ const targetAddr = '/ip4/90.110.28.181/tcp/50913/p2p/12D3KooWJM29sadqienYmVvA7Gy
 if (!targetAddr) throw new Error('the target address needs to be specified as a parameter');
 
 //process.env.DEBUG = 'libp2p:dcutr*';
-process.env.DEBUG = 'libp2p:*,libp2p:identify*,libp2p:dcutr*';
 const DIAL_THROUGH_RELAY = false; // general test, DEPRECATED
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
@@ -73,9 +72,24 @@ node.addEventListener('self:peer:update', (evt) => {
 });
 node.addEventListener('peer:discovery', async (event) => {
 	const peerId = event.detail.id;
+	const multiaddrs = node.getConnections(peerId).map(con => con.remoteAddr);
+	//let connectionPeerInfo;
+	//try { connectionPeerInfo = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
+	//} catch (error) {}
+
+	console.log(`peer:discovery => ${peerId.toString()} (multiaddrs: ${multiaddrs.length})`);
+
 	const discoveryMultiaddrs = event.detail.multiaddrs;
 	if (discoveryMultiaddrs.length === 0) return;
 
+	try {
+		await new Promise(resolve => setTimeout(resolve, 3000));
+		await node.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+	} catch (error) {
+		console.error(`Failed to dial SYNC_PROTOCOL to ${peerId.toString()}`, error.message);
+	}
+
+	return;
 	try {
 		const notRelayedAddrs = discoveryMultiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
 		if (notRelayedAddrs.length === 0) return; //TODO can try a simple dial SYNC_PROTOCOL
@@ -127,13 +141,53 @@ node.addEventListener('peer:discovery', async (event) => {
 node.addEventListener('peer:connect', async (event) => {
 	const peerId = event.detail;
 	const peerIdStr = peerId.toString();
-	//const multiaddrs = node.getConnections(peerId).map(con => con.remoteAddr);
+	const cons = node.getConnections(peerId);
+	const multiaddrs = cons.map(con => con.remoteAddr);
 
-	//await node.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
-	console.log(`peer:connect => ${peerIdStr} (total: ${node.getConnections(peerId).length} connections)`);
+	try { // const has = await node.peerStore.has(sharedPeerId);
+		const has = await node.peerStore.has(peerId);
+		const peerFromStore = has ? await node.peerStore.get(peerId) : null;
+		if (peerFromStore) peerFromStore.toString();
+
+		const connectionPeerInfo = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
+		//await node.dialProtocol(peerId, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+		console.log(`peer:connect => ${peerIdStr} (total: ${node.getConnections(peerId).length} connections)`);
+	} catch (error) {
+		console.error(`peer:connect => ${peerIdStr} =>`, error.message);
+	}
 });
 
-const initCon = await node.dial(multiaddr(bootAddr));
+try {
+	//const initCon = await node.dial(multiaddr(bootAddr));
+	const stream = await node.dialProtocol(multiaddr(bootAddr), P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+	const readResult = await P2PNetwork.streamRead(stream);
+	/** @type {string[]} */
+	const sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
+	
+	await new Promise(resolve => setTimeout(resolve, 10000));
+
+	const allCons = node.getConnections();
+	const connectedPeerIdsStr = allCons.map(con => con.remotePeer.toString());
+	const myPeerIdStr = node.peerId.toString();
+	for (const sharedPeerIdStr of sharedPeerIdsStr) {
+		if (sharedPeerIdStr === myPeerIdStr) continue;
+		if (connectedPeerIdsStr.includes(sharedPeerIdStr)) continue;
+
+		const sharedPeerId = peerIdFromString(sharedPeerIdStr);
+		try {
+			const has = await node.peerStore.has(sharedPeerId);
+			const peerFromStore = has ? await node.peerStore.get(sharedPeerId) : null;
+			const peerInfo = await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) });
+			await node.dial(sharedPeerId, { signal: AbortSignal.timeout(3_000) });
+			console.log(`--- Dialed ${sharedPeerIdStr} from the boot node as relay ---`);
+		} catch (error) {
+			console.error(`Failed to dial ${sharedPeerIdStr} from the boot node`, error.message);
+		}
+	}
+	console.log('Received a message', readResult);
+} catch (error) {
+	console.error('Failed to dial the boot node', error.message);
+}
 //await initCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
 //console.log(`Connected init -> ${initCon.remoteAddr.toString()}`);
 //await node.dialProtocol(multiaddr(bootAddr), '/ipfs/id/1.0.0', { signal: AbortSignal.timeout(3_000) });
@@ -167,7 +221,7 @@ const initCon = await node.dial(multiaddr(bootAddr));
 
 
 //const targetPeerIdFromStr = peerIdFromString('12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ');
-//const tpInfo = await node.peerRouting.findPeer(targetPeerIdFromStr, { signal: AbortSignal.timeout(10_000) });
+//const tpInfo = await node.peerRouting.findPeer(targetPeerIdFromStr, { signal: AbortSignal.timeout(3_000) });
 //console.log('Found target peer:', tpInfo.id.toString());
 
 // try init more peer connexions trough the relay
@@ -230,7 +284,7 @@ async function dialNewPeersThroughRelayOLD() { // DEPRECATED
 				console.log(`Connected to the target: ${targetPeerIdStr}
 trough: ${targetCon.remoteAddr.toString()}`);
 
-				const peerInfo = await node.peerRouting.findPeer(targetPeerId, { signal: AbortSignal.timeout(10_000) });
+				const peerInfo = await node.peerRouting.findPeer(targetPeerId, { signal: AbortSignal.timeout(3_000) });
 				console.log('Found peer:', peerInfo.id.toString());
 				//knownPeersIdStr = (await node.peerStore.all()).map(peer => peer.id.toString());
 			} catch (error) { console.error(error.message); }
@@ -252,10 +306,10 @@ trough: ${targetCon.remoteAddr.toString()}`);
 //const peerId = peerIdFromString('12D3KooWJRAvHUPuQZ5GDPZgLJ9bFZ7jYWrR5R2hYudjA65eMqx1'); // JRAv ?
 //const peerId = peerIdFromString('12D3KooWEAKsyqsmPqSd4k3jniBkuciJYhBvNs9BqA1449CxP3hN'); // EAKs ?
 //const peerId = peerIdFromString('12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ'); // ZAYGA ?
-//const peerInfo = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(10_000) });
+//const peerInfo = await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
 //console.log('Found peer:', peerInfo.id.toString());
 
-//const con = await node.dial(peerId, { signal: AbortSignal.timeout(10_000) });
+//const con = await node.dial(peerId, { signal: AbortSignal.timeout(3_000) });
 //console.log(`Connected to the target ${con.remoteAddr.toString()}`);
 // ----------------------------
 
@@ -276,19 +330,28 @@ trough: ${targetCon.remoteAddr.toString()}`);
 (async () => {
 	let peerStored = 0;
 	let connectionsCount = 0;
+	let relayedConsCount = 0;
+	let directConsCount = 0;
 	while (true) {
 		await new Promise(resolve => setTimeout(resolve, 1000));
 		const allPeers = await node.peerStore.all();
 		const allPeersIdStr = allPeers.map(peer => peer.id.toString());
 		const allCons = node.getConnections();
+		const relayedCons = allCons.filter(con => con.remoteAddr.toString().includes('p2p-circuit')).map(con => con.remoteAddr.toString());
+		const directCons = allCons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false).map(con => con.remoteAddr.toString());
 
-		if (allPeersIdStr.length > peerStored || allCons.length > connectionsCount) {
+		if (allPeersIdStr.length > peerStored
+		|| allCons.length !== connectionsCount
+		|| relayedCons.length !== relayedConsCount
+		|| directCons.length !== directConsCount) {
 			console.log('New peers state:', allPeersIdStr);
 
-			console.log('All relayed connections:', allCons.filter(con => con.remoteAddr.toString().includes('p2p-circuit')).map(con => con.remoteAddr.toString()));
-			console.log('Direct connections:', allCons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false).map(con => con.remoteAddr.toString()));
+			console.log('All relayed connections:', relayedCons);
+			console.log('Direct connections:', directCons);
 			peerStored = allPeersIdStr.length;
 			connectionsCount = allCons.length;
+			relayedConsCount = relayedCons.length;
+			directConsCount = directCons.length;
 		}
 	}
 })();
