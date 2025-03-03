@@ -189,7 +189,7 @@ class P2PNetwork extends EventEmitter {
                 if (Object.keys(this.peers).length >= this.options.maxPeers) break;
                 const peerIdStr = peer.id.toString();
                 if (peerIdStr === myPeerIdStr) continue;
-                if (this.peers[peerIdStr] && this.peers[peerIdStr].dialable) continue;
+                if (this.peers[peerIdStr]) continue;
 
                 try {
                     await this.p2pNode.dial(peer.id, { signal: AbortSignal.timeout(this.options.dialTimeout) });
