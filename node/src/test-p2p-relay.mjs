@@ -84,7 +84,7 @@ async function askRelayShare(multiAddrs) {
 /** @param {string[]} peerIdsStr */
 async function tryToDialPeerIdsStr(peerIdsStr) {
 	if (!peerIdsStr || peerIdsStr.length === 0) return;
-	let result = { success: 0, failed: 0 };
+	let result = { success: 0, failed: 0, peersDialed: [] };
 	const allCons = node.getConnections();
 	const connectedPeerIdsStr = allCons.map(con => con.remotePeer.toString());
 	for (const sharedPeerIdStr of peerIdsStr) {
@@ -95,10 +95,12 @@ async function tryToDialPeerIdsStr(peerIdsStr) {
 			//await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary
 			await node.dial(peerIdFromString(sharedPeerIdStr), { signal: AbortSignal.timeout(3_000) });
 			result.success++;
+			result.peersDialed.push(sharedPeerIdStr);
 		} catch (error) { result.failed++ }
 	}
 
 	console.log(`--- Dialed ${result.success} peers, failed ${result.failed} ---`);
+	if (result.peersDialed.length) console.log(result.peersDialed);
 }
 node.addEventListener('peer:discovery', async (event) => {
 	console.log(`peer:discovery => ${event.detail.id.toString()}`);
@@ -146,6 +148,7 @@ async function tryConnectMorePeersLoop() {
 			try {
 				//await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
 				await node.dial(peerId, { signal: AbortSignal.timeout(3000) });
+				const updatedCons = node.getConnections(peerId);
 				newlyDialed++;
 			} catch (error) {}
 		}

@@ -260,7 +260,8 @@ class P2PNetwork extends EventEmitter {
             if (connectedPeerIdsStr.includes(sharedPeerIdStr)) continue;
     
             try {
-                //await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); //? not necessary
+                const peerId = peerIdFromString(sharedPeerIdStr);
+                await this.p2pNode.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) }); //? not necessary
                 await this.p2pNode.dial(peerIdFromString(sharedPeerIdStr), { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 result.success++;
             } catch (error) { result.failed++ }
@@ -349,7 +350,7 @@ class P2PNetwork extends EventEmitter {
                     this.miniLogger.log(`]]] I AM BOOTSTRAP! DHT SERVER ENABLED [[[`, (m) => { console.info(m); });
                     this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
                 } else { 
-                    this.miniLogger.log(`Failed to dial bootstrap node ${addr}`, (m) => { console.error(m); });
+                    //this.miniLogger.log(`Failed to dial bootstrap node ${addr}`, (m) => { console.error(m); });
                 }
             }
         }
