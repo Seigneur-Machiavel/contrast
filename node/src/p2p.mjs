@@ -291,7 +291,6 @@ class P2PNetwork extends EventEmitter {
             if (!connection) throw new Error('No connection to read/write');
 
             const request = await P2PNetwork.streamRead(stream);
-            await stream.closeRead();
             if (request.data.byteLength === 0) throw new Error('Empty request');
 
             const clientData = serializer.deserialize.rawData(request.data);
@@ -314,6 +313,9 @@ class P2PNetwork extends EventEmitter {
                         .then(() => console.log(`WebRTC direct initié vers ${peerId}`))
                         .catch(err => console.error('Dial WebRTC échoué:', err));
                 }
+                console.log('---------------------------------');
+                console.log('ICE CANDIDATE:', candidate);
+                console.log('---------------------------------');
             };
         } catch (error) {
             console.error('Failed to handle SDP exchange:', error.message);
