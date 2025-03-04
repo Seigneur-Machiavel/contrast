@@ -24,7 +24,8 @@ const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/tcp/0/ws', '/webrtc-direct'] }, // '/webrtc-direct'
-	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webSockets(), webRTCDirect()],
+	//transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webSockets(), webRTCDirect()],
+	transports: [tcp()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -33,9 +34,9 @@ const node = await createLibp2p({
 		dcutr: dcutr(),
 		upnp: uPnPNAT(),
 		autoNAT: autoNAT(),
-		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24, reservationTtl: 60_000 } })
+		//circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24, reservationTtl: 60_000 } })
 	},
-	peerDiscovery: [mdns(), dhtService]
+	//peerDiscovery: [mdns(), dhtService]
 })
 await node.start();
 
