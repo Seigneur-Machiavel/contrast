@@ -114,7 +114,7 @@ class P2PNetwork extends EventEmitter {
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
 
         const dhtService = kadDHT({ enabled: true, randomWalk: true });
-        const peerDiscovery = [mdns(), dhtService];
+        const peerDiscovery = [dhtService]; // mdns()
         if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
         const listen = this.options.listenAddresses;
