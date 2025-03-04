@@ -127,6 +127,7 @@ class P2PNetwork extends EventEmitter {
         
         const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
+        if (!listen.includes('/ip4/0.0.0.0/tcp/27260')) listen.push('/ip4/0.0.0.0/tcp/27260');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
         //if (!listen.includes('/ip4/194.146.15.44/tcp/0/ws/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B')) listen.push('/ip4/194.146.15.44/tcp/0/ws/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B');
