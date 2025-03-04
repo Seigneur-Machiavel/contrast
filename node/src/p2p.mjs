@@ -322,7 +322,8 @@ class P2PNetwork extends EventEmitter {
     async #sendSDPToRelay(directAddrs) {
         try {
             const stream = await this.p2pNode.dialProtocol(directAddrs, P2PNetwork.SDP_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            await P2PNetwork.streamWrite(serializer.serialize.rawData({ sdp: localSDP }));
+            const serialized = serializer.serialize.rawData({ sdp: localSDP });
+            await P2PNetwork.streamWrite(stream, serialized);
 
             const response = await P2PNetwork.streamRead(stream);
             if (response.data.byteLength === 0) throw new Error('Empty response from relay');
