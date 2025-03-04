@@ -421,7 +421,7 @@ class P2PNetwork extends EventEmitter {
             const peerCons = this.p2pNode.getConnections(event.detail.id);
             if (this.peers[event.detail.id.toString()]) return; // no need to update if already in peers list (dialable false)
             this.#updatePeer(event.detail.id.toString(), { dialable: false, id: event.detail.id }, 'from discovery trough relay');
-            await this.#dialSharedPeersFromRelay(multiAddrs);
+            //await this.#dialSharedPeersFromRelay(multiAddrs);
         } catch (error) {
             console.error(error.message); }
     }
@@ -448,7 +448,7 @@ class P2PNetwork extends EventEmitter {
                 await this.#dialSharedPeersFromRelay(directAddrs);
                 this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay to discover more peers');
 
-                //await this.#sendSDPToRelay(directAddrs);
+                await this.#sendSDPToRelay(directAddrs);
             }
         } catch (error) {
             this.#updatePeer(peerIdStr, { dialable: false, id: event.detail }, 'connected trough relay');
