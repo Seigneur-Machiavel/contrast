@@ -434,7 +434,7 @@ class P2PNetwork extends EventEmitter {
                 await this.#dialSharedPeersFromRelay(directAddrs);
                 this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay to discover more peers');
 
-                await this.#sendSDPToRelay(directAddrs);
+                //await this.#sendSDPToRelay(directAddrs);
             }
         } catch (error) {
             this.#updatePeer(peerIdStr, { dialable: false, id: event.detail }, 'connected trough relay');
