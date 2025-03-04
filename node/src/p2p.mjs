@@ -284,10 +284,13 @@ class P2PNetwork extends EventEmitter {
     }
     async #handleSDPExchange(lstream) { //TODO
         try {
-            const connection = lstream.connection;
             const stream = lstream.stream;
-            const request = await P2PNetwork.streamRead(stream);
+            if (!stream) throw new Error('No stream to read/write');
 
+            const connection = lstream.connection;
+            if (!connection) throw new Error('No connection to read/write');
+
+            const request = await P2PNetwork.streamRead(stream);
             const clientData = serializer.deserialize.rawData(request.data);
             const peerId = connection.remotePeer.toString();
             const clientSDP = clientData.sdp;
@@ -297,7 +300,7 @@ class P2PNetwork extends EventEmitter {
             await relayPC.setRemoteDescription({ type: 'offer', sdp: clientSDP });
             const answer = await relayPC.createAnswer();
             await relayPC.setLocalDescription(answer);
-            
+
             const serialized = serializer.serialize.rawData({ sdp: answer.sdp });
             await P2PNetwork.streamWrite(stream, serialized);
     
