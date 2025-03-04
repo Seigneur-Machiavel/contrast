@@ -164,8 +164,10 @@ class P2PNetwork extends EventEmitter {
             p2pNode.handle(P2PNetwork.RELAY_SHARE_PROTOCOL, this.#handleRelayShare.bind(this));
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
-                console.log('\n -- selfPeerUpdate:');
-                for (const addr of p2pNode.getMultiaddrs()) console.log(addr.toString());
+                console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
+                const myAddrsFromStore = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses;
+                const myAddrs = p2pNode.getMultiaddrs();
+                for (const addr of myAddrs) console.log(addr.toString());
             });
 
             p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
