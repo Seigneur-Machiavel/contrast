@@ -297,7 +297,8 @@ class P2PNetwork extends EventEmitter {
             await relayPC.setRemoteDescription({ type: 'offer', sdp: clientSDP });
             const answer = await relayPC.createAnswer();
             await relayPC.setLocalDescription(answer);
-            stream.write(serializer.serialize.rawData({ sdp: answer.sdp }));
+            const serialized = serializer.serialize.rawData({ sdp: answer.sdp });
+            await P2PNetwork.streamWrite(stream, serialized);
     
             relayPC.onicecandidate = ({ candidate }) => {
                 if (!candidate) {
