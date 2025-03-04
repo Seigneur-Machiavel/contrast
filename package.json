@@ -1,6 +1,6 @@
 {
   "name": "contrast",
-  "version": "0.1.34",
+  "version": "0.1.35",
   "description": "All-in-one Contrast application",
   "main": "main.js",
   "scripts": {

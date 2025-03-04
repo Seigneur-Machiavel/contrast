@@ -24,8 +24,8 @@ const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/tcp/0/ws', '/webrtc-direct'] }, // '/webrtc-direct'
-	//transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webSockets(), webRTCDirect()],
-	transports: [tcp()],
+	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webSockets(), webRTCDirect()],
+	//transports: [tcp()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -34,14 +34,15 @@ const node = await createLibp2p({
 		dcutr: dcutr(),
 		upnp: uPnPNAT(),
 		autoNAT: autoNAT(),
-		//circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24, reservationTtl: 60_000 } })
+		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24, reservationTtl: 60_000 } })
 	},
 	//peerDiscovery: [mdns(), dhtService]
 })
 await node.start();
 
+const target = '/ip4/158.178.213.171/tcp/63564/p2p/12D3KooWSpYvDZpJ6i4BG2pNZcMT5Lmv9E4cd4ubjCDP9G7m994i/p2p-circuit/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX'; // SPY
 //const target = '/dns4/contrast.observer/tcp/27260'; // contrast.observer direct IP
-const target = '/dns4/contrast.observer/tcp/27260'; // contrast.observer DNS
+//const target = '/dns4/contrast.observer/tcp/27260'; // contrast.observer DNS
 //const target = '/ip4/192.168.4.23/tcp/61121/ws/p2p/12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
 //const target = '/ip4/141.8.119.6/tcp/46124'
 //const target = '/ip4/193.43.70.41/tcp/1603/p2p/12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7' // YOGA
