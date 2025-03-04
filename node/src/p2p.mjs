@@ -393,6 +393,7 @@ class P2PNetwork extends EventEmitter {
     async #connectToBootstrapNodes() {
         for (const addr of this.options.bootstrapNodes) {
             const ipAddr = addr.split('/p2p/').pop();
+            ipAddr.replace('/ws', '');
             if (this.myAddr === ipAddr) { this.iAmBootstrap = true; continue; } // Skip if recognize as myself
             if (this.#isBootstrapNodeAlreadyConnected(addr)) { continue; } // Skip if already connected
 
