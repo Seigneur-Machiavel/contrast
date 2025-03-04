@@ -122,16 +122,16 @@ class P2PNetwork extends EventEmitter {
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
 
         const dhtService = kadDHT({ enabled: true, randomWalk: true });
-        const peerDiscovery = [dhtService]; // mdns()
+        const peerDiscovery = [mdns(), dhtService]; // mdns()
         if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
         const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
-        if (!listen.includes('/ip4/0.0.0.0/tcp/27260')) listen.push('/ip4/0.0.0.0/tcp/27260');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
-        if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
+        if (!listen.includes('/ip4/0.0.0.0/tcp/27260')) listen.push('/ip4/0.0.0.0/tcp/27260');
+        //if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
         //if (!listen.includes('/ip4/194.146.15.44/tcp/0/ws/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B')) listen.push('/ip4/194.146.15.44/tcp/0/ws/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B');
-        if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
+        //if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
         
         try {
             const p2pNode = await createLibp2p({
@@ -144,7 +144,7 @@ class P2PNetwork extends EventEmitter {
                     webSockets(),
                     webRTCDirect(),
                     tcp()
-                ], // webRTCDirect(), tcp()
+                ],
                 addresses: { listen },
                 services: {
                     uPnPNAT: uPnPNAT(),
