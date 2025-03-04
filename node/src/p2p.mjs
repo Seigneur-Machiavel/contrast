@@ -117,15 +117,15 @@ class P2PNetwork extends EventEmitter {
         const peerDiscovery = [mdns(), dhtService];
         if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
-        //const listen = this.options.listenAddresses;
-        //if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
+        const listen = this.options.listenAddresses;
+        if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         //if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
         //if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
 
         //if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
 
         // override listen addresses
-        const listen = ['/ip4/0.0.0.0/tcp/27260/ws', '/ip4/0.0.0.0/tcp/0/ws', '/p2p-circuit']
+        //const listen = ['/ip4/0.0.0.0/tcp/27260/ws', '/ip4/0.0.0.0/tcp/0/ws', '/p2p-circuit']
 
         try {
             const p2pNode = await createLibp2p({
