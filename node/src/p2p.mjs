@@ -139,7 +139,7 @@ class P2PNetwork extends EventEmitter {
                 connectionEncrypters: [ noise() ],
                 connectionGater: { denyDialMultiaddr: () => false },
                 transports: [
-                    //circuitRelayTransport({ discoverRelays: 3 }),
+                    circuitRelayTransport({ discoverRelays: 3 }),
                     //webSockets(),
                     //webRTCDirect(),
                     tcp()
@@ -152,7 +152,7 @@ class P2PNetwork extends EventEmitter {
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
-                    //circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
+                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
                 },
                 /*config: {
                     peerDiscovery:
