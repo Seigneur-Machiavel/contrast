@@ -286,27 +286,27 @@ class P2PNetwork extends EventEmitter {
         try {
             const connection = lstream.connection;
             const stream = lstream.stream;
-            stream.on('data', async (data) => {
-                const clientData = serializer.deserialize.rawData(data);
-                const peerId = connection.remotePeer.toString();
-                const clientSDP = clientData.sdp;
-                console.log(`Reçu SDP de ${peerId}:`, clientSDP);
-        
-                const relayPC = new wrtc.RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-                await relayPC.setRemoteDescription({ type: 'offer', sdp: clientSDP });
-                const answer = await relayPC.createAnswer();
-                await relayPC.setLocalDescription(answer);
-                stream.write(serializer.serialize.rawData({ sdp: answer.sdp }));
-        
-                relayPC.onicecandidate = ({ candidate }) => {
-                    if (!candidate) {
-                        
-                        this.p2pNode.dial(multiaddr(`/ip4/127.0.0.1/tcp/12345/http/p2p-webrtc-direct/p2p/${peerId}`))
-                            .then(() => console.log(`WebRTC direct initié vers ${peerId}`))
-                            .catch(err => console.error('Dial WebRTC échoué:', err));
-                    }
-                };
-            });
+            const request = await P2PNetwork.streamRead(stream);
+
+            const clientData = serializer.deserialize.rawData(request.data);
+            const peerId = connection.remotePeer.toString();
+            const clientSDP = clientData.sdp;
+            console.log(`Reçu SDP de ${peerId}:`, clientSDP);
+    
+            const relayPC = new wrtc.RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+            await relayPC.setRemoteDescription({ type: 'offer', sdp: clientSDP });
+            const answer = await relayPC.createAnswer();
+            await relayPC.setLocalDescription(answer);
+            stream.write(serializer.serialize.rawData({ sdp: answer.sdp }));
+    
+            relayPC.onicecandidate = ({ candidate }) => {
+                if (!candidate) {
+                    
+                    this.p2pNode.dial(multiaddr(`/ip4/127.0.0.1/tcp/12345/http/p2p-webrtc-direct/p2p/${peerId}`))
+                        .then(() => console.log(`WebRTC direct initié vers ${peerId}`))
+                        .catch(err => console.error('Dial WebRTC échoué:', err));
+                }
+            };
         } catch (error) {
             console.error('Failed to handle SDP exchange:', error.message);
         }
@@ -314,12 +314,13 @@ class P2PNetwork extends EventEmitter {
     async #sendSDPToRelay(directAddrs) {
         try {
             const stream = await this.p2pNode.dialProtocol(directAddrs, '/relay-share/1.0.0');
-            stream.write(serializer.serialize.rawData({ sdp: localSDP }));
-            stream.on('data', async (data) => {
-                const relayAnswer = serializer.deserialize.rawData(data).sdp;
-                await peerConnection.setRemoteDescription({ type: 'answer', sdp: relayAnswer });
-                console.log('Reçu answer du relais');
-            });
+            await P2PNetwork.streamWrite(serializer.serialize.rawData({ sdp: localSDP }));
+
+            const response = await P2PNetwork.streamRead(stream);
+            const deserialized = serializer.deserialize.rawData(response.data).sdp;
+            const relayAnswer = deserialized.sdp;
+            await peerConnection.setRemoteDescription({ type: 'answer', sdp: relayAnswer });
+            console.log('Reçu answer du relais');
         } catch (error) {
             console.error('Failed to send SDP to relay:', error.message);
         }
