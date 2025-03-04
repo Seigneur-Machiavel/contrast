@@ -280,7 +280,7 @@ class P2PNetwork extends EventEmitter {
 
         //const relayAddrsStr = multiAddrs.map(addr => addr.toString());
         const wsCompatibleAddrs = multiAddrs.map(addr => addr.toString()).filter(addr => addr.includes('ws'));
-        if (wsCompatibleAddrs.length > 0) return; // force ws for now
+        if (wsCompatibleAddrs.length === 0) return; // force ws for now
 
         for (const sharedPeerIdStr of sharedPeerIdsStr) {
             if (sharedPeerIdStr === this.p2pNode.peerId.toString()) continue; // not myself
