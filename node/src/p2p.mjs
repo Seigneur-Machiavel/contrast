@@ -13,7 +13,7 @@ import { mdns } from '@libp2p/mdns';
 import { kadDHT } from '@libp2p/kad-dht';
 import { webRTCDirect, webRTC } from '@libp2p/webrtc';
 import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2';
-import wrtc from 'wrtc';
+import wrtc from 'wrtc'; // WARNING -> npm i node-pre-gyp --g to install that crap
 //const wrtc = await import('wrtc');
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { dcutr } from '@libp2p/dcutr';
@@ -229,6 +229,13 @@ class P2PNetwork extends EventEmitter {
             }
         }
     }
+    #filterDirectAddrs(multiaddrs) {
+        let directAddrs = multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+        directAddrs = directAddrs.filter(addr => addr.toString().includes('/192') === false);
+        directAddrs = directAddrs.filter(addr => addr.toString().includes('/127') === false);
+        directAddrs = directAddrs.filter(addr => addr.toString().includes('/10') === false);
+        return directAddrs;
+    }
     async #updatePeerDialableStateOnDirectConnectionUpgrade() {
         while(true) {
             await new Promise(resolve => setTimeout(resolve, 5000));
@@ -250,7 +257,7 @@ class P2PNetwork extends EventEmitter {
 
                 try {
                     const peerInfo = await this.p2pNode.peerRouting.findPeer(peer.id, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
-                    const directAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+                    const directAddrs = this.#filterDirectAddrs(peerInfo.multiaddrs);
                     await this.p2pNode.dialProtocol(directAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                     this.#updatePeer(peerIdStr, { dialable: true, id: peer.id }, 'relayedConnectionUpgraded');
                     await this.#updateConnexionResume();
@@ -318,6 +325,12 @@ class P2PNetwork extends EventEmitter {
                 console.log('ICE CANDIDATE:', candidate);
                 console.log('---------------------------------');
             };
+            relayPC.oniceconnectionstatechange = () => {
+                console.log('ICE CONNECTION STATE:', relayPC.iceConnectionState);
+            };
+            relayPC.onicecandidateerror = (evt) => {
+                console.log('ICE CANDIDATE ERROR:', evt);
+            };
         } catch (error) {
             console.error('Failed to handle SDP exchange:', error.message);
         }
@@ -383,6 +396,7 @@ class P2PNetwork extends EventEmitter {
         this.connexionResume = { totalPeers, connectedBootstraps, totalBootstraps };
 
         const allPeers = await this.p2pNode.peerStore.all();
+        allPeers.forEach(peer => { peer.id.toString(); }); //TODO REMOVE AFTER DEBUGING
         this.miniLogger.log(`Connected to ${totalPeers} peers | ${dialablePeers} dialables | ${allPeers.length} in peerStore (${connectedBootstraps}/${totalBootstraps} bootstrap nodes)`, (m) => { console.info(m); });
     }
     #handlePeerDiscovery = async (event) => {
@@ -391,7 +405,7 @@ class P2PNetwork extends EventEmitter {
         //await new Promise(resolve => setTimeout(resolve, 3000)); //? not necessary
 
         try {
-            const directAddrs = event.detail.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+            const directAddrs = this.#filterDirectAddrs(event.detail.multiaddrs);
             if (directAddrs.length > 0) { await this.#dialSharedPeersFromRelay(directAddrs); return; }
             
             await new Promise(resolve => setTimeout(resolve, 10000)); // wait for DHT to update
@@ -407,7 +421,7 @@ class P2PNetwork extends EventEmitter {
             const peerCons = this.p2pNode.getConnections(event.detail.id);
             if (this.peers[event.detail.id.toString()]) return; // no need to update if already in peers list (dialable false)
             this.#updatePeer(event.detail.id.toString(), { dialable: false, id: event.detail.id }, 'from discovery trough relay');
-            //await this.#dialSharedPeersFromRelay(multiAddrs);
+            await this.#dialSharedPeersFromRelay(multiAddrs);
         } catch (error) {
             console.error(error.message); }
     }
@@ -425,7 +439,7 @@ class P2PNetwork extends EventEmitter {
             if (directCons.length === 0) { // try to upgrade to direct connection (from DHT)
                 await new Promise(resolve => setTimeout(resolve, 10000)); // wait for DHT to update
                 const peerInfo = await this.p2pNode.peerRouting.findPeer(event.detail, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
-                const directMultiAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+                const directMultiAddrs = this.#filterDirectAddrs(peerInfo.multiaddrs);
                 if (directMultiAddrs.length === 0) throw new Error('No direct multiaddrs found');
                 await this.p2pNode.dialProtocol(directMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'upgraded to direct connection');
