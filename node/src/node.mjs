@@ -54,12 +54,12 @@ export class Node {
     workers = [];
     nbOfWorkers = 4;
     bootstrapNodes = [
-        '/dns4/pinkparrot.science/tcp/27260',
-        '/dns4/pinkparrot.observer/tcp/27261',
+        '/dns4/pinkparrot.science/tcp/27260/ws',
+        '/dns4/pinkparrot.observer/tcp/27261/ws',
         //'/dns4/pinkparrot.observer/tcp/27261/ws/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7',
-        '/dns4/contrast.observer/tcp/27260',
+        '/dns4/contrast.observer/tcp/27260/ws',
         //'/dns4/contrast.observer/tcp/27260/ws/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX',
-        '/dns4/pariah.monster/tcp/27260'
+        '/dns4/pariah.monster/tcp/27260/ws'
     ];
     memPool = new MemPool();
     /** @type {OpStack} */
