@@ -297,6 +297,7 @@ class P2PNetwork extends EventEmitter {
             await relayPC.setRemoteDescription({ type: 'offer', sdp: clientSDP });
             const answer = await relayPC.createAnswer();
             await relayPC.setLocalDescription(answer);
+            
             const serialized = serializer.serialize.rawData({ sdp: answer.sdp });
             await P2PNetwork.streamWrite(stream, serialized);
     
@@ -314,11 +315,11 @@ class P2PNetwork extends EventEmitter {
     }
     async #sendSDPToRelay(directAddrs) {
         try {
-            const stream = await this.p2pNode.dialProtocol(directAddrs, '/relay-share/1.0.0');
+            const stream = await this.p2pNode.dialProtocol(directAddrs, P2PNetwork.SDP_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
             await P2PNetwork.streamWrite(serializer.serialize.rawData({ sdp: localSDP }));
 
             const response = await P2PNetwork.streamRead(stream);
-            const deserialized = serializer.deserialize.rawData(response.data).sdp;
+            const deserialized = serializer.deserialize.rawData(response.data);
             const relayAnswer = deserialized.sdp;
             await peerConnection.setRemoteDescription({ type: 'answer', sdp: relayAnswer });
             console.log('Reçu answer du relais');
