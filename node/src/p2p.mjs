@@ -121,7 +121,8 @@ class P2PNetwork extends EventEmitter {
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
-        //if (!listen.includes('/dns4/0.0.0.0/tcp/0')) listen.push('/dns4/0.0.0.0/tcp/0');
+        if (!listen.includes('/dns4/0.0.0.0/tcp/0')) listen.push('/dns4/0.0.0.0/tcp/0');
+        if (!listen.includes('/dns4/0.0.0.0/tcp/0/ws')) listen.push('/dns4/0.0.0.0/tcp/0/ws');
         //if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
 
         try {
@@ -230,7 +231,9 @@ class P2PNetwork extends EventEmitter {
                 if (this.peers[peerIdStr] && this.peers[peerIdStr].dialable) continue;
 
                 try {
-                    await this.p2pNode.dialProtocol(peer.id, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+                    const peerInfo = await this.p2pNode.peerRouting.findPeer(peer.id, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
+                    const directAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
+                    await this.p2pNode.dialProtocol(directAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                     this.#updatePeer(peerIdStr, { dialable: true, id: peer.id }, 'relayedConnectionUpgraded');
                 } catch (error) {}
             }
@@ -349,7 +352,7 @@ class P2PNetwork extends EventEmitter {
                 await this.#dialSharedPeersFromRelay(directAddrs);
             }
 
-            this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay'); 
+            this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay');
         } catch (error) {}
         await this.#updateConnexionResume();
     }
