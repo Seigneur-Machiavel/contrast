@@ -38,7 +38,7 @@ const dhtService = kadDHT({ enabled: true, randomWalk: true });
 const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
-	addresses: { listen: ['/p2p-circuit', '/webrtc-direct', '/ip4/0.0.0.0/tcp/0'] },
+	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/tcp/0/ws'] }, // '/webrtc-direct'
 	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTCDirect()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],

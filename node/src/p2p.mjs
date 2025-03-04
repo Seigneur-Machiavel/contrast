@@ -33,6 +33,11 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
  * @typedef {import("@libp2p/interface").PeerId} PeerId
  * @typedef {import("@libp2p/interface").Stream} Stream
+ * 
+ * @typedef {Object} Peer
+ * @property {PeerId} id
+ * @property {boolean} dialable
+ * @property {number} lastSeen
  */
 
 class P2PNetwork extends EventEmitter {
@@ -115,8 +120,9 @@ class P2PNetwork extends EventEmitter {
         const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
-        if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
-        //if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
+        if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
+        //if (!listen.includes('/dns4/0.0.0.0/tcp/0')) listen.push('/dns4/0.0.0.0/tcp/0');
+        //if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
 
         try {
             const p2pNode = await createLibp2p({
@@ -124,7 +130,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 connectionGater: { denyDialMultiaddr: () => false },
-                transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTCDirect()],
+                transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webSockets()],
                 addresses: { listen },
                 services: {
                     uPnPNAT: uPnPNAT(),
@@ -148,6 +154,7 @@ class P2PNetwork extends EventEmitter {
             });
 
             await p2pNode.start();
+            //await p2pNode.services.dht.setMode('server'); // trigger on bootstrap self:dial
 
             console.log('Listening on:')
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
@@ -368,7 +375,9 @@ class P2PNetwork extends EventEmitter {
     }
     #isBootstrapNodeAlreadyConnected(addr = '/dns4/..') {
         for (const peerIdStr in this.connectedBootstrapNodes) {
-            if (this.connectedBootstrapNodes[peerIdStr] === addr) { return true; }
+            const ipAddr = addr.split('/p2p/').pop();
+            if (this.connectedBootstrapNodes[peerIdStr] === addr) return true;
+            if (this.connectedBootstrapNodes[peerIdStr] === ipAddr) return true;
         }
         return false;
     }
@@ -403,7 +412,7 @@ class P2PNetwork extends EventEmitter {
             }
         }
 
-        //await this.#updateConnexionResume();
+        await this.#updateConnexionResume();
     }
     async stop() {
         if (this.p2pNode) { await this.p2pNode.stop(); }
@@ -416,7 +425,7 @@ class P2PNetwork extends EventEmitter {
         updatedPeer.id = data.id || updatedPeer.id;
         updatedPeer.lastSeen = this.timeSynchronizer.getCurrentTime();
         if (data.dialable !== undefined) { updatedPeer.dialable = data.dialable; }
-        if (updatedPeer.dialable === undefined) { updatedPeer.dialable = null; }
+        if (updatedPeer.dialable === undefined) { updatedPeer.dialable = false; }
 
         this.peers[peerIdStr] = updatedPeer;
         this.miniLogger.log(`--{ Peer } ${readableId(peerIdStr)} updated ${reason ? `for reason: ${reason}` : ''}`, (m) => { console.debug(m); });
