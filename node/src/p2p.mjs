@@ -121,8 +121,8 @@ class P2PNetwork extends EventEmitter {
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
-        if (!listen.includes('/dns4/0.0.0.0/tcp/0')) listen.push('/dns4/0.0.0.0/tcp/0');
-        if (!listen.includes('/dns4/0.0.0.0/tcp/0/ws')) listen.push('/dns4/0.0.0.0/tcp/0/ws');
+        if (!listen.includes('/dns4/contrast.observer/tcp/0')) listen.push('/dns4/0.0.0.0/tcp/0');
+        if (!listen.includes('/dns4/contrast.observer/tcp/0/ws')) listen.push('/dns4/0.0.0.0/tcp/0/ws');
         //if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
 
         try {
