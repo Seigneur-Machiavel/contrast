@@ -289,7 +289,7 @@ class P2PNetwork extends EventEmitter {
             if (peerConnections.length > 0) continue; // already connected
     
             const relayedMultiAddrs = []; // all possibles relayed addresses to reach the shared peer
-            for (const addrStr of relayAddrsStr) relayedMultiAddrs.push(multiaddr(`${addrStr}/p2p-circuit/p2p/${sharedPeerIdStr}`));
+            for (const addrStr of wsCompatibleAddrs) relayedMultiAddrs.push(multiaddr(`${addrStr}/p2p-circuit/p2p/${sharedPeerIdStr}`));
 
             try {
                 //await node.dialProtocol(relaydMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
