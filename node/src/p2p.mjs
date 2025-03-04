@@ -122,7 +122,7 @@ class P2PNetwork extends EventEmitter {
         const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hashUint8Array);
 
         const dhtService = kadDHT({ enabled: true, randomWalk: true });
-        const peerDiscovery = [mdns(), dhtService]; // mdns()
+        const peerDiscovery = [dhtService]; // mdns()
         if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
         const listen = this.options.listenAddresses;
@@ -141,8 +141,8 @@ class P2PNetwork extends EventEmitter {
                 connectionGater: { denyDialMultiaddr: () => false },
                 transports: [
                     circuitRelayTransport({ discoverRelays: 3 }),
-                    //webSockets(),
-                    //webRTCDirect(),
+                    webSockets(),
+                    webRTCDirect(),
                     tcp()
                 ], // webRTCDirect(), tcp()
                 addresses: { listen },
