@@ -12,7 +12,9 @@ import { tcp } from '@libp2p/tcp';
 import { mdns } from '@libp2p/mdns';
 import { kadDHT } from '@libp2p/kad-dht';
 import { webRTCDirect, webRTC } from '@libp2p/webrtc';
-import { circuitRelayTransport, circuitRelayServer } from "@libp2p/circuit-relay-v2";
+import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2';
+import wrtc from 'wrtc';
+//const wrtc = await import('wrtc');
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { dcutr } from '@libp2p/dcutr';
 import { autoNAT } from '@libp2p/autonat';
@@ -40,6 +42,11 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
  * @property {number} lastSeen
  */
 
+const peerConnection = new wrtc.RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+const offer = await peerConnection.createOffer();
+await peerConnection.setLocalDescription(offer);
+const localSDP = offer.sdp;
+
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 64 * 1024; // 64 KB
     static maxStreamBytes = 1024 * 1024 * 1024; // 1 GB
@@ -49,8 +56,9 @@ class P2PNetwork extends EventEmitter {
     fastConverter = new FastConverter();
 
     static DIRECT_PORTS = ['27260', '27261', '27262', '27263', '27264', '27265', '27266', '27267', '27268', '27269'];
-    static SYNC_PROTOCOL = '/blockchain-sync/1.0.0';
-    static RELAY_SHARE_PROTOCOL = '/relay-share/1.0.0';
+    static RELAY_SHARE_PROTOCOL = '/relay-share/1.0.0'; // to connect to relayed peers
+    static SDP_PROTOCOL = '/webrtc-sdp/1.0.0'; // to exchange SDP offers/answers
+    static SYNC_PROTOCOL = '/blockchain-sync/1.0.0'; // to sync blockchain data and peers status
     static ALLOWED_TOPICS = new Set(['new_transaction', 'new_block_candidate', 'new_block_finalized']);
     
     /** @type {Libp2p} */
@@ -119,21 +127,21 @@ class P2PNetwork extends EventEmitter {
         
         const listen = this.options.listenAddresses;
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
-        //if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
-        //if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
-
-        //if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
-
-        // override listen addresses
-        //const listen = ['/ip4/0.0.0.0/tcp/27260/ws', '/ip4/0.0.0.0/tcp/0/ws', '/p2p-circuit']
-
+        if (!listen.includes('/ip4/0.0.0.0/tcp/0/ws')) listen.push('/ip4/0.0.0.0/tcp/0/ws');
+        //if (!listen.includes('/ip4/194.146.15.44/tcp/0/ws/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B')) listen.push('/ip4/194.146.15.44/tcp/0/ws/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B');
+        if (!listen.includes('/webrtc-direct')) listen.push('/webrtc-direct');
+        
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
                 streamMuxers: [ yamux() ],
                 connectionEncrypters: [ noise() ],
                 connectionGater: { denyDialMultiaddr: () => false },
-                transports: [circuitRelayTransport({ discoverRelays: 3 }), webSockets()], // tcp()
+                transports: [
+                    circuitRelayTransport({ discoverRelays: 3 }),
+                    webSockets(),
+                    webRTCDirect()
+                ], // webRTCDirect(), tcp()
                 addresses: { listen },
                 services: {
                     uPnPNAT: uPnPNAT(),
@@ -162,11 +170,14 @@ class P2PNetwork extends EventEmitter {
             console.log('Listening on:')
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
             p2pNode.handle(P2PNetwork.RELAY_SHARE_PROTOCOL, this.#handleRelayShare.bind(this));
+            p2pNode.handle(P2PNetwork.SDP_PROTOCOL, this.#handleSDPExchange.bind(this));
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
-                await new Promise(resolve => setTimeout(resolve, 10000));
+                //await new Promise(resolve => setTimeout(resolve, 10000));
+                
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
-                const myAddrsFromStore = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses;
+                //const peerInfo = await p2pNode.peerRouting.findPeer(p2pNode.peerId, { signal: AbortSignal.timeout(3_000) });
+                //const myAddrsFromStore = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses;
                 const myAddrs = p2pNode.getMultiaddrs();
                 for (const addr of myAddrs) console.log(addr.toString());
             });
@@ -271,6 +282,49 @@ class P2PNetwork extends EventEmitter {
         console.info(sharedPeerIdsStr);
         await P2PNetwork.streamWrite(stream, serializedMessage);
     }
+    async #handleSDPExchange(lstream) { //TODO
+        try {
+            const connection = lstream.connection;
+            const stream = lstream.stream;
+            stream.on('data', async (data) => {
+                const clientData = serializer.deserialize.rawData(data);
+                const peerId = connection.remotePeer.toString();
+                const clientSDP = clientData.sdp;
+                console.log(`Reçu SDP de ${peerId}:`, clientSDP);
+        
+                const relayPC = new wrtc.RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+                await relayPC.setRemoteDescription({ type: 'offer', sdp: clientSDP });
+                const answer = await relayPC.createAnswer();
+                await relayPC.setLocalDescription(answer);
+                stream.write(serializer.serialize.rawData({ sdp: answer.sdp }));
+        
+                relayPC.onicecandidate = ({ candidate }) => {
+                    if (!candidate) {
+                        
+                        this.p2pNode.dial(multiaddr(`/ip4/127.0.0.1/tcp/12345/http/p2p-webrtc-direct/p2p/${peerId}`))
+                            .then(() => console.log(`WebRTC direct initié vers ${peerId}`))
+                            .catch(err => console.error('Dial WebRTC échoué:', err));
+                    }
+                };
+            });
+        } catch (error) {
+            console.error('Failed to handle SDP exchange:', error.message);
+        }
+    }
+    async #sendSDPToRelay(directAddrs) {
+        try {
+            const stream = await this.p2pNode.dialProtocol(directAddrs, '/relay-share/1.0.0');
+            stream.write(serializer.serialize.rawData({ sdp: localSDP }));
+            stream.on('data', async (data) => {
+                const relayAnswer = serializer.deserialize.rawData(data).sdp;
+                await peerConnection.setRemoteDescription({ type: 'answer', sdp: relayAnswer });
+                console.log('Reçu answer du relais');
+            });
+        } catch (error) {
+            console.error('Failed to send SDP to relay:', error.message);
+        }
+    }
+
     /** @param {Multiaddr[]} multiAddrs */
     async #dialSharedPeersFromRelay(multiAddrs) {
         /** @type {string[]} */
@@ -365,8 +419,9 @@ class P2PNetwork extends EventEmitter {
                 const directAddrs = directCons.map(con => con.remoteAddr);
                 await this.#dialSharedPeersFromRelay(directAddrs);
                 this.#updatePeer(peerIdStr, { dialable: true, id: event.detail }, 'used as relay to discover more peers');
-            }
 
+                await this.#sendSDPToRelay(directAddrs);
+            }
         } catch (error) {
             this.#updatePeer(peerIdStr, { dialable: false, id: event.detail }, 'connected trough relay');
         }
