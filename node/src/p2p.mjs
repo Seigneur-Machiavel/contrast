@@ -432,7 +432,14 @@ class P2PNetwork extends EventEmitter {
     #handlePeerConnect = async (event) => {
         const peerIdStr = event.detail.toString();
         this.miniLogger.log(`(peer:connect) incoming dial ${readableId(peerIdStr)} success`, (m) => { console.debug(m); });
-        
+        if (peerIdStr === "12D3KooWSpYvDZpJ6i4BG2pNZcMT5Lmv9E4cd4ubjCDP9G7m994i") {
+            // BANNED
+            const cons = this.p2pNode.getConnections(event.detail);
+            for (const con of cons) {
+                con.close();
+            }
+
+        }
         // confirm connection type: direct(dialable) or relayed
         const cons = this.p2pNode.getConnections(event.detail);
         const directCons = cons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
