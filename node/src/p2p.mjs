@@ -436,8 +436,9 @@ class P2PNetwork extends EventEmitter {
             // BANNED
             const cons = this.p2pNode.getConnections(event.detail);
             for (const con of cons) {
-                con.close();
+                await con.close();
             }
+            return;
 
         }
         // confirm connection type: direct(dialable) or relayed

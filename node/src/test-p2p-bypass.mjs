@@ -23,7 +23,11 @@ const dhtService = kadDHT({ enabled: true, randomWalk: true });
 const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
-	addresses: { listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/tcp/0/ws', '/webrtc-direct'] }, // '/webrtc-direct'
+	addresses: {
+		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/tcp/0/ws'],
+		//announce: ['/ip4/194.146.15.44/tcp/0'],
+		appendAnnounce: ['/ip4/194.146.15.44/tcp/0']
+	}, // '/webrtc-direct'
 	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webSockets(), webRTCDirect()],
 	//transports: [tcp()],
 	connectionEncrypters: [noise()],
@@ -40,19 +44,35 @@ const node = await createLibp2p({
 })
 await node.start();
 
-const target = '/ip4/158.178.213.171/tcp/63564/p2p/12D3KooWSpYvDZpJ6i4BG2pNZcMT5Lmv9E4cd4ubjCDP9G7m994i/p2p-circuit/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX'; // SPY
+//const target = '/ip4/158.178.213.171/tcp/63564/p2p/12D3KooWSpYvDZpJ6i4BG2pNZcMT5Lmv9E4cd4ubjCDP9G7m994i/p2p-circuit/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX'; // SPY
 //const target = '/dns4/contrast.observer/tcp/27260'; // contrast.observer direct IP
 //const target = '/dns4/contrast.observer/tcp/27260'; // contrast.observer DNS
 //const target = '/ip4/192.168.4.23/tcp/61121/ws/p2p/12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
 //const target = '/ip4/141.8.119.6/tcp/46124'
+
+const bootAddr = '/dns4/contrast.observer/tcp/27260';
+const bootIdStr = '/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX';
+const sep = '/p2p-circuit/p2p/';
 //const target = '/ip4/193.43.70.41/tcp/1603/p2p/12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7' // YOGA
-const multiAddr = multiaddr(target);
+const targetIdStr = '12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
+
 try {
-    await node.dial(multiAddr, { signal: AbortSignal.timeout(3000) })
+	await node.dial(multiaddr(bootAddr + bootIdStr), { signal: AbortSignal.timeout(3000) });
+	console.log('Dialing to:', bootAddr + bootIdStr);
+
+	const myAddrs = node.getMultiaddrs();
+	for (const addr of myAddrs) {
+		console.log('My address:', addr.toString());
+	}
+
+	const mePeer = await node.peerStore.get(node.peerId);
+	console.log(mePeer);
+
+	//const target = bootAddr + bootIdStr + sep + targetIdStr
+    //const con = await node.dial(multiaddr(target), { signal: AbortSignal.timeout(3000) })
+	//con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
     //await node.dialProtocol(multiAddr, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
-    console.log('Dialed:', target);
+    //console.log('Dialed:', target);
 } catch (error) {
     console.error('Failed to dial:', error);
 }
-
-console.log('Dialing to:', target);
