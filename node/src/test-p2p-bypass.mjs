@@ -90,9 +90,9 @@ try {
 	console.log('Dialed target:', target);
 
 	await new Promise(resolve => setTimeout(resolve, 2_000));
+	const peerId = await peerIdFromString(targetIdStr);
 	// upgrading connection...
 	/*const ma = multiaddr(target);
-	const peerId = await peerIdFromString(targetIdStr);
 	const multiAddr = ma.encapsulate(`/p2p/${peerId.toString()}`);
 	const newCon = await node.dial(multiAddr, { signal: AbortSignal.timeout(3000) });*/ //-> LOL !!
 
@@ -103,7 +103,7 @@ try {
 	const stream = await con.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3000) });
 	await stream.closeWrite();
 	//const steam = await newCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
-	const read = await P2PNetwork.streamReader(steam);
+	const read = await P2PNetwork.streamRead(stream);
     //await node.dialProtocol(multiAddr, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
     console.log('Dialed:', target);
 } catch (error) {

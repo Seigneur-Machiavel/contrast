@@ -64,7 +64,7 @@ export class SyncHandler {
 
     /** @param {Node} node */
     constructor(node) {
-        node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this));
+        node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this), { runOnLimitedConnection: true });
         this.node = node;
         this.p2pNet = node.p2pNetwork;
         this.miniLogger.log('SyncHandler setup', (m) => console.info(m));

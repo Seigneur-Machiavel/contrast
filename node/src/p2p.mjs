@@ -153,7 +153,8 @@ class P2PNetwork extends EventEmitter {
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
-                    circuitRelay: circuitRelayServer({ // makes the node function as a relay server
+                    circuitRelay: circuitRelayServer({ advertise: true }),
+                    /*circuitRelay: circuitRelayServer({ // makes the node function as a relay server
                         hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
                         advertise: true,
                         reservations: {
@@ -165,7 +166,7 @@ class P2PNetwork extends EventEmitter {
                           maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
                           maxOutboundHopStreams: 64, // how many outbound HOP streams are allow simultaneously
                         }
-                    })
+                    })*/
                 },
                 config: {
                     peerDiscovery:
@@ -184,8 +185,8 @@ class P2PNetwork extends EventEmitter {
 
             console.log('Listening on:')
             p2pNode.getMultiaddrs().forEach((ma) => console.log(ma.toString()))
-            p2pNode.handle(P2PNetwork.RELAY_SHARE_PROTOCOL, this.#handleRelayShare.bind(this));
-            p2pNode.handle(P2PNetwork.SDP_PROTOCOL, this.#handleSDPExchange.bind(this));
+            p2pNode.handle(P2PNetwork.RELAY_SHARE_PROTOCOL, this.#handleRelayShare.bind(this), { runOnLimitedConnection: true });
+            p2pNode.handle(P2PNetwork.SDP_PROTOCOL, this.#handleSDPExchange.bind(this), { runOnLimitedConnection: true });
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
                 //await new Promise(resolve => setTimeout(resolve, 10000));
