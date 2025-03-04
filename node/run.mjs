@@ -26,4 +26,4 @@ if (privateKey) {
     while(true) await new Promise(resolve => setTimeout(resolve, 1000)); // keep node running
 }
 
-console.log('Failed to start node.');
+//console.log('Failed to start node.');
