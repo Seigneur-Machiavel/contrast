@@ -225,6 +225,7 @@ class P2PNetwork extends EventEmitter {
                 if (directCons.length === 0) continue;
 
                 this.#updatePeer(peerIdStr, { dialable: true }, 'directConnectionUpgraded');
+                await this.#updateConnexionResume();
             }
 
             const allPeers = await this.p2pNode.peerStore.all();
@@ -237,6 +238,7 @@ class P2PNetwork extends EventEmitter {
                     const directAddrs = peerInfo.multiaddrs.filter(addr => addr.toString().includes('p2p-circuit') === false);
                     await this.p2pNode.dialProtocol(directAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                     this.#updatePeer(peerIdStr, { dialable: true, id: peer.id }, 'relayedConnectionUpgraded');
+                    await this.#updateConnexionResume();
                 } catch (error) {}
             }
         }
@@ -292,11 +294,13 @@ class P2PNetwork extends EventEmitter {
             for (const addrStr of wsCompatibleAddrs) relayedMultiAddrs.push(multiaddr(`${addrStr}/p2p-circuit/p2p/${sharedPeerIdStr}`));
 
             try {
-                //await node.dialProtocol(relaydMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
+                //await this.p2pNode.dialProtocol(relayedMultiAddrs, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3_000) });
                 await this.p2pNode.dial(relayedMultiAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
                 console.log('DIALED FROM RELAY');
                 //await this.p2pNode.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(this.options.findPeerTimeout) });
-            } catch (error) {}
+            } catch (error) {
+                console.error('FAILED DIAL FROM RELAY', error.message);
+            }
         }
     }
     async #updateConnexionResume() {
