@@ -153,7 +153,19 @@ class P2PNetwork extends EventEmitter {
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     pubsub: gossipsub(),
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24 } })
+                    circuitRelay: circuitRelayServer({ // makes the node function as a relay server
+                        hopTimeout: 30 * 1000, // incoming relay requests must be resolved within this time limit
+                        advertise: true,
+                        reservations: {
+                          maxReservations: 15, // how many peers are allowed to reserve relay slots on this server
+                          reservationClearInterval: 300 * 1000, // how often to reclaim stale reservations
+                          applyDefaultLimit: true, // whether to apply default data/duration limits to each relayed connection
+                          defaultDurationLimit: 2 * 60 * 1000, // the default maximum amount of time a relayed connection can be open for
+                          defaultDataLimit: BigInt(2 << 20), // the default maximum number of bytes that can be transferred over a relayed connection
+                          maxInboundHopStreams: 32, // how many inbound HOP streams are allow simultaneously
+                          maxOutboundHopStreams: 64, // how many outbound HOP streams are allow simultaneously
+                        }
+                    })
                 },
                 config: {
                     peerDiscovery:

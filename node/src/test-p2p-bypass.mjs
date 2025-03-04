@@ -47,6 +47,15 @@ const node = await createLibp2p({
 		autoNAT: autoNAT(),
 		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24, reservationTtl: 60_000 } })
 	},
+	config: {
+		peerDiscovery:
+			{ autoDial: true, mdns: { enabled: true, interval: 10_000 } },
+		relay: {
+			enabled: true,
+			hop: { enabled: true, active: true },
+			autoRelay: { enabled: true, maxListeners: 20 },
+		},
+	},
 	//peerDiscovery: [mdns(), dhtService]
 })
 await node.start();
@@ -65,20 +74,36 @@ const targetIdStr = '12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
 
 try {
 	await node.dial(multiaddr(bootAddr + bootIdStr), { signal: AbortSignal.timeout(3000) });
-	console.log('Dialing to:', bootAddr + bootIdStr);
+	console.log('Dialed boot:', bootAddr + bootIdStr);
 
-	await new Promise(resolve => setTimeout(resolve, 10_000));
+	/*await new Promise(resolve => setTimeout(resolve, 10_000));
 	const myAddrs = node.getMultiaddrs();
 	for (const addr of myAddrs) {
 		console.log('My address:', addr.toString());
-	}
+	}*/
 
 	const mePeer = await node.peerStore.get(node.peerId);
 	console.log(mePeer);
 
 	const target = bootAddr + bootIdStr + sep + targetIdStr
     const con = await node.dial(multiaddr(target), { signal: AbortSignal.timeout(3000) })
-	con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
+	console.log('Dialed target:', target);
+
+	await new Promise(resolve => setTimeout(resolve, 2_000));
+	// upgrading connection...
+	/*const ma = multiaddr(target);
+	const peerId = await peerIdFromString(targetIdStr);
+	const multiAddr = ma.encapsulate(`/p2p/${peerId.toString()}`);
+	const newCon = await node.dial(multiAddr, { signal: AbortSignal.timeout(3000) });*/ //-> LOL !!
+
+	const peer = await node.peerStore.get(peerId);
+	console.log(peer);
+	const peerInfo = await node.peerRouting.findPeer(peerId);
+
+	const stream = await con.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3000) });
+	await stream.closeWrite();
+	//const steam = await newCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
+	const read = await P2PNetwork.streamReader(steam);
     //await node.dialProtocol(multiAddr, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
     console.log('Dialed:', target);
 } catch (error) {
