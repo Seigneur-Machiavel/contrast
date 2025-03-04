@@ -140,7 +140,8 @@ class P2PNetwork extends EventEmitter {
                 transports: [
                     circuitRelayTransport({ discoverRelays: 3 }),
                     webSockets(),
-                    webRTCDirect()
+                    webRTCDirect(),
+                    tcp()
                 ], // webRTCDirect(), tcp()
                 addresses: { listen },
                 services: {
