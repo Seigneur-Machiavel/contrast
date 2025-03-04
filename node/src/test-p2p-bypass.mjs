@@ -17,6 +17,13 @@ import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 import { tcp } from '@libp2p/tcp';
 import { webSockets } from '@libp2p/websockets';
 
+function filterLocalAddrs(ma) {
+	let localAddrs = ma.filter(addr => addr.toString().includes('/192') === false);
+	localAddrs = localAddrs.filter(addr => addr.toString().includes('/127') === false);
+	localAddrs = localAddrs.filter(addr => addr.toString().includes('/10') === false);
+	return localAddrs;
+}
+
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 const dhtService = kadDHT({ enabled: true, randomWalk: true });
@@ -25,8 +32,8 @@ const node = await createLibp2p({
 	privateKey: privateKeyObject,
 	addresses: {
 		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/tcp/0/ws'],
-		//announce: ['/ip4/194.146.15.44/tcp/0'],
-		appendAnnounce: ['/ip4/194.146.15.44/tcp/0']
+		announceFilter: (addrs) => filterLocalAddrs(addrs),
+		//appendAnnounce: ['/ip4/194.146.15.44/tcp/0']
 	}, // '/webrtc-direct'
 	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webSockets(), webRTCDirect()],
 	//transports: [tcp()],
@@ -60,6 +67,7 @@ try {
 	await node.dial(multiaddr(bootAddr + bootIdStr), { signal: AbortSignal.timeout(3000) });
 	console.log('Dialing to:', bootAddr + bootIdStr);
 
+	await new Promise(resolve => setTimeout(resolve, 10_000));
 	const myAddrs = node.getMultiaddrs();
 	for (const addr of myAddrs) {
 		console.log('My address:', addr.toString());
