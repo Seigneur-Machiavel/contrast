@@ -291,6 +291,8 @@ class P2PNetwork extends EventEmitter {
             if (!connection) throw new Error('No connection to read/write');
 
             const request = await P2PNetwork.streamRead(stream);
+            if (request.data.byteLength === 0) throw new Error('Empty request');
+            
             const clientData = serializer.deserialize.rawData(request.data);
             const peerId = connection.remotePeer.toString();
             const clientSDP = clientData.sdp;
@@ -322,6 +324,7 @@ class P2PNetwork extends EventEmitter {
             await P2PNetwork.streamWrite(serializer.serialize.rawData({ sdp: localSDP }));
 
             const response = await P2PNetwork.streamRead(stream);
+            if (response.data.byteLength === 0) throw new Error('Empty response from relay');
             const deserialized = serializer.deserialize.rawData(response.data);
             const relayAnswer = deserialized.sdp;
             await peerConnection.setRemoteDescription({ type: 'answer', sdp: relayAnswer });
