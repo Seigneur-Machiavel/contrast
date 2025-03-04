@@ -418,7 +418,8 @@ class P2PNetwork extends EventEmitter {
             // no direct connexion initially, but now we have multiaddrs, we can try to dial directly/trough relay
             //? just dial() ?
             await this.p2pNode.dial(relayedMultiAddrs, { signal: AbortSignal.timeout(this.options.dialTimeout) });
-            const peerCons = this.p2pNode.getConnections(event.detail.id);
+
+            const peerCons = this.p2pNode.getConnections(event.detail.id); //TODO remove after debuging
             if (this.peers[event.detail.id.toString()]) return; // no need to update if already in peers list (dialable false)
             this.#updatePeer(event.detail.id.toString(), { dialable: false, id: event.detail.id }, 'from discovery trough relay');
             //await this.#dialSharedPeersFromRelay(multiAddrs);
