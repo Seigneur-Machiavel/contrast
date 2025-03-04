@@ -76,11 +76,11 @@ try {
 	const mePeer = await node.peerStore.get(node.peerId);
 	console.log(mePeer);
 
-	//const target = bootAddr + bootIdStr + sep + targetIdStr
-    //const con = await node.dial(multiaddr(target), { signal: AbortSignal.timeout(3000) })
-	//con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
+	const target = bootAddr + bootIdStr + sep + targetIdStr
+    const con = await node.dial(multiaddr(target), { signal: AbortSignal.timeout(3000) })
+	con.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
     //await node.dialProtocol(multiAddr, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
-    //console.log('Dialed:', target);
+    console.log('Dialed:', target);
 } catch (error) {
     console.error('Failed to dial:', error);
 }
