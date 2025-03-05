@@ -65,7 +65,9 @@ await node.start();
 //const target = '/ip4/141.8.119.6/tcp/46124'
 //const target = '/ip4/193.43.70.41/tcp/1603/p2p/12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7' // YOGA
 
-const bootAddrStr = '/dns4/contrast.observer/tcp/27260/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX';
+//const bootAddrStr = '/dns4/contrast.observer/tcp/27260/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX'; // VPS
+const bootAddrStr = '/dns4/pinkparrot.observer/tcp/27261/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7'; // RASPI
+
 const targetIdStr = '12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'; // YOGA
 //const targetIdStr = '12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ'; // ZAYGA
 const targetAddr = multiaddr(`${bootAddrStr}/p2p-circuit/p2p/${targetIdStr}`);

@@ -99,7 +99,7 @@ class P2PNetwork extends EventEmitter {
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     nat: uPnPNAT({ description: 'contrast-node', ttl: 7200, keepAlive: true }),
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 0 } }),
+                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 4 } }),
                 },
                 //peerDiscovery
             });
