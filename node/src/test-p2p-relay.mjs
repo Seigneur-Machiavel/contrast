@@ -16,7 +16,11 @@ import { createLibp2p } from 'libp2p';
 import { webRTCDirect, webRTC } from '@libp2p/webrtc';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 import { dcutr } from '@libp2p/dcutr';
-import { P2PNetwork, PROTOCOLS, STREAM_OPTIONS } from './p2p.mjs';
+import { P2PNetwork, PROTOCOLS, STREAM_OPTIONS, FILTERS } from './p2p.mjs';
+
+/**
+ * @typedef {import('@multiformats/multiaddr').Multiaddr} Multiaddr
+ */
 
 const bootAddr = '/dns4/contrast.observer/tcp/27260';
 //const bootAddr = '/dns4/pinkparrot.science/tcp/27260'; // PINKPARROT
@@ -31,13 +35,6 @@ const targetAddr = '/ip4/90.110.28.181/tcp/50913/p2p/12D3KooWJM29sadqienYmVvA7Gy
 //const targetAddr = '/ip4/88.182.31.209/tcp/8988/p2p/12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ/p2p-circuit/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7'; // ZAYGA
 if (!targetAddr) throw new Error('the target address needs to be specified as a parameter');
 
-function filterLocalAddrs(ma) {
-	let localAddrs = ma.filter(addr => addr.toString().includes('/192') === false);
-	localAddrs = localAddrs.filter(addr => addr.toString().includes('/127') === false);
-	localAddrs = localAddrs.filter(addr => addr.toString().includes('/10') === false);
-	return localAddrs;
-}
-
 //process.env.DEBUG = 'libp2p:dcutr*';
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
@@ -46,9 +43,9 @@ const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: {
-		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'],
-		//announceFilter: (addrs) => filterLocalAddrs(addrs),
-		announceFilter: (addrs) => [], // anonymous
+		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/udp/0/webrtc-direct'],
+		announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'ONLY_PUBLIC'),
+		//announceFilter: (addrs) => [], // anonymous
 	},
 	//transports: [tcp()],
 	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTCDirect()], // webSockets()
@@ -63,13 +60,13 @@ const node = await createLibp2p({
 		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 24, reservationTtl: 60_000 } })
 	},
 	config: {
-		//peerDiscovery:
-			//{ autoDial: true },
+		/*peerDiscovery:
+			{ autoDial: true },
 		relay: {
 			enabled: true,
 			hop: { enabled: true, active: true },
 			autoRelay: { enabled: true, maxListeners: 20 },
-		},
+		},*/
 	},
 	//peerDiscovery: [dhtService]
 })
@@ -101,7 +98,6 @@ node.addEventListener('self:peer:update', (evt) => {
 	//console.log('\n -- selfPeerUpdate:');
 	//for (const addr of node.getMultiaddrs()) console.log(addr.toString());
 });
-
 async function askRelayShare(multiAddrs) {
 	if (!multiAddrs || multiAddrs.length === 0) return;
 	try {
@@ -112,8 +108,8 @@ async function askRelayShare(multiAddrs) {
 		return sharedPeerIdsStr;
 	} catch (error) { console.log(`Failed to get peersShared`) }
 }
-/** @param {multiaddr[]} relayAddrs @param {string[]} peerIdsStr */
-async function tryToDialPeerIdsStr(relayAddrs, peerIdsStr) {
+/** @param {Multiaddr} relayAddr @param {string[]} peerIdsStr */
+async function tryToDialPeerIdsStr(relayAddr, peerIdsStr) {
 	if (!peerIdsStr || peerIdsStr.length === 0) return;
 	let result = { success: 0, failed: 0, peersDialed: [] };
 	const allCons = node.getConnections();
@@ -122,23 +118,22 @@ async function tryToDialPeerIdsStr(relayAddrs, peerIdsStr) {
 		if (sharedPeerIdStr === node.peerId.toString()) continue; // not myself
 		if (connectedPeerIdsStr.includes(sharedPeerIdStr)) continue;
 		
-		for (const addr of relayAddrs) {
-			const relayAddr = addr.toString();
-			const relayedAddr = multiaddr(`${relayAddr}/p2p-circuit/p2p/${sharedPeerIdStr}`);
+		const relayAddrStr = relayAddr.toString();
+		const relayedAddr = multiaddr(`${relayAddrStr}/p2p-circuit/p2p/${sharedPeerIdStr}`);
 
-			try {
-				const stream = await node.dialProtocol(relayedAddr, PROTOCOLS.RELAY_SHARE, STREAM_OPTIONS.NEW_RELAYED_STREAM);
-				//const connection = await node.dial(relayedAddr, { signal: AbortSignal.timeout(3_000) });
-				//const stream = await connection.newStream(PROTOCOLS.RELAY_SHARE, STREAM_OPTIONS.NEW_RELAYED_STREAM);
-				const readResult = await P2PNetwork.streamRead(stream);
-				//const sharedPeerId = peerIdFromString(sharedPeerIdStr);
-				//const peer = await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary
-				//if (peer.multiaddrs.length > 0) await node.dialProtocol(peer.multiaddrs, PROTOCOLS.SYNC, { signal: AbortSignal.timeout(3_000) });
-				result.success++;
-				result.peersDialed.push(sharedPeerIdStr);
-			} catch (error) {
-				console.error(`Failed to dial ${sharedPeerIdStr}:`, error.message);
-				result.failed++ }
+		try {
+			const stream = await node.dialProtocol(relayedAddr, PROTOCOLS.RELAY_SHARE, STREAM_OPTIONS.NEW_RELAYED_STREAM);
+			//const connection = await node.dial(relayedAddr, { signal: AbortSignal.timeout(3_000) });
+			//const stream = await connection.newStream(PROTOCOLS.RELAY_SHARE, STREAM_OPTIONS.NEW_RELAYED_STREAM);
+			const readResult = await P2PNetwork.streamRead(stream);
+			//const sharedPeerId = peerIdFromString(sharedPeerIdStr);
+			//const peer = await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary
+			//if (peer.multiaddrs.length > 0) await node.dialProtocol(peer.multiaddrs, PROTOCOLS.SYNC, { signal: AbortSignal.timeout(3_000) });
+			result.success++;
+			result.peersDialed.push(sharedPeerIdStr);
+		} catch (error) {
+			console.error(`Failed to dial ${sharedPeerIdStr}:`, error.message);
+			result.failed++
 		}
 	}
 
@@ -154,20 +149,25 @@ node.addEventListener('peer:discovery', async (event) => {
 	//const sharedPeerIdsStr = await askRelayShare(notRelayedAddrs);
 	//event.detail.
 
-	const sharedPeerIdsStr = await askRelayShare(event.detail.multiaddrs);
-	await tryToDialPeerIdsStr(event.detail.multiaddrs, sharedPeerIdsStr);
-});
-node.addEventListener('peer:disconnect', async (event) => {
-	console.log(`peer:disconnect => ${event.detail.toString()}`);
+	//const sharedPeerIdsStr = await askRelayShare(event.detail.multiaddrs);
+	//await tryToDialPeerIdsStr(event.detail.multiaddrs, sharedPeerIdsStr);
 });
 node.addEventListener('peer:connect', async (event) => {
 	const peerId = event.detail;
 	const peerIdStr = peerId.toString();
-	const cons = node.getConnections(peerId);
-	const multiaddrs = cons.map(con => con.remoteAddr);
-	const directCons = cons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
-	console.log(`peer:connect => ${peerIdStr} (total: ${cons.length} connections, direct: ${directCons.length})`);
+	const unlimitedCon = node.getConnections(peerId).find(con => !con.limits);
+	//const directCons = allCons.filter(con => con.remoteAddr.toString().includes('p2p-circuit') === false);
+	console.log(`peer:connect => ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`);
+
+	if (!unlimitedCon) return;
+
+	const multiAddrs = unlimitedCon.remoteAddr;
+	const sharedPeerIdsStr = await askRelayShare(multiAddrs);
+	await tryToDialPeerIdsStr(multiAddrs, sharedPeerIdsStr);
 	return;
+});
+node.addEventListener('peer:disconnect', async (event) => {
+	console.log(`peer:disconnect => ${event.detail.toString()}`);
 });
 
 async function tryConnectMorePeersLoop() {
@@ -201,7 +201,7 @@ async function initBootConnectionLight() {
 	}
 }
 
-tryConnectMorePeersLoop();
+//tryConnectMorePeersLoop();
 await initBootConnectionLight();
 
 (async () => {
