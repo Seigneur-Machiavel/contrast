@@ -87,7 +87,7 @@ class P2PNetwork extends EventEmitter {
                 connectionGater: {denyDialMultiaddr: () => false},
                 transports: [tcp(), circuitRelayTransport({ discoverRelays: 2 })],//webRTCDirect(),
                 addresses: {
-                    announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
+                    //announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
                     listen: this.options.listenAddresses
                 },
                 services: {
@@ -205,7 +205,7 @@ class P2PNetwork extends EventEmitter {
         const peerIdStr = event.detail.toString();
         const unlimitedCon = this.p2pNode.getConnections(event.detail).find(con => !con.limits);
 		this.miniLogger.log(`peer:connect ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`, (m) => console.debug(m));
-        this.#updatePeer(peerIdStr, { dialable: unlimitedCon ? true : false, id: event.detail }, unlimitedCon ? 'direct connection' : 'relayed connection');
+        this.#updatePeer(peerIdStr, { dialable: unlimitedCon, id: event.detail }, unlimitedCon ? 'direct connection' : 'relayed connection');
 
         await this.#updateConnexionResume();
     }

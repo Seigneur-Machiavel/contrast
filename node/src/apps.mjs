@@ -203,12 +203,7 @@ export class DashboardWsApp {
         if (!derivedAccounts) { console.error('Failed to derive addresses.'); return; }
         await this.#wallet.saveAccounts();
 
-        const listenAddresses = [
-            '/ip4/0.0.0.0/tcp/0',
-            `/ip4/0.0.0.0/tcp/${this.nodePort}`,
-            //`/ip4/0.0.0.0/tcp/${this.nodePort}/ws`,
-            //'/ip4/0.0.0.0/tcp/0/ws'
-        ];
+        const listenAddresses = ['/ip4/0.0.0.0/tcp/0', `/ip4/0.0.0.0/tcp/${this.nodePort}`];
         this.node = new Node(derivedAccounts[0], ['validator', 'miner', 'observer'], listenAddresses);
         this.node.minerAddress = derivedAccounts[1].address;
         await this.node.start();
