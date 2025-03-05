@@ -53,7 +53,7 @@ class P2PNetwork extends EventEmitter {
         maxPeers: 12,
         logLevel: 'info',
         logging: true,
-        listenAddresses: ['/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0', '/p2p-circuit'],
+        listenAddresses: ['/p2p-circuit'], // '/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0'
         dialTimeout: 3000
     };
 

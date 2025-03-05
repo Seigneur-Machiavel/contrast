@@ -43,12 +43,11 @@ const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: {
-		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/udp/0/webrtc-direct'],
+		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'], // '/ip4/0.0.0.0/udp/0/webrtc-direct'],
 		announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
 		//announceFilter: (addrs) => [], // anonymous
 	},
-	//transports: [tcp()],
-	transports: [circuitRelayTransport({ discoverRelays: 3 }), tcp(), webRTCDirect()], // webSockets()
+	transports: [tcp(), circuitRelayTransport({ discoverRelays: 3 })], // webRTCDirect(), webSockets()
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -73,12 +72,19 @@ const node = await createLibp2p({
 await node.start();
 console.log(`Node started with id ${node.peerId.toString()}`)
 
+node.addEventListener('transport:listening', (evt) => {
+	if (!evt.detail.relay?.toString()) return;
+	/** @type {string[]} */
+	const relayAddrsStr = evt.detail.listeningAddrs.map(addr => addr.toString());
+	const myPeerIdStr = node.peerId.toString();
+	for (const relayAddrStr of relayAddrsStr) {
+		if (!relayAddrStr.endsWith('p2p-circuit')) continue;
+		const relayedAddrStr = `${relayAddrStr}/p2p/${myPeerIdStr}`;
+		console.log(`Listening: ${relayedAddrStr}`);
+	}
+});
 node.addEventListener('self:peer:update', async (evt) => {
-	//await new Promise(resolve => setTimeout(resolve, 10000));
-	
 	console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
-	//const peerInfo = await p2pNode.peerRouting.findPeer(p2pNode.peerId, { signal: AbortSignal.timeout(3_000) });
-	//const myAddrsFromStore = (await p2pNode.peerStore.get(p2pNode.peerId)).addresses;
 	const myAddrs = node.getMultiaddrs();
 	for (const addr of myAddrs) console.log(addr.toString());
 });
