@@ -253,7 +253,7 @@ class P2PNetwork extends EventEmitter {
                 this.#updatePeer(peerIdStr, { dialable: true }, 'directConnectionUpgraded');
                 updatedPeers.push(peerIdStr);
             }
-            await this.#updateConnexionResume();
+            if (updatedPeers.length > 0) await this.#updateConnexionResume();
         }
     }
 
