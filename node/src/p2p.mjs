@@ -202,8 +202,12 @@ class P2PNetwork extends EventEmitter {
                 const myAddrs = p2pNode.getMultiaddrs();
                 for (const addr of myAddrs) console.log(addr.toString());
             });
-
-            p2pNode.services.circuitRelay.addEventListener('reservation', (evt) => {
+            p2pNode.addEventListener('relay:reservation', (evt) => {
+                console.log('------');
+                console.log('New relay reservation:', evt.detail);
+                console.log('------');
+            });
+            p2pNode.services.circuitRelay.addEventListener('relay:reservation', (evt) => {
                 console.log('------');
                 console.log('New relay reservation:', evt.detail);
                 console.log('------');
