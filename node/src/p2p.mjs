@@ -177,7 +177,7 @@ class P2PNetwork extends EventEmitter {
             }
         }
     }
-    /** @param {Stream} stream */
+
     #handleRelayShare = async ({ stream, connection }) => {
         console.log('RELAY SHARE');
         if (!stream) { return; }
@@ -204,7 +204,7 @@ class P2PNetwork extends EventEmitter {
     #handlePeerConnect = async (event) => {
         const peerIdStr = event.detail.toString();
         const unlimitedCon = this.p2pNode.getConnections(event.detail).find(con => !con.limits);
-		this.miniLogger.log(console.log(`peer:connect ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`), (m) => console.debug(m));
+		this.miniLogger.log(`peer:connect ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`, (m) => console.debug(m));
         this.#updatePeer(peerIdStr, { dialable: unlimitedCon ? true : false, id: event.detail }, unlimitedCon ? 'direct connection' : 'relayed connection');
 
         await this.#updateConnexionResume();
