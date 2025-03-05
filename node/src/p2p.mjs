@@ -61,6 +61,8 @@ class P2PNetwork extends EventEmitter {
     p2pNode;
     /** @type {Object<string, Peer>} */
     peers = {};
+    /** @type {Object<string, boolean>} peerIdStr: active? | state of the relays I know */
+    myRelays = {};
     
     /** @param {TimeSynchronizer} timeSynchronizer @param {string[]} [listenAddresses] */
     constructor(timeSynchronizer, listenAddresses = []) {
@@ -80,7 +82,7 @@ class P2PNetwork extends EventEmitter {
         //if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
         try {
-            this.p2pNode = await createLibp2p({
+            const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
@@ -97,24 +99,36 @@ class P2PNetwork extends EventEmitter {
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     nat: uPnPNAT({ description: 'contrast-node', ttl: 7200, keepAlive: true }),
-                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 4 } }),
+                    circuitRelay: circuitRelayServer({ reservations: { maxReservations: 0 } }),
                 },
                 //peerDiscovery
             });
 
-            this.p2pNode.handle(PROTOCOLS.RELAY_SHARE, this.#handleRelayShare, { runOnLimitedConnection: true });
-            this.p2pNode.addEventListener('self:peer:update', async (evt) => {
-                if (!this.myAddr) return; // logs if bootstrap node only
+            p2pNode.addEventListener('self:peer:update', async (evt) => {
+                //if (!this.myAddr) return; // logs if bootstrap node only
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
-                for (const addr of this.p2pNode.getMultiaddrs()) console.log(addr.toString());
-            });
-            this.p2pNode.addEventListener('transport:listening', (evt) => {}); // UNUSED FOR NOW
-            this.p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
-            this.p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
-            this.p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
-            this.p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+                /*for (const { multiaddr, isCertified } of evt.detail.peer.addresses) {
+                    //if (!isCertified) continue; //? to early ?
+                    const isCircuitRelay = multiaddr.toString().endsWith('p2p-circuit');
+                    console.log(addr.toString());
+                    }*/
 
-            this.miniLogger.log(`P2P network started. PeerId ${readableId(this.p2pNode.peerId.toString())}`, (m) => { console.info(m); });
+                /*for (const myAddrStr of p2pNode.getMultiaddrs().map(addr => addr.toString())) {
+                    if (!myAddrStr.endsWith('p2p-circuit')) continue;
+                    const relayAddrStr = myAddrStr.split('/p2p-circuit/').shift().split('p2p/').pop();
+                    this.myRelays[relayAddrStr] = true;
+                }*/
+                // p2pNode.services.circuitRelay.reservations.maxReservations = 4;
+            });
+            p2pNode.addEventListener('transport:listening', this.#handleRelayListening);
+            p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
+            p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
+            p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+            p2pNode.handle(PROTOCOLS.RELAY_SHARE, this.#handleRelayShare, { runOnLimitedConnection: true });
+
+            this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
+            this.p2pNode = p2pNode;
         } catch (error) {
             this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
             this.miniLogger.log(error.stack, (m) => { console.error(m); });
@@ -178,6 +192,26 @@ class P2PNetwork extends EventEmitter {
         }
     }
 
+    #handleRelayListening = async (event) => {
+        const relayPeerIdStr = event.detail.relay?.toString();
+        if (!relayPeerIdStr) return;
+    
+        const relayAddrsStr = event.detail.listeningAddrs.map(addr => addr.toString());
+        if (relayAddrsStr.length === 0) { this.myRelays[relayPeerIdStr] = false; return } // not relayed anymore
+
+        const myPeerIdStr = this.p2pNode.peerId.toString();
+        for (const relayAddrStr of relayAddrsStr) { // probably only one addr
+            if (!relayAddrStr.endsWith('p2p-circuit')) continue;
+            const relayedAddrStr = `${relayAddrStr}/p2p/${myPeerIdStr}`;
+            console.log(`Listening from relay: ${relayedAddrStr}`);
+            this.myRelays[relayPeerIdStr] = true; // relayed by this peer
+        }
+
+        // log
+        for (const relayPeerIdStr in this.myRelays) {
+            console.log(`Relay ${relayPeerIdStr} is ${this.myRelays[relayPeerIdStr] ? 'active' : 'inactive'}`);
+        }
+    }
     #handleRelayShare = async ({ stream, connection }) => {
         console.log('RELAY SHARE');
         if (!stream) { return; }
@@ -292,6 +326,7 @@ class P2PNetwork extends EventEmitter {
             } catch (err) { // DETECT IF THE BOOTSTRAP NODE IS MYSELF
                 if (err.message === 'Can not dial self') {
                     this.myAddr = ipAddr;
+                    this.p2pNode.services.circuitRelay.reservations.maxReservations = 4; // Enable relay
                     //await this.p2pNode.services.dht.setMode('server'); // Ensure DHT is enabled as server
                     this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
                     this.miniLogger.log(`]]] I AM BOOTSTRAP! DHT SERVER ENABLED [[[`, (m) => { console.info(m); });

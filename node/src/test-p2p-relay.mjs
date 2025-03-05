@@ -5,7 +5,6 @@ import { identify } from '@libp2p/identify';
 import { peerIdFromString } from '@libp2p/peer-id';
 
 import { serializer } from '../../utils/serializer.mjs';
-import { webSockets } from '@libp2p/websockets';
 import { tcp } from '@libp2p/tcp';
 import { mdns } from '@libp2p/mdns';
 import { uPnPNAT } from '@libp2p/upnp-nat';
@@ -73,14 +72,16 @@ await node.start();
 console.log(`Node started with id ${node.peerId.toString()}`)
 
 node.addEventListener('transport:listening', (evt) => {
-	if (!evt.detail.relay?.toString()) return;
+	const relayPeerIdStr = evt.detail.relay?.toString();
+	if (!relayPeerIdStr) return;
+
 	/** @type {string[]} */
 	const relayAddrsStr = evt.detail.listeningAddrs.map(addr => addr.toString());
 	const myPeerIdStr = node.peerId.toString();
 	for (const relayAddrStr of relayAddrsStr) {
 		if (!relayAddrStr.endsWith('p2p-circuit')) continue;
 		const relayedAddrStr = `${relayAddrStr}/p2p/${myPeerIdStr}`;
-		console.log(`Listening: ${relayedAddrStr}`);
+		console.log(`Listening from relay: ${relayedAddrStr}`);
 	}
 });
 node.addEventListener('self:peer:update', async (evt) => {
