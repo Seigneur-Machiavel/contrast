@@ -65,47 +65,71 @@ await node.start();
 //const target = '/dns4/contrast.observer/tcp/27260'; // contrast.observer DNS
 //const target = '/ip4/192.168.4.23/tcp/61121/ws/p2p/12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
 //const target = '/ip4/141.8.119.6/tcp/46124'
-
-const bootAddr = '/dns4/contrast.observer/tcp/27260';
-const bootIdStr = '/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX';
-const sep = '/p2p-circuit/p2p/';
 //const target = '/ip4/193.43.70.41/tcp/1603/p2p/12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7' // YOGA
-const targetIdStr = '12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
+
+const bootAddrStr = '/dns4/contrast.observer/tcp/27260/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX';
+//const targetIdStr = '12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7'; // YOGA
+const targetIdStr = '12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ'; // ZAYGA
+const targetAddr = multiaddr(`${bootAddrStr}/p2p-circuit/p2p/${targetIdStr}`);
 
 try {
-	await node.dial(multiaddr(bootAddr + bootIdStr), { signal: AbortSignal.timeout(3000) });
-	console.log('Dialed boot:', bootAddr + bootIdStr);
+	// Écouter les événements de connexion pour déboguer
+	node.addEventListener('peer:connect', (evt) => {
+		console.log('Connecté à:', evt.detail.toString());
+	});
 
-	/*await new Promise(resolve => setTimeout(resolve, 10_000));
-	const myAddrs = node.getMultiaddrs();
-	for (const addr of myAddrs) {
-		console.log('My address:', addr.toString());
-	}*/
+	// Établir la connexion relayée
+	// Ouvrir un stream sur la connexion
+	const connection = await node.dial(targetAddr, { signal: AbortSignal.timeout(3_000) });
+	const stream = await connection.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { runOnLimitedConnection: true });
+	//const stream = await node.dialProtocol(targetAddr, P2PNetwork.RELAY_SHARE_PROTOCOL, {  runOnLimitedConnection: true, signal: AbortSignal.timeout(30_000) });
+	console.log('Stream ouvert avec succès!');
 
+	//await stream.closeWrite();
+	//const read = await P2PNetwork.streamRead(stream);
+	//console.log('stream L:', read.data.length);
+	while (true) {
+		await new Promise(resolve => setTimeout(resolve, 1_000));
+		const peerCons = node.getConnections(targetIdStr);
+		const peerFromStore = await node.peerStore.get(peerIdFromString(targetIdStr));
+		const peerIdStr = peerFromStore.id.toString();
+		// if one connexio nidrect log
+		if (peerCons.length > 1) {
+			console.log('Connexion directe:', peerCons[0].remoteAddr.toString());
+
+			//break;
+		}
+	}
+} catch (error) {
+	console.error('Erreur:', error);
+}
+/*
+const bootAddrStr = '/dns4/contrast.observer/tcp/27260';
+const bootIdStr = '/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX';
+const sep = '/p2p-circuit/p2p/';
+
+try {
+	const bootAddr = multiaddr(bootAddrStr + bootIdStr);
+	const bootStream = await node.dialProtocol(bootAddr, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(30_000) });
+	console.log('Dialed boot:', bootAddr.toString()); 
+	await new Promise(resolve => setTimeout(resolve, 30_000));
 	const mePeer = await node.peerStore.get(node.peerId);
-	console.log(mePeer);
+	//console.log(mePeer);
+	
+	const targetIdStr = '12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
+	const target = bootAddr.toString() + sep + targetIdStr;
+	const targetAddr = multiaddr(target);
 
-	const target = bootAddr + bootIdStr + sep + targetIdStr
-    const con = await node.dial(multiaddr(target), { signal: AbortSignal.timeout(3000) })
-	console.log('Dialed target:', target);
-
-	await new Promise(resolve => setTimeout(resolve, 2_000));
-	const peerId = await peerIdFromString(targetIdStr);
-	// upgrading connection...
-	/*const ma = multiaddr(target);
-	const multiAddr = ma.encapsulate(`/p2p/${peerId.toString()}`);
-	const newCon = await node.dial(multiAddr, { signal: AbortSignal.timeout(3000) });*/ //-> LOL !!
-
-	const peer = await node.peerStore.get(peerId);
-	console.log(peer);
-	const peerInfo = await node.peerRouting.findPeer(peerId);
-
-	const stream = await con.newStream(P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(3000) });
+	// Vérifie si le peer est déjà connecté
+    const existingConn = node.getConnections(targetIdStr)[0];
+    if (existingConn) {
+        console.log('Déjà connecté via:', existingConn.remoteAddr.toString());
+    }
+		
+	//const tAdddr = bootAddr.encapsulate(targetIdStr); //TODO: learn that
+	const stream = await node.dialProtocol(targetAddr, P2PNetwork.RELAY_SHARE_PROTOCOL, { signal: AbortSignal.timeout(30_000) });
 	await stream.closeWrite();
-	//const steam = await newCon.newStream(P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
-	const read = await P2PNetwork.streamRead(stream);
-    //await node.dialProtocol(multiAddr, P2PNetwork.SYNC_PROTOCOL, { signal: AbortSignal.timeout(3000) });
     console.log('Dialed:', target);
 } catch (error) {
     console.error('Failed to dial:', error);
-}
+}*/

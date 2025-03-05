@@ -47,6 +47,22 @@ const offer = await peerConnection.createOffer();
 await peerConnection.setLocalDescription(offer);
 const localSDP = offer.sdp;
 
+class PROTOCOLS {
+    static RELAY_SHARE = '/relay-share/1.0.0';
+    static SDP_EXCHANGE = '/webrtc-sdp/1.0.0';
+    static SYNC = '/blockchain-sync/1.0.0';
+}
+class STREAM_OPTIONS {
+    static NEW_RELAYED_STREAM = { runOnLimitedConnection: true, signal: AbortSignal.timeout(3_000) };
+}
+
+function filterLocalAddrs(ma) {
+	let localAddrs = ma.filter(addr => addr.toString().includes('/192') === false);
+	localAddrs = localAddrs.filter(addr => addr.toString().includes('/127') === false);
+	localAddrs = localAddrs.filter(addr => addr.toString().includes('/10') === false);
+	return localAddrs;
+}
+
 class P2PNetwork extends EventEmitter {
     static maxChunkSize = 64 * 1024; // 64 KB
     static maxStreamBytes = 1024 * 1024 * 1024; // 1 GB
@@ -55,6 +71,7 @@ class P2PNetwork extends EventEmitter {
     timeSynchronizer;
     fastConverter = new FastConverter();
 
+    static NEW_RELAYED_STREAM_OPTIONS = { runOnLimitedConnection: true, signal: AbortSignal.timeout(3_000) }
     static DIRECT_PORTS = ['27260', '27261', '27262', '27263', '27264', '27265', '27266', '27267', '27268', '27269'];
     static RELAY_SHARE_PROTOCOL = '/relay-share/1.0.0'; // to connect to relayed peers
     static SDP_PROTOCOL = '/webrtc-sdp/1.0.0'; // to exchange SDP offers/answers
@@ -126,6 +143,7 @@ class P2PNetwork extends EventEmitter {
         if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
         const listen = this.options.listenAddresses;
+        //if (!listen.includes('/webrtc')) listen.push('/webrtc');
         if (!listen.includes('/p2p-circuit')) listen.push('/p2p-circuit');
         if (!listen.includes('/ip4/0.0.0.0/tcp/0')) listen.push('/ip4/0.0.0.0/tcp/0');
         if (!listen.includes('/ip4/0.0.0.0/tcp/27260')) listen.push('/ip4/0.0.0.0/tcp/27260');
@@ -145,9 +163,18 @@ class P2PNetwork extends EventEmitter {
                     webRTCDirect(),
                     tcp()
                 ],
-                addresses: { listen },
+                addresses: { listen, announceFilter: (addrs) => filterLocalAddrs(addrs) },
                 services: {
-                    uPnPNAT: uPnPNAT(),
+                    nat: uPnPNAT({
+                        description: 'my-node', // set as the port mapping description on the router, defaults the current libp2p version and your peer id
+                        //gateway: '192.168.1.1', // leave unset to auto-discover
+                        //externalIp: '80.1.1.1', // leave unset to auto-discover
+                        //localAddress: '129.168.1.123', // leave unset to auto-discover
+                        ttl: 7200, // TTL for port mappings (min 20 minutes)
+                        keepAlive: true, // Refresh port mapping after TTL expires,
+                        //autoConfirmAddress: true, // Auto confirm the external IP address
+                        
+                    }),
                     identify: identify(),
                     dht: dhtService,
                     dcutr: dcutr(),
@@ -350,9 +377,9 @@ class P2PNetwork extends EventEmitter {
             console.error('Failed to handle SDP exchange:', error.message);
         }
     }
-    async #sendSDPToRelay(directAddrs) {
+    async #sendSDPToRelay(directAddrs) { //TODO convert -> sendSDPToRelayedPeer
         try {
-            const stream = await this.p2pNode.dialProtocol(directAddrs, P2PNetwork.SDP_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout) });
+            const stream = await this.p2pNode.dialProtocol(directAddrs, P2PNetwork.SDP_PROTOCOL, { signal: AbortSignal.timeout(this.options.dialTimeout),  runOnLimitedConnection: true });
             const serialized = serializer.serialize.rawData({ sdp: localSDP });
             await P2PNetwork.streamWrite(stream, serialized);
 
@@ -684,4 +711,4 @@ function readableId(peerIdStr) {
 }
 
 export default P2PNetwork;
-export { P2PNetwork, readableId };
+export { P2PNetwork, readableId, PROTOCOLS, STREAM_OPTIONS };
