@@ -196,7 +196,7 @@ class P2PNetwork extends EventEmitter {
         const relayPeerIdStr = event.detail.relay?.toString();
         if (!relayPeerIdStr) return;
     
-        const relayAddrsStr = event.detail.listeningAddrs.map(addr => addr.toString());
+        const relayAddrsStr = FILTERS.multiAddrs(event.detail.listeningAddrs, 'PUBLIC').map(addr => addr.toString());
         if (relayAddrsStr.length === 0) { this.myRelays[relayPeerIdStr] = false; return } // not relayed anymore
 
         const myPeerIdStr = this.p2pNode.peerId.toString();
