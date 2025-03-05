@@ -3,7 +3,6 @@ import { Storage, CheckpointsStorage, PATH } from '../../utils/storage-manager.m
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { P2PNetwork, readableId, STREAM, PROTOCOLS, P2P_OPTIONS } from './p2p.mjs';
-import ReputationManager from './peers-reputation.mjs';
 
 /**
  * @typedef {import("./node.mjs").Node} Node
@@ -77,7 +76,6 @@ export class SyncHandler {
         if (!stream) { return; }
         
         const peerIdStr = lstream.connection.remotePeer.toString();
-        this.p2pNet.reputationManager.recordAction({ peerId: peerIdStr }, ReputationManager.GENERAL_ACTIONS.SYNC_INCOMING_STREAM);
         //this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         
         let readResultCopy;
