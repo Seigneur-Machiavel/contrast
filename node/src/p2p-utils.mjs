@@ -1,32 +1,124 @@
-
+import { serializer } from '../../utils/serializer.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
  * @typedef {import('@multiformats/multiaddr').Multiaddr} Multiaddr
+ * @typedef {import("@libp2p/interface").Stream} Stream
  */
 
-export class PROTOCOLS {
-    static RELAY_SHARE = '/relay-share/1.0.0';
-    static SDP_EXCHANGE = '/webrtc-sdp/1.0.0';
-    static SYNC = '/blockchain-sync/1.0.0';
+export class P2P_OPTIONS {
+    DIRECT_PORTS = ['27260', '27261', '27262', '27263', '27264', '27265', '27266', '27267', '27268', '27269'];
 }
 
-export class STREAM_OPTIONS {
-    static NEW_RELAYED_STREAM = { runOnLimitedConnection: true, signal: AbortSignal.timeout(3_000) };
+export class PROTOCOLS {
+    static RELAY_SHARE = '/relay-share/1.0.0'; // to connect to relayed peers
+    static SDP_EXCHANGE = '/webrtc-sdp/1.0.0'; // to exchange SDP offers/answers
+    static SYNC = '/blockchain-sync/1.0.0'; // to sync blockchain data and peers status
+}
+
+export class STREAM {
+    static MAX_CHUNK_SIZE = 64 * 1024; // 64 KB
+    static MAX_STREAM_BYTES = 1024 * 1024 * 1024; // 1 GB
+    static NEW_RELAYED_STREAM_OPTIONS = { runOnLimitedConnection: true, signal: AbortSignal.timeout(3_000) };
+
+    /** @param {Stream} stream @param {Uint8Array} serializedMessage @param {number} [maxChunkSize] */
+    static async WRITE(stream, serializedMessage, maxChunkSize = STREAM.MAX_CHUNK_SIZE) {
+        // limit the speed of sending chunks, at 64 KB/chunk, 1 GB would take:
+        // 1 GB / 64 KB = 16384 chunks => 16384 * 2 ms = 32.768 more seconds
+        async function* generateChunks(serializedMessage, maxChunkSize, delay = 2) {
+            const totalChunks = Math.ceil(serializedMessage.length / maxChunkSize);
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * maxChunkSize;
+                yield serializedMessage.slice(start, start + maxChunkSize); // send chunk
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        try { await stream.sink( generateChunks(serializedMessage, maxChunkSize) );
+        } catch (error) { console.error(error.message); return false; }
+        return true;
+    }
+    /** @param {Stream} stream */
+    static async READ(stream) {
+        const dataChunks = [];
+        for await (const chunk of stream.source) { dataChunks.push(chunk.subarray()); }
+
+        const data = new Uint8Array(Buffer.concat(dataChunks));
+        return { data, nbChunks: dataChunks.length };
+    }
 }
 
 export class FILTERS {
-    /** @param {Multiaddr[]} ma @param {'ONLY_PUBLIC' | 'ONLY_LOCAL' | 'ALL'} filter - default: 'ONLY_PUBLIC' */
-    static multiAddrs(ma, filter = 'ONLY_PUBLIC') {
+    /**
+     * @param {Multiaddr[]} ma
+     * @param {'PUBLIC' | 'LOCAL'} [IP] - Filter by public or local IP addresses, PUBLIC ONLY, LOCAL ONLY, default: NO_FILTER
+     * @param {'CIRCUIT' | 'NO_CIRCUIT'} [P2P_CIRCUIT] - Filter by p2p-circuit addresses, CIRCUIT ONLY, NO_CIRCUIT, default: NO_FILTER
+     */
+    static multiAddrs(ma, IP, P2P_CIRCUIT) {
         if (Array.isArray(ma) === false) return [];
-        if (typeof filter !== 'string') return [];
+        if (IP && typeof IP !== 'string') return [];
+        if (P2P_CIRCUIT && typeof P2P_CIRCUIT !== 'string') return [];
 
         return ma.filter(addr => {
-            const ip = addr.toString();
-            if (ip.includes('/127')) return filter !== 'ONLY_PUBLIC';
-            if (ip.includes('/192.168')) return filter !== 'ONLY_PUBLIC';
-            if (ip.includes('/10.')) return filter !== 'ONLY_PUBLIC';
-            if (ip.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return filter !== 'ONLY_PUBLIC';
-            return filter !== 'ONLY_LOCAL';
+            const addrStr = addr.toString();
+
+            if (P2P_CIRCUIT === 'CIRCUIT' && !addrStr.includes('/p2p-circuit/')) return false;
+            if (P2P_CIRCUIT === 'NO_CIRCUIT' && addrStr.includes('/p2p-circuit/')) return false;
+
+            if (IP === 'PUBLIC' && addrStr.includes('/127')) return false;
+            if (IP === 'PUBLIC' && addrStr.includes('/192.168')) return false;
+            if (IP === 'PUBLIC' && addrStr.includes('/10.')) return false;
+            if (IP === 'PUBLIC' && addrStr.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false;
+
+            if (IP === 'LOCAL' && !addrStr.includes('/127')) return false;
+            if (IP === 'LOCAL' && !addrStr.includes('/192.168')) return false;
+            if (IP === 'LOCAL' && !addrStr.includes('/10.')) return false;
+            if (IP === 'LOCAL' && !addrStr.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false;
+
+            return true;
         });
+    }
+}
+
+export class PUBSUB {
+    static TOPIC_MAX_BYTES = {
+        'new_transaction': BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02,
+        'new_block_candidate': BLOCKCHAIN_SETTINGS.maxBlockSize * 1.04,
+        'new_block_finalized': BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05,
+    }
+
+    /** Validates the data of incoming pubsub message. @param {string} topic @param {Uint8Array} data */
+    static VALIDATE(topic, data, verifySize = true) {
+        if (typeof topic !== 'string') {
+            console.error(`Received non-string topic: ${topic}`);
+            return false;
+        }
+        if (!PUBSUB.TOPIC_MAX_BYTES[topic]) return false;
+
+        if (!(data instanceof Uint8Array)) {
+            console.error(`Received non-binary data dataset: ${data} topic: ${topic}`);
+            return false;
+        }
+        if (!verifySize || data.byteLength <= PUBSUB.TOPIC_MAX_BYTES[topic]) return true;
+
+        console.error(`Message size exceeds maximum allowed size, topic: ${topic}`, (m) => { console.error(m); });
+    }
+    /** @param {string} topic */
+    static SERIALIZE(topic, data) {
+        switch (topic) {
+            case 'new_transaction': return serializer.serialize.transaction(data);
+            case 'new_block_candidate': return serializer.serialize.block_candidate(data);
+            case 'new_block_finalized': return serializer.serialize.block_finalized(data);
+            default: return serializer.serialize.rawData(data);
+        }
+    }
+    /** @param {string} topic @param {Uint8Array} data */
+    static DESERIALIZE(topic, data) {
+        switch (topic) {
+            case 'new_transaction': return serializer.deserialize.transaction(data);
+            case 'new_block_candidate': return serializer.deserialize.block_candidate(data);
+            case 'new_block_finalized': return serializer.deserialize.block_finalized(data);
+            default: return serializer.deserialize.rawData(data);
+        }
     }
 }

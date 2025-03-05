@@ -2,7 +2,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { Storage, CheckpointsStorage, PATH } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { P2PNetwork, readableId } from './p2p.mjs';
+import { P2PNetwork, readableId, STREAM, PROTOCOLS, P2P_OPTIONS } from './p2p.mjs';
 import ReputationManager from './peers-reputation.mjs';
 
 /**
@@ -64,13 +64,13 @@ export class SyncHandler {
 
     /** @param {Node} node */
     constructor(node) {
-        node.p2pNetwork.p2pNode.handle(P2PNetwork.SYNC_PROTOCOL, this.#handleIncomingStream.bind(this), { runOnLimitedConnection: true });
+        node.p2pNetwork.p2pNode.handle(PROTOCOLS.SYNC, this.#handleIncomingStream, { runOnLimitedConnection: true });
         this.node = node;
         this.p2pNet = node.p2pNetwork;
         this.miniLogger.log('SyncHandler setup', (m) => console.info(m));
     }
 
-    async #handleIncomingStream(lstream) {
+    #handleIncomingStream = async (lstream) => {
         if (this.node.restartRequested) { return; }
         /** @type {Stream} */
         const stream = lstream.stream;
@@ -82,13 +82,10 @@ export class SyncHandler {
         
         let readResultCopy;
         try {
-            const readResult = await P2PNetwork.streamRead(stream, this.fastConverter);
+            const readResult = await STREAM.READ(stream);
             if (!readResult) { throw new Error('(#handleIncomingStream) Failed to read data from stream'); }
             readResultCopy = readResult;
-            if (readResult.data.byteLength === 0) {
-                stream.close();
-                return;
-            }
+            if (readResult.data.byteLength === 0) { stream.close(); return; }
 
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(readResult.data);
@@ -122,7 +119,7 @@ export class SyncHandler {
             // crop data and add the length of the serialized data at the beginning of the response
             data = msg.bytesStart > 0 ? data.slice(msg.bytesStart) : data;
             const serializedResponse = serializer.serialize.syncResponse(mySyncStatus, data);
-            const sent = await P2PNetwork.streamWrite(stream, serializedResponse);
+            const sent = await STREAM.WRITE(stream, serializedResponse);
             if (!sent) { throw new Error('(#handleIncomingStream) Failed to write data to stream'); }
 
             let logComplement = '';
@@ -154,11 +151,11 @@ export class SyncHandler {
             
             try { // try to get the remaining data
                 msg.bytesStart = dataBytes.acquired;
-                stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [P2PNetwork.SYNC_PROTOCOL], { negotiateFully: true });
-                const sent = await P2PNetwork.streamWrite(stream, serializer.serialize.rawData(msg));
+                stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [PROTOCOLS.SYNC], { negotiateFully: true });
+                const sent = await STREAM.WRITE(stream, serializer.serialize.rawData(msg));
                 if (!sent) { throw new Error('(sendSyncRequest) Failed to write data to stream'); }
 
-                const readResult = await P2PNetwork.streamRead(stream);
+                const readResult = await STREAM.READ(stream);
                 if (!readResult) { throw new Error('(sendSyncRequest)  Failed to read data from stream'); }
                 if (readResult.data.byteLength < serializer.syncResponseMinLen) throw new Error('(sendSyncRequest) Invalid response format');
                 dataBytes.lastNbChunks = readResult.nbChunks;
@@ -169,7 +166,7 @@ export class SyncHandler {
                 syncRes.checkpointInfo = syncResponse.checkpointInfo;
 
                 if (!dataBytes.expected) { // initializing the data
-                    if (syncResponse.dataLength > P2PNetwork.maxStreamBytes) {
+                    if (syncResponse.dataLength > STREAM.MAX_STREAM_BYTES) {
                         this.miniLogger.log(`(sendSyncRequest) Received data is too big (${syncResponse.dataLength} bytes)`, (m) => { console.error(m); });
                         return false;
                     }

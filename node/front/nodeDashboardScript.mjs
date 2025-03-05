@@ -255,9 +255,9 @@ function displayNodeInfo(data) {
 
     renderPeersHeight(data.peerHeights);
 
-    if (data.repScores) {
+    /*if (data.repScores) {
         renderScores(data.repScores);
-    }
+    }*/
 
     if (data.ignoreIncomingBlocks !== undefined) {
         updateToggle(data.ignoreIncomingBlocks, eHTML.ignoreBlocksToggle);

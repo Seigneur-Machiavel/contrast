@@ -16,7 +16,7 @@ import { createLibp2p } from 'libp2p';
 import { webRTCDirect, webRTC } from '@libp2p/webrtc';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 import { dcutr } from '@libp2p/dcutr';
-import { P2PNetwork, PROTOCOLS, STREAM_OPTIONS, FILTERS } from './p2p.mjs';
+import { P2PNetwork, PROTOCOLS, STREAM, FILTERS } from './p2p.mjs';
 
 /**
  * @typedef {import('@multiformats/multiaddr').Multiaddr} Multiaddr
@@ -44,7 +44,7 @@ const node = await createLibp2p({
 	privateKey: privateKeyObject,
 	addresses: {
 		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/udp/0/webrtc-direct'],
-		announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'ONLY_PUBLIC'),
+		announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
 		//announceFilter: (addrs) => [], // anonymous
 	},
 	//transports: [tcp()],
@@ -87,7 +87,7 @@ node.handle(PROTOCOLS.SYNC, async ({ stream }) => {
 	console.log('####--- Received a stream: SYNC_PROTOCOL')
 	await new Promise(resolve => setTimeout(resolve, 3000));
 
-	const read = await P2PNetwork.streamRead(stream);
+	const read = await STREAM.READ(stream);
 	console.log('Received a message', read)
 });
 node.handle(PROTOCOLS.RELAY_SHARE, async ({ stream }) => {
@@ -101,8 +101,8 @@ node.addEventListener('self:peer:update', (evt) => {
 async function askRelayShare(multiAddrs) {
 	if (!multiAddrs || multiAddrs.length === 0) return;
 	try {
-		const stream = await node.dialProtocol(multiAddrs, PROTOCOLS.RELAY_SHARE, STREAM_OPTIONS.NEW_RELAYED_STREAM);
-		const readResult = await P2PNetwork.streamRead(stream);
+		const stream = await node.dialProtocol(multiAddrs, PROTOCOLS.RELAY_SHARE, STREAM.NEW_RELAYED_STREAM_OPTIONS);
+		const readResult = await STREAM.READ(stream);
 		/** @type {string[]} */
 		const sharedPeerIdsStr = serializer.deserialize.rawData(readResult.data);
 		return sharedPeerIdsStr;
@@ -122,10 +122,10 @@ async function tryToDialPeerIdsStr(relayAddr, peerIdsStr) {
 		const relayedAddr = multiaddr(`${relayAddrStr}/p2p-circuit/p2p/${sharedPeerIdStr}`);
 
 		try {
-			const stream = await node.dialProtocol(relayedAddr, PROTOCOLS.RELAY_SHARE, STREAM_OPTIONS.NEW_RELAYED_STREAM);
+			const stream = await node.dialProtocol(relayedAddr, PROTOCOLS.RELAY_SHARE, STREAM.NEW_RELAYED_STREAM_OPTIONS);
 			//const connection = await node.dial(relayedAddr, { signal: AbortSignal.timeout(3_000) });
-			//const stream = await connection.newStream(PROTOCOLS.RELAY_SHARE, STREAM_OPTIONS.NEW_RELAYED_STREAM);
-			const readResult = await P2PNetwork.streamRead(stream);
+			//const stream = await connection.newStream(PROTOCOLS.RELAY_SHARE, STREAM.NEW_RELAYED_STREAM_OPTIONS);
+			const readResult = await STREAM.READ(stream);
 			//const sharedPeerId = peerIdFromString(sharedPeerIdStr);
 			//const peer = await node.peerRouting.findPeer(sharedPeerId, { signal: AbortSignal.timeout(3_000) }); // not necessary
 			//if (peer.multiaddrs.length > 0) await node.dialProtocol(peer.multiaddrs, PROTOCOLS.SYNC, { signal: AbortSignal.timeout(3_000) });
@@ -183,7 +183,7 @@ async function tryConnectMorePeersLoop() {
 			try {
 				//await node.peerRouting.findPeer(peerId, { signal: AbortSignal.timeout(3_000) });
 				//await node.dial(peerId, { signal: AbortSignal.timeout(3000) });
-				await node.dialProtocol(peerId, P2PNetwork.RELAY_SHARE_PROTOCOL, STREAM_OPTIONS.NEW_RELAYED_STREAM);
+				await node.dialProtocol(peerId, PROTOCOLS.RELAY_SHARE, STREAM.NEW_RELAYED_STREAM_OPTIONS);
 				const updatedCons = node.getConnections(peerId);
 				newlyDialed++;
 			} catch (error) {}
