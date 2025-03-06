@@ -82,15 +82,21 @@ class P2PNetwork extends EventEmitter {
         //if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         
         const listen = this.options.listenAddresses;
-        if (isRelayCandidate) listen.push('/p2p-circuit');
+        if (isRelayCandidate) listen.push('/p2p-circuit') // should already listen the open ports
+        else listen.push('/ip4/0.0.0.0/tcp/0');
+        const discoverRelays = isRelayCandidate ? 0 : 2;
+
         try {
             const p2pNode = await createLibp2p({
                 privateKey: privateKeyObject,
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 //connectionGater: {denyDialMultiaddr: () => false},
-                transports: [tcp(), circuitRelayTransport({ discoverRelays: 2, relayFilter: FILTERS.filterRelayAddrs })], //webRTCDirect(),
-                addresses: { announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'), listen },
+                transports: [tcp(), circuitRelayTransport({ discoverRelays, relayFilter: FILTERS.filterRelayAddrs })], //webRTCDirect(),
+                addresses: {
+                    listen,
+                    announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC', undefined, [27260, 27269]),
+                },
                 services: {
                     identify: identify(),
                     pubsub: gossipsub(),
@@ -104,7 +110,6 @@ class P2PNetwork extends EventEmitter {
             });
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
-                //if (!this.myAddr) return; // logs if bootstrap node only
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
                 for (const addr of evt.detail.peer.addresses) console.log(addr.multiaddr.toString());
 
@@ -335,7 +340,7 @@ class P2PNetwork extends EventEmitter {
             } catch (err) { // DETECT IF THE BOOTSTRAP NODE IS MYSELF
                 if (err.message === 'Can not dial self') {
                     this.myAddr = ipAddr;
-                    this.p2pNode.services.circuitRelay.reservations.maxReservations = 4; // Enable relay
+                    //this.p2pNode.services.circuitRelay.reservations.maxReservations = 4; // Enable relay
                     //await this.p2pNode.services.dht.setMode('server'); // Ensure DHT is enabled as server
                     this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
                     this.miniLogger.log(`]]] I AM BOOTSTRAP! DHT SERVER ENABLED [[[`, (m) => { console.info(m); });

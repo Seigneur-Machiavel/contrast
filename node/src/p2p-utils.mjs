@@ -54,27 +54,33 @@ export class FILTERS {
      * @param {Multiaddr[]} ma
      * @param {'PUBLIC' | 'LOCAL'} [IP] - Filter by public or local IP addresses, PUBLIC ONLY, LOCAL ONLY, default: NO_FILTER
      * @param {'CIRCUIT' | 'NO_CIRCUIT'} [P2P_CIRCUIT] - Filter by p2p-circuit addresses, CIRCUIT ONLY, NO_CIRCUIT, default: NO_FILTER
+     * @param {number[]} [PORT_RANGE] - Filter by port range, default: All accepted (undefined)
      */
-    static multiAddrs(ma, IP, P2P_CIRCUIT) {
+    static multiAddrs(ma, IP, P2P_CIRCUIT, PORT_RANGE = [27260, 27269]) {
         if (Array.isArray(ma) === false) return [];
         if (IP && typeof IP !== 'string') return [];
         if (P2P_CIRCUIT && typeof P2P_CIRCUIT !== 'string') return [];
 
         return ma.filter(addr => {
             const addrStr = addr.toString();
-
             if (P2P_CIRCUIT === 'CIRCUIT' && !addrStr.includes('/p2p-circuit/')) return false;
             if (P2P_CIRCUIT === 'NO_CIRCUIT' && addrStr.includes('/p2p-circuit/')) return false;
-
-            if (IP === 'PUBLIC' && addrStr.includes('/127')) return false;
-            if (IP === 'PUBLIC' && addrStr.includes('/192.168')) return false;
-            if (IP === 'PUBLIC' && addrStr.includes('/10.')) return false;
             if (IP === 'PUBLIC' && addrStr.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false;
-
-            if (IP === 'LOCAL' && !addrStr.includes('/127')) return false;
-            if (IP === 'LOCAL' && !addrStr.includes('/192.168')) return false;
-            if (IP === 'LOCAL' && !addrStr.includes('/10.')) return false;
             if (IP === 'LOCAL' && !addrStr.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false;
+
+            const address = addr.nodeAddress().address;
+            if (IP === 'PUBLIC' && address.startsWith('127')) return false;
+            if (IP === 'PUBLIC' && address.startsWith('192.168')) return false;
+            if (IP === 'PUBLIC' && address.startsWith('10.')) return false;
+            if (IP === 'LOCAL' && !address.startsWith('127')) return false;
+            if (IP === 'LOCAL' && !address.startsWith('192.168')) return false;
+            if (IP === 'LOCAL' && !address.startsWith('10.')) return false;
+
+            if (!PORT_RANGE) return true;
+
+            const port = addr.nodeAddress().port;
+            if (isNaN(port)) return false;
+            if (port < PORT_RANGE[0] || port > PORT_RANGE[1]) return false;
 
             return true;
         });
@@ -84,11 +90,13 @@ export class FILTERS {
         return multiaddrs.filter(addr => {
             // PUBLIC ONLY, NO LOCAL, NO CIRCUIT
             const addrStr = addr.toString();
-            if (addrStr.includes('/127')) return false;
-            if (addrStr.includes('/192.168')) return false;
-            if (addrStr.includes('/10.')) return false;
             if (addrStr.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false;
             if (!addrStr.includes('/p2p-circuit/')) return false;
+
+            const address = addr.nodeAddress().address;
+            if (address.startsWith('127')) return false;
+            if (address.startsWith('192.168')) return false;
+            if (address.startsWith('10.')) return false;
 
             const port = addr.nodeAddress().port;
             if (isNaN(port)) return false;
