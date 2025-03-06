@@ -70,7 +70,7 @@ ipcRenderer.on('connexion-resume', (event, ...args) => {
 	if (!resumeElement) return;
 
 	const { totalPeers, connectedBootstraps, totalBootstraps, relayedPeers } = args[0];
-	const appendText = relayedPeers > 0 ? ` [${relayedPeers} relayed]` : '';
+	const appendText = relayedPeers > 0 ? ` [${relayedPeers} R]` : '';
 	if (totalPeers < 1 ) { 
 		resumeElement.innerText = 'Connecting network 🔴';
 	} else if (totalPeers < 5) {

@@ -210,4 +210,11 @@ app.on('ready', async () => {
 
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
     dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.boardWindow);
+
+    /*let checkForUpdates = !isDev;
+    while(checkForUpdates) { // check for updates every 5 minutes
+        await new Promise(resolve => setTimeout(resolve, 300000));
+        const updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
+        updateCheckResult.
+    }*/
 });

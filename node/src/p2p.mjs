@@ -106,7 +106,7 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('self:peer:update', async (evt) => {
                 //if (!this.myAddr) return; // logs if bootstrap node only
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
-                for (const addr of evt.detail.peer.addresses) console.log(addr.toString());
+                for (const addr of evt.detail.peer.addresses) console.log(addr.multiaddr.toString());
 
                 /*for (const { multiaddr, isCertified } of evt.detail.peer.addresses) {
                     //if (!isCertified) continue; //? to early ?
