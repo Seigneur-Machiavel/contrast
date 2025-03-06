@@ -84,7 +84,6 @@ class P2PNetwork extends EventEmitter {
         const listen = this.options.listenAddresses;
         if (isRelayCandidate) listen.push('/p2p-circuit') // should already listen the open ports
         else listen.push('/ip4/0.0.0.0/tcp/0');
-        const discoverRelays = isRelayCandidate ? 0 : 2;
 
         try {
             const p2pNode = await createLibp2p({
@@ -92,7 +91,10 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 //connectionGater: {denyDialMultiaddr: () => false},
-                transports: [tcp(), circuitRelayTransport({ discoverRelays, relayFilter: FILTERS.filterRelayAddrs })], //webRTCDirect(),
+                transports: [
+                    tcp(),
+                    circuitRelayTransport({ discoverRelays: isRelayCandidate ? 0 : 2, relayFilter: FILTERS.filterRelayAddrs })
+                ], //webRTCDirect(),
                 addresses: {
                     listen,
                     announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC', undefined, [27260, 27269]),
@@ -112,29 +114,16 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('self:peer:update', async (evt) => {
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
                 for (const addr of evt.detail.peer.addresses) console.log(addr.multiaddr.toString());
-                return true;
-                /*for (const { multiaddr, isCertified } of evt.detail.peer.addresses) {
-                    //if (!isCertified) continue; //? to early ?
-                    const isCircuitRelay = multiaddr.toString().endsWith('p2p-circuit');
-                    console.log(addr.toString());
-                    }*/
-
-                /*for (const myAddrStr of p2pNode.getMultiaddrs().map(addr => addr.toString())) {
-                    if (!myAddrStr.endsWith('p2p-circuit')) continue;
-                    const relayAddrStr = myAddrStr.split('/p2p-circuit/').shift().split('p2p/').pop();
-                    this.myRelays[relayAddrStr] = true;
-                }*/
-                // p2pNode.services.circuitRelay.reservations.maxReservations = 4;
             });
             p2pNode.addEventListener('transport:listening', this.#handleRelayListening);
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
             p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
             p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
             p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
-            p2pNode.handle(PROTOCOLS.RELAY_SHARE, this.#handleRelayShare, { runOnLimitedConnection: true });
+            p2pNode.handle(PROTOCOLS.RELAY_SHARE, this.#handleRelayShare);
+            if (isRelayCandidate) p2pNode.handle(PROTOCOLS.RELAY_RESERVATION, this.#handleRelayReservation);
 
-            this.miniLogger.log(`P2P network started. ${isRelayCandidate ? 'RELAY ENABLED' : 'RELAY DISABLED'} |
--- PeerId ${readableId(p2pNode.peerId.toString())}`, (m) => { console.info(m); });
+            this.miniLogger.log(`P2P network started. PeerId ${readableId(p2pNode.peerId.toString())} - ${isRelayCandidate ? 'RELAY ENABLED' : 'RELAY DISABLED'}`, (m) => { console.info(m); });
             this.p2pNode = p2pNode;
         } catch (error) {
             this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
@@ -236,6 +225,16 @@ class P2PNetwork extends EventEmitter {
         console.info('SENDING RELAY SHARE RESPONSE:');
         console.info(sharedPeerIdsStr);
         await STREAM.WRITE(stream, serializer.serialize.rawData(sharedPeerIdsStr));
+    }
+    #handleRelayReservation = async ({ stream, connection }) => {
+        //const remotePort = parseInt(connection.remoteAddr.toString().split('/')[4], 10);
+        const targetPortOpenned = FILTERS.multiAddrs([connection.remoteAddr], undefined, 'NO_CIRCUIT', [27260, 27269]).length > 0;
+        if (targetPortOpenned) {
+            console.log(`Reservation rejection for ${connection.remotePeer}: already a relay`);
+            stream.close();
+        } else {
+            console.log(`Reservation acceptance for ${connection.remotePeer}`);
+        }
     }
     #handlePeerDiscovery = async (event) => {
         this.miniLogger.log(`(peer:discovery) ${event.detail.id.toString()}`, (m) => console.debug(m));
