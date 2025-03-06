@@ -63,7 +63,8 @@ export class SyncHandler {
 
     /** @param {Node} node */
     constructor(node) {
-        node.p2pNetwork.p2pNode.handle(PROTOCOLS.SYNC, this.#handleIncomingStream, { runOnLimitedConnection: true });
+        //node.p2pNetwork.p2pNode.handle(PROTOCOLS.SYNC, this.#handleIncomingStream, { runOnLimitedConnection: true });
+        node.p2pNetwork.p2pNode.handle(PROTOCOLS.SYNC, this.#handleIncomingStream);
         this.node = node;
         this.p2pNet = node.p2pNetwork;
         this.miniLogger.log('SyncHandler setup', (m) => console.info(m));
@@ -149,7 +150,7 @@ export class SyncHandler {
             
             try { // try to get the remaining data
                 msg.bytesStart = dataBytes.acquired;
-                stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, [PROTOCOLS.SYNC], { negotiateFully: true });
+                stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, PROTOCOLS.SYNC, { signal: AbortSignal.timeout(3_000) });
                 const sent = await STREAM.WRITE(stream, serializer.serialize.rawData(msg));
                 if (!sent) { throw new Error('(sendSyncRequest) Failed to write data to stream'); }
 

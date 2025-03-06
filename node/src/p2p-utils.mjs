@@ -14,8 +14,6 @@ export class PROTOCOLS {
     static RELAY_SHARE = '/relay-share/1.0.0'; // to connect to relayed peers
     static SDP_EXCHANGE = '/webrtc-sdp/1.0.0'; // to exchange SDP offers/answers
     static SYNC = '/blockchain-sync/1.0.0'; // to sync blockchain data and peers status
-
-    static RELAY_RESERVATION = '/libp2p/circuit/relay/0.2.0'; // to reserve a relayed connection
 }
 
 export class STREAM {
@@ -111,6 +109,9 @@ export class FILTERS {
 
 export class PUBSUB {
     static TOPIC_MAX_BYTES = {
+        'self:peer:update': 1024,
+        'peer:connect': 2048,
+        'peer:disconnect': 1024,
         'new_transaction': BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02,
         'new_block_candidate': BLOCKCHAIN_SETTINGS.maxBlockSize * 1.04,
         'new_block_finalized': BLOCKCHAIN_SETTINGS.maxBlockSize * 1.05,

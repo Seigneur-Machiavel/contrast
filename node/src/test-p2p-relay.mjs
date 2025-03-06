@@ -177,6 +177,7 @@ node.addEventListener('peer:connect', async (event) => {
 
 	const multiAddrs = unlimitedCon.remoteAddr;
 	const sharedPeerIdsStr = await askRelayShare(multiAddrs);
+	return;
 	await tryToDialPeerIdsStr(multiAddrs, sharedPeerIdsStr);
 	return;
 });

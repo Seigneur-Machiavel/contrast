@@ -163,7 +163,7 @@ export class Node {
         await this.p2pNetwork.start(uniqueHash, this.isRelayCandidate);
         this.syncHandler = new SyncHandler(this);
         const uniqueTopics = this.#subscribeTopicsRelatedToRoles(this.roles);
-        for (const topic of uniqueTopics) { this.p2pNetwork.subscribe(topic, this.p2pHandler.bind(this)); }
+        for (const topic of uniqueTopics) { this.p2pNetwork.subscribe(topic, this.p2pHandler); }
 
         if (this.roles.includes('miner')) { this.miner.startWithWorker(); }
 
@@ -496,10 +496,9 @@ export class Node {
         this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
     }
     /** @param {string} topic @param {object} message */
-    async p2pHandler(topic, message) {
+    p2pHandler = async (topic, message) => {
         const data = message.content;
         const from = message.from;
-        const byteLength = message.byteLength;
         const lastBlockIndex = this.blockchain.lastBlock ? this.blockchain.lastBlock.index : -1;
         //console.log(`[P2P-HANDLER] ${topic} -> ${from} | ${byteLength} bytes`);
         try {
