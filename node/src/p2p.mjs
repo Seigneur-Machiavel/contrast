@@ -267,7 +267,7 @@ class P2PNetwork extends EventEmitter {
     async #updateConnexionResume() {
         const totalPeers = Object.keys(this.peers).length || 0;
         const dialablePeers = Object.values(this.peers).filter(peer => peer.dialable).length;
-        const peerMap = node.services.circuitRelay?.reservations;
+        const peerMap = this.p2pNode.services.circuitRelay?.reservations;
 
         this.connexionResume = {
             totalPeers,
