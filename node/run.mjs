@@ -12,8 +12,9 @@ const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
 const nodeApp = args.includes('-na') ? nextArg('-na') : 'dashboard'; // dashboard, stresstest
 const privateKey = args.includes('-pk') ? nextArg('-pk') : null;
 const password = args.includes('-pw') ? nextArg('-pw') : 'fingerPrint'; //fingerPrint.slice(0, 30)
+const forceRelay = args.includes('-fr') ? true : false; // force p2p relay mode even if port verification fails
 
-const dashboardWorker = new NodeAppWorker(nodeApp, nodePort, dashboardPort, observerPort);
+const dashboardWorker = new NodeAppWorker(nodeApp, nodePort, dashboardPort, observerPort, null, forceRelay);
 const result = await dashboardWorker.setPasswordAndWaitResult(password); // (will try init node if password is correct)
 console.log('passwordCorrect:', result.data);
 

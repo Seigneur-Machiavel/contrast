@@ -279,13 +279,15 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     nodeStarted = false;
     /** @type {BrowserWindow} */
     mainWindow;
+    forceRelay;
     #password;
-    constructor (app = "dashboard", nodePort = 27260, dashboardPort = 27271, observerPort = 27270, mainWindow = null) {
+    constructor (app = "dashboard", nodePort = 27260, dashboardPort = 27271, observerPort = 27270, mainWindow = null, forceRelay) {
         this.app = app;
         this.nodePort = nodePort;
         this.dashboardPort = dashboardPort;
         this.observerPort = observerPort;
         this.mainWindow = mainWindow;
+        this.forceRelay = forceRelay;
         this.initWorker();
         this.autoRestartLoop();
     }
@@ -382,9 +384,10 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
         const nodePort = this.nodePort;
         const dashboardPort = this.dashboardPort;
         const observerPort = this.observerPort;
+        const forceRelay = this.forceRelay;
 
         this.worker = null;
-        this.worker = newWorker(`./${app}-worker.mjs`, '', { nodePort, dashboardPort, observerPort });
+        this.worker = newWorker(`./${app}-worker.mjs`, '', { nodePort, dashboardPort, observerPort, forceRelay });
 
         await new Promise(resolve => setTimeout(resolve, 200));
 

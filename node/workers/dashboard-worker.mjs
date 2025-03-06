@@ -11,6 +11,7 @@ import nodeMachineId from 'node-machine-id';
 const nodePort = workerData.nodePort || 27260;
 const dashboardPort = workerData.dashboardPort || 27271;
 const observerPort = workerData.observerPort || 27270;
+const forceRelay = workerData.forceRelay || false;
 const cryptoLight = new CryptoLight();
 cryptoLight.argon2Hash = argon2Hash;
 const dashApp = new DashboardWsApp(undefined, cryptoLight, nodePort, dashboardPort, false);
@@ -46,7 +47,7 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     if (nodeInitialized) return; // avoid double init
 
     initializingNode = true;
-    const initialized = await dashApp.init(privateKey);
+    const initialized = await dashApp.init(privateKey, forceRelay);
     if (!initialized && dashApp.waitingForPrivKey) {
         parentPort.postMessage({ type: 'message_to_mainWindow', data: 'waiting-for-priv-key' });
         console.error(`Can't init dashApp, waitingForPrivKey!`);

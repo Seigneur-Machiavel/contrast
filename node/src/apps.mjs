@@ -147,7 +147,7 @@ export class DashboardWsApp {
         if (autoInit) this.init();
         this.#stopNodeIfRequestedLoop();
     }
-    async init(privateKey) {
+    async init(privateKey, forceRelay) {
         // NODE CLIENT INIT
         await this.loadNodeSettingBinary();// UPDATED TO NEW VERSION WITH ENCRYPTION
 
@@ -155,7 +155,7 @@ export class DashboardWsApp {
 
         const defaultPrivKey = this.#nodeSetting?.privateKey;
         const usablePrivKey = privateKey || defaultPrivKey;
-        if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey); }
+        if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey, forceRelay); }
         if (!this.node) { // fail to init node with default or provided private key
             this.waitingForPrivKey = true;
             console.info("Failed to init node... waiting For PrivKey...");
@@ -199,7 +199,7 @@ export class DashboardWsApp {
 
         return true;
     }
-    async initMultiNode(nodePrivateKey = 'ff') {
+    async initMultiNode(nodePrivateKey = 'ff', forceRelay) {
         this.#wallet = new Wallet(nodePrivateKey);
         await this.#wallet.loadAccounts();
 
@@ -208,7 +208,7 @@ export class DashboardWsApp {
         await this.#wallet.saveAccounts();
 
         const listenAddresses = [`/ip4/0.0.0.0/tcp/${this.nodePort}`]; // '/ip4/0.0.0.0/tcp/0'
-        const isRelayCandidate = await this.portMapped ? true : false;
+        const isRelayCandidate = forceRelay || await this.portMapped ? true : false;
         this.node = new Node(derivedAccounts[0], ['validator', 'miner', 'observer'], listenAddresses, isRelayCandidate);
         this.node.minerAddress = derivedAccounts[1].address;
         await this.node.start();
