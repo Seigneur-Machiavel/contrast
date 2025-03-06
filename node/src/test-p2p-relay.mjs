@@ -21,6 +21,8 @@ import { P2PNetwork, PROTOCOLS, STREAM, FILTERS } from './p2p.mjs';
  * @typedef {import('@multiformats/multiaddr').Multiaddr} Multiaddr
  */
 
+
+console.log('Test-p2p-relay.mjs');
 const bootAddr = '/dns4/contrast.observer/tcp/27260';
 //const bootAddr = '/dns4/pinkparrot.science/tcp/27260'; // PINKPARROT
 //const bootAddr = '/ip4/192.168.4.22/tcp/27260' // PINKPARROT LOCAL
@@ -46,7 +48,7 @@ const node = await createLibp2p({
 		announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
 		//announceFilter: (addrs) => [], // anonymous
 	},
-	transports: [tcp(), circuitRelayTransport({ discoverRelays: 3 })], // webRTCDirect(), webSockets()
+	transports: [tcp(), circuitRelayTransport({ discoverRelays: 3, relayFilter: FILTERS.filterRelayAddrs })], // webRTCDirect(), webSockets()
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
@@ -69,8 +71,12 @@ const node = await createLibp2p({
 	//peerDiscovery: [dhtService]
 })
 await node.start();
+
 console.log(`Node started with id ${node.peerId.toString()}`)
 
+node.addEventListener('change:multiaddrs', ({ peerId, multiaddrs }) => {
+	console.log(`Peer ${peerId.toString()} multiaddrs changed to:`, multiaddrs.map(addr => addr.toString()));
+});
 node.addEventListener('transport:listening', (evt) => {
 	const relayPeerIdStr = evt.detail.relay?.toString();
 	if (!relayPeerIdStr) return;
@@ -87,7 +93,12 @@ node.addEventListener('transport:listening', (evt) => {
 node.addEventListener('self:peer:update', async (evt) => {
 	console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
 	const myAddrs = node.getMultiaddrs();
-	for (const addr of myAddrs) console.log(addr.toString());
+	for (const addr of myAddrs) {
+		console.log(addr.toString());
+		const port = addr.nodeAddress().port;
+		if (port < 27260 || port > 27269) continue;
+		console.log('Valid relay:', addr.toString());
+	}
 });
 
 node.handle(PROTOCOLS.SYNC, async ({ stream }) => {
@@ -99,7 +110,7 @@ node.handle(PROTOCOLS.SYNC, async ({ stream }) => {
 });
 node.handle(PROTOCOLS.RELAY_SHARE, async ({ stream }) => {
 	console.log('####--- Received a stream: RELAY_SHARE_PROTOCOL')
-	await new Promise(resolve => setTimeout(resolve, 3000));
+	//await new Promise(resolve => setTimeout(resolve, 3000));
 });
 node.addEventListener('self:peer:update', (evt) => {
 	//console.log('\n -- selfPeerUpdate:');

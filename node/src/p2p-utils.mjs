@@ -49,6 +49,7 @@ export class STREAM {
 }
 
 export class FILTERS {
+
     /**
      * @param {Multiaddr[]} ma
      * @param {'PUBLIC' | 'LOCAL'} [IP] - Filter by public or local IP addresses, PUBLIC ONLY, LOCAL ONLY, default: NO_FILTER
@@ -74,6 +75,24 @@ export class FILTERS {
             if (IP === 'LOCAL' && !addrStr.includes('/192.168')) return false;
             if (IP === 'LOCAL' && !addrStr.includes('/10.')) return false;
             if (IP === 'LOCAL' && !addrStr.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false;
+
+            return true;
+        });
+    }
+    /** @param {Multiaddr[]} multiaddrs */
+    static filterRelayAddrs(multiaddrs) {
+        return multiaddrs.filter(addr => {
+            // PUBLIC ONLY, NO LOCAL, NO CIRCUIT
+            const addrStr = addr.toString();
+            if (addrStr.includes('/127')) return false;
+            if (addrStr.includes('/192.168')) return false;
+            if (addrStr.includes('/10.')) return false;
+            if (addrStr.match(/\/172\.(1[6-9]|2[0-9]|3[0-1])\./)) return false;
+            if (!addrStr.includes('/p2p-circuit/')) return false;
+
+            const port = addr.nodeAddress().port;
+            if (isNaN(port)) return false;
+            if (port < 27260 || port > 27269) return false;
 
             return true;
         });

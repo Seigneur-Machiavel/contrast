@@ -87,7 +87,7 @@ class P2PNetwork extends EventEmitter {
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
                 connectionGater: {denyDialMultiaddr: () => false},
-                transports: [tcp(), circuitRelayTransport({ discoverRelays: 2 })],//webRTCDirect(),
+                transports: [tcp(), circuitRelayTransport({ discoverRelays: 2, relayFilter: FILTERS.filterRelayAddrs })], //webRTCDirect(),
                 addresses: {
                     announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
                     listen: this.options.listenAddresses
