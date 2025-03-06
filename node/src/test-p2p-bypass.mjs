@@ -14,7 +14,7 @@ import { createLibp2p } from 'libp2p';
 import { dcutr } from '@libp2p/dcutr';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 import { tcp } from '@libp2p/tcp';
-import { P2PNetwork, STREAM, PROTOCOLS } from './p2p.mjs';
+import { P2PNetwork, STREAM, PROTOCOLS, FILTERS } from './p2p.mjs';
 
 function filterLocalAddrs(ma) {
 	let localAddrs = ma.filter(addr => addr.toString().includes('/192') === false);
@@ -30,22 +30,22 @@ const node = await createLibp2p({
 	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: {
-		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0', '/ip4/0.0.0.0/tcp/0/ws'],
-		announceFilter: (addrs) => filterLocalAddrs(addrs),
+		listen: ['/ip4/0.0.0.0/tcp/0'],
+		announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
+		//announceFilter: (addrs) => filterLocalAddrs(addrs),
 	},
-	transports: [circuitRelayTransport(), tcp()],
-	//transports: [tcp()],
+	transports: [tcp(), circuitRelayTransport()],
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
 	services: {
 		identify: identify(),
-		dht: dhtService,
+		//dht: dhtService,
 		dcutr: dcutr(),
 		upnp: uPnPNAT(),
 		autoNAT: autoNAT(),
 		circuitRelay: circuitRelayServer({ reservations: { maxReservations: 4 } }),
 	},
-	config: {
+	/*config: {
 		peerDiscovery:
 			{ autoDial: true, mdns: { enabled: true, interval: 10_000 } },
 		relay: {
@@ -53,7 +53,8 @@ const node = await createLibp2p({
 			hop: { enabled: true, active: true },
 			autoRelay: { enabled: true, maxListeners: 20 },
 		},
-	},
+	},*/
+	peerDiscovery: []
 	//peerDiscovery: [mdns(), dhtService]
 })
 await node.start();

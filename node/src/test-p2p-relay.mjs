@@ -23,31 +23,27 @@ import { P2PNetwork, PROTOCOLS, STREAM, FILTERS } from './p2p.mjs';
 
 
 console.log('Test-p2p-relay.mjs');
-const bootAddr = '/dns4/contrast.observer/tcp/27260';
-//const bootAddr = '/dns4/pinkparrot.science/tcp/27260'; // PINKPARROT
-//const bootAddr = '/ip4/192.168.4.22/tcp/27260' // PINKPARROT LOCAL
-//const bootAddr = '/dns4/pinkparrot.science/tcp/27260/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B'; // PINKPARROT: DaPq...
-if (!bootAddr) throw new Error('the bootAddr address needs to be specified as a parameter');
-
-//const targetAddr = '/ip4/192.168.4.26/tcp/45521/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7/p2p-circuit/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B'; // WOKRS
-//const targetAddr = '/ip4/90.110.28.181/tcp/50913/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp/p2p-circuit/webrtc';
-const targetAddr = '/ip4/90.110.28.181/tcp/50913/p2p/12D3KooWJM29sadqienYmVvA7GyMLThkKdDKc63kCJ7zmHdFDsSp/p2p-circuit/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B';
-//const targetAddr = '12D3KooWRwDMmqPkdxg2yPkuiW1gPCgcdHGJtyaGfxdgAuEpNzD7';
-//const targetAddr = '/ip4/88.182.31.209/tcp/8988/p2p/12D3KooWPDErmALnzdFsWP72GQ7mf9dvjLsAv9eqQuyuX3UcaggJ/p2p-circuit/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7'; // ZAYGA
-if (!targetAddr) throw new Error('the target address needs to be specified as a parameter');
+const bootAddrStr = '/dns4/contrast.observer/tcp/27260';
+//const bootAddrStr = '/dns4/pinkparrot.observer/tcp/27261'; // RASPI ANONYMOUS (NO DIFFERENCE)
+//const bootAddrStr = '/dns4/pinkparrot.observer/tcp/27261/p2p/12D3KooWP8KNmdnJKmXJ64bJVMvauSdrUVbmixe3zJzapp6oWZG7'; // RASPI
+//const bootAddrStr = '/dns4/pinkparrot.science/tcp/27260'; // PINKPARROT
+//const bootAddrStr = '/ip4/192.168.4.22/tcp/27260' // PINKPARROT LOCAL
+//const bootAddrStr = '/dns4/pinkparrot.science/tcp/27260/p2p/12D3KooWDaPq8QDCnLmA1xCNFMKPpQtbwkTEid2jSsi5EoYneZ9B'; // PINKPARROT: DaPq...
+if (!bootAddrStr) throw new Error('the bootAddrStr address needs to be specified as a parameter');
 
 //process.env.DEBUG = 'libp2p:dcutr*';
 const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]);
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 //const dhtService = kadDHT({ enabled: true, randomWalk: true });
 const node = await createLibp2p({
-	//connectionGater: { denyDialMultiaddr: () => false },
+	connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: {
-		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'], // '/ip4/0.0.0.0/udp/0/webrtc-direct'],
+		listen: ['/ip4/0.0.0.0/tcp/0'], // '/ip4/0.0.0.0/udp/0/webrtc-direct'],
 		announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
 		//announceFilter: (addrs) => [], // anonymous
 	},
+	//transports: [tcp(), circuitRelayTransport({ discoverRelays: 3 })],
 	transports: [tcp(), circuitRelayTransport({ discoverRelays: 3, relayFilter: FILTERS.filterRelayAddrs })], // webRTCDirect(), webSockets()
 	connectionEncrypters: [noise()],
 	streamMuxers: [yamux()],
@@ -211,7 +207,7 @@ async function tryConnectMorePeersLoop() {
 }
 async function initBootConnectionLight() {
 	try {
-		const con = await node.dial(multiaddr(bootAddr), { signal: AbortSignal.timeout(3000) });
+		const con = await node.dial(multiaddr(bootAddrStr), { signal: AbortSignal.timeout(3000) });
 		const peerId = con.remotePeer;
         const peerIdStr = peerId.toString();
 	} catch (error) {

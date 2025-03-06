@@ -112,7 +112,7 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('self:peer:update', async (evt) => {
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
                 for (const addr of evt.detail.peer.addresses) console.log(addr.multiaddr.toString());
-
+                return true;
                 /*for (const { multiaddr, isCertified } of evt.detail.peer.addresses) {
                     //if (!isCertified) continue; //? to early ?
                     const isCircuitRelay = multiaddr.toString().endsWith('p2p-circuit');
@@ -218,6 +218,7 @@ class P2PNetwork extends EventEmitter {
         for (const relayPeerIdStr in this.myRelays) {
             console.log(`Relay ${relayPeerIdStr} is ${this.myRelays[relayPeerIdStr] ? 'active' : 'inactive'}`);
         }
+        return true;
     }
     #handleRelayShare = async ({ stream, connection }) => {
         console.log('RELAY SHARE');
@@ -274,6 +275,7 @@ class P2PNetwork extends EventEmitter {
         const dialablePeers = Object.values(this.peers).filter(peer => peer.dialable).length;
         // PeerMap {map: Map(0)}
         const peerMap = this.p2pNode.services.circuitRelay?.reservations;
+        //const relayed
         const relayedPeers = peerMap ? peerMap.map.size : 0;
 
         this.connexionResume = {
