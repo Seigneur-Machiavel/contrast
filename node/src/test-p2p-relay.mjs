@@ -41,7 +41,7 @@ const hash = new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1
 const privateKeyObject = await generateKeyPairFromSeed("Ed25519", hash);
 //const dhtService = kadDHT({ enabled: true, randomWalk: true });
 const node = await createLibp2p({
-	connectionGater: { denyDialMultiaddr: () => false },
+	//connectionGater: { denyDialMultiaddr: () => false },
 	privateKey: privateKeyObject,
 	addresses: {
 		listen: ['/p2p-circuit', '/ip4/0.0.0.0/tcp/0'], // '/ip4/0.0.0.0/udp/0/webrtc-direct'],
@@ -68,7 +68,7 @@ const node = await createLibp2p({
 			autoRelay: { enabled: true, maxListeners: 20 },
 		},*/
 	},
-	//peerDiscovery: [dhtService]
+	peerDiscovery: []
 })
 await node.start();
 

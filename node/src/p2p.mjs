@@ -86,7 +86,7 @@ class P2PNetwork extends EventEmitter {
                 privateKey: privateKeyObject,
                 streamMuxers: [yamux()],
                 connectionEncrypters: [noise()],
-                connectionGater: {denyDialMultiaddr: () => false},
+                //connectionGater: {denyDialMultiaddr: () => false},
                 transports: [tcp(), circuitRelayTransport({ discoverRelays: 2, relayFilter: FILTERS.filterRelayAddrs })], //webRTCDirect(),
                 addresses: {
                     announceFilter: (addrs) => FILTERS.multiAddrs(addrs, 'PUBLIC'),
@@ -101,7 +101,7 @@ class P2PNetwork extends EventEmitter {
                     nat: uPnPNAT({ description: 'contrast-node', ttl: 7200, keepAlive: true }),
                     circuitRelay: circuitRelayServer({ reservations: { maxReservations: 4 } }),
                 },
-                //peerDiscovery
+                peerDiscovery: []
             });
 
             p2pNode.addEventListener('self:peer:update', async (evt) => {
