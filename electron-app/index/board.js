@@ -69,15 +69,16 @@ ipcRenderer.on('connexion-resume', (event, ...args) => {
 	const resumeElement = document.getElementById('connexion-resume');
 	if (!resumeElement) return;
 
-	const { totalPeers, connectedBootstraps, totalBootstraps } = args[0];
-	if (totalPeers < 2 ) { 
+	const { totalPeers, connectedBootstraps, totalBootstraps, relayedPeers } = args[0];
+	const appendText = relayedPeers > 0 ? ` [${relayedPeers} relayed]` : '';
+	if (totalPeers < 1 ) { 
 		resumeElement.innerText = 'Connecting network 🔴';
 	} else if (totalPeers < 5) {
-		resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟠`;
+		resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟠${appendText}`;
 	} else if (totalPeers < 10) {
-		resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟡`;
+		resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟡${appendText}`;
 	} else {
-		resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟢`;
+		resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟢${appendText}`;
 	}
 });
 ipcRenderer.on('assistant-message', (event, ...args) => assistant.sendMessage(args[0], 'system'));

@@ -37,6 +37,7 @@ export class Node {
     account;
     roles;
     listenAddresses = ['/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0'];
+    isRelayCandidate = false;
     version;
     validatorRewardAddress;
     useDevArgon2 = false;
@@ -76,12 +77,18 @@ export class Node {
     ignoreIncomingBlocks = false;
     logValidationTime = false;
 
-    /** @param {Account} account @param {string[]} roles @param {string[]} listenAddresses @param {number} version */
-    constructor(account, roles = ['validator'], listenAddresses, version = 1) {
+    /**
+     * @param {Account} account - A contrast wallet account used to identify the node and sign transactions
+     * @param {string[]} roles - 'miner', 'validator', 'observer'
+     * @param {string[]} listenAddresses - The addresses the node will listen to
+     * @param {boolean} isRelayCandidate - If the node is a candidate to relay p2p connections
+     * @param {number} version */
+    constructor(account, roles = ['validator'], listenAddresses, isRelayCandidate, version = 1) {
         this.id = account.address;
         this.account = account;
         this.roles = roles; // 'miner', 'validator', ...
         this.listenAddresses = listenAddresses;
+        this.isRelayCandidate = isRelayCandidate;
         this.version = version;
         this.validatorRewardAddress = account.address;
 
@@ -153,7 +160,7 @@ export class Node {
 
         this.updateState("Initializing P2P network");
         const uniqueHash = await this.account.getUniqueHash(64);
-        await this.p2pNetwork.start(uniqueHash);
+        await this.p2pNetwork.start(uniqueHash, this.isRelayCandidate);
         this.syncHandler = new SyncHandler(this);
         const uniqueTopics = this.#subscribeTopicsRelatedToRoles(this.roles);
         for (const topic of uniqueTopics) { this.p2pNetwork.subscribe(topic, this.p2pHandler.bind(this)); }

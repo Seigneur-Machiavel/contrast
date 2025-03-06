@@ -12,6 +12,7 @@ import { serializer } from '../../utils/serializer.mjs';
 import { Wallet } from './wallet.mjs';
 import { Node } from './node.mjs';
 import { CallBackManager } from './websocketCallback.mjs';
+import { EasyUpnp } from '../../utils/easy-upnp.mjs';
 
 /**
 * @typedef {import("./wallet.mjs").Account} Account
@@ -123,6 +124,7 @@ export class DashboardWsApp {
     stopping = false;
     stopped = false;
     waitingForPrivKey = false;
+    portMapped;
     /** @param {Node} node @param {CryptoLight} cryptoLight */
     constructor(node, cryptoLight, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
@@ -139,6 +141,8 @@ export class DashboardWsApp {
         /** @type {WebSocketServer} */
         this.wss = null;
 
+        // try to map the port (promise takes some time to resolve)
+        this.portMapped = EasyUpnp.tryPortMappingUntilSuccess([nodePort]);
         this.readableNow = () => { return `${new Date().toLocaleTimeString()}:${new Date().getMilliseconds()}` };
         if (autoInit) this.init();
         this.#stopNodeIfRequestedLoop();
@@ -204,7 +208,8 @@ export class DashboardWsApp {
         await this.#wallet.saveAccounts();
 
         const listenAddresses = [`/ip4/0.0.0.0/tcp/${this.nodePort}`]; // '/ip4/0.0.0.0/tcp/0'
-        this.node = new Node(derivedAccounts[0], ['validator', 'miner', 'observer'], listenAddresses);
+        const isRelayCandidate = await this.portMapped ? true : false;
+        this.node = new Node(derivedAccounts[0], ['validator', 'miner', 'observer'], listenAddresses, isRelayCandidate);
         this.node.minerAddress = derivedAccounts[1].address;
         await this.node.start();
 

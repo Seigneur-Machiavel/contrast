@@ -11,6 +11,7 @@
   "author": "The Contrast Team",
   "license": "ISC",
   "dependencies": {
+    "@achingbrain/nat-port-mapper": "^4.0.2",
     "@chainsafe/libp2p-gossipsub": "^14.1.0",
     "@chainsafe/libp2p-noise": "^16.0.0",
     "@chainsafe/libp2p-yamux": "^7.0.1",
