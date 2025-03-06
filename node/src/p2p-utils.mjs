@@ -110,7 +110,7 @@ export class FILTERS {
 export class PUBSUB {
     static TOPIC_MAX_BYTES = {
         'self:peer:update': 1024,
-        'peer:connect': 2048,
+        'pub:connect': 2048,
         'peer:disconnect': 1024,
         'new_transaction': BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02,
         'new_block_candidate': BLOCKCHAIN_SETTINGS.maxBlockSize * 1.04,

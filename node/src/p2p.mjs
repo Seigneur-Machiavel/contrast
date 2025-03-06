@@ -137,11 +137,16 @@ class P2PNetwork extends EventEmitter {
                 //this.peersManager.digestConnectAddr(myAddrStr);
                 //this.broadcast('self:peer:update', { id: p2pNode.peerId.toString(), addr: myAddrStr });
             });
-            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+            
             p2pNode.addEventListener('transport:listening', this.#handleRelayListening); //? useless ?
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
             p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
             p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+
+            p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
+            p2pNode.services.pubsub.subscribe('pub:connect');
+            p2pNode.services.pubsub.subscribe('pub:disconnect');
+
             p2pNode.handle(PROTOCOLS.RELAY_SHARE, this.#handleRelayShare);
             console.log(p2pNode.getProtocols())
 
@@ -267,14 +272,16 @@ class P2PNetwork extends EventEmitter {
     }
     #handlePeerConnect = async (event) => {
         const peerIdStr = event.detail.toString();
+        const cons = this.p2pNode.getConnections(event.detail);
         const unlimitedCon = this.p2pNode.getConnections(event.detail).find(con => !con.limits);
 		this.miniLogger.log(`peer:connect ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`, (m) => console.debug(m));
         this.#updatePeer(peerIdStr, { dialable: unlimitedCon, id: event.detail }, unlimitedCon ? 'direct connection' : 'relayed connection');
 
         // Probably only one address or none
-        for (const addr of FILTERS.multiAddrs(event.detail.addresses, 'PUBLIC', undefined, [27260, 27269])) {
+        const addresses = cons.map(con => con.remoteAddr);
+        for (const addr of FILTERS.multiAddrs(addresses, 'PUBLIC', undefined, [27260, 27269])) {
                 this.peersManager.digestConnectEvent(this.p2pNode.peerId.toString(), addr.toString());
-                this.broadcast('peer:connect', addr.toString());
+                this.broadcast('pub:connect', addr.toString());
         }
 
         await this.#updateConnexionResume();
@@ -286,7 +293,7 @@ class P2PNetwork extends EventEmitter {
         if (this.connectedBootstrapNodes[peerIdStr]) delete this.connectedBootstrapNodes[peerIdStr];
 
         this.peersManager.digestDisconnectEvent(this.p2pNode.peerId.toString(), peerIdStr);
-        this.broadcast('peer:disconnect', peerIdStr);
+        this.broadcast('pub:disconnect', peerIdStr);
         await this.#updateConnexionResume();
     }
 
@@ -411,10 +418,10 @@ class P2PNetwork extends EventEmitter {
 
         const content = PUBSUB.DESERIALIZE(topic, data);
         switch (topic) {
-            case 'peer:connect':
+            case 'pub:connect':
                 this.peersManager.digestConnectEvent(from.toString(), content);
                 return; // no need to emit
-            case 'peer:disconnect':
+            case 'pub:disconnect':
                 this.peersManager.digestDisconnectEvent(content);
                 return; // no need to emit
         }
@@ -426,7 +433,7 @@ class P2PNetwork extends EventEmitter {
     async broadcast(topic, message) {
         if (Object.keys(this.peers).length === 0) return;
         
-        const emitSelf = topic === 'peer:connect' || topic === 'peer:disconnect';
+        //const emitSelf = topic === 'pub:connect' || topic === 'pub:disconnect';
         try {
             const serialized = PUBSUB.SERIALIZE(topic, message);
             await this.p2pNode.services.pubsub.publish(topic, serialized); // { emitSelf }
