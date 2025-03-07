@@ -441,14 +441,17 @@ class P2PNetwork extends EventEmitter {
     /** @param {CustomEvent} event */
     #handlePubsubMessage = async (event) => {
         const { topic, data, from } = event.detail;
-        if (!PUBSUB.VALIDATE(topic, data)) return;
+        if (!PUBSUB.VALIDATE(topic, data)) 
+            return;
 
         const content = PUBSUB.DESERIALIZE(topic, data);
         switch (topic) {
             case 'self:pub:update:add':
+                console.info('SELF PUB UPDATE ADD', content);
                 this.peersManager.digestSelfUpdateAddEvent(from.toString(), content);
                 return; // no need to emit
             case 'self:pub:update:remove':
+                console.info('SELF PUB UPDATE REMOVE', content);
                 this.peersManager.digestSelfUpdateRemoveEvent(from.toString(), content);
                 return; // no need to emit
             case 'pub:connect':
