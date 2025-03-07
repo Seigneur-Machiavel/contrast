@@ -48,6 +48,7 @@ class P2PNetwork extends EventEmitter {
     miniLogger = new MiniLogger('P2PNetwork');
     timeSynchronizer;
     myAddr; // my ip address (only filled if I am a bootstrap node)
+    addresses; // my listening addresses
     connectedBootstrapNodes = {};
     connexionResume = { totalPeers: 0, connectedBootstraps: 0, totalBootstraps: 0, relayedPeers: 0 };
     targetBootstrapNodes = 3;
@@ -121,26 +122,22 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('self:peer:update', async (evt) => {
                 if (evt.detail.peer.addresses.length === 0) return;
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
-                //for (const addr of evt.detail.peer.addresses) console.log(addr.multiaddr.toString());
-                // should be only one address
-                if (evt.detail.peer.addresses.length > 1) {
-                    console.warn('More than one address: ', evt.detail.peer.addresses.map(addr => addr.multiaddr.toString()));
-                    return;
+                
+                for (const addr of evt.detail.peer.addresses) { // search for new addresses
+                    if (this.addresses.includes(addr.toString())) continue;
+                    this.peersManager.digestConnectEvent(p2pNode.peerId.toString(), addr.toString());
+                    this.broadcast('pub:connect', addr.toString());
                 }
 
-                const myAddrStr = evt.detail.peer.addresses[0].multiaddr.toString();
-                if (myAddrStr.split('/p2p/').length !== 2) {
-                    console.warn('Invalid address: ', myAddrStr);
-                    return;
+                for (const addrStr of this.addresses) { // search for removed addresses
+                    if (evt.detail.peer.addresses.includes(addr)) continue;
+                    this.peersManager.digestDisconnectEvent(p2pNode.peerId.toString(), addrStr);
+                    this.broadcast('pub:disconnect', addrStr);
                 }
 
-                //this.peersManager.digestConnectAddr(myAddrStr);
-                //this.broadcast('self:peer:update', { id: p2pNode.peerId.toString(), addr: myAddrStr });
-                this.peersManager.digestConnectEvent(p2pNode.peerId.toString(), myAddrStr);
-                this.broadcast('self:pub:update', myAddrStr);
+                this.addresses = evt.detail.peer.addresses.map(addr => addr.toString()); // local update
             });
             
-            p2pNode.addEventListener('transport:listening', this.#handleRelayListening); //? useless ?
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
             p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
             p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
@@ -165,7 +162,6 @@ class P2PNetwork extends EventEmitter {
         //this.#tryConnectMorePeersLoop();
         this.#peerUpdateOnDirectConnectionUpgrade(); // SHOULD BE REMOVED IF CONNECT/DISCOVERY EVENTS ARE ENOUGH
         this.#bootstrapsConnectionsLoop();
-        this.#peerAdvertisingLoop();
     }
     
     async #tryConnectMorePeersLoop(delay = 10_000) {
@@ -188,7 +184,7 @@ class P2PNetwork extends EventEmitter {
         }
     }
     /** @param {Multiaddr[]} multiAddrs */
-    async #dialSharedPeersFromRelay(multiAddrs) {
+    async #dialSharedPeersFromRelay(multiAddrs) { // DEPRECATED -> usage replaced by pub:connect
         /** @type {string[]} */
         let sharedPeerIdsStr;
 
@@ -220,37 +216,7 @@ class P2PNetwork extends EventEmitter {
         }
     }
 
-    async #peerAdvertisingLoop(delay = 20_000) {
-        while(true) {
-            await new Promise(resolve => setTimeout(resolve, delay));
-            
-
-        }
-    }
-    #handleRelayListening = async (event) => {
-        const relayPeerIdStr = event.detail.relay?.toString();
-        if (!relayPeerIdStr) return;
-
-        const relayAddrsStr = FILTERS.multiAddrs(event.detail.listeningAddrs, 'PUBLIC').map(addr => addr.toString());
-        if (relayAddrsStr.length === 0) { this.myRelays[relayPeerIdStr] = false; return } // not relayed anymore
-
-        //this.peersManager.digestConnectAddr(relayAddrsStr[0]); // should be only one addr
-
-        const myPeerIdStr = this.p2pNode.peerId.toString();
-        for (const relayAddrStr of relayAddrsStr) { // probably only one addr
-            if (!relayAddrStr.endsWith('p2p-circuit')) continue;
-            const relayedAddrStr = `${relayAddrStr}/p2p/${myPeerIdStr}`;
-            console.log(`Listening from relay: ${relayedAddrStr}`);
-            this.myRelays[relayPeerIdStr] = true; // relayed by this peer
-        }
-
-        // log
-        for (const relayPeerIdStr in this.myRelays) {
-            console.log(`Relay ${relayPeerIdStr} is ${this.myRelays[relayPeerIdStr] ? 'active' : 'inactive'}`);
-        }
-        return true;
-    }
-    #handleRelayShare = async ({ stream, connection }) => {
+    #handleRelayShare = async ({ stream, connection }) => { // DEPRECATED -> usage replaced by pub:connect
         console.log('RELAY SHARE');
         if (!stream) { return; }
         await stream.closeRead(); // nothing to read
@@ -283,8 +249,8 @@ class P2PNetwork extends EventEmitter {
         // Probably only one address or none
         const addresses = cons.map(con => con.remoteAddr);
         for (const addr of FILTERS.multiAddrs(addresses, 'PUBLIC', undefined, [27260, 27269])) {
-                this.peersManager.digestConnectEvent(this.p2pNode.peerId.toString(), addr.toString());
-                this.broadcast('pub:connect', addr.toString());
+            this.peersManager.digestConnectEvent(this.p2pNode.peerId.toString(), addr.toString());
+            this.broadcast('pub:connect', addr.toString());
         }
 
         await this.#updateConnexionResume();
@@ -325,6 +291,9 @@ class P2PNetwork extends EventEmitter {
             totalBootstraps: this.myAddr ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length,
             relayedPeers
         };
+
+        // new peers logs from peersManager
+        //return;
 
         const allPeers = await this.p2pNode.peerStore.all();
         allPeers.forEach(peer => { peer.id.toString(); }); //TODO REMOVE AFTER DEBUGING

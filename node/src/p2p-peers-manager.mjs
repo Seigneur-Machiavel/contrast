@@ -68,10 +68,12 @@ export class PeersManager {
     /** @param {string} id emitter peerIdStr @param {string} addr MultiAddress.toString() */
     digestConnectEvent(id, addr) {
         if (typeof id !== 'string' || typeof addr !== 'string') return;
-        if (!addr.includes('/p2p/')) return;
-        const { peerIdStr, relayedIdStr } = this.#destructureAddr(addr);
 
-        if (!relayedIdStr) this.setPeerDirectAddr(peerIdStr, addr);
+        const address = addr.endsWith('p2p-circuit') ? `${addr}/p2p/${id}` : addr;
+        if (!address.includes('/p2p/')) return;
+        const { peerIdStr, relayedIdStr } = this.#destructureAddr(address);
+
+        if (!relayedIdStr) this.setPeerDirectAddr(peerIdStr, address);
         else if (id === relayedIdStr) this.addRelayedTrough(id, peerIdStr);
         
         if (id !== peerIdStr) this.addNeighbour(peerIdStr, id);
