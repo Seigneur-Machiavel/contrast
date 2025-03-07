@@ -48,7 +48,7 @@ class P2PNetwork extends EventEmitter {
     miniLogger = new MiniLogger('P2PNetwork');
     timeSynchronizer;
     myAddr; // my ip address (only filled if I am a bootstrap node)
-    addresses; // my listening addresses
+    addresses = []; // my listening addresses
     connectedBootstrapNodes = {};
     connexionResume = { totalPeers: 0, connectedBootstraps: 0, totalBootstraps: 0, relayedPeers: 0 };
     targetBootstrapNodes = 3;
