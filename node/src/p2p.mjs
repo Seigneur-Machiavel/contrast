@@ -49,6 +49,7 @@ class P2PNetwork extends EventEmitter {
     timeSynchronizer;
     myIpAddr; // my ip address (only filled if I am a bootstrap node)
     addresses = []; // my listening addresses
+    myRelayCircuitAddrs = {}; // my relay circuit addresses by relayPeerIdStr (endWith('/p2p-circuit'))
     connectedBootstrapNodes = {};
     connexionResume = { totalPeers: 0, connectedBootstraps: 0, totalBootstraps: 0, relayedPeers: 0 };
     targetBootstrapNodes = 2;
@@ -142,6 +143,7 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
             p2pNode.addEventListener('peer:disconnect', this.#handlePeerDisconnect);
             p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
+            p2pNode.addEventListener('transport:listening', this.#handleListening);
 
             p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
             p2pNode.services.pubsub.subscribe('self:pub:update:add');
@@ -222,6 +224,7 @@ class P2PNetwork extends EventEmitter {
         // this one is based on this.peerManager.store
         while(true) {
             await new Promise(resolve => setTimeout(resolve, delay));
+            if (this.myIpAddr) break; // bootstrap nodes don't need enhance connections
 
             const connectedPeersConType = {}; // peerId.toString()
             const cons = this.p2pNode.getConnections();
@@ -264,6 +267,27 @@ class P2PNetwork extends EventEmitter {
                     console.error('FAILED DIAL FROM STORE', error.message);
                 }
             }
+        }
+    }
+    #handleListening = async (event) => {
+        const myPeerIdStr = this.peersManager.idStr;
+        const relayPeerIdStr = event.detail.relay?.toString();
+        if (!relayPeerIdStr) return;
+    
+        /** @type {string[]} */
+        const relayAddrsStr = event.detail.listeningAddrs.map(addr => addr.toString());
+
+        // probably only one address... or none if relay disabled
+        let relayAddrStr = relayAddrsStr[0] || this.myRelayCircuitAddrs[relayPeerIdStr];
+        if (!relayAddrStr.endsWith('p2p-circuit')) return; // should not append
+
+        if (relayAddrsStr.length === 0) { // relay reservation closed
+            this.peersManager.digestSelfUpdateRemoveEvent(myPeerIdStr, relayAddrStr);
+            this.broadcast('self:pub:update:remove', relayAddrStr);
+        } else {
+            this.myRelayCircuitAddrs[relayPeerIdStr] = relayAddrStr;
+            this.peersManager.digestSelfUpdateAddEvent(myPeerIdStr, relayAddrStr);
+            this.broadcast('self:pub:update:add', relayAddrStr);
         }
     }
     #handleRelayShare = async ({ stream, connection }) => { // DEPRECATED -> usage replaced by pub:connect
@@ -441,8 +465,7 @@ class P2PNetwork extends EventEmitter {
     /** @param {CustomEvent} event */
     #handlePubsubMessage = async (event) => {
         const { topic, data, from } = event.detail;
-        if (!PUBSUB.VALIDATE(topic, data)) 
-            return;
+        if (!PUBSUB.VALIDATE(topic, data)) return;
 
         const content = PUBSUB.DESERIALIZE(topic, data);
         switch (topic) {
@@ -468,11 +491,13 @@ class P2PNetwork extends EventEmitter {
     /** @param {string} topic */
     async broadcast(topic, message) {
         if (Object.keys(this.peers).length === 0) return;
+
+        if (PUBSUB.TOPIC_BROADCAST_DELAY[topic]) // delay the broadcast if needed
+            await new Promise(resolve => setTimeout(resolve, PUBSUB.TOPIC_BROADCAST_DELAY[topic]));
         
-        //const emitSelf = topic === 'pub:connect' || topic === 'pub:disconnect';
         try {
             const serialized = PUBSUB.SERIALIZE(topic, message);
-            await this.p2pNode.services.pubsub.publish(topic, serialized); // { emitSelf }
+            await this.p2pNode.services.pubsub.publish(topic, serialized);
         } catch (error) {
             if (error.message === "PublishError.NoPeersSubscribedToTopic") return error;
             this.miniLogger.log(`Broadcast error on topic **${topic}**: ${error.message}`, (m) => console.error(m));

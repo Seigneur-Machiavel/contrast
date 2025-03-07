@@ -108,10 +108,6 @@ node.handle(PROTOCOLS.RELAY_SHARE, async ({ stream }) => {
 	console.log('####--- Received a stream: RELAY_SHARE_PROTOCOL')
 	//await new Promise(resolve => setTimeout(resolve, 3000));
 });
-node.addEventListener('self:peer:update', (evt) => {
-	//console.log('\n -- selfPeerUpdate:');
-	//for (const addr of node.getMultiaddrs()) console.log(addr.toString());
-});
 async function askRelayShare(multiAddrs) {
 	if (!multiAddrs || multiAddrs.length === 0) return;
 	try {

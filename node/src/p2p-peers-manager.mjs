@@ -39,12 +39,6 @@ export class PeersManager {
         if (!this.store[neighbourIdStr].neighboursIds.includes(peerIdStr))
             this.store[neighbourIdStr].neighboursIds.push(peerIdStr);
     }
-    /** @param {string} peerIdStr @param {string} relayIdStr */
-    addRelayedTrough(peerIdStr, relayIdStr) {
-        if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
-        if (this.store[peerIdStr].relayedTroughsIds.includes(relayIdStr)) return;
-        this.store[peerIdStr].relayedTroughsIds.push(relayIdStr);
-    }
     /** @param {string} peerIdStr @param {string} neighbourIdStr */
     unsetNeighbours(peerIdStr, neighbourIdStr) {
         if (this.store[peerIdStr]) {
@@ -56,6 +50,13 @@ export class PeersManager {
             const index = this.store[neighbourIdStr].neighboursIds.indexOf(peerIdStr);
             if (index >= 0) this.store[neighbourIdStr].neighboursIds.splice(index, 1);
         }
+    }
+
+    /** @param {string} peerIdStr @param {string} relayIdStr */
+    addRelayedTrough(peerIdStr, relayIdStr) {
+        if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
+        if (this.store[peerIdStr].relayedTroughsIds.includes(relayIdStr)) return;
+        this.store[peerIdStr].relayedTroughsIds.push(relayIdStr);
     }
     /** @param {string} peerIdStr @param {string} relayIdStr */
     removeRelayedTrough(peerIdStr, relayIdStr) {
