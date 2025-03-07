@@ -72,6 +72,7 @@ class P2PNetwork extends EventEmitter {
     constructor(timeSynchronizer, listenAddresses = []) {
         super();
         this.timeSynchronizer = timeSynchronizer;
+        this.peersManager.timeSynchronizer = timeSynchronizer;
         for (const addr of listenAddresses)
             if (!this.options.listenAddresses.includes(addr)) this.options.listenAddresses.push(addr);
     }
@@ -124,18 +125,19 @@ class P2PNetwork extends EventEmitter {
                 if (evt.detail.peer.addresses.length === 0) return;
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
                 
+                const now = this.timeSynchronizer?.getCurrentTime() || Date.now();
                 const publicAddrs = FILTERS.multiAddrs(evt.detail.peer.addresses.map(obj => obj.multiaddr), 'PUBLIC', undefined, [27260, 27269]);
                 const peerAddrsStr = publicAddrs.map(addr => addr.toString());
                 for (const addrStr of peerAddrsStr) { // search for new addresses
                     if (this.addresses.includes(addrStr)) continue;
-                    this.peersManager.digestSelfUpdateAddEvent(myPeerIdStr, addrStr);
-                    this.broadcast('self:pub:update:add', addrStr);
+                    this.peersManager.digestSelfUpdateAddEvent(myPeerIdStr, addrStr, now);
+                    this.broadcast('self:pub:update:add', { addrStr, timestamp: now });
                 }
 
                 for (const addrStr of this.addresses) { // search for removed addresses
                     if (peerAddrsStr.includes(addrStr)) continue;
-                    this.peersManager.digestSelfUpdateRemoveEvent(myPeerIdStr, addrStr);
-                    this.broadcast('self:pub:update:remove', addrStr);
+                    this.peersManager.digestSelfUpdateRemoveEvent(myPeerIdStr, addrStr, now);
+                    this.broadcast('self:pub:update:remove', { addrStr, timestamp: now });
                 }
 
                 this.addresses = peerAddrsStr; // local update
@@ -279,16 +281,18 @@ class P2PNetwork extends EventEmitter {
         const relayAddrsStr = event.detail.listeningAddrs.map(addr => addr.toString());
 
         // probably only one address... or none if relay disabled
-        let relayAddrStr = relayAddrsStr[0] || this.myRelayCircuitAddrs[relayPeerIdStr];
-        if (!relayAddrStr.endsWith('p2p-circuit')) return; // should not append
+        let addrStr = relayAddrsStr[0] || this.myRelayCircuitAddrs[relayPeerIdStr];
+        if (!addrStr.endsWith('p2p-circuit')) return; // should not append
 
+        const now = this.timeSynchronizer?.getCurrentTime() || Date.now();
         if (relayAddrsStr.length === 0) { // relay reservation closed
-            this.peersManager.digestSelfUpdateRemoveEvent(myPeerIdStr, relayAddrStr);
-            this.broadcast('self:pub:update:remove', relayAddrStr);
+            delete this.myRelayCircuitAddrs[relayPeerIdStr];
+            this.peersManager.digestSelfUpdateRemoveEvent(myPeerIdStr, addrStr, now);
+            this.broadcast('self:pub:update:remove', { addrStr, timestamp: now });
         } else {
-            this.myRelayCircuitAddrs[relayPeerIdStr] = relayAddrStr;
-            this.peersManager.digestSelfUpdateAddEvent(myPeerIdStr, relayAddrStr);
-            this.broadcast('self:pub:update:add', relayAddrStr);
+            this.myRelayCircuitAddrs[relayPeerIdStr] = addrStr;
+            this.peersManager.digestSelfUpdateAddEvent(myPeerIdStr, addrStr, now);
+            this.broadcast('self:pub:update:add', { addrStr, timestamp: now });
         }
     }
     #handleRelayShare = async ({ stream, connection }) => { // DEPRECATED -> usage replaced by pub:connect
@@ -321,14 +325,15 @@ class P2PNetwork extends EventEmitter {
 		this.miniLogger.log(`peer:connect ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`, (m) => console.debug(m));
         this.#updatePeer(peerIdStr, { dialable: unlimitedCon, id: event.detail }, unlimitedCon ? 'direct connection' : 'relayed connection');
 
-        if (unlimitedCon) this.peersManager.setNeighbours(this.peersManager.idStr, peerIdStr);
-        else this.peersManager.addRelayedTrough(this.peersManager.idStr, peerIdStr);
+        const now = this.timeSynchronizer?.getCurrentTime() || Date.now();
+        if (unlimitedCon) this.peersManager.setNeighbours(this.peersManager.idStr, peerIdStr, now);
+        else this.peersManager.addRelayedTrough(this.peersManager.idStr, peerIdStr, now);
 
         // Probably only one address or none
         const addresses = cons.map(con => con.remoteAddr);
         for (const addr of FILTERS.multiAddrs(addresses, 'PUBLIC', undefined, [27260, 27269])) {
-            this.peersManager.digestConnectEvent(this.peersManager.idStr, addr.toString());
-            this.broadcast('pub:connect', addr.toString());
+            this.peersManager.digestConnectEvent(this.peersManager.idStr, addr.toString(), now);
+            this.broadcast('pub:connect', { addrStr: addr.toString(), timestamp: now });
         }
 
         await this.#updateConnexionResume();
@@ -340,8 +345,9 @@ class P2PNetwork extends EventEmitter {
         if (this.peers[peerIdStr]) delete this.peers[peerIdStr];
         if (this.connectedBootstrapNodes[peerIdStr]) delete this.connectedBootstrapNodes[peerIdStr];
 
-        this.peersManager.digestDisconnectEvent(this.peersManager.idStr, peerIdStr);
-        this.broadcast('pub:disconnect', peerIdStr);
+        const now = this.timeSynchronizer?.getCurrentTime() || Date.now();
+        this.peersManager.digestDisconnectEvent(this.peersManager.idStr, peerIdStr, now);
+        this.broadcast('pub:disconnect', { peerIdStr, timestamp: now });
         await this.#updateConnexionResume();
     }
 
@@ -465,24 +471,27 @@ class P2PNetwork extends EventEmitter {
     }
     /** @param {CustomEvent} event */
     #handlePubsubMessage = async (event) => {
-        const { topic, data, from } = event.detail;
+        const { topic, data, from, type } = event.detail;
         if (!PUBSUB.VALIDATE(topic, data)) return;
-
+        
+        //? type = 'signed' | 'unsigned' | 'raw'
         const content = PUBSUB.DESERIALIZE(topic, data);
         switch (topic) {
             case 'self:pub:update:add':
-                console.info('SELF PUB UPDATE ADD', content);
-                this.peersManager.digestSelfUpdateAddEvent(from.toString(), content);
+                console.info(`SELF PUB UPDATE ADD ${from.toString()}`, content);
+                this.peersManager.digestSelfUpdateAddEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'self:pub:update:remove':
-                console.info('SELF PUB UPDATE REMOVE', content);
-                this.peersManager.digestSelfUpdateRemoveEvent(from.toString(), content);
+                console.info(`SELF PUB UPDATE REMOVE ${from.toString()}`, content);
+                this.peersManager.digestSelfUpdateRemoveEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:connect':
-                this.peersManager.digestConnectEvent(from.toString(), content);
+                console.info(`PUB CONNECT ${from.toString()}`, content);
+                this.peersManager.digestConnectEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:disconnect':
-                this.peersManager.digestDisconnectEvent(content);
+                console.info(`PUB DISCONNECT ${from.toString()}`, content);
+                this.peersManager.digestDisconnectEvent(from.toString(), content.peerIdStr, content.timestamp);
                 return; // no need to emit
         }
 

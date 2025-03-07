@@ -111,9 +111,9 @@ export class FILTERS {
 export class PUBSUB {
     static TOPIC_BROADCAST_DELAY = {
         'self:pub:update:add': 2000,
-        'self:pub:update:remove': 1000,
+        'self:pub:update:remove': 2000,
         'pub:connect': 2000,
-        'pub:disconnect': 1000,
+        'pub:disconnect': 2000,
     }
 
     static TOPIC_MAX_BYTES = {

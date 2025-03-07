@@ -3,6 +3,7 @@ import { multiaddr } from '@multiformats/multiaddr';
 
 /**
  * @typedef {import("@multiformats/multiaddr").Multiaddr} Multiaddr
+ * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
  */
 
 /**
@@ -10,7 +11,7 @@ import { multiaddr } from '@multiformats/multiaddr';
  * Theses informations cannot be considered as reliable
  */
 class Peer {
-    lastSeen = 0; // timestamp
+    updateTime = 0; // timestamp
     /** @type {string | undefined} Not includes "/p2p/..." */
     directAddr;
     /** @type {string[]} The peers that are directly connected to this peer */
@@ -20,6 +21,8 @@ class Peer {
 }
 
 export class PeersManager {
+    /** @type {TimeSynchronizer} */
+    timeSynchronizer;
     /** @type {Object<string, Peer>} */
     store = {}; // by peerIdStr
 
@@ -29,55 +32,80 @@ export class PeersManager {
     constructor() {}
 
     // re simplify , only two case
-    /** @param {string} peerIdStr @param {string} neighbourIdStr */
-    setNeighbours(peerIdStr, neighbourIdStr) {
+    /** @param {string} peerIdStr @param {string} neighbourIdStr @param {number} timestamp */
+    setNeighbours(peerIdStr, neighbourIdStr, timestamp) {
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
         if (!this.store[peerIdStr].neighboursIds.includes(neighbourIdStr))
-            this.store[peerIdStr].neighboursIds.push(neighbourIdStr);
+            if (this.updateTimeIfNotOutdated(peerIdStr, timestamp))
+                this.store[peerIdStr].neighboursIds.push(neighbourIdStr);
         
         if (!this.store[neighbourIdStr]) this.store[neighbourIdStr] = new Peer();
         if (!this.store[neighbourIdStr].neighboursIds.includes(peerIdStr))
-            this.store[neighbourIdStr].neighboursIds.push(peerIdStr);
+            if (this.updateTimeIfNotOutdated(neighbourIdStr, timestamp))
+                this.store[neighbourIdStr].neighboursIds.push(peerIdStr);
     }
     /** @param {string} peerIdStr @param {string} neighbourIdStr */
-    unsetNeighbours(peerIdStr, neighbourIdStr) {
-        if (this.store[peerIdStr]) {
-            const index = this.store[peerIdStr].neighboursIds.indexOf(neighbourIdStr);
-            if (index >= 0) this.store[peerIdStr].neighboursIds.splice(index, 1);
-        }
+    unsetNeighbours(peerIdStr, neighbourIdStr, timestamp) {
+        const indexA = this.store[peerIdStr]?.neighboursIds.indexOf(neighbourIdStr);
+        if (indexA && indexA >= 0 && this.updateTimeIfNotOutdated(peerIdStr, timestamp))
+            this.store[peerIdStr].neighboursIds.splice(indexA, 1);
 
-        if (this.store[neighbourIdStr]) {
-            const index = this.store[neighbourIdStr].neighboursIds.indexOf(peerIdStr);
-            if (index >= 0) this.store[neighbourIdStr].neighboursIds.splice(index, 1);
-        }
+        const indexB = this.store[neighbourIdStr]?.neighboursIds.indexOf(peerIdStr);
+        if (indexB && indexB >= 0 && this.updateTimeIfNotOutdated(neighbourIdStr, timestamp))
+            this.store[neighbourIdStr].neighboursIds.splice(indexB, 1);
     }
-
-    /** @param {string} peerIdStr @param {string} relayIdStr */
-    addRelayedTrough(peerIdStr, relayIdStr) {
+    /** @param {string} peerIdStr @param {string} relayIdStr @param {number} timestamp */
+    addRelayedTrough(peerIdStr, relayIdStr, timestamp) {
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
         if (this.store[peerIdStr].relayedTroughsIds.includes(relayIdStr)) return;
+        if (!this.updateTimeIfNotOutdated(peerIdStr, timestamp)) return;
+
         this.store[peerIdStr].relayedTroughsIds.push(relayIdStr);
     }
-    /** @param {string} peerIdStr @param {string} relayIdStr */
-    removeRelayedTrough(peerIdStr, relayIdStr) {
+    /** @param {string} peerIdStr @param {string} relayIdStr @param {number} timestamp */
+    removeRelayedTrough(peerIdStr, relayIdStr, timestamp) {
         if (!this.store[peerIdStr]) return;
+        
         const index = this.store[peerIdStr].relayedTroughsIds.indexOf(relayIdStr);
-        if (index >= 0) this.store[peerIdStr].relayedTroughsIds.splice(index, 1);
+        if (index === -1) return;
+        if (!this.updateTimeIfNotOutdated(peerIdStr, timestamp)) return;
+
+        this.store[peerIdStr].relayedTroughsIds.splice(index, 1);
     }
-    /** @param {string} peerIdStr @param {string} addr */
-    setPeerDirectAddr(peerIdStr, addr) {
+    /** @param {string} peerIdStr @param {string} addr @param {number} timestamp */
+    setPeerDirectAddr(peerIdStr, addr, timestamp) {
         const addrStr = addr.split('/p2p')[0];
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
+        if (!this.updateTimeIfNotOutdated(peerIdStr, timestamp)) return;
+
         this.store[peerIdStr].directAddr = addrStr;
     }
-    unsetPeerDirectAddr(peerIdStr) {
+    /** @param {string} peerIdStr */
+    unsetPeerDirectAddr(peerIdStr, timestamp) {
         if (!this.store[peerIdStr]) return;
+        if (!this.updateTimeIfNotOutdated(peerIdStr, timestamp)) return;
+
         this.store[peerIdStr].directAddr = undefined;
     }
-    /** @param {string} peerIdStr */
-    updateLastSeen(peerIdStr) {
+    /** @param {string} peerIdStr @param {number} [timestamp] */
+    updateTimeIfNotOutdated(peerIdStr, timestamp) {
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
-        this.store[peerIdStr].lastSeen = Date.now();
+        const lastUpdateTime = this.store[peerIdStr]?.updateTime || 0;
+
+        if (lastUpdateTime > timestamp) return false;
+        this.store[peerIdStr].updateTime = timestamp;
+        return true;
+    }
+
+    /** @param {number} timestamp */
+    #validTimestamp(timestamp) {
+        if (typeof timestamp !== 'number') return;
+        if (timestamp % 1 !== 0) return;
+        if (timestamp < 0) return;
+
+        const now = this.timeSynchronizer?.getCurrentTime() || Date.now();
+        if (timestamp > now) return;
+        return true;
     }
     /** @param {string} addr */
     #destructureAddr(addr) {
@@ -86,46 +114,48 @@ export class PeersManager {
             relayedIdStr: addr.split('/p2p-circuit/p2p/')[1] // can be undefined
         }
     }
-    /** @param {string} id @param {string} addr */
-    digestSelfUpdateAddEvent(id, addr) {
+    /** @param {string} id @param {string} addr @param {number} [timestamp] */
+    digestSelfUpdateAddEvent(id, addr, timestamp) {
         if (typeof id !== 'string' || typeof addr !== 'string') return;
+        if (!this.#validTimestamp(timestamp)) return;
+        if (!addr.endsWith('p2p-circuit')) { this.setPeerDirectAddr(id, addr, timestamp); return; }
+
         // new address to reach the peer published by the peer itself
-        this.updateLastSeen(id);
-        if (!addr.endsWith('p2p-circuit')) { this.setPeerDirectAddr(id, addr); return; }
-
         const { peerIdStr, relayedIdStr } = this.#destructureAddr(addr);
         if (!peerIdStr) return;
-        this.addRelayedTrough(id, peerIdStr);
+        this.addRelayedTrough(id, peerIdStr, timestamp);
     }
-    /** @param {string} id @param {string} addr */
-    digestSelfUpdateRemoveEvent(id, addr) {
+    /** @param {string} id @param {string} addr @param {number} [timestamp] */
+    digestSelfUpdateRemoveEvent(id, addr, timestamp) {
         if (typeof id !== 'string' || typeof addr !== 'string') return;
+        if (!this.#validTimestamp(timestamp)) return;
+
         // address to reach the peer published by the peer itself is no longer valid
-        if (!addr.endsWith('p2p-circuit')) { 
-            this.unsetPeerDirectAddr(id); return; } // should not append
+        if (!addr.endsWith('p2p-circuit')) { this.unsetPeerDirectAddr(id, timestamp); return; } // should not append
 
         const { peerIdStr, relayedIdStr } = this.#destructureAddr(addr);
         if (!peerIdStr) return;
-        this.removeRelayedTrough(id, peerIdStr);
+        this.removeRelayedTrough(id, peerIdStr, timestamp);
     }
-    /** @param {string} id emitter peerIdStr @param {string} addr MultiAddress.toString() */
-    digestConnectEvent(id, addr) {
+    /** @param {string} id emitter peerIdStr @param {string} addr MultiAddress.toString() @param {number} timestamp */
+    digestConnectEvent(id, addr, timestamp) {
         if (typeof id !== 'string' || typeof addr !== 'string') return;
-        // '/dns4/contrast.observer/tcp/27260/p2p/12D3KooWEKjHKUrLW8o8EAL9wofj2LvWynFQZzx1kLPYicd4aEBX'
-        this.updateLastSeen(id);
+        if (!this.#validTimestamp(timestamp)) return;
+
         const address = addr.endsWith('p2p-circuit') ? `${addr}/p2p/${id}` : addr;
         if (!address.includes('/p2p/')) return;
         const { peerIdStr, relayedIdStr } = this.#destructureAddr(address);
 
-        if (id !== peerIdStr) this.setNeighbours(peerIdStr, id);
-        if (!relayedIdStr) this.setPeerDirectAddr(peerIdStr, address);
-        else if (id === relayedIdStr) this.addRelayedTrough(id, peerIdStr);
-        else (this.addRelayedTrough(relayedIdStr, peerIdStr)); // not very reliable
+        if (id !== peerIdStr) this.setNeighbours(peerIdStr, id, timestamp);
+        if (!relayedIdStr) this.setPeerDirectAddr(peerIdStr, address, timestamp);
+        else if (id === relayedIdStr) this.addRelayedTrough(id, peerIdStr, timestamp);
+        else (this.addRelayedTrough(relayedIdStr, peerIdStr, timestamp)); // not very reliable
     }
-    /** @param {string} id @param {string} peerIdStr */
-    digestDisconnectEvent(id, peerIdStr) {
-        this.unsetNeighbours(peerIdStr, id);
-        this.removeRelayedTrough(peerIdStr, id);
+    /** @param {string} id @param {string} peerIdStr @param {number} timestamp */
+    digestDisconnectEvent(id, peerIdStr, timestamp) {
+        if (!this.#validTimestamp(timestamp)) return;
+        this.unsetNeighbours(peerIdStr, id, timestamp);
+        this.removeRelayedTrough(peerIdStr, id, timestamp);
     }
 
     lastPeerGivenIndex = 0;
