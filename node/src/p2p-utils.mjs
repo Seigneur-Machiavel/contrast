@@ -19,8 +19,8 @@ export class PROTOCOLS {
 export class STREAM {
     static MAX_CHUNK_SIZE = 64 * 1024; // 64 KB
     static MAX_STREAM_BYTES = 1024 * 1024 * 1024; // 1 GB
-    static NEW_DIRECT_STREAM_OPTIONS = { signal: AbortSignal.timeout(3_000) };
-    static NEW_RELAYED_STREAM_OPTIONS = { runOnLimitedConnection: true, signal: AbortSignal.timeout(3_000) };
+    static NEW_DIRECT_STREAM_OPTIONS = () => { return { signal: AbortSignal.timeout(3_000) } };
+    static NEW_RELAYED_STREAM_OPTIONS = () => { return { runOnLimitedConnection: true, signal: AbortSignal.timeout(3_000) } };
 
     /** @param {Stream} stream @param {Uint8Array} serializedMessage @param {number} [maxChunkSize] */
     static async WRITE(stream, serializedMessage, maxChunkSize = STREAM.MAX_CHUNK_SIZE) {

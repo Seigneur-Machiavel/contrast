@@ -89,8 +89,7 @@ class P2PNetwork extends EventEmitter {
         //const peerDiscovery = [bootstrap({ list: this.options.bootstrapNodes })];
 
         const listen = this.options.listenAddresses;
-        if (isRelayCandidate) listen.push('/p2p-circuit') // should already listen the open ports
-        else listen.push('/ip4/0.0.0.0/tcp/0');
+        if (!isRelayCandidate) listen.push('/p2p-circuit');
 
         try {
             const p2pNode = await createLibp2p({
@@ -254,15 +253,15 @@ class P2PNetwork extends EventEmitter {
                 if (!peerIdStr || !peer) continue;
                 if (peerIdStr === this.peersManager.idStr) continue; // not myself
                 if (connectedPeersConType[peerIdStr]) continue; // already connected
-
-                const multiAddrs = this.peersManager.buildMultiAddrs(peerIdStr);
+                
+                const multiAddrs = this.peersManager.buildMultiAddrs(peerIdStr, this.p2pNode);
                 if (multiAddrs.length === 0) continue; // no address to dial
 
                 const direct = multiAddrs.find(addr => !addr.toString().includes('p2p-circuit'));
                 if (!direct && this.options.maxRelayedPeers <= resume.relayedIds.length) continue; // too much relayed peers
 
+                const streamOptions = direct ? STREAM.NEW_DIRECT_STREAM_OPTIONS() : STREAM.NEW_RELAYED_STREAM_OPTIONS();
                 try {
-                    const streamOptions = direct ? STREAM.NEW_DIRECT_STREAM_OPTIONS : STREAM.NEW_RELAYED_STREAM_OPTIONS;
                     await this.p2pNode.dialProtocol(multiAddrs, PROTOCOLS.SYNC, streamOptions);
                     this.#updatePeer(peerIdStr, { dialable: true, id: peer.id }, 'initFromStore');
                     connectedPeersConType[peerIdStr] = direct ? 'direct' : 'relayed';

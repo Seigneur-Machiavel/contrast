@@ -174,14 +174,25 @@ export class PeersManager {
             return { peerIdStr, peer };
         }
     }
-    buildMultiAddrs(peerIdStr) {
+    /**
+     * @param {string} peerIdStr - The peerId of the peer to connect to
+     * @param {import("libp2p").Libp2p} [p2pNode] - *optional* The libp2p node to use to build the multiaddrs if connection to the relay exists (useful in case of local network)
+     */
+    buildMultiAddrs(peerIdStr, p2pNode) {
         const peer = this.store[peerIdStr];
+        const existingCon = p2pNode?.getConnections(peerIdFromString(peerIdStr)).filter(con => !con.limits)[0];
+        const existingAddr = existingCon?.remoteAddr;
+        if (existingAddr) return [existingAddr];
         if (peer.directAddr) return [multiaddr(`${peer.directAddr}/p2p/${peerIdStr}`)];
 
         let relayedAddrs = [];
         for (const relayIdStr of peer.relayedTroughsIds) {
-            if (!this.store[relayIdStr].directAddr) continue;
-            const relayedAddrStr = `${this.store[relayIdStr].directAddr}/p2p/${relayIdStr}/p2p-circuit/p2p/${peerIdStr}`;
+            const existingDirectCon = p2pNode?.getConnections(peerIdFromString(relayedAddrs)).filter(con => !con.limits)[0];
+            const existingAddr = existingDirectCon?.remoteAddr.toString().split('/p2p/')[0];
+            const relayAddrStr = existingAddr || this.store[relayIdStr]?.directAddr;
+            if (!relayAddrStr) continue;
+
+            const relayedAddrStr = `${relayAddrStr}/p2p/${relayIdStr}/p2p-circuit/p2p/${peerIdStr}`;
             relayedAddrs.push(multiaddr(relayedAddrStr));
         }
         return relayedAddrs;
