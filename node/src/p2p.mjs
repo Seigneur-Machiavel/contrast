@@ -282,7 +282,7 @@ class P2PNetwork extends EventEmitter {
 
         // probably only one address... or none if relay disabled
         let addrStr = relayAddrsStr[0] || this.myRelayCircuitAddrs[relayPeerIdStr];
-        if (!addrStr.endsWith('p2p-circuit')) return; // should not append
+        if (!addrStr || !addrStr.endsWith('p2p-circuit')) return; // should not append
 
         const now = this.timeSynchronizer?.getCurrentTime() || Date.now();
         if (relayAddrsStr.length === 0) { // relay reservation closed
