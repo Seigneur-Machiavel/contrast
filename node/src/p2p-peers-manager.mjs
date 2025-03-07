@@ -60,6 +60,7 @@ export class PeersManager {
     }
     /** @param {string} peerIdStr */
     updateLastSeen(peerIdStr) {
+        if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
         this.store[peerIdStr].lastSeen = Date.now();
     }
     /** @param {string} addr */
