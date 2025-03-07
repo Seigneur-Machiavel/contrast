@@ -88,6 +88,9 @@ class P2PNetwork extends EventEmitter {
         //if (this.options.bootstrapNodes.length > 0) peerDiscovery.push( bootstrap({ list: this.options.bootstrapNodes }) );
         //const peerDiscovery = [bootstrap({ list: this.options.bootstrapNodes })];
 
+        /*if (isRelayCandidate) listen.push('/p2p-circuit') // should already listen the open ports
+        else listen.push('/ip4/0.0.0.0/tcp/0');*/
+        // IN TESTING
         const listen = this.options.listenAddresses;
         if (!isRelayCandidate) listen.push('/p2p-circuit');
 
