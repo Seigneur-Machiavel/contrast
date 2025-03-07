@@ -124,20 +124,21 @@ class P2PNetwork extends EventEmitter {
                 if (evt.detail.peer.addresses.length === 0) return;
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
                 
-                const peerAddrs = evt.detail.peer.addresses.map(obj => obj.multiaddr.toString());
-                for (const addrStr of peerAddrs) { // search for new addresses
+                const publicAddrs = FILTERS.multiAddrs(evt.detail.peer.addresses.map(obj => obj.multiaddr), 'PUBLIC', undefined, [27260, 27269]);
+                const peerAddrsStr = publicAddrs.map(addr => addr.toString());
+                for (const addrStr of peerAddrsStr) { // search for new addresses
                     if (this.addresses.includes(addrStr)) continue;
                     this.peersManager.digestSelfUpdateAddEvent(myPeerIdStr, addrStr);
                     this.broadcast('self:pub:update:add', addrStr);
                 }
 
                 for (const addrStr of this.addresses) { // search for removed addresses
-                    if (peerAddrs.includes(addrStr)) continue;
+                    if (peerAddrsStr.includes(addrStr)) continue;
                     this.peersManager.digestSelfUpdateRemoveEvent(myPeerIdStr, addrStr);
                     this.broadcast('self:pub:update:remove', addrStr);
                 }
 
-                this.addresses = peerAddrs; // local update
+                this.addresses = peerAddrsStr; // local update
             });
             
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);

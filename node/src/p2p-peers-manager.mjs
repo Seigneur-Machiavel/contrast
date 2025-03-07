@@ -70,6 +70,10 @@ export class PeersManager {
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
         this.store[peerIdStr].directAddr = addrStr;
     }
+    unsetPeerDirectAddr(peerIdStr) {
+        if (!this.store[peerIdStr]) return;
+        this.store[peerIdStr].directAddr = undefined;
+    }
     /** @param {string} peerIdStr */
     updateLastSeen(peerIdStr) {
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
@@ -97,7 +101,8 @@ export class PeersManager {
     digestSelfUpdateRemoveEvent(id, addr) {
         if (typeof id !== 'string' || typeof addr !== 'string') return;
         // address to reach the peer published by the peer itself is no longer valid
-        if (!addr.endsWith('p2p-circuit')) { this.setPeerDirectAddr(id, undefined); return; } // should not append
+        if (!addr.endsWith('p2p-circuit')) { 
+            this.unsetPeerDirectAddr(id); return; } // should not append
 
         const { peerIdStr, relayedIdStr } = this.#destructureAddr(addr);
         if (!peerIdStr) return;
