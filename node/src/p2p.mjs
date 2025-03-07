@@ -278,7 +278,7 @@ class P2PNetwork extends EventEmitter {
         if (!relayPeerIdStr) return;
     
         /** @type {string[]} */
-        const relayAddrsStr = event.detail.listeningAddrs.map(addr => addr.toString());
+        const relayAddrsStr = FILTERS.multiAddrs(event.detail.listeningAddrs, 'PUBLIC', 'CIRCUIT', [27260, 27269]).map(addr => addr.toString());
 
         // probably only one address... or none if relay disabled
         let addrStr = relayAddrsStr[0] || this.myRelayCircuitAddrs[relayPeerIdStr];
@@ -478,19 +478,19 @@ class P2PNetwork extends EventEmitter {
         const content = PUBSUB.DESERIALIZE(topic, data);
         switch (topic) {
             case 'self:pub:update:add':
-                console.info(`SELF PUB UPDATE ADD ${from.toString()}`, content);
+                console.info(`SELF PUB UPDATE ADD =${from.toString()}=>`, content);
                 this.peersManager.digestSelfUpdateAddEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'self:pub:update:remove':
-                console.info(`SELF PUB UPDATE REMOVE ${from.toString()}`, content);
+                console.info(`SELF PUB UPDATE REMOVE =${from.toString()}=>`, content);
                 this.peersManager.digestSelfUpdateRemoveEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:connect':
-                console.info(`PUB CONNECT ${from.toString()}`, content);
+                console.info(`PUB CONNECT =${from.toString()}=>`, content);
                 this.peersManager.digestConnectEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:disconnect':
-                console.info(`PUB DISCONNECT ${from.toString()}`, content);
+                console.info(`PUB DISCONNECT =${from.toString()}=>`, content);
                 this.peersManager.digestDisconnectEvent(from.toString(), content.peerIdStr, content.timestamp);
                 return; // no need to emit
         }
