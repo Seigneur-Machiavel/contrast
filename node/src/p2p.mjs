@@ -123,14 +123,15 @@ class P2PNetwork extends EventEmitter {
                 if (evt.detail.peer.addresses.length === 0) return;
                 console.log(`\n -- selfPeerUpdate (${evt.detail.peer.addresses.length}):`);
                 
-                for (const addr of evt.detail.peer.addresses) { // search for new addresses
-                    if (this.addresses.includes(addr.toString())) continue;
-                    this.peersManager.digestConnectEvent(p2pNode.peerId.toString(), addr.toString());
-                    this.broadcast('pub:connect', addr.toString());
+                const peerAddrs = evt.detail.peer.addresses.map(obj => obj.multiaddr.toString());
+                for (const addrStr of peerAddrs) { // search for new addresses
+                    if (this.addresses.includes(addrStr)) continue;
+                    this.peersManager.digestConnectEvent(p2pNode.peerId.toString(), addrStr);
+                    this.broadcast('pub:connect', addrStr);
                 }
 
                 for (const addrStr of this.addresses) { // search for removed addresses
-                    if (evt.detail.peer.addresses.includes(addrStr)) continue;
+                    if (peerAddrs.includes(addrStr)) continue;
                     this.peersManager.digestDisconnectEvent(p2pNode.peerId.toString(), addrStr);
                     this.broadcast('pub:disconnect', addrStr);
                 }
@@ -293,6 +294,7 @@ class P2PNetwork extends EventEmitter {
         };
 
         // new peers logs from peersManager
+        const peers = this.peersManager.store;
         //return;
 
         const allPeers = await this.p2pNode.peerStore.all();
