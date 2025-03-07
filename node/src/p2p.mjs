@@ -136,6 +136,8 @@ class P2PNetwork extends EventEmitter {
 
                 //this.peersManager.digestConnectAddr(myAddrStr);
                 //this.broadcast('self:peer:update', { id: p2pNode.peerId.toString(), addr: myAddrStr });
+                this.peersManager.digestConnectEvent(p2pNode.peerId.toString(), myAddrStr);
+                this.broadcast('self:pub:update', myAddrStr);
             });
             
             p2pNode.addEventListener('transport:listening', this.#handleRelayListening); //? useless ?
@@ -418,6 +420,7 @@ class P2PNetwork extends EventEmitter {
 
         const content = PUBSUB.DESERIALIZE(topic, data);
         switch (topic) {
+            case 'self:pub:update':
             case 'pub:connect':
                 this.peersManager.digestConnectEvent(from.toString(), content);
                 return; // no need to emit
