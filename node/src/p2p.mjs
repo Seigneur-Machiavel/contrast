@@ -130,7 +130,7 @@ class P2PNetwork extends EventEmitter {
                 }
 
                 for (const addrStr of this.addresses) { // search for removed addresses
-                    if (evt.detail.peer.addresses.includes(addr)) continue;
+                    if (evt.detail.peer.addresses.includes(addrStr)) continue;
                     this.peersManager.digestDisconnectEvent(p2pNode.peerId.toString(), addrStr);
                     this.broadcast('pub:disconnect', addrStr);
                 }
