@@ -19,6 +19,7 @@ export class PROTOCOLS {
 export class STREAM {
     static MAX_CHUNK_SIZE = 64 * 1024; // 64 KB
     static MAX_STREAM_BYTES = 1024 * 1024 * 1024; // 1 GB
+    static NEW_DIRECT_STREAM_OPTIONS = { signal: AbortSignal.timeout(3_000) };
     static NEW_RELAYED_STREAM_OPTIONS = { runOnLimitedConnection: true, signal: AbortSignal.timeout(3_000) };
 
     /** @param {Stream} stream @param {Uint8Array} serializedMessage @param {number} [maxChunkSize] */
@@ -109,7 +110,8 @@ export class FILTERS {
 
 export class PUBSUB {
     static TOPIC_MAX_BYTES = {
-        'self:pub:update': 2048,
+        'self:pub:update:add': 2048,
+        'self:pub:update:remove': 2048,
         'pub:connect': 2048,
         'pub:disconnect': 1024,
         'new_transaction': BLOCKCHAIN_SETTINGS.maxTransactionSize * 1.02,
