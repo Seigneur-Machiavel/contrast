@@ -47,7 +47,7 @@ class P2PNetwork extends EventEmitter {
     subscriptions = new Set();
     miniLogger = new MiniLogger('P2PNetwork');
     timeSynchronizer;
-    myAddr; // my ip address (only filled if I am a bootstrap node)
+    myIpAddr; // my ip address (only filled if I am a bootstrap node)
     addresses = []; // my listening addresses
     connectedBootstrapNodes = {};
     connexionResume = { totalPeers: 0, connectedBootstraps: 0, totalBootstraps: 0, relayedPeers: 0 };
@@ -64,9 +64,7 @@ class P2PNetwork extends EventEmitter {
     /** @type {Libp2p} */
     p2pNode;
     /** @type {Object<string, Peer>} */
-    peers = {};
-    /** @type {Object<string, boolean>} peerIdStr: active? | state of the relays I know */
-    myRelays = {};
+    peers = {}; // should be replaced by peersManager
     
     /** @param {TimeSynchronizer} timeSynchronizer @param {string[]} [listenAddresses] */
     constructor(timeSynchronizer, listenAddresses = []) {
@@ -289,7 +287,7 @@ class P2PNetwork extends EventEmitter {
         this.connexionResume = {
             totalPeers,
             connectedBootstraps: this.#bootstrapConsInfo().connectedBootstrapsCount,
-            totalBootstraps: this.myAddr ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length,
+            totalBootstraps: this.myIpAddr ? this.options.bootstrapNodes.length - 1 : this.options.bootstrapNodes.length,
             relayedPeers
         };
 
@@ -343,7 +341,7 @@ class P2PNetwork extends EventEmitter {
     async #connectToBootstrapNodes() {
         for (const addr of this.options.bootstrapNodes) {
             const ipAddr = addr.split('/p2p/').pop();
-            if (this.myAddr === ipAddr) continue; // Skip if recognize as myself
+            if (this.myIpAddr === ipAddr) continue; // Skip if recognize as myself
             if (this.#isBootstrapNodeAlreadyConnected(addr)) { continue; } // Skip if already connected
             if (this.#bootstrapConsInfo().bootstrapConnexionsTargetReached) { break; } // Stop if reached the target
 
@@ -353,7 +351,7 @@ class P2PNetwork extends EventEmitter {
                 this.connectedBootstrapNodes[con.remotePeer.toString()] = ipAddr;
             } catch (err) { // DETECT IF THE BOOTSTRAP NODE IS MYSELF
                 if (err.message === 'Can not dial self') {
-                    this.myAddr = ipAddr;
+                    this.myIpAddr = ipAddr;
                     //this.p2pNode.services.circuitRelay.reservations.maxReservations = 4; // Enable relay
                     //await this.p2pNode.services.dht.setMode('server'); // Ensure DHT is enabled as server
                     this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });

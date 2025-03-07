@@ -58,6 +58,10 @@ export class PeersManager {
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
         this.store[peerIdStr].directAddr = addrStr;
     }
+    /** @param {string} peerIdStr */
+    updateLastSeen(peerIdStr) {
+        this.store[peerIdStr].lastSeen = Date.now();
+    }
     /** @param {string} addr */
     #destructureAddr(addr) {
         return {
@@ -69,14 +73,14 @@ export class PeersManager {
     digestConnectEvent(id, addr) {
         if (typeof id !== 'string' || typeof addr !== 'string') return;
 
+        this.updateLastSeen(id);
         const address = addr.endsWith('p2p-circuit') ? `${addr}/p2p/${id}` : addr;
         if (!address.includes('/p2p/')) return;
         const { peerIdStr, relayedIdStr } = this.#destructureAddr(address);
 
+        if (id !== peerIdStr) this.addNeighbour(peerIdStr, id);
         if (!relayedIdStr) this.setPeerDirectAddr(peerIdStr, address);
         else if (id === relayedIdStr) this.addRelayedTrough(id, peerIdStr);
-        
-        if (id !== peerIdStr) this.addNeighbour(peerIdStr, id);
     }
     /** @param {string} id @param {string} peerIdStr */
     digestDisconnectEvent(id, peerIdStr) {
