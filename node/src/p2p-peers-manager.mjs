@@ -130,6 +130,8 @@ export class PeersManager {
         let i = (this.lastPeerGivenIndex + 1) % peersId.length;
         for (i; i < peersId.length; i++) {
             const peerIdStr = peersId[i];
+            if (this.idStr === peerIdStr) continue; // skip myself
+
             const peer = this.store[peerIdStr];
             if (directOnly && !peer.directAddr) continue;
             this.lastPeerGivenIndex = i;
@@ -143,7 +145,8 @@ export class PeersManager {
         let relayedAddrs = [];
         for (const relayIdStr of peer.relayedTroughsIds) {
             if (!this.store[relayIdStr].directAddr) continue;
-            relayedAddrs.push(multiaddr(`${this.store[relayIdStr].directAddr}/p2p-circuit/p2p/${peerIdStr}`));
+            const relayedAddrStr = `${this.store[relayIdStr].directAddr}/p2p/${relayIdStr}/p2p-circuit/p2p/${peerIdStr}`;
+            relayedAddrs.push(multiaddr(relayedAddrStr));
         }
         return relayedAddrs;
     }

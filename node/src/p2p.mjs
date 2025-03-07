@@ -144,7 +144,8 @@ class P2PNetwork extends EventEmitter {
             p2pNode.addEventListener('peer:discovery', this.#handlePeerDiscovery);
 
             p2pNode.services.pubsub.addEventListener('message', this.#handlePubsubMessage);
-            p2pNode.services.pubsub.subscribe('self:pub:update');
+            p2pNode.services.pubsub.subscribe('self:pub:update:add');
+            p2pNode.services.pubsub.subscribe('self:pub:update:remove');
             p2pNode.services.pubsub.subscribe('pub:connect');
             p2pNode.services.pubsub.subscribe('pub:disconnect');
 
