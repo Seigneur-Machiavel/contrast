@@ -187,7 +187,7 @@ export class PeersManager {
 
         let relayedAddrs = [];
         for (const relayIdStr of peer.relayedTroughsIds) {
-            const existingDirectCon = p2pNode?.getConnections(peerIdFromString(relayedAddrs)).filter(con => !con.limits)[0];
+            const existingDirectCon = p2pNode?.getConnections(peerIdFromString(relayIdStr)).filter(con => !con.limits)[0];
             const existingAddr = existingDirectCon?.remoteAddr.toString().split('/p2p/')[0];
             const relayAddrStr = existingAddr || this.store[relayIdStr]?.directAddr;
             if (!relayAddrStr) continue;

@@ -90,9 +90,11 @@ class P2PNetwork extends EventEmitter {
 
         /*if (isRelayCandidate) listen.push('/p2p-circuit') // should already listen the open ports
         else listen.push('/ip4/0.0.0.0/tcp/0');*/
+
         // IN TESTING
         const listen = this.options.listenAddresses;
-        if (!isRelayCandidate) listen.push('/p2p-circuit');
+        //if (!isRelayCandidate) listen.push('/p2p-circuit');
+        listen.push('/p2p-circuit');
 
         try {
             const p2pNode = await createLibp2p({
