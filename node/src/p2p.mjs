@@ -136,7 +136,7 @@ class P2PNetwork extends EventEmitter {
                     this.broadcast('pub:disconnect', addrStr);
                 }
 
-                this.addresses = evt.detail.peer.addresses.map(addr => addr.toString()); // local update
+                this.addresses = addrStr; // local update
             });
             
             p2pNode.addEventListener('peer:connect', this.#handlePeerConnect);
