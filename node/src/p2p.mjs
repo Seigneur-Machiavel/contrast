@@ -56,7 +56,7 @@ class P2PNetwork extends EventEmitter {
     options = {
         bootstrapNodes: [],
         maxPeers: 12,
-        maxRelayedPeers: 4,
+        maxRelayedPeers: 6,
         logLevel: 'info',
         logging: true,
         listenAddresses: [], // '/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0'
