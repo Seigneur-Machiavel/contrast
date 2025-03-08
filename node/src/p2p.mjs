@@ -8,13 +8,13 @@ import { createLibp2p } from 'libp2p';
 import { peerIdFromString } from '@libp2p/peer-id';
 
 import { tcp } from '@libp2p/tcp';
-import { webRTCDirect, webRTC } from '@libp2p/webrtc';
+//import { webRTCDirect, webRTC } from '@libp2p/webrtc'; // very heavy, uninstalled
 import { circuitRelayTransport, circuitRelayServer } from '@libp2p/circuit-relay-v2';
 
 import { identify } from '@libp2p/identify';
 import { uPnPNAT } from '@libp2p/upnp-nat';
-import { mdns } from '@libp2p/mdns';
-import { kadDHT } from '@libp2p/kad-dht';
+//import { mdns } from '@libp2p/mdns'; // uninstalled
+//import { kadDHT } from '@libp2p/kad-dht'; // uninstalled
 import { gossipsub } from '@chainsafe/libp2p-gossipsub';
 import { dcutr } from '@libp2p/dcutr';
 import { autoNAT } from '@libp2p/autonat';
