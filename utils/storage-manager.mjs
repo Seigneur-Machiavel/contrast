@@ -166,6 +166,10 @@ export class Storage {
         const filePath = path.join(directoryPath, fileNameWithExtension);
         if (fs.existsSync(filePath)) { fs.rmSync(filePath); }
     }
+    static dumpTrashFolder() {
+        if (fs.existsSync(PATH.TRASH)) fs.rmSync(PATH.TRASH, { recursive: true });
+        fs.mkdirSync(PATH.TRASH);
+    }
 }
 
 export class CheckpointsStorage {

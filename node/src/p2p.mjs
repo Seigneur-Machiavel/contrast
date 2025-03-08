@@ -103,7 +103,7 @@ class P2PNetwork extends EventEmitter {
                 connectionEncrypters: [noise()],
                 //connectionGater: {denyDialMultiaddr: () => false},
                 transports: [
-                    tcp(),
+                    tcp({ inboundSocketInactivityTimeout: 30_000, outboundSocketInactivityTimeout: 30_000 }),
                     circuitRelayTransport({ discoverRelays: isRelayCandidate ? 0 : 2, relayFilter: FILTERS.filterRelayAddrs })
                 ], //webRTCDirect(),
                 addresses: {
@@ -162,7 +162,7 @@ class P2PNetwork extends EventEmitter {
             console.log(p2pNode.getProtocols())
 
             this.peersManager.idStr = myPeerIdStr;
-            this.miniLogger.log(`P2P network started. PeerId ${readableId(myPeerIdStr)} - ${isRelayCandidate ? 'RELAY ENABLED' : 'RELAY DISABLED'}`, (m) => { console.info(m); });
+            this.miniLogger.log(`P2P network started. PeerId ${readableId(myPeerIdStr)} - ${isRelayCandidate ? 'RELAY ENABLED' : 'RELAY DISABLED'}`, (m) => console.info(m));
             this.p2pNode = p2pNode;
         } catch (error) {
             this.miniLogger.log('Failed to start P2P network', (m) => { console.error(m); });
@@ -227,7 +227,7 @@ class P2PNetwork extends EventEmitter {
             }
         }
     }
-    async #enhanceConnectionLoop(delay = 10_000) {
+    async #enhanceConnectionLoop(delay = 10_000) { // CAN BE SIMPLIFIED
         // this one is based on this.peerManager.store
         while(true) {
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -312,8 +312,7 @@ class P2PNetwork extends EventEmitter {
 			sharedPeerIdsStr.push(con.remotePeer.toString());
         }
 
-        console.info('SENDING RELAY SHARE RESPONSE:');
-        console.info(sharedPeerIdsStr);
+        this.miniLogger.log(`(relay:share) ${sharedPeerIdsStr.length} peers shared`, (m) => console.debug(m));
         await STREAM.WRITE(stream, serializer.serialize.rawData(sharedPeerIdsStr));
     }
     #handlePeerDiscovery = async (event) => {
@@ -387,7 +386,7 @@ class P2PNetwork extends EventEmitter {
 
         const allPeers = await this.p2pNode.peerStore.all();
         allPeers.forEach(peer => { peer.id.toString(); }); //TODO REMOVE AFTER DEBUGING
-        this.miniLogger.log(`Connected to ${totalPeers} peers | ${dialablePeers} dialables | ${allPeers.length} in peerStore (${this.#bootstrapConsInfo().connectedBootstrapsCount}/${this.connexionResume.totalBootstraps} bootstrap nodes)`, (m) => { console.info(m); });
+        this.miniLogger.log(`Connected to ${totalPeers} peers | ${dialablePeers} dialables | ${allPeers.length} in peerStore (${this.#bootstrapConsInfo().connectedBootstrapsCount}/${this.connexionResume.totalBootstraps} bootstrap nodes)`, (m) => console.info(m));
     }
     async #peerUpdateOnDirectConnectionUpgrade(delay = 5_000) {
         while(true) {
@@ -444,9 +443,9 @@ class P2PNetwork extends EventEmitter {
                     this.myIpAddr = ipAddr;
                     //this.p2pNode.services.circuitRelay.reservations.maxReservations = 4; // Enable relay
                     //await this.p2pNode.services.dht.setMode('server'); // Ensure DHT is enabled as server
-                    this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
-                    this.miniLogger.log(`]]] I AM BOOTSTRAP! DHT SERVER ENABLED [[[`, (m) => { console.info(m); });
-                    this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]][[[[[[[[[[[[[[[[[[[[[', (m) => { console.info(m); });
+                    this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]]|[[[[[[[[[[[[[[[[[[[[[', (m) => console.info(m));
+                    this.miniLogger.log(`]]]]]]]]]]]]] I AM BOOTSTRAP! [[[[[[[[[[[[[`, (m) => console.info(m));
+                    this.miniLogger.log(']]]]]]]]]]]]]]]]]]]]]|[[[[[[[[[[[[[[[[[[[[[', (m) => console.info(m));
                 }
             }
         }
@@ -482,19 +481,19 @@ class P2PNetwork extends EventEmitter {
         const content = PUBSUB.DESERIALIZE(topic, data);
         switch (topic) {
             case 'self:pub:update:add':
-                console.info(`SELF PUB UPDATE ADD =${from.toString()}=>`, content);
+                this.miniLogger.log(`SELF PUB UPDATE ADD =${from.toString()}=> ${content.addrStr}`, (m) => console.info(m));
                 this.peersManager.digestSelfUpdateAddEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'self:pub:update:remove':
-                console.info(`SELF PUB UPDATE REMOVE =${from.toString()}=>`, content);
+                this.miniLogger.log(`SELF PUB UPDATE REMOVE =${from.toString()}=> ${content.addrStr}`, (m) => console.info(m));
                 this.peersManager.digestSelfUpdateRemoveEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:connect':
-                console.info(`PUB CONNECT =${from.toString()}=>`, content);
+                this.miniLogger.log(`PUB CONNECT =${from.toString()}=> ${content.addrStr}`, (m) => console.info(m));
                 this.peersManager.digestConnectEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:disconnect':
-                console.info(`PUB DISCONNECT =${from.toString()}=>`, content);
+                this.miniLogger.log(`PUB DISCONNECT =${from.toString()}=> ${content.peerIdStr}`, (m) => console.info(m));
                 this.peersManager.digestDisconnectEvent(from.toString(), content.peerIdStr, content.timestamp);
                 return; // no need to emit
         }

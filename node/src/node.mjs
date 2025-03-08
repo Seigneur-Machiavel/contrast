@@ -153,6 +153,8 @@ export class Node {
 
         const activeCheckpoint = this.checkpointSystem.checkForActiveCheckpoint();
         if (!activeCheckpoint && !startFromScratch) {
+            this.checkpointSystem.pruneCheckpointsLowerThanHeight(0); // will preserve 3 highest checkpoints
+            Storage.dumpTrashFolder();
             this.updateState("Loading blockchain");
             const startHeight = await this.blockchain.load(this.snapshotSystem);
             this.loadSnapshot(startHeight);

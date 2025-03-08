@@ -182,7 +182,7 @@ export class CheckpointSystem {
 
 	minGapTryCheckpoint = 720; // 24h
 	checkpointHeightModulo = 100;
-	checkpointToConserve = 10;
+	checkpointToConserve = 3;
 	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	rndControlDiceFaces = 12;
 
@@ -206,14 +206,18 @@ export class CheckpointSystem {
 		return result;
 	}
 	pruneCheckpointsLowerThanHeight(height = 1000) { // dangerous to prune checkpoints, use with caution
-		let preservedCheckpoints = 0;
+		const result = { erased: [], preserved: [] };
 		const descendingHeights = this.#getCheckpointsInfos().heights.reverse();
 		for (const h of descendingHeights) {
-			const maxCheckpointsReached = preservedCheckpoints >= this.checkpointToConserve;
-			if (h < height && !maxCheckpointsReached) { preservedCheckpoints++; continue; }
+			const maxCheckpointsReached = result.preserved.length >= this.checkpointToConserve;
+			if (h > height && !maxCheckpointsReached) { result.preserved.push(h); continue; }
 
-			fs.rmSync(path.join(PATH.CHECKPOINTS, h.toString), { recursive: true, force: true });
+			fs.rmSync(path.join(PATH.CHECKPOINTS, h.toString()), { recursive: true, force: true });
+			result.erased.push(h);
 		}
+
+		if (result.erased.length === 0) return; // no need to log
+		console.info(`Checkpoints pruned | erased: ${result.erased.join(', ')} | preserved: ${result.preserved.join(', ')}`);
 	}
 	async newCheckpoint(height = 1000, fromPath, overwrite = false) {
 		// We prefer to not overwrite existing checkpoints, but it's possible to force it
@@ -336,8 +340,8 @@ export class CheckpointSystem {
 		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
 
 		if (saveZipArchive) {
-			const checkpointSavedf = await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
-			if (!checkpointSavedf) { throw new Error(`(Checkpoint deploy) Checkpoint save failed`); }
+			const checkpointSaved = await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
+			if (!checkpointSaved) { throw new Error(`(Checkpoint deploy) Checkpoint save failed`); }
 		}
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
