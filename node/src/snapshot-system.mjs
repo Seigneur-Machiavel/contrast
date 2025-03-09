@@ -53,9 +53,8 @@ export class SnapshotSystem {
 	 * @param {UtxoCache} utxoCache 
 	 * @param {Vss} vss 
 	 * @param {MemPool} memPool */
-	async newSnapshot(utxoCache, vss, memPool) {
+	async newSnapshot(utxoCache, vss, memPool, logPerf = false) {
 		const breather = new Breather();
-		const logPerf = false;
 		const height = utxoCache.blockchain.currentHeight;
 		const heightPath = path.join(PATH.SNAPSHOTS, `${height}`);
 		if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }

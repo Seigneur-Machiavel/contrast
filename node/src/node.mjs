@@ -312,13 +312,13 @@ export class Node {
             this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 
-        await this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool);
+        await this.snapshotSystem.newSnapshot(this.utxoCache, this.vss, this.memPool, true);
         this.snapshotSystem.moveSnapshotsLowerThanHeightToTrash(finalizedBlock.index - eraseUnder);
         // avoid gap between the loaded snapshot and the new one
         // at this stage we know that the loaded snapshot is consistent with the blockchain
-        if (this.snapshotSystem.loadedSnapshotHeight < finalizedBlock.index - (eraseUnder*2)) {
+        if (this.snapshotSystem.loadedSnapshotHeight < finalizedBlock.index - (eraseUnder*2))
             this.snapshotSystem.loadedSnapshotHeight = 0;
-        }
+        
         this.snapshotSystem.restoreLoadedSnapshot();
     }
     /** @param {BlockData} finalizedBlock */
