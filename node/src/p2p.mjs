@@ -103,7 +103,12 @@ class P2PNetwork extends EventEmitter {
                 connectionEncrypters: [noise()],
                 //connectionGater: {denyDialMultiaddr: () => false},
                 transports: [
-                    tcp({ inboundSocketInactivityTimeout: 30_000, outboundSocketInactivityTimeout: 30_000 }),
+                    tcp({
+                        inboundSocketInactivityTimeout: 30_000,
+                        outboundSocketInactivityTimeout: 30_000,
+                        dialOpts: { keepAlive: true, signal: AbortSignal.timeout(this.options.dialTimeout) },
+                        listenOpts: { keepAlive: true }
+                    }),
                     circuitRelayTransport({ discoverRelays: isRelayCandidate ? 0 : 2, relayFilter: FILTERS.filterRelayAddrs })
                 ], //webRTCDirect(),
                 addresses: {
@@ -117,7 +122,7 @@ class P2PNetwork extends EventEmitter {
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     nat: uPnPNAT({ description: 'contrast-node', ttl: 7200, keepAlive: true }),
-                    ...(isRelayCandidate && {circuitRelay: circuitRelayServer({reservations: {maxReservations: 4,}})}),
+                    ...(isRelayCandidate && {circuitRelay: circuitRelayServer({reservations: {maxReservations: 4}})})
                 },
                 peerDiscovery: []
                 //peerDiscovery // temporary

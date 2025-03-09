@@ -20,11 +20,11 @@ function setShortcuts(windows, dev = true) {
         BrowserWindow.getFocusedWindow().webContents.toggleDevTools();
     });
     // TOOGLE NODE DASHBOARD
-    if (shortcutsKeys.nodeDashboard.enabled) globalShortcut.register(shortcutsKeys.nodeDashboard.key, () => {
+    /*if (shortcutsKeys.nodeDashboard.enabled) globalShortcut.register(shortcutsKeys.nodeDashboard.key, () => {
         shortcutsLogger.log(`Node dashboard shortcut pressed (${shortcutsKeys.nodeDashboard.key})`, (m) => { console.log(m); });
         const nodeDashboardWindowVisible = windows.nodeDashboard.isVisible();
         if (!nodeDashboardWindowVisible) { windows.nodeDashboard.show(); windows.nodeDashboard.reload(); } else { windows.nodeDashboard.hide(); }
-    });
+    });*/
     // RELOAD
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {
         shortcutsLogger.log(`Reload shortcut pressed (${shortcutsKeys.reload.key})`, (m) => { console.log(m); });
