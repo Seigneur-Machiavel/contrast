@@ -106,7 +106,7 @@ class P2PNetwork extends EventEmitter {
                     tcp({
                         inboundSocketInactivityTimeout: 30_000,
                         outboundSocketInactivityTimeout: 30_000,
-                        dialOpts: { keepAlive: true, signal: AbortSignal.timeout(this.options.dialTimeout) },
+                        dialOpts: { keepAlive: true },
                         listenOpts: { keepAlive: true }
                     }),
                     circuitRelayTransport({ discoverRelays: isRelayCandidate ? 0 : 2, relayFilter: FILTERS.filterRelayAddrs })
