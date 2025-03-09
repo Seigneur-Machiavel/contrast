@@ -56,7 +56,7 @@ class P2PNetwork extends EventEmitter {
     options = {
         bootstrapNodes: [],
         maxPeers: 12,
-        maxRelayedPeers: 6,
+        maxRelayedPeers: 8,
         logLevel: 'info',
         logging: true,
         listenAddresses: [], // '/ip4/0.0.0.0/tcp/27260', '/ip4/0.0.0.0/tcp/0'
@@ -122,7 +122,7 @@ class P2PNetwork extends EventEmitter {
                     dcutr: dcutr(),
                     autoNAT: autoNAT(),
                     nat: uPnPNAT({ description: 'contrast-node', ttl: 7200, keepAlive: true }),
-                    ...(isRelayCandidate && {circuitRelay: circuitRelayServer({reservations: {maxReservations: 4}})})
+                    ...(isRelayCandidate && {circuitRelay: circuitRelayServer({reservations: {maxReservations: 6}})})
                 },
                 peerDiscovery: []
                 //peerDiscovery // temporary
