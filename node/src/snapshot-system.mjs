@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Storage, BlockchainStorage, CheckpointsStorage, PATH, copyFolderRecursiveSync } from '../../utils/storage-manager.mjs';
+import { Storage, StorageAsync, BlockchainStorage, CheckpointsStorage, PATH, copyFolderRecursiveSync } from '../../utils/storage-manager.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockData, BlockUtils } from './block-classes.mjs';
@@ -61,20 +61,23 @@ export class SnapshotSystem {
 
 		performance.mark('startSaveVssSpectrum'); // SAVE VSS SPECTRUM
 		const serializedSpectum = serializer.serialize.rawData(vss.spectrum);
-		Storage.saveBinary('vss', serializedSpectum, heightPath);
+		//Storage.saveBinary('vss', serializedSpectum, heightPath);
+		await StorageAsync.saveBinary('vss', serializedSpectum, heightPath);
 		performance.mark('endSaveVssSpectrum');
 		await breather.breathe();
 
 		performance.mark('startSaveMemPool'); // SAVE MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
 		const serializedPKAddresses = serializer.serialize.pubkeyAddressesObj(memPool.knownPubKeysAddresses);
 		this.knownPubKeysAddressesSnapInfo = { height, hash: HashFunctions.xxHash32(serializedPKAddresses) };
-		Storage.saveBinary('memPool', serializedPKAddresses, heightPath);
+		//Storage.saveBinary('memPool', serializedPKAddresses, heightPath);
+		await StorageAsync.saveBinary('memPool', serializedPKAddresses, heightPath);
 		performance.mark('endSaveMemPool');
 		await breather.breathe();
 
 		performance.mark('startSaveUtxoCache'); // SAVE UTXO CACHE
 		const utxoCacheDataSerialized = serializer.serialize.utxoCacheData(utxoCache);
-		Storage.saveBinary('utxoCache', utxoCacheDataSerialized, heightPath);
+		//Storage.saveBinary('utxoCache', utxoCacheDataSerialized, heightPath);
+		await StorageAsync.saveBinary('utxoCache', utxoCacheDataSerialized, heightPath);
 		performance.mark('endSaveUtxoCache');
 
 		if (logPerf) {
@@ -90,25 +93,28 @@ export class SnapshotSystem {
 	 * @param {UtxoCache} utxoCache 
 	 * @param {Vss} vss 
 	 * @param {MemPool} memPool */
-	rollBackTo(height, utxoCache, vss, memPool) {
+	async rollBackTo(height, utxoCache, vss, memPool) {
 		if (height === 0) return false;
 		
 		const logPerf = true;
 		const heightPath = path.join(PATH.SNAPSHOTS, `${height}`);
 
 		performance.mark('startLoadSpectrum'); // LOAD VSS SPECTRUM
-		const serializedSpectrum = Storage.loadBinary('vss', heightPath);
+		//const serializedSpectrum = Storage.loadBinary('vss', heightPath);
+		const serializedSpectrum = await StorageAsync.loadBinary('vss', heightPath);
 		vss.spectrum = serializer.deserialize.rawData(serializedSpectrum);
 		performance.mark('endLoadSpectrum');
 
 		performance.mark('startLoadMemPool'); // LOAD MEMPOOL (KNOWN PUBKEYS-ADDRESSES)
-		const serializedPKAddresses = Storage.loadBinary('memPool', heightPath);
+		//const serializedPKAddresses = Storage.loadBinary('memPool', heightPath);
+		const serializedPKAddresses = await StorageAsync.loadBinary('memPool', heightPath);
 		this.knownPubKeysAddressesSnapInfo = { height, hash: HashFunctions.xxHash32(serializedPKAddresses) };
 		memPool.knownPubKeysAddresses = serializer.deserialize.pubkeyAddressesObj(serializedPKAddresses);
 		performance.mark('endLoadMemPool');
 
 		performance.mark('startLoadUtxoCache'); // LOAD UTXO CACHE
-		const utxoCacheDataSerialized = Storage.loadBinary('utxoCache', heightPath);
+		//const utxoCacheDataSerialized = Storage.loadBinary('utxoCache', heightPath);
+		const utxoCacheDataSerialized = await StorageAsync.loadBinary('utxoCache', heightPath);
 		utxoCache.totalOfBalances = this.fastConverter.uint86BytesToNumber(utxoCacheDataSerialized.subarray(0, 6));
 		utxoCache.totalSupply = this.fastConverter.uint86BytesToNumber(utxoCacheDataSerialized.subarray(6, 12));
 		//const deserializationStart = performance.now();

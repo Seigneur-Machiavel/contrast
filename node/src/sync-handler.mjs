@@ -430,7 +430,7 @@ export class SyncHandler {
             const modulo = (this.syncFailureCount / this.syncFailureModulos.loadSnapshot) % snapshotsHeights.length;
             const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
             this.miniLogger.log(`(M1)--> Trying to sync from snapshot #${previousSnapHeight}`, (m) => { console.info(m); });
-            this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
+            await this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
         }
 
         // IN WORDS:

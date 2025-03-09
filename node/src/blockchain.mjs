@@ -235,7 +235,7 @@ export class Blockchain {
             totalDuplicates += duplicate;
             duplicateCountTime += (performance.now() - duplicateStart);
 
-            this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
+            await this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
 
             //if (i % 300 === 0) { await new Promise(resolve => setTimeout(resolve, 50)); } // avoid p2p disconnection
             await breather.breathe();

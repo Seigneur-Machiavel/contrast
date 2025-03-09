@@ -211,7 +211,7 @@ export class OpStack {
                     break;
                 case 'rollBackTo':
                     this.miniLogger.log(`[OpStack] Rollback to #${content}`, (m) => console.info(m));
-                    this.node.loadSnapshot(content, false);
+                    await this.node.loadSnapshot(content, false);
                     break;
                 case 'reorg_start':
                     this.isReorging = true;

@@ -15,6 +15,7 @@ const url = await import('url');*/ // -> DEPRECATED
 if (false) {
     const AdmZip = require('adm-zip');
     const fs = require('fs');
+    const fsPromise = require('node:fs/promises');
     const path = require('path');
     const crypto = require('crypto');
     const url = require('url');
@@ -22,9 +23,10 @@ if (false) {
 
 // -> Imports compatibility for Node.js, Electron and browser
 
-let AdmZip, crypto, fs, path, url;
+let AdmZip, crypto, fs, fsPromise, path, url;
 (async () => {
     try { fs = await import('fs'); } catch (error) { fs = window.fs; }
+    try { fsPromise = await import('node:fs/promises'); } catch (error) { fsPromise = window.fsPromise; }
     try { path = await import('path'); } catch (error) { path = window.path; }
     try { url = await import('url'); } catch (error) { url = window.url; }
     try { AdmZip = await import('adm-zip').then(module => module.default); } catch (error) { AdmZip = window.AdmZip; }
@@ -169,6 +171,39 @@ export class Storage {
     static dumpTrashFolder() {
         if (fs.existsSync(PATH.TRASH)) fs.rmSync(PATH.TRASH, { recursive: true });
         fs.mkdirSync(PATH.TRASH);
+    }
+}
+export class StorageAsync {
+    // savebin and loadbin only
+    /** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
+    static async saveBinary(fileName, serializedData, directoryPath) {
+        try {
+            const directoryPath__ = directoryPath || PATH.STORAGE;
+            if (!fs.existsSync(directoryPath__)) { fs.mkdirSync(directoryPath__); }
+
+            const filePath = path.join(directoryPath__, `${fileName}.bin`);
+            await fsPromise.writeFile(filePath, serializedData);
+            return true;
+        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
+
+        return false;
+    }
+
+    /** @param {string} fileName @param {string} directoryPath */
+    static async loadBinary(fileName, directoryPath) {
+        const directoryPath__ = directoryPath || PATH.STORAGE;
+        const filePath = path.join(directoryPath__, `${fileName}.bin`);
+        try {
+            const buffer = await fsPromise.readFile(filePath);
+            return buffer;
+        } catch (error) {
+            if (error.code === 'ENOENT') {
+                storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
+            } else {
+                storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+            }
+        }
+        return false;
     }
 }
 
@@ -317,7 +352,7 @@ export class AddressesTxsRefsStorage {
         const txsRefs = serializer.deserialize.txsReferencesArray(serialized);
         return txsRefs;
     }
-    setTxsReferencesOfAddress(address = '', txsRefs = []) {
+    async setTxsReferencesOfAddress(address = '', txsRefs = []) {
         const serialized = serializer.serialize.txsReferencesArray(txsRefs);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         this.architecture[lvl0][lvl1][address] = true;
@@ -326,7 +361,8 @@ export class AddressesTxsRefsStorage {
         if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
 
         const filePath = path.join(dirPath, `${address}.bin`);
-        fs.writeFileSync(filePath, serialized);
+        //fs.writeFileSync(filePath, serialized);
+        await fsPromise.writeFile(filePath, serialized);
     }
     reset() {
         if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true }); }

@@ -157,7 +157,7 @@ export class Node {
             Storage.dumpTrashFolder();
             this.updateState("Loading blockchain");
             const startHeight = await this.blockchain.load(this.snapshotSystem);
-            this.loadSnapshot(startHeight);
+            await this.loadSnapshot(startHeight);
         }
 
         this.updateState("Initializing P2P network");
@@ -279,13 +279,13 @@ export class Node {
     }
 
     // SNAPSHOT: LOAD/SAVE ---------------------------------------------------------------
-    loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
+    async loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
         if (snapshotIndex < 0) { return; }
 
         this.miniLogger.log(`Last known snapshot index: ${snapshotIndex}`, (m) => { console.info(m); });
         this.blockchain.currentHeight = snapshotIndex;
         this.blockCandidate = null;
-        this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
+        await this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.info(m); });
         if (snapshotIndex < 1) {
