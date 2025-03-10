@@ -142,6 +142,7 @@ async function createWindow(options, parentWindow) {
 // AUTO UPDATER EVENTS
 autoUpdater.on('update-available', (e) => console.log(`A new update is available: v${e.version}`));
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+    if (silentUpdate && isDev) { console.log('downloaded'); return; } // avoid restart/install in dev mode
     if (silentUpdate) { autoUpdater.quitAndInstall(true, true); return; }
 
     const dialogOpts = {
@@ -173,7 +174,8 @@ autoUpdaterCheckLoop = async () => {
 // IPC EVENTS
 ipcMain.on('minimize-btn-click', () => windows.boardWindow.minimize());
 ipcMain.on('maximize-btn-click', () => windows.boardWindow.isMaximized() ? windows.boardWindow.unmaximize() : windows.boardWindow.maximize());
-ipcMain.on('close-btn-click', () => windows.boardWindow.close());
+//ipcMain.on('close-btn-click', () => windows.boardWindow.close());
+ipcMain.on('close-btn-click', () => app.quit());
 ipcMain.on('set-password', async (event, password) => {
     console.log('setting password...');
     const { channel, data } = await dashboardWorker.setPasswordAndWaitResult(password);
