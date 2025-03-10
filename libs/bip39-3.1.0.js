@@ -23632,7 +23632,7 @@ const sha256_1 = require("@noble/hashes/sha256");
 const sha512_1 = require("@noble/hashes/sha512");
 const pbkdf2_1 = require("@noble/hashes/pbkdf2");
 const utils_1 = require("@noble/hashes/utils");
-const _wordlists_1 = require("./_wordlists.js");
+const _wordlists_1 = require("./_wordlists");
 let DEFAULT_WORDLIST = _wordlists_1._default;
 const INVALID_MNEMONIC = 'Invalid mnemonic';
 const INVALID_ENTROPY = 'Invalid entropy';
@@ -23796,7 +23796,7 @@ function getDefaultWordlist() {
     })[0];
 }
 exports.getDefaultWordlist = getDefaultWordlist;
-var _wordlists_2 = require("./_wordlists.js");
+var _wordlists_2 = require("./_wordlists");
 exports.wordlists = _wordlists_2.wordlists;
 
 }).call(this)}).call(this,require("buffer").Buffer)

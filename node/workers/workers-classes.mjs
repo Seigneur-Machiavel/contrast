@@ -333,6 +333,7 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
         this.worker.postMessage({ type: 'set_private_key_and_start_node', data: privateKey });
         console.info('msg sent to NodeAppWorker: set_private_key_and_start_node');
     }
+    /** @param {string} password @returns {Promise<string | false>} */
     async extractPrivateKeyAndWaitResult(password = '') {
         const promise = new Promise((resolve, reject) => {
             this.worker.on('message', (message) => {

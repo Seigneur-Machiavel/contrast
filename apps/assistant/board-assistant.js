@@ -88,6 +88,42 @@ class Assistant {
         if (sender === 'system') return;
         this.onResponse(message);
     }
+    showPrivateKey(privateKeyHex, asWords = false) {
+        if (!asWords) { this.sendMessage(privateKeyHex, 'system'); return }
+
+        /** @type {string} */
+        const wordsList = bip39.entropyToMnemonic(privateKeyHex);
+        const hexFromList = bip39.mnemonicToEntropy(wordsList).toString('hex');
+        if (hexFromList !== privateKeyHex) return this.sendMessage('Error while extracting the private key!', 'system');
+
+        //this.sendMessage(wordsList, 'system'); just to test: ok
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message');
+        messageDiv.classList.add('wordslist');
+
+        const wordsArray = wordsList.split(' ');
+        if (wordsArray.length % 2 !== 0) return this.sendMessage('wordsArray.length % 2 !== 0', 'system');
+
+        for (let i = 0; i < wordsArray.length -1; i += 2) {
+            const rowDiv = document.createElement('div');
+            rowDiv.classList.add('wordslist-row');
+
+            const firstWordDiv = document.createElement('div');
+            firstWordDiv.classList.add('wordslist-word');
+            firstWordDiv.textContent = `${i + 1}. ${wordsArray[i]}`;
+            rowDiv.appendChild(firstWordDiv);
+
+            const secondWordDiv = document.createElement('div');
+            secondWordDiv.classList.add('wordslist-word');
+            secondWordDiv.textContent = `${i + 2}. ${wordsArray[i + 1]}`;
+            rowDiv.appendChild(secondWordDiv);
+
+            messageDiv.appendChild(rowDiv);
+        }
+
+        this.eHTML.messagesContainer.appendChild(messageDiv);
+        this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
+    }
 
     requestNewPassword(failureMsg = false) {
         if (failureMsg === false) {
@@ -169,7 +205,7 @@ class Assistant {
         //window.electronAPI.extractPrivateKey(password);
         ipcRenderer.send('extract-private-key', password);
 
-        setTimeout(() => { this.idleMenu(); }, 1000);
+        setTimeout(() => { this.idleMenu(); }, 6000);
     }
 
     /** @param {ChoicesActions} choices */
@@ -196,8 +232,6 @@ class Assistant {
 			'Extract my private key': () => this.requestPasswordToExtract(),
 			'Launch at startup': () => {
                 this.requestChoice({
-                    //'Yes': () => { window.electronAPI.setAutoLaunch(true), this.idleMenu(); },
-                    //'No': () => { window.electronAPI.setAutoLaunch(false), this.idleMenu(); }
                     'Yes': () => { ipcRenderer.send('set-auto-launch', true); this.idleMenu(); },
                     'No': () => { ipcRenderer.send('set-auto-launch', false); this.idleMenu(); }
                 });

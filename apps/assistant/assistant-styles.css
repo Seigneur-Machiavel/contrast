@@ -40,6 +40,19 @@
     transform-origin: right;
     animation: messageAppear .2s forwards;
 }
+/*#board-messages-container .message.wordslist {
+    display: flex;
+    width: fit-content;
+    gap: 5px;
+}*/ /* looks useless */
+.wordslist-row {
+    display: flex;
+    width: 400px;
+    justify-content: space-around;
+}
+.wordslist-word {
+    width: 180px;
+}
 @keyframes messageAppear {
     0% {
         opacity: 0;

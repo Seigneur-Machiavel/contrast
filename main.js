@@ -48,6 +48,8 @@ const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });
 const nodeApp = isDev ? 'stresstest' : 'dashboard';
 let isQuiting = false;
+let updateCheckResult;
+let silentUpdate = true;
 /** @type {Object<string, BrowserWindow>} */
 const windows = {};
 const windowsOptions = {
@@ -140,6 +142,8 @@ async function createWindow(options, parentWindow) {
 // AUTO UPDATER EVENTS
 autoUpdater.on('update-available', (e) => console.log(`A new update is available: v${e.version}`));
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+    if (silentUpdate) { autoUpdater.quitAndInstall(true, true); return; }
+
     const dialogOpts = {
         type: 'info',
         buttons: ['Restart', 'Later'],
@@ -150,9 +154,21 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
 
     dialog.showMessageBox(dialogOpts).then((returnValue) => {
         if (isDev) { console.log('downloaded'); return; } // avoid restart/install in dev mode
-        if (returnValue.response === 0) autoUpdater.quitAndInstall();
+        if (returnValue.response === 0) autoUpdater.quitAndInstall(false, false);
     });
 });
+autoUpdaterCheckLoop = async () => {
+    let downloadingVersion;
+    while (!downloadingVersion && downloadingVersion !== version) {
+        //autoUpdater.forceDevUpdateConfig = true; autoUpdater.currentVersion = '0.2.1'; // Dev update test
+        updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
+        downloadingVersion = updateCheckResult?.updateInfo?.version;
+
+        const delay = Math.floor(Math.random() * 60_000) + 240_000; // rnd delay beetwen 4 and 5 minutes
+        await new Promise(resolve => setTimeout(resolve, delay)); // avoid all peers updating at the same time
+    }
+    console.log(`Update check loop stopped, downloading version: ${downloadingVersion}`);
+};
 
 // IPC EVENTS
 ipcMain.on('minimize-btn-click', () => windows.boardWindow.minimize());
@@ -170,9 +186,13 @@ ipcMain.on('set-password', async (event, password) => {
 ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());
 ipcMain.on('set-private-key-and-start-node', (event, privateKey) => dashboardWorker.setPrivateKeyAndStartNode(privateKey));
 ipcMain.on('extract-private-key', async (event, password) => {
-    const extracted = await dashboardWorker.extractPrivateKeyAndWaitResult(password === '' ? 'fingerPrint' : password);
+    const extractedHex = await dashboardWorker.extractPrivateKeyAndWaitResult(password === '' ? 'fingerPrint' : password);
+    if (!extractedHex) return event.reply('assistant-message', 'Password is incorrect, try again!');
+
     event.reply('assistant-message', 'Your private key will be show in 5s, do not reveal it to anyone!');
-    setTimeout(() => event.reply('assistant-message', extracted), 5000);
+    
+    //setTimeout(() => event.reply('assistant-message', extractedHex), 5000);
+    setTimeout(() => event.reply('assistant-private-key', extractedHex), 5000);
 });
 ipcMain.on('set-auto-launch', async (event, value) => {
     const isEnabled = await myAppAutoLauncher.isEnabled();
@@ -197,7 +217,7 @@ app.on('before-quit', () => {
 app.on('will-quit', async () => await new Promise(resolve => setTimeout(resolve, 10000))); // let time for the node to stop properly
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 app.on('ready', async () => {
-    if (!isDev) autoUpdater.checkForUpdatesAndNotify();
+    if (!isDev) autoUpdaterCheckLoop();
     await loadUserPreferences();
 
     windows.boardWindow = await createWindow(windowsOptions.boardWindow);

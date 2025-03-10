@@ -82,6 +82,7 @@ ipcRenderer.on('connexion-resume', (event, ...args) => {
 	}
 });
 ipcRenderer.on('assistant-message', (event, ...args) => assistant.sendMessage(args[0], 'system'));
+ipcRenderer.on('assistant-private-key', (event, ...args) => assistant.showPrivateKey(args[0], true)); // show as words
 ipcRenderer.on('window-to-front', (event, ...args) => appsManager.setFrontWindow(args[0]));
 //#endregion
 
