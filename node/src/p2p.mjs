@@ -335,10 +335,7 @@ class P2PNetwork extends EventEmitter {
         const peerIdStr = event.detail.toString();
         const cons = this.p2pNode.getConnections(event.detail);
         const authorized = this.peersManager.localEvent(peerIdStr, 'CONNECT');
-        if (!authorized) {
-            for (const con of cons) con.close();
-            return;
-        }
+        if (!authorized) { for (const con of cons) con.close(); return; } // con denied
 
         const unlimitedCon = this.p2pNode.getConnections(event.detail).find(con => !con.limits);
 		this.miniLogger.log(`peer:connect ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`, (m) => console.debug(m));
@@ -359,6 +356,9 @@ class P2PNetwork extends EventEmitter {
     }
     #handlePeerDisconnect = async (event) => {
         const peerIdStr = event.detail.toString();
+        const authorized = this.peersManager.isLocalEventAuthorized(peerIdStr, 'CONNECT');
+        if (!authorized) return; // con denied, no need to update or log
+        
         this.miniLogger.log(`--------> Peer ${readableId(peerIdStr)} disconnected`, (m) => console.debug(m));
 
         if (this.peers[peerIdStr]) delete this.peers[peerIdStr];

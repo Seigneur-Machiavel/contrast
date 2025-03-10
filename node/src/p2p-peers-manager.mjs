@@ -15,14 +15,15 @@ class PeerFloodCounter {
     };
 
     constructor() {}
-
+    /** @param {'CONNECT' | 'RESERVATION'} type @param {number} timestamp */
+    isAuthorized(type, timestamp) {
+        this.eventsTimestamps[type] = this.eventsTimestamps[type].filter(eventTimestamp => eventTimestamp > timestamp - 60000);
+        return this.eventsTimestamps[type].length + 1 <= this.maxEventsPerMinute[type];
+    }
     /** @param {'CONNECT' | 'RESERVATION'} type @param {number} timestamp */
     new(type, timestamp) {
         this.eventsTimestamps[type].push(timestamp);
-        // remove events older than 1 minute
-        this.eventsTimestamps[type] = this.eventsTimestamps[type].filter(eventTimestamp => eventTimestamp > timestamp - 60000);
-
-        return this.eventsTimestamps[type].length <= this.maxEventsPerMinute[type];
+        return timestamp;
     }
 }
 
@@ -221,11 +222,17 @@ export class PeersManager {
     }
 
     /** @param {string} peerIdStr @param {'CONNECT' | 'RESERVATION'} type */
+    isLocalEventAuthorized(peerIdStr, type) {
+        if (!this.store[peerIdStr]) return false;
+        const timestamp = this.timeSynchronizer?.getCurrentTime() || Date.now();
+        return this.store[peerIdStr].floodCounter.isAuthorized(type, timestamp);
+    }
+    /** @param {string} peerIdStr @param {'CONNECT' | 'RESERVATION'} type */
     localEvent(peerIdStr, type) {
         if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
         const timestamp = this.timeSynchronizer?.getCurrentTime() || Date.now();
+        if (!this.store[peerIdStr].floodCounter.isAuthorized(type, timestamp)) return false;
 
-        const authorize = this.store[peerIdStr].floodCounter.new(type, timestamp);
-        return authorize;
+        return this.store[peerIdStr].floodCounter.new(type, timestamp);
     }
 }
