@@ -6,6 +6,26 @@ import { multiaddr } from '@multiformats/multiaddr';
  * @typedef {import("../../utils/time.mjs").TimeSynchronizer} TimeSynchronizer
  */
 
+class PeerFloodCounter {
+    maxEventsPerMinute = {
+        CONNECT: 5,
+    }
+    eventsTimestamps = {
+        CONNECT: [],
+    };
+
+    constructor() {}
+
+    /** @param {'CONNECT' | 'RESERVATION'} type @param {number} timestamp */
+    new(type, timestamp) {
+        this.eventsTimestamps[type].push(timestamp);
+        // remove events older than 1 minute
+        this.eventsTimestamps[type] = this.eventsTimestamps[type].filter(eventTimestamp => eventTimestamp > timestamp - 60000);
+
+        return this.eventsTimestamps[type].length <= this.maxEventsPerMinute[type];
+    }
+}
+
 /**
  * Informations about a peer can be furnished by the peer himself or by other peers
  * Theses informations cannot be considered as reliable
@@ -18,6 +38,8 @@ class Peer {
     neighboursIds = [];
     /** @type {string[]} The peers that can be use as relay to connect to this peer (can be empty) */
     relayedTroughsIds = [];
+
+    floodCounter = new PeerFloodCounter();
 }
 
 export class PeersManager {
@@ -196,5 +218,14 @@ export class PeersManager {
             relayedAddrs.push(multiaddr(relayedAddrStr));
         }
         return relayedAddrs;
+    }
+
+    /** @param {string} peerIdStr @param {'CONNECT' | 'RESERVATION'} type */
+    localEvent(peerIdStr, type) {
+        if (!this.store[peerIdStr]) this.store[peerIdStr] = new Peer();
+        const timestamp = this.timeSynchronizer?.getCurrentTime() || Date.now();
+
+        const authorize = this.store[peerIdStr].floodCounter.new(type, timestamp);
+        return authorize;
     }
 }

@@ -334,6 +334,12 @@ class P2PNetwork extends EventEmitter {
     #handlePeerConnect = async (event) => {
         const peerIdStr = event.detail.toString();
         const cons = this.p2pNode.getConnections(event.detail);
+        const authorized = this.peersManager.localEvent(peerIdStr, 'CONNECT');
+        if (!authorized) {
+            for (const con of cons) con.close();
+            return;
+        }
+
         const unlimitedCon = this.p2pNode.getConnections(event.detail).find(con => !con.limits);
 		this.miniLogger.log(`peer:connect ${peerIdStr} (direct: ${unlimitedCon ? 'yes' : 'no'})`, (m) => console.debug(m));
         this.#updatePeer(peerIdStr, { dialable: unlimitedCon, id: event.detail }, unlimitedCon ? 'direct connection' : 'relayed connection');
