@@ -379,12 +379,26 @@ export const convert = {
     },
     /** @param {number} num - Integer to convert to readable */
     formatNumberAsCurrency: (num) => {
-        // 1_000_000_000 -> 1,000.000000
-        if (num < 1_000_000) { return `0.${num.toString().padStart(6, '0')}`; }
-        const num2last6 = num.toString().slice(-6);
-        const numRest = num.toString().slice(0, -6);
+        const numberPaddded = num.toString().padStart(6, '0');
+        const num2last6 = numberPaddded.toString().slice(-6) || '0';
+        const numRest = numberPaddded.toString().slice(0, -6) || '0';
         const separedNum = numRest.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        return `${separedNum}.${num2last6}`;
+        let formatedValue = `${separedNum}.${num2last6}`.replace(/0+$/, ''); // remove trailing zeros
+        if (formatedValue.endsWith('.')) { formatedValue = formatedValue.slice(0, -1); }
+        
+        return formatedValue;
+    },
+    /** @param {string} str - String to convert to readable change */
+    formatCurrencyAsMicroAmount: (str) => {
+        if (!/^[0-9.,]*$/.test(str)) return 0; // only contains 0-9 "," "."
+
+        const [integer, decimal] = str.split('.');
+        const integerStr = integer.replace(/,/g, '');
+        const decimalStr = decimal ? decimal.padEnd(6, '0').slice(0, 6) : '000000';
+        const int = integerStr === '' ? 0 : parseInt(`${integerStr}${decimalStr}`);
+        if (isNaN(int)) { console.error('Invalid number:', str); return 0; }
+
+        return int;
     },
     /** @param {number} num - Integer to convert to readable change */
     formatNumberAsCurrencyChange: (num) => {

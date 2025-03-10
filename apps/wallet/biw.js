@@ -546,7 +546,7 @@ class BoardInternalWallet {
         });
         document.addEventListener('focusout', async (event) => {
             const target = event.target;
-            if (target.classList.contains('biw-amountInput')) this.#updateAmountAndFeesRelatedToInput(target);
+            if (target.classList.contains('biw-amountInput')) this.updateAmountAndFeesRelatedToInput(target);
         });
         document.addEventListener('mouseover', (event) => {
             const target = event.target;
@@ -573,19 +573,15 @@ class BoardInternalWallet {
             }
         });
     }
-    #updateAmountAndFeesRelatedToInput(target) {
+    updateAmountAndFeesRelatedToInput(target) {
         const foldName = target.parentElement.parentElement.dataset.foldname;
-
-        if (isNaN(parseFloat(target.value))) { target.value = ''; return; }
-        target.value = parseFloat(target.value).toFixed(6);
+        const amountMicro = window.convert.formatCurrencyAsMicroAmount(target.value);
         
         // update amount with currency format
-        const amountMicro = parseInt(target.value.replace('.',''));
-        const formatedValue = window.convert.formatNumberAsCurrency(amountMicro);
+        let formatedValue = window.convert.formatNumberAsCurrency(amountMicro);
         console.log(`formated ${amountMicro} to ${formatedValue}`);
         target.value = formatedValue;
-        
-        // update totalSpent
+
         let totalSpentMicro = amountMicro;
         totalSpentMicro += parseInt(this.eHTML[foldName].txFee.innerText.replace('.',''));
         if (foldName === 'send') {
@@ -613,7 +609,7 @@ class BoardInternalWallet {
                 this.eHTML.send.amount.value = instructions.amount;
                 console.log(`instructions.amount: ${instructions.amount}`);
                 this.toggleMiniForm('send');
-                this.#updateAmountAndFeesRelatedToInput(this.eHTML.send.amount);
+                this.updateAmountAndFeesRelatedToInput(this.eHTML.send.amount);
                 this.textInfo(this.eHTML.send.textInfo, 'Read carefully the instructions result!', 3000, true);
                 break;
             case 'STAKE':
@@ -622,7 +618,7 @@ class BoardInternalWallet {
                 this.eHTML.stake.toAddress.value = instructions.address;
                 this.eHTML.stake.amount.value = instructions.amount;
                 this.toggleMiniForm('stake');
-                this.#updateAmountAndFeesRelatedToInput(this.eHTML.stake.amount);
+                this.updateAmountAndFeesRelatedToInput(this.eHTML.stake.amount);
                 this.textInfo(this.eHTML.stake.textInfo, 'Read carefully the instructions result!', 3000, true);
                 break;
             case 'INSCRIBE':

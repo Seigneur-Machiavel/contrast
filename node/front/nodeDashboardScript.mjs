@@ -200,6 +200,7 @@ const eHTML = {
 }
 window.eHTML = eHTML;
 
+function readableId(peerIdStr) { return peerIdStr.replace('12D3KooW', '').slice(0, 12) }
 function displayNodeInfo(data) {
     /** @type {StakeReference[]} */
     const validatorStakesReference = data.validatorStakes ? data.validatorStakes : false;
@@ -232,7 +233,7 @@ function displayNodeInfo(data) {
     eHTML.lastBlockInfo.textContent = data.lastBlockInfo ? data.lastBlockInfo : 'No Block Info';
     eHTML.txInMempool.textContent = data.txInMempool;
     eHTML.averageBlockTime.textContent = data.averageBlockTime ? `${data.averageBlockTime} seconds` : '0 seconds';
-    eHTML.peerId.textContent = data.peerId ? data.peerId.replace('12D3KooW', '') : 'No Peer ID';
+    eHTML.peerId.textContent = data.peerId ? readableId(data.peerId) : 'No Peer ID';
     eHTML.nodeState.textContent = data.nodeState ? data.nodeState : 'No State';
     if (Array.isArray(data.listenAddress) && data.listenAddress.length > 0) {
         let cleanedAddresses = [];
@@ -303,7 +304,7 @@ function renderPeers(peers) {
 
         // Create a span to hold the peer ID
         const peerSpan = document.createElement('span');
-        peerSpan.textContent = peerId.replace('12D3KooW', '');
+        peerSpan.textContent = readableId(peerId);
         peerSpan.classList.add('peer-id'); // Optional: Add a class for styling
 
         // Create a div to hold peer information
@@ -376,7 +377,7 @@ function renderPeersHeight(peers) {
         li.classList.add('peer-height-item');
 
         const peerSpan = document.createElement('span');
-        peerSpan.textContent = `${peerId.replace('12D3KooW', '')}: `;
+        peerSpan.textContent = `${readableId(peerId)}: `;
         peerSpan.classList.add('peer-id');
 
         const heightSpan = document.createElement('span');
