@@ -58,7 +58,7 @@ export class SyncHandler {
     peersHeights = {};
     consensusHeight = -1;
     syncFailureCount = 0;
-    syncFailureModulos = { loadSnapshot: 5, restart: 20 };
+    syncFailureModulos = { loadSnapshot: 3, restart: 20 };
     node;
 
     /** @param {Node} node */
@@ -424,7 +424,7 @@ export class SyncHandler {
         }
 
         // METHOD 1: try to sync from snapshots
-        // if syncFailureCount is a multiple of 5, try to sync from snapshots
+        // if syncFailureCount is a multiple of 3, try to sync from previous snapshot
         const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
         if (this.syncFailureCount % this.syncFailureModulos.loadSnapshot === 0 && snapshotsHeights.length > 0) {
             const modulo = (this.syncFailureCount / this.syncFailureModulos.loadSnapshot) % snapshotsHeights.length;
