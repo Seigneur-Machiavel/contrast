@@ -264,7 +264,10 @@ class P2PNetwork extends EventEmitter {
 
             // now we have the resume, we can try to init new connections if needed
             for (let i = 0; i < missingPeers; i++) {
-                const { peerIdStr, peer } = this.peersManager.getNextConnectablePeer();
+                const nextConnectablePeer = this.peersManager.getNextConnectablePeer();
+                if (!nextConnectablePeer) break; // no more connectable peers
+
+                const { peerIdStr, peer } = nextConnectablePeer;
                 if (!peerIdStr || !peer) continue;
                 if (peerIdStr === this.peersManager.idStr) continue; // not myself
                 if (connectedPeersConType[peerIdStr]) continue; // already connected
