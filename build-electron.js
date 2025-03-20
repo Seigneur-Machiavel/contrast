@@ -31,7 +31,7 @@ builder.build({
       target: 'nsis',
       icon: 'electron-app/img/icon.ico',
       artifactName: `Contrast-Setup-${version}.exe`,
-      certificateSubjectName: "Open Source Developer,Guillaume Bisiaux"
+      certificateSubjectName: "Open Source Developer, Guillaume Bisiaux"
     },
     nsis: { oneClick: false, allowToChangeInstallationDirectory: true },
     asar: true,

@@ -205,6 +205,23 @@ ipcMain.on('set-auto-launch', async (event, value) => {
     console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);
     event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
 });
+ipcMain.on('reset-private-key', async (event) => {
+    if (dashboardWorker) await dashboardWorker.stop();
+    await new Promise(resolve => setTimeout(resolve, 7000)); // wait for the node to stop properly
+    mainStorage.deleteFile('passHash.bin');
+    mainStorage.deleteFile('nodeSetting.bin');
+    if (!app.isPackaged) return;
+    app.relaunch();
+    app.quit();
+});
+ipcMain.on('reset-all-data', async (event) => {
+    if (dashboardWorker) await dashboardWorker.stop();
+    await new Promise(resolve => setTimeout(resolve, 7000)); // wait for the node to stop properly
+    await import('./clear.mjs');
+    if (!app.isPackaged) return;
+    app.relaunch();
+    app.quit();
+});
 ipcMain.on('generate-new-address', async (event, prefix) => {
     const newAddress = await dashboardWorker.generateNewAddressAndWaitResult(prefix);
     event.reply('new-address-generated', newAddress);

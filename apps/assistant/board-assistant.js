@@ -146,7 +146,7 @@ class Assistant {
             return;
         }
 
-        const isValid = typeof password === 'string' && password.length > 5 && password.length < 30;
+        const isValid = typeof password === 'string' && password.length > 5 && password.length < 31;
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; } // re ask confirmation (2)
 
         this.#userResponse = password;
@@ -165,7 +165,7 @@ class Assistant {
 
     requestPrivateKey() {
         this.sendMessage('Please enter your private key (64 characters hexadecimal)');
-        this.#setActiveInput('text', 'Your private key...', true);
+        this.#setActiveInput('password', 'Your private key...', true);
         this.onResponse = this.#verifyPrivateKey;
     }
     #verifyPrivateKey(privateKey = 'toto') {
@@ -185,7 +185,7 @@ class Assistant {
         this.onResponse = this.#verifyPasswordAndUnlock;
     }
     #verifyPasswordAndUnlock(password = 'toto') {
-        const isValid = typeof password === 'string' && password.length > 5 && password.length < 30;
+        const isValid = typeof password === 'string' && password.length > 5 && password.length < 31;
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
 
         //window.electronAPI.setPassword(password);
@@ -236,6 +236,14 @@ class Assistant {
                     'No': () => { ipcRenderer.send('set-auto-launch', false); this.idleMenu(); }
                 });
             },
+            'Reset': () => {
+                this.sendMessage('Your private key will be lost, are you sure?');
+                this.requestChoice({
+                    'Delete private key': () => ipcRenderer.send('reset-private-key'), // should restart the app
+                    'Delete all data': () => ipcRenderer.send('reset-all-data'), // should restart the app
+                    'No': () => this.idleMenu()
+                });
+            }
 		});
     }
 
