@@ -147,10 +147,10 @@ async function createWindow(options, parentWindow) {
 autoUpdater.on('update-available', (e) => {
     console.log(`A new update is available: v${e.version}`);
     /// board assitan msg
-    ipcRenderer.send('assistant-message', `A new update is available: v${e.version}`);
+    //ipcRenderer.send('assistant-message', `A new update is available: v${e.version}`);
 })
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
-    ipcRenderer.send('assistant-message', `Update downloaded and ready to be installed: v${releaseName}`);
+    //ipcRenderer.send('assistant-message', `Update downloaded and ready to be installed: v${releaseName}`);
     if (silentUpdate && isDev) { console.log('downloaded'); return; } // avoid restart/install in dev mode
     if (silentUpdate) { autoUpdater.quitAndInstall(true, true); return; }
 
@@ -173,10 +173,10 @@ const autoUpdaterCheckLoop = async () => {
         console.log('Checking for updates...');
         //autoUpdater.forceDevUpdateConfig = true; autoUpdater.currentVersion = '0.2.1'; // Dev update test
         try {
-            ipcRenderer.send('assistant-message', 'Checking for updates...');
+            //ipcRenderer.send('assistant-message', 'Checking for updates...');
             updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
             downloadingVersion = updateCheckResult?.updateInfo?.version;
-            ipcRenderer.send('assistant-message', `No updates found, checking again in 1h...`);
+            //ipcRenderer.send('assistant-message', `No updates found, checking again in 1h...`);
         } catch (error) {
             console.error('Error during update check:', error.stack);
         }
