@@ -283,6 +283,7 @@ export class SyncHandler {
         const consensus = { height: 0, peers: 0, blockHash: '' };
         const consensuses = {};
         for (const peerStatus of peersStatus) {
+            if (peerStatus.currentHeight === 0) { continue; }
             const height = peerStatus.currentHeight;
             const blockHash = peerStatus.latestBlockHash;
 
