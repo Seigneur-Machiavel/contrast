@@ -452,7 +452,7 @@ class BoardInternalWallet {
                     
                     this.refreshActiveAccounts();
                     this.animations.sendBtn = this.holdBtnMouseDownAnimation(e.target, async () => {
-                        amount = parseInt(this.eHTML.send.amount.value.replace(",","").replace(".",""));
+                        amount = parseInt(Number(this.eHTML.send.amount.value).toFixed(6).replace(",","").replace(".",""));
                         receiverAddress = this.eHTML.send.toAddress.value;
 
                         const createdSignedTx = await window.Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress, feePerByte);
@@ -474,20 +474,20 @@ class BoardInternalWallet {
                     this.refreshActiveAccounts();
                     this.animations.stakeBtn = this.holdBtnMouseDownAnimation(e.target, async () => {
                         console.log('stakeBtn');
-                            amount = parseInt(this.eHTML.stake.amount.value.replace(",","").replace(".",""));
-                            try {
-                                const stakeOnAddress = this.eHTML.stake.toAddress.value;
-                                window.addressUtils.conformityCheck(stakeOnAddress);
+                        amount = parseInt(Number(this.eHTML.stake.amount.value).toFixed(6).replace(",","").replace(".",""));
+                        try {
+                            const stakeOnAddress = this.eHTML.stake.toAddress.value;
+                            window.addressUtils.conformityCheck(stakeOnAddress);
 
-                                const createdTx = await window.Transaction_Builder.createStakingVss(senderAccount, stakeOnAddress, amount, feePerByte);
-                                const signedTx = await senderAccount.signTransaction(createdTx);
-                                console.log('transaction:', signedTx);
-                                this.fetcher.send({ type: 'broadcast_transaction', data: { transaction: signedTx, senderAddress: senderAccount.address } });
-                            } catch (error) {
-                                this.textInfo(this.eHTML.stake.textInfo, error.message.replace(' | ', '\n'), 7000, true);
-                            }
-                            
-                            this.animations.stakeBtn = null;
+                            const createdTx = await window.Transaction_Builder.createStakingVss(senderAccount, stakeOnAddress, amount, feePerByte);
+                            const signedTx = await senderAccount.signTransaction(createdTx);
+                            console.log('transaction:', signedTx);
+                            this.fetcher.send({ type: 'broadcast_transaction', data: { transaction: signedTx, senderAddress: senderAccount.address } });
+                        } catch (error) {
+                            this.textInfo(this.eHTML.stake.textInfo, error.message.replace(' | ', '\n'), 7000, true);
+                        }
+                        
+                        this.animations.stakeBtn = null;
                     });
                     break;
             }

@@ -7,6 +7,7 @@ Menu.setApplicationMenu(null); // remove the window top menu
 const isDev = !app.isPackaged;
 
 /**
+ * @typedef {import('electron-updater').UpdateCheckResult} UpdateCheckResult
  * @typedef {import('./utils/storage-manager.mjs').Storage} Storage
  * 
  * @typedef {Object} WindowOptions
@@ -23,6 +24,8 @@ const isDev = !app.isPackaged;
  * @property {boolean} [maximized] - default false
  * @property {boolean} [startHidden] - default true
  * @property {boolean} [isMainWindow] - default false */
+
+
 
 /** @type {Storage} */
 let mainStorage;
@@ -48,7 +51,8 @@ const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });
 const nodeApp = isDev ? 'stresstest' : 'dashboard';
 let isQuiting = false;
-let updateCheckResult;
+/** @type {UpdateCheckResult | null} */
+let updateCheckResult = null;
 let silentUpdate = true;
 /** @type {Object<string, BrowserWindow>} */
 const windows = {};
@@ -140,7 +144,8 @@ async function createWindow(options, parentWindow) {
 }
 
 // AUTO UPDATER EVENTS
-autoUpdater.on('update-available', (e) => console.log(`A new update is available: v${e.version}`));
+autoUpdater.on('update-available', (e) => 
+    console.log(`A new update is available: v${e.version}`));
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     if (silentUpdate && isDev) { console.log('downloaded'); return; } // avoid restart/install in dev mode
     if (silentUpdate) { autoUpdater.quitAndInstall(true, true); return; }
@@ -158,14 +163,14 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
         if (returnValue.response === 0) autoUpdater.quitAndInstall(false, false);
     });
 });
-autoUpdaterCheckLoop = async () => {
+const autoUpdaterCheckLoop = async () => {
     let downloadingVersion;
     while (!downloadingVersion && downloadingVersion !== version) {
         //autoUpdater.forceDevUpdateConfig = true; autoUpdater.currentVersion = '0.2.1'; // Dev update test
         updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
         downloadingVersion = updateCheckResult?.updateInfo?.version;
 
-        const delay = Math.floor(Math.random() * 60_000) + 240_000; // rnd delay beetwen 4 and 5 minutes
+        const delay = Math.floor(Math.random() * 60_000) + 60_000; // rnd delay beetwen 30sec and 1min
         await new Promise(resolve => setTimeout(resolve, delay)); // avoid all peers updating at the same time
     }
     console.log(`Update check loop stopped, downloading version: ${downloadingVersion}`);
