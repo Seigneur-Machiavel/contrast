@@ -50,11 +50,12 @@ const SETTINGS = {
     LOCAL_PORT: "27270",
     //LOCAL: window.explorerLOCAL || false,
     LOCAL: (window.parent && window !== window.parent) || window.location.hostname === 'localhost' ? true : false,
+    //LOCAL: window.location.hostname === 'localhost' ? true : false,
     RECONNECT_INTERVAL: 2000,
     GET_CURRENT_HEIGHT_INTERVAL: window.location.hostname === 'localhost' ? 1000 : 5000,
     ROLES: window.explorerROLES || ['chainExplorer', 'blockExplorer'],
 
-    AUTO_CHOSE_BEST_NODES: window.location.hostname === 'localhost' ? false : true,
+    AUTO_CHOSE_BEST_NODES: false, // window.location.hostname === 'localhost' ? false : true, // EXPERIMENTAL
     CURRENT_NODE_INDEX: 0,
     NODES_LIST: [ // used for redondant connections
         'ws://localhost:27270',

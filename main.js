@@ -2,7 +2,7 @@ if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.m
 
 const fs = require('fs');
 const path = require('path');
-const { app, BrowserWindow, Menu, globalShortcut, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, globalShortcut, dialog, ipcMain, ipcRenderer } = require('electron');
 Menu.setApplicationMenu(null); // remove the window top menu
 const isDev = !app.isPackaged;
 
@@ -144,9 +144,13 @@ async function createWindow(options, parentWindow) {
 }
 
 // AUTO UPDATER EVENTS
-autoUpdater.on('update-available', (e) => 
-    console.log(`A new update is available: v${e.version}`));
+autoUpdater.on('update-available', (e) => {
+    console.log(`A new update is available: v${e.version}`);
+    /// board assitan msg
+    ipcRenderer.send('assistant-message', `A new update is available: v${e.version}`);
+})
 autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+    ipcRenderer.send('assistant-message', `Update downloaded and ready to be installed: v${releaseName}`);
     if (silentUpdate && isDev) { console.log('downloaded'); return; } // avoid restart/install in dev mode
     if (silentUpdate) { autoUpdater.quitAndInstall(true, true); return; }
 
@@ -166,11 +170,20 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
 const autoUpdaterCheckLoop = async () => {
     let downloadingVersion;
     while (!downloadingVersion && downloadingVersion !== version) {
+        console.log('Checking for updates...');
         //autoUpdater.forceDevUpdateConfig = true; autoUpdater.currentVersion = '0.2.1'; // Dev update test
-        updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
-        downloadingVersion = updateCheckResult?.updateInfo?.version;
+        try {
+            ipcRenderer.send('assistant-message', 'Checking for updates...');
+            updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
+            downloadingVersion = updateCheckResult?.updateInfo?.version;
+            ipcRenderer.send('assistant-message', `No updates found, checking again in 1h...`);
+        } catch (error) {
+            console.error('Error during update check:', error.stack);
+        }
 
-        const delay = Math.floor(Math.random() * 60_000) + 60_000; // rnd delay beetwen 30sec and 1min
+        const delay = Math.floor(Math.random() * 10_000) + 10_000; // rnd delay beetwen 30sec and 1min
+        //const delay = Math.floor(Math.random() * 60_000) + 60_000; // rnd delay beetwen 30sec and 1min
+        console.log(`Next update check in ${(delay / 1000).toFixed(2)}s`);
         await new Promise(resolve => setTimeout(resolve, delay)); // avoid all peers updating at the same time
     }
     console.log(`Update check loop stopped, downloading version: ${downloadingVersion}`);
@@ -241,7 +254,8 @@ app.on('before-quit', () => {
 app.on('will-quit', async () => await new Promise(resolve => setTimeout(resolve, 10000))); // let time for the node to stop properly
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 app.on('ready', async () => {
-    if (!isDev) autoUpdaterCheckLoop();
+    //if (!isDev) autoUpdaterCheckLoop();
+    if (!isDev) autoUpdater.checkForUpdatesAndNotify();
     await loadUserPreferences();
 
     windows.boardWindow = await createWindow(windowsOptions.boardWindow);
