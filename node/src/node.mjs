@@ -184,7 +184,7 @@ export class Node {
         if (!activeCheckpoint) { this.opStack.pushFirst('createBlockCandidateAndBroadcast', null); }
         this.opStack.pushFirst('syncWithPeers', null);
     }
-    async #waitSomePeers(nbOfPeers = 1, maxAttempts = 30, delay = 1000) {
+    async #waitSomePeers(nbOfPeers = 1, maxAttempts = 30, delay = 5000) {
         const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
         let connectedPeers = 0;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
