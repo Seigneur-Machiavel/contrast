@@ -345,8 +345,9 @@ export class CheckpointSystem {
 		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
 
 		if (saveZipArchive) {
-			const checkpointSaved = await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
-			if (!checkpointSaved) { throw new Error(`(Checkpoint deploy) Checkpoint save failed`); }
+			await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
+			//const checkpointSaved = await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
+			//if (!checkpointSaved) { throw new Error(`(Checkpoint deploy) Checkpoint save failed`); }
 		}
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
