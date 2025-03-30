@@ -894,6 +894,12 @@ function updateAddressExhaustiveDataFromNode(address) {
     console.log(`Updating ${address} from: ${from}`);
     chrome.runtime.sendMessage({action: 'get_address_exhaustive_data', address, from });
 }
+function inputElementValueToAmount(inputElement) {
+    const a = Number(inputElement.value.replaceAll(",",""));
+    const b = a.toFixed(6).replaceAll(".","");
+    const c = parseInt(b);
+    return c;
+}
 //#endregion
 
 //#region - EVENT LISTENERS
@@ -1068,7 +1074,8 @@ document.addEventListener('mousedown', function(e) { // hold click
 
             animations.sendBtn = holdBtnMouseDown(e.target, async () => {
                 console.log('sendBtn');
-                amount = parseInt(eHTML.send.amount.value.replace(",","").replace(".",""));
+                //amount = parseInt(eHTML.send.amount.value.replaceAll(",","").replaceAll(".",""));
+                amount = inputElementValueToAmount(eHTML.send.amount);
                 console.log('amount:', amount);
                 receiverAddress = eHTML.send.address.value;
                 senderAccount = activeWallet.accounts[activeAddressPrefix][activeAccountIndexByPrefix[activeAddressPrefix]];
@@ -1093,7 +1100,8 @@ document.addEventListener('mousedown', function(e) { // hold click
             
             animations.stakeBtn = holdBtnMouseDown(e.target, async () => {
                 console.log('stakeBtn');
-                    amount = parseInt(eHTML.stake.amount.value.replace(",","").replace(".",""));
+                    //amount = parseInt(eHTML.stake.amount.value.replaceAll(",","").replaceAll(".",""));
+                    amount = inputElementValueToAmount(eHTML.stake.amount);
                     console.log('amount:', amount);
         
                     senderAccount = activeWallet.accounts[activeAddressPrefix][activeAccountIndexByPrefix[activeAddressPrefix]];

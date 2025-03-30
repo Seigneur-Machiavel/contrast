@@ -371,6 +371,12 @@ class BoardInternalWallet {
             this.fetcher.send({ type: 'subscribe_balance_update', data });
         });
     }
+    #inputElementValueToAmount(inputElement) {
+        const a = Number(inputElement.value.replaceAll(",",""));
+        const b = a.toFixed(6).replaceAll(".","");
+        const c = parseInt(b);
+        return c;
+    }
     #initListeners() {
         document.addEventListener('click', async (e) => {
             let target = e.target;
@@ -452,7 +458,8 @@ class BoardInternalWallet {
                     
                     this.refreshActiveAccounts();
                     this.animations.sendBtn = this.holdBtnMouseDownAnimation(e.target, async () => {
-                        amount = parseInt(Number(this.eHTML.send.amount.value).toFixed(6).replace(",","").replace(".",""));
+                        //amount = parseInt(Number(this.eHTML.send.amount.value.replaceAll(",","")).toFixed(6).replaceAll(".",""));
+                        amount = this.#inputElementValueToAmount(this.eHTML.send.amount);
                         receiverAddress = this.eHTML.send.toAddress.value;
 
                         const createdSignedTx = await window.Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress, feePerByte);
@@ -474,8 +481,10 @@ class BoardInternalWallet {
                     this.refreshActiveAccounts();
                     this.animations.stakeBtn = this.holdBtnMouseDownAnimation(e.target, async () => {
                         console.log('stakeBtn');
-                        amount = parseInt(Number(this.eHTML.stake.amount.value).toFixed(6).replace(",","").replace(".",""));
+                        
+                        //amount = parseInt(Number(this.eHTML.stake.amount.value).toFixed(6).replaceAll(",","").replaceAll(".",""));
                         try {
+                            amount = this.#inputElementValueToAmount(this.eHTML.stake.amount);
                             const stakeOnAddress = this.eHTML.stake.toAddress.value;
                             window.addressUtils.conformityCheck(stakeOnAddress);
 

@@ -170,7 +170,7 @@ export class Node {
         if (this.roles.includes('miner')) { this.miner.startWithWorker(); }
 
         const nbOfPeers = await this.#waitSomePeers();
-        if (!nbOfPeers || nbOfPeers < 2) {
+        if (!nbOfPeers || nbOfPeers < 1) {
             this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); });
             this.restartRequested = 'Failed to connect to peers';
             return;

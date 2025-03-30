@@ -96,6 +96,7 @@ class Assistant {
         const hexFromList = bip39.mnemonicToEntropy(wordsList).toString('hex');
         if (hexFromList !== privateKeyHex) return this.sendMessage('Error while extracting the private key!', 'system');
 
+        
         //this.sendMessage(wordsList, 'system'); just to test: ok
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('message');
@@ -164,7 +165,7 @@ class Assistant {
     }
 
     requestPrivateKey() {
-        this.sendMessage('Please enter your private key (64 characters hexadecimal)');
+        this.sendMessage('Please enter your private key (64 characters hexadecimal or 24 words list)');
         this.#setActiveInput('password', 'Your private key...', true);
         this.onResponse = this.#verifyPrivateKey;
     }

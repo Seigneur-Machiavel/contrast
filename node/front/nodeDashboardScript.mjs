@@ -574,7 +574,7 @@ document.addEventListener('click', async (event) => {
     switch (target) {
         case eHTML.stakeInput.confirmBtn:
             console.log('Stake Confirm Button clicked');
-            const amountToStake = parseInt(eHTML.stakeInput.input.value.replace(",","").replace(".",""));
+            const amountToStake = parseInt(eHTML.stakeInput.input.value.replaceAll(",","").replaceAll(".",""));
             const validatorAddress = eHTML.validatorAddress.textContent;
             console.log(`amountToStake: ${amountToStake} | validatorAddress: ${validatorAddress}`);
             
