@@ -169,14 +169,45 @@ class Assistant {
         this.#setActiveInput('password', 'Your private key...', true);
         this.onResponse = this.#verifyPrivateKey;
     }
+    #digestWordsListStr(wordsList = 'toto toto ...') {
+        const split = wordsList.split(' ');
+        const words = [];
+        //console.log('split:', split);
+        for (const part of split) {
+            let cleaned = part.trim().toLowerCase(); // remove spaces and lowercase
+            cleaned = cleaned.replace(/[^a-z]/g, ''); // remove all non-alphabetic characters
+            if (cleaned.length > 0) words.push(cleaned);
+        }
+
+        if (words.length % 2 !== 0) return null; // must be even
+
+        const wl = words.join(' ');
+        const hex = bip39.mnemonicToEntropy(wl).toString('hex');
+        
+        return hex;
+    }
+    #isHexadecimal(str) {
+        const regex = /^[0-9a-fA-F]+$/;
+        if (str && str.length % 2 === 0 && regex.test(str)) { return true; }
+        return false;
+    }
     #verifyPrivateKey(privateKey = 'toto') {
+        if (!typeof privateKey === 'string') { this.sendMessage('Invalid private key. (must be a string)'); return; }
+
+        //console.log('privateKey:', privateKey);
+        let privKeyHex = privateKey;
+        const isWordsList = privateKey.split(' ').length > 1;
+        if (isWordsList) { // convert words list to hex
+            privKeyHex = this.#digestWordsListStr(privateKey);
+            if (!privKeyHex) { this.sendMessage('Invalid private key (words list).'); return; }
+        }
+
         // hex only, 64 characters
-        const isValid = typeof privateKey === 'string' && privateKey.length === 64 && this.#isHexadecimal(privateKey);
-        if (!isValid) { this.sendMessage('Invalid private key.'); return; }
+        const isValidPrivHex = privKeyHex.length === 64 && this.#isHexadecimal(privKeyHex);
+        if (!isValidPrivHex) { this.sendMessage('Invalid private key. (retry)'); return; }
         
         this.sendMessage('Initializing node... (can take a up to a minute)');
-        //window.electronAPI.setPrivateKeyAndStartNode(privateKey);
-        ipcRenderer.send('set-private-key-and-start-node', privateKey);
+        ipcRenderer.send('set-private-key-and-start-node', privKeyHex);
         this.#setActiveInput('idle');
     }
 
@@ -299,11 +330,6 @@ class Assistant {
             this.eHTML.inputIdleText.textContent = newText;
             await new Promise(resolve => setTimeout(resolve, 60));
         }
-    }
-    #isHexadecimal(str) {
-        const regex = /^[0-9a-fA-F]+$/;
-        if (str && str.length % 2 === 0 && regex.test(str)) { return true; }
-        return false;
     }
 }
 
