@@ -174,18 +174,30 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         await new Promise((resolve) => setTimeout(resolve, 1000)); // let time to start workers
         return readyWorkers;
     }
+    async #togglePausedWorkers() {
+        for (let i = this.nbOfWorkers; i < this.workers.length; i++)
+            if (this.workers[i]?.paused === false) this.workers[i].pause();
+        
+        for (let i = 0; i < this.nbOfWorkers; i++)
+            if (this.workers[i]?.paused === true) this.workers[i].resume();
+    }
+
     async #terminateUnusedWorkers() {
-        const promises = [];
-        for (let i = this.nbOfWorkers; i < this.workers.length; i++) { promises.push(this.workers[i].terminateAsync()); }
-        await Promise.all(promises);
+        for (let i = this.nbOfWorkers; i < this.workers.length; i++) this.workers[i].terminateAsync();
         this.workers = this.workers.slice(0, this.nbOfWorkers);
     }
     /** DON'T AWAIT THIS FUNCTION */
     async startWithWorker() {
-        const delayBetweenUpdate = 100;
+        const delayBetweenUpdate = 10; // previously 100ms
+        let countBeforeCleaning = 0;
         while (!this.terminated) {
             await new Promise((resolve) => setTimeout(resolve, delayBetweenUpdate));
-            await this.#terminateUnusedWorkers();
+            this.#togglePausedWorkers();
+            if (countBeforeCleaning > 0) countBeforeCleaning--;
+            if (countBeforeCleaning <= 0) {
+                await this.#terminateUnusedWorkers();
+                countBeforeCleaning = 200;
+            }
             const readyWorkers = await this.#createMissingWorkers();
             this.hashRate = this.#getAverageHashrate();
             

@@ -64,9 +64,9 @@ async function mineBlockUntilValid() {
 	while (true) {
 		if (minerVars.exiting) { return { error: 'Exiting' }; }
 		if (minerVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
-		if (minerVars.paused) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
+		if (minerVars.paused) { await new Promise((resolve) => setTimeout(resolve, 100)); continue; }
 		if (minerVars.timeOffset === 0) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
-		await new Promise((resolve) => setTimeout(resolve, minerVars.testMiningSpeedPenality));
+		if (minerVars.testMiningSpeedPenality) await new Promise((resolve) => setTimeout(resolve, minerVars.testMiningSpeedPenality));
 
 		try {
 			const startTime = performance.now();
@@ -76,6 +76,7 @@ async function mineBlockUntilValid() {
 	
 			minerVars.hashCount++;
 			hashRateCalculator.newHash(performance.now() - startTime);
+			//console.log('hashTime', Math.round(performance.now() - startTime), 'ms');
 			
 			const { conform } = mining.verifyBlockHashConformToDifficulty(mined.bitsArrayAsString, mined.finalizedBlock);
 			if (!conform) { continue; }
@@ -160,9 +161,11 @@ parentPort.on('message', async (task) => {
 			break;
 		case 'pause':
 			minerVars.paused = true;
+			parentPort.postMessage({ paused: true });
 			return;
 		case 'resume':
 			minerVars.paused = false;
+			parentPort.postMessage({ paused: false });
 			return;
 		case 'terminate':
 			//console.info('[miner-worker-nodejs] Terminating...');

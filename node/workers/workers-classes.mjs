@@ -85,12 +85,20 @@ export class MinerWorker {
         /** @type {BlockData} */
         this.result = null;
         this.isWorking = false;
+        this.paused = false;
         this.hashRate = 0;
 
         /** @type {Worker} worker */
         this.worker = newWorker('./miner-worker-nodejs.mjs');
         this.worker.on('close', () => { console.log('MinerWorker closed'); });
         this.worker.on('message', (message) => {
+            if (message.paused === true || message.paused === false) {
+                if (message.paused === true) this.paused = true;
+                if (message.paused === false) this.paused = false;
+                console.log('MinerWorker paused new state:', message.paused);
+                return;
+            }
+
             if (message.hashRate) { this.hashRate = message.hashRate; return; }
 
             if (message.result.error) { console.error(message.result.error); }

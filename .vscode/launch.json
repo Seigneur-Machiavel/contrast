@@ -10,7 +10,8 @@
             "cwd": "${workspaceFolder}",
             "env": {},
             "sourceMaps": false,
-            "outFiles": ["${workspaceFolder}/**/*.js"]
+            "outFiles": ["${workspaceFolder}/**/*.js"],
+            "runtimeArgs": ["--js-flags=--max-old-space-size=16384"]
         },
         {
             "type": "node",
