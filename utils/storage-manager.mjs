@@ -164,7 +164,7 @@ export class Storage {
 
     static deleteFile(fileNameWithExtension = 'toto.bin', directoryPath = PATH.STORAGE) {
         const filePath = path.join(directoryPath, fileNameWithExtension);
-        if (fs.existsSync(filePath)) { fs.rmSync(filePath); }
+        if (fs.existsSync(filePath)) fs.rmSync(filePath);
     }
     static dumpTrashFolder() {
         if (fs.existsSync(PATH.TRASH)) fs.rmSync(PATH.TRASH, { recursive: true });

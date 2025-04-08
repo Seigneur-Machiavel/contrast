@@ -6,7 +6,7 @@
     content="
         default-src 'self';
         style-src 'self' 'unsafe-inline';
-        frame-src http://localhost:27270 http://localhost:27271;
+        frame-src http://localhost:27270 http://localhost:27271 http://pinkparrot.science:27280 https://www.contrast.science;
         connect-src ws://localhost:27270 ws://localhost:27271 file:;
     "> <!-- removed: worker-src 'self' blob:; -->
     <title>Contrast</title>
@@ -41,7 +41,10 @@
     </label>
 
     <div id="board-windows-wrap"></div>
-    <button id="board-info-panel-button" data-infokey="infoButton"><img src="../img/info64.png"></button>
+    <button id="board-info-panel-button" data-infokey="infoButton">
+        <img src="../img/info64.png">
+        <div class="tooltip">Info panel</div>
+    </button>
     <div id="board-info-panel">
         <h3>Info panel</h3>
         <p>This is the info panel. It will display information about the element under the cursor.</p>

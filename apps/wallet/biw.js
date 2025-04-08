@@ -560,7 +560,7 @@ class BoardInternalWallet {
         document.addEventListener('mouseover', (event) => {
             const target = event.target;
             const parent = target.parentElement;
-            if (target.id === 'biw-addressTypeList' || parent.id === 'biw-addressTypeList') {
+            if (target.id === 'biw-addressTypeList' || parent?.id === 'biw-addressTypeList') {
                 this.eHTML.addressTypeList.classList.add('expand');
             } else { this.eHTML.addressTypeList.classList.remove('expand'); }
 

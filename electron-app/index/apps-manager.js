@@ -47,6 +47,8 @@ class ButtonsBar {
 		img.src = app.icon;
 		img.style.width = app.iconWidth;
 
+		newElement('div', ['tooltip'], app.tooltip, button);
+
 		this.buttons.push(button);
 		this.buttonsByAppNames[appName] = button;
 	}
@@ -69,7 +71,6 @@ class SubWindow {
 	resizeStart = { x: 0, y: 0, width: 0, height: 0 };
 	position = { left: 0, top: 0 };
 	minSize = { width: 0, height: 0 };
-	maxSize = { width: 0, height: 0 };
 	initSize = { width: undefined, height: undefined };
 	windowSize = { width: 0, height: 0 };
 	folded = true;
@@ -92,7 +93,7 @@ class SubWindow {
 		const windowClasses = this.autoSized ? ['window', 'fitContent'] : ['window', 'resizable'];
 		this.element = newElement('div', windowClasses, '', parentElement);
 		this.element.dataset.appName = this.appName;
-		this.element.appendChild(this.#newTitleBar(this.title, this.canFullScreen));
+		this.element.appendChild(this.#newTitleBar(this.title, this.canFullScreen, this.url_or_file.includes("://")));
 
 		this.contentElement = newElement('div', ['content'], '', this.element, this.url_or_file);
 		if (!this.contentElement) { console.error('Content cannot be build for:', this.url_or_file); return; }
@@ -111,8 +112,10 @@ class SubWindow {
 
 		this.element.style.minWidth = this.minSize.width ? `${this.minSize.width}px` : 'auto';
 		this.element.style.minHeight = this.minSize.height ? `${this.minSize.height}px` : 'auto';
-		this.element.style.maxWidth = this.maxSize.width ? `${this.maxSize.width}px` : `${window.innerWidth}px`;
-		this.element.style.maxHeight = this.maxSize.height ? `${this.maxSize.height}px` : `${window.innerHeight}px`;
+
+		const { width, height } = parentElement.getBoundingClientRect();
+		this.element.style.maxWidth = `${width}px`;
+		this.element.style.maxHeight = `${height}px`;
 		if (this.initSize.width) { this.element.style.width = this.initSize.width + 'px'; }
 		if (this.initSize.height) { this.element.style.height = this.initSize.height + 'px'; }
 		
@@ -143,12 +146,19 @@ class SubWindow {
 			}, 800);
 		}
 	}
-	#newTitleBar(title, expandable = true) {
+	#newTitleBar(title, expandable = true, isUrl = false) {
 		const titleBar = newElement('div', ['title-bar'], '');
 		newElement('div', ['background'], '', titleBar);
 		newElement('span', [], title, titleBar);
 
 		const buttonsWrap = newElement('div', ['buttons-wrap'], '', titleBar);
+
+		if (isUrl) {
+			const refreshButton = newElement('img', ['refresh-button'], '', buttonsWrap);
+			refreshButton.dataset.appName = this.appName;
+			refreshButton.dataset.action = 'refresh';
+			refreshButton.src = '../img/refresh_64.png';
+		}
 
 		const foldButton = newElement('img', ['fold-button'], '', buttonsWrap);
 		foldButton.dataset.appName = this.appName;
@@ -292,8 +302,6 @@ class AppsManager {
 		this.windows[appName].canFullScreen = canFullScreen;
 		this.windows[appName].minSize.width = minWidth;
 		this.windows[appName].minSize.height = minHeight;
-		this.windows[appName].maxSize.width = maxWidth;
-		this.windows[appName].maxSize.height = maxHeight;
 		this.windows[appName].initSize.width = initWidth;
 		this.windows[appName].initSize.height = initHeight;
 		this.windows[appName].position.top = initTop || 0;
@@ -393,6 +401,14 @@ class AppsManager {
 	}
 	clickWindowHandler(e) {
 		switch(e.target.dataset.action) {
+			case 'refresh':
+				const iframe = this.windows[e.target.dataset.appName].contentElement.querySelector('iframe');
+				if (!iframe) return;
+
+				iframe.src = iframe.src;
+				//iframe.contentWindow.location.reload(); // try reload
+				//iframe.contentWindow.postMessage({ type: 'reload' }, this.windows[e.target.dataset.appName].origin);
+				return;
 			case 'fold': this.toggleAppWindow(e.target.dataset.appName); return;
 			case 'expand':
 				this.windows[e.target.dataset.appName].setFullScreen(this.calculateBoardSize(), this.transitionsDuration);
@@ -473,17 +489,20 @@ class AppsManager {
 		e.preventDefault();
 		const minWidth = subWindow.minSize.width || 100;
 		const minHeight = subWindow.minSize.height || 100;
-		const maxWidth = subWindow.maxSize.width || window.innerWidth;
-		const maxHeight = subWindow.maxSize.height || window.innerHeight;
+
+		const { width, height } = this.windowsWrap.getBoundingClientRect();
+		const maxWidth = width;
+		const maxHeight = height;
 
 		const cursorHorizontalDiff = e.clientX - subWindow.resizeStart.x;
 		const cursorVerticalDiff = e.clientY - subWindow.resizeStart.y;
-
+		
 		const newWidth = Math.min(maxWidth, Math.max(minWidth, subWindow.resizeStart.width + cursorHorizontalDiff));
 		const newHeight = Math.min(maxHeight, Math.max(minHeight, subWindow.resizeStart.height + cursorVerticalDiff));
-		subWindow.element.style.width = newWidth + 'px';
-		subWindow.element.style.height = newHeight + 'px';
-
+		// +12 px to improve tracking
+		subWindow.element.style.width = newWidth + 12 + 'px';
+		subWindow.element.style.height = newHeight + 12 + 'px';
+		
 		subWindow.resizeStart.x = e.clientX;
 		subWindow.resizeStart.y = e.clientY;
 		subWindow.resizeStart.width = newWidth;

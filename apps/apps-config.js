@@ -5,8 +5,6 @@
  * @property {boolean} [autoSized] - default false
  * @property {number} [minWidth]
  * @property {number} [minHeight]
- * @property {number} [maxWidth]
- * @property {number} [maxHeight]
  * @property {number} [initWidth]
  * @property {number} [initHeight]
  * @property {number} [initTop]
@@ -31,8 +29,6 @@ const AppConfig = (appName, appConfig) => {
 		autoSized: appConfig.autoSized || false,
 		minWidth: appConfig.minWidth || undefined,
 		minHeight: appConfig.minHeight || undefined,
-		maxWidth: appConfig.maxWidth || undefined,
-		maxHeight: appConfig.maxHeight || undefined,
 		initWidth: appConfig.initWidth || undefined,
 		initHeight: appConfig.initHeight || undefined,
 		initTop: appConfig.initTop || undefined,
@@ -40,6 +36,7 @@ const AppConfig = (appName, appConfig) => {
 		icon: appConfig.icon || `../../apps/${appName}/img/icon_128.png`,
 		iconWidth: appConfig.iconWidth || '50%',
 		title: appConfig.title || 'App_Title',
+		tooltip: appConfig.tooltip || appConfig.title || 'App_Title',
 		url_or_file: appConfig.url_or_file,
 		mainClass: appConfig.mainClass || undefined,
 		setGlobal: appConfig.setGlobal || false,
@@ -58,6 +55,7 @@ const appsConfig = {
 		initWidth: 700,
 		iconWidth: '60%',
 		title: '❖ ASSISTANT ` ` \\_',
+		tooltip: 'Mr Cold Coffee',
 		url_or_file: '../../apps/assistant/assistant-content.html',
 		fullScreen: false,
 		setFront: true
@@ -68,6 +66,7 @@ const appsConfig = {
 		autoSized: true,
 		canFullScreen: false,
 		title: '- )( - WALLET ___\\',
+		tooltip: 'Wallet',
 		url_or_file: '../../apps/wallet/biw-content.html',
 	},
 	/*chat: {
@@ -96,6 +95,7 @@ const appsConfig = {
 		initTop: 0,
 		iconWidth: '69%',
 		title: '~~ DASHBOARD ___\\',
+		tooltip: 'Node Dashboard',
 		//content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
 		url_or_file: 'http://localhost:27271',
 	},
@@ -110,8 +110,24 @@ const appsConfig = {
 		initLeft: 430,
 		iconWidth: '69%',
 		title: '°`° BLOCKCHAIN EXPLORER - }== -',
+		tooltip: 'Blockchain Explorer',
 		//content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>'
 		url_or_file: 'http://localhost:27270',
+	},
+	cybercon: {
+		preload: false,
+		minWidth: 400,
+		/*minHeight: 300 + 32,
+		initWidth: 600,
+		initHeight: 450 + 32,*/
+		initWidth: 800,
+		initHeight: 600 + 32,
+		canFullScreen: true,
+		iconWidth: '30%',
+		title: '#_| CYBERCON |_# --- -- --- EXPERIMENTAL',
+		tooltip: 'Cybercon (experimental)',
+		//url_or_file: 'http://localhost:27280',
+		url_or_file: 'http://pinkparrot.science:27280/',
 	},
 };
 

@@ -133,20 +133,44 @@ document.addEventListener('change', (event) => {
 			break;
 	}
 });
-window.addEventListener('resize', function() {
+window.addEventListener('resize', function(e) {
+	// Trigger on main window resize event only
+	const { width, height } = windowsWrap.getBoundingClientRect();
 	for (const app in appsManager.windows) {
-		appsManager.windows[app].element.style.maxWidth = Math.min(appsManager.windows[app].element.style.maxWidth, window.innerWidth) + 'px';
-		appsManager.windows[app].element.style.maxHeight = Math.min(appsManager.windows[app].element.style.maxHeight, window.innerHeight) + 'px';
+		// Number(appsManager.windows[app].element.style.maxWidth.replace('px', ''))
+		//const maxWidth = appsManager.windows[app].maxSize.width || width;
+		//const maxHeight = appsManager.windows[app].maxSize.height || height;
+		//appsManager.windows[app].element.style.maxWidth = Math.min(maxWidth, width) + 'px';
+		//appsManager.windows[app].element.style.maxHeight = Math.min(maxHeight, height) + 'px';
+		appsManager.windows[app].element.style.maxWidth = width + 'px';
+		appsManager.windows[app].element.style.maxHeight = height + 'px';
 	}
 });
-
+function formatedUrl(urlStr = 'http://localhost:27271/') {
+	// result : http://localhost:27271
+	const url = new URL(urlStr);
+	return `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+}
 window.addEventListener('message', function(e) {
-	if (e.data.type && e.data.type === 'iframeClick') {
+	console.log('message received:', e.data);
+	console.log(e);
+	if (e.data?.type === 'iframeClick') {
 		for (const app in appsManager.windows) {
-			if (appsManager.windows[app].origin !== e.origin) { continue; }
+			if (!appsManager.windows[app].origin) continue;
+			if (formatedUrl(appsManager.windows[app].origin) !== formatedUrl(e.origin)) continue;
 			appsManager.setFrontWindow(app);
 			break;
 		}
+	}
+
+	const isCyberCon = formatedUrl(e.origin) === formatedUrl(appsManager.windows.cybercon.origin);
+	if (isCyberCon && e.data?.type === 'set_auth_info') {
+		// appName, fileName, data, secure
+		ipcRenderer.send('store-app-data', 'cyberCon', 'auth_info', e.data.value, true);
+	}
+
+	if (isCyberCon && e.data?.type === 'reset_game') {
+		ipcRenderer.send('delete-app-data', 'cyberCon', 'auth_info');
 	}
 });
 

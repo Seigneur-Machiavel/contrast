@@ -145,6 +145,20 @@ parentPort.on('message', async (message) => {
             const newAddress = await dashApp.generateNewAddress(prefix);
             parentPort.postMessage({ type: 'new_address_generated', data: newAddress });
             break;
+        case 'cypher_text':
+            if (!cryptoLight.isReady()) return false;
+            if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
+            const cipherText = await cryptoLight.encryptText(message.data, undefined, true);
+            if (!cipherText) { console.error('Cypher text failed'); return; }
+            parentPort.postMessage({ type: 'cypher_text_result', data: cipherText });
+            break;
+        case 'decipher_text':
+            if (!cryptoLight.isReady()) return false;
+            if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
+            const decipherText = await cryptoLight.decryptText(message.data, undefined);
+            if (!decipherText) { console.error('Decipher text failed'); return; }
+            parentPort.postMessage({ type: 'decipher_text_result', data: decipherText });
+            break;
         default:
             console.error('Unknown message type:', message.type);
     }

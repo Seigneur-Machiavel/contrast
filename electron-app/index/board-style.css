@@ -149,6 +149,9 @@ body {
 #board-info-panel-button:hover {
     box-shadow: inset 0 0 0 2px var(--color3);
 }
+#board-info-panel-button:hover .tooltip {
+    top: 20%;
+}
 #board-info-panel-button.active {
     box-shadow: inset 0 0 0 2px var(--color2);
 }
@@ -186,6 +189,7 @@ body {
 }
 
 #board-bottom-buttons-bar {
+    z-index: 10;
     pointer-events: none;
     position: fixed;
     display: flex;

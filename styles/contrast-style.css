@@ -163,3 +163,38 @@ button {
 .hidden {
     display: none !important;
 }
+.tooltip {
+    pointer-events: none;
+    z-index: 1;
+    /*display: none;*/
+    display: block;
+    opacity: 0;
+    position: absolute;
+    background: var(--color1);
+    color: var(--color2);
+    border: solid var(--color3) 2px;
+    padding: 4px 6px;
+    font-size: xx-small;
+
+    left: 50%;
+    top: 120%;
+    transform: translateX(-50%);
+    transition: none;
+}
+div:hover > .tooltip {
+    display: block;
+    opacity: 1;
+    transition: opacity .2s .2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+button:hover {
+    z-index: 1;
+}
+button:hover > .tooltip {
+    display: block;
+    opacity: 1;
+    left: 50%;
+    top: 80%;
+    transform: none;
+    min-width: 120px;
+    transition: opacity .1s .2s cubic-bezier(0.4, 0, 0.2, 1);
+}

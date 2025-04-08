@@ -384,6 +384,28 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
+    async cypherTextAndWaitResult(text = '') {
+        const promise = new Promise((resolve, reject) => {
+            this.worker.on('message', (message) => {
+                if (message.type === 'cypher_text_result') return resolve(message.data);
+            });
+            setTimeout(() => { reject('Timeout'); }, 10000);
+        });
+        this.worker.postMessage({ type: 'cypher_text', data: text });
+        console.info('msg sent to NodeAppWorker: cypher_text');
+        return promise;
+    }
+    async decipherTextAndWaitResult(text = '') {
+        const promise = new Promise((resolve, reject) => {
+            this.worker.on('message', (message) => {
+                if (message.type === 'decipher_text_result') return resolve(message.data);
+            });
+            setTimeout(() => { reject('Timeout'); }, 10000);
+        });
+        this.worker.postMessage({ type: 'decipher_text', data: text });
+        console.info('msg sent to NodeAppWorker: decipher_text');
+        return promise;
+    }
     #avoidMainWindowMessage(message, typeStringCheck = true) {
         if (!this.mainWindow) return true;
         if (typeStringCheck && typeof message.data !== 'string') return true;

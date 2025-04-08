@@ -30,8 +30,7 @@ const isDev = !app.isPackaged;
 /** @type {Storage} */
 let mainStorage;
 (async () => {
-    const { Storage } = await import('./utils/storage-manager.mjs');
-    mainStorage = Storage;
+    mainStorage = (await import('./utils/storage-manager.mjs')).Storage;
 })();
 
 const { autoUpdater } = require('electron-updater');
@@ -204,7 +203,9 @@ ipcMain.on('set-password', async (event, password) => {
     setShortcuts(windows, isDev);
 });
 ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());
-ipcMain.on('set-private-key-and-start-node', (event, privateKey) => dashboardWorker.setPrivateKeyAndStartNode(privateKey));
+ipcMain.on('set-private-key-and-start-node', (event, privateKey) => {
+    dashboardWorker.setPrivateKeyAndStartNode(privateKey)
+});
 ipcMain.on('extract-private-key', async (event, password) => {
     const extractedHex = await dashboardWorker.extractPrivateKeyAndWaitResult(password === '' ? 'fingerPrint' : password);
     if (!extractedHex) return event.reply('assistant-message', 'Password is incorrect, try again!');
@@ -243,6 +244,33 @@ ipcMain.on('reset-all-data', async (event) => {
 ipcMain.on('generate-new-address', async (event, prefix) => {
     const newAddress = await dashboardWorker.generateNewAddressAndWaitResult(prefix);
     event.reply('new-address-generated', newAddress);
+});
+ipcMain.on('store-app-data', async (event, appName, filename, data, secure = true) => {
+    if (!mainStorage) await new Promise(resolve => setTimeout(resolve, 10)); // wait for storage to be loaded
+    if (typeof appName !== 'string') return event.reply('error', 'Invalid appName');
+    if (typeof filename !== 'string') return event.reply('error', 'Invalid filename');
+    if (!data) return event.reply('error', 'Invalid data');
+    if (typeof secure !== 'boolean') return event.reply('error', 'Invalid secure type, must be a boolean');
+
+    if (!secure) {
+        mainStorage.saveJSON(`${appName}/${filename}`, data);
+        event.reply('app-data-stored', appName, filename, data);
+        return;
+    }
+    
+    try {
+        const cypherTextData = await dashboardWorker.cypherTextAndWaitResult(data);
+        mainStorage.saveJSON(`${appName}/${filename}`, cypherTextData);
+        event.reply('app-data-stored', appName, filename, cypherTextData);
+    } catch (error) { event.reply('error', 'Error while storing app data:', error); }
+});
+ipcMain.on('delete-app-data', async (event, appName, filename) => {
+    if (!mainStorage) await new Promise(resolve => setTimeout(resolve, 10)); // wait for storage to be loaded
+    if (typeof appName !== 'string') return event.reply('error', 'Invalid appName');
+    if (typeof filename !== 'string') return event.reply('error', 'Invalid filename');
+
+    mainStorage.deleteFile(`${appName}/${filename}`);
+    event.reply('app-data-deleted', appName, filename);
 });
 
 // APP EVENTS
