@@ -209,7 +209,7 @@ async function getHeightsLoop() {
     while (true) {
         await new Promise((resolve) => { setTimeout(() => { resolve(); }, SETTINGS.GET_CURRENT_HEIGHT_INTERVAL); });
         if (!ws || ws.readyState !== 1) { continue; }
-        try { ws.send(JSON.stringify({ type: 'get_height', data: Date.now() })) } catch (error) {};
+        try { ws.send(JSON.stringify({ type: 'get_height' })) } catch (error) {};
     }
 }; getHeightsLoop();
 //#endregion

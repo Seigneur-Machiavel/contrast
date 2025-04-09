@@ -152,8 +152,8 @@ function formatedUrl(urlStr = 'http://localhost:27271/') {
 	return `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
 }
 window.addEventListener('message', function(e) {
-	console.log('message received:', e.data);
-	console.log(e);
+	//console.log('message received:', e.data);
+	//console.log(e);
 	if (e.data?.type === 'iframeClick') {
 		for (const app in appsManager.windows) {
 			if (!appsManager.windows[app].origin) continue;
@@ -163,7 +163,7 @@ window.addEventListener('message', function(e) {
 		}
 	}
 
-	const isCyberCon = formatedUrl(e.origin) === formatedUrl(appsManager.windows.cybercon.origin);
+	const isCyberCon = formatedUrl(e.origin) === formatedUrl(appsManager.windows.cybercon?.origin);
 	if (isCyberCon && e.data?.type === 'set_auth_info') {
 		// appName, fileName, data, secure
 		ipcRenderer.send('store-app-data', 'cyberCon', 'auth_info', e.data.value, true);

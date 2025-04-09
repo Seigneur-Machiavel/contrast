@@ -50,7 +50,6 @@ export class STREAM {
 }
 
 export class FILTERS {
-
     /**
      * @param {Multiaddr[]} ma
      * @param {'PUBLIC' | 'LOCAL'} [IP] - Filter by public or local IP addresses, PUBLIC ONLY, LOCAL ONLY, default: NO_FILTER

@@ -63,8 +63,14 @@ async function mineBlockUntilValid() {
 	const hashRateCalculator = new hashrateCalculator(parentPort);
 	while (true) {
 		if (minerVars.exiting) { return { error: 'Exiting' }; }
-		if (minerVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
 		if (minerVars.paused) { await new Promise((resolve) => setTimeout(resolve, 100)); continue; }
+
+		// IF PAUSED MORE THAN A MINUTE AGO, WE NEED TO WAIT AN UPDATE OF BLOCK CANDIDATE
+		// ON NEW CANDIDATE, PAUSE TIME IS RESET
+		while (minerVars.pausedAtTime && minerVars.pausedAtTime > Date.now() - 60000)
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+		if (minerVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
 		if (minerVars.timeOffset === 0) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
 		if (minerVars.testMiningSpeedPenality) await new Promise((resolve) => setTimeout(resolve, minerVars.testMiningSpeedPenality));
 
@@ -131,6 +137,7 @@ const minerVars = {
 	bet: 0,
 	timeOffset: 0,
 	paused: false,
+	pausedAtTime: 0,
 
 	testMiningSpeedPenality: 0, // TODO: set to 0 after testing
 };
@@ -149,6 +156,7 @@ parentPort.on('message', async (task) => {
         case 'newCandidate':
 			minerVars.highestBlockHeight = task.blockCandidate.index;
 			minerVars.blockCandidate = task.blockCandidate;
+			minerVars.pausedAtTime = null;
 			return;
 		case 'mineUntilValid':
 			if (minerVars.working) { return; } else { minerVars.working = true; }
@@ -161,6 +169,7 @@ parentPort.on('message', async (task) => {
 			break;
 		case 'pause':
 			minerVars.paused = true;
+			minerVars.pausedAtTime = Date.now();
 			parentPort.postMessage({ paused: true });
 			return;
 		case 'resume':
