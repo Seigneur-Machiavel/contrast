@@ -275,11 +275,13 @@ ipcMain.on('delete-app-data', async (event, appName, filename) => {
 
 // APP EVENTS
 app.on('before-quit', () => {
-    isQuiting = true;
-    globalShortcut.unregisterAll();
-    if (dashboardWorker) dashboardWorker.stop();
+    try {
+        isQuiting = true;
+        if (dashboardWorker) dashboardWorker.stop();
+        globalShortcut.unregisterAll();
+    } catch (error) { console.error('Error during app quit:', error); }
 });
-app.on('will-quit', async () => await new Promise(resolve => setTimeout(resolve, 10000))); // let time for the node to stop properly
+app.on('will-quit', async () => await new Promise(resolve => setTimeout(resolve, 3000))); // let time for the node to stop properly
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 app.on('ready', async () => {
     //if (!isDev) autoUpdaterCheckLoop();

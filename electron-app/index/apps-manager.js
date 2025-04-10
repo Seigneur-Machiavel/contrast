@@ -17,6 +17,8 @@ function newElement(tag, classes, innerText, parent, url_or_file) {
         });
     } else if (url_or_file) {
         const iframe = document.createElement('iframe');
+		// test with webview
+		//const iframe = document.createElement('webview');
         iframe.src = url_or_file;
         iframe.style.width = '100%';
         iframe.style.height = '100%';
@@ -108,6 +110,7 @@ class SubWindow {
 
 		// if iframe in content
 		const iframe = this.contentElement.querySelector('iframe');
+		//|| this.contentElement.querySelector('webview');
 		if (iframe) iframe.id = this.appName + '-iframe';
 
 		this.element.style.minWidth = this.minSize.width ? `${this.minSize.width}px` : 'auto';
@@ -137,14 +140,24 @@ class SubWindow {
 			});
 
 			// Set dark mode to the iframe according to the board body class
-			if (!this.origin) return;
-			setTimeout(() => {
-				const iframe = this.contentElement.querySelector('iframe');
-				if (!iframe) return;
-				const darkModeState = document.body.classList.contains('dark-mode');
-				iframe.contentWindow.postMessage({ type: 'darkMode', value: darkModeState }, this.origin);
-			}, 800);
+			setTimeout(() => this.setDarkModeAccordingToBoard(), 800);
 		}
+	}
+	refreshIframeSrc() {
+		if (!this.contentElement) return;
+
+		const iframe = this.contentElement.querySelector('iframe');
+		if (!iframe) return;
+
+		iframe.src = iframe.src;
+	}
+	setDarkModeAccordingToBoard() {
+		if (!this.origin) return;
+		const iframe = this.contentElement.querySelector('iframe');
+		if (!iframe) return;
+
+		const darkModeState = document.body.classList.contains('dark-mode');
+		iframe.contentWindow.postMessage({ type: 'darkMode', value: darkModeState }, this.origin);
 	}
 	#newTitleBar(title, expandable = true, isUrl = false) {
 		const titleBar = newElement('div', ['title-bar'], '');
@@ -402,12 +415,8 @@ class AppsManager {
 	clickWindowHandler(e) {
 		switch(e.target.dataset.action) {
 			case 'refresh':
-				const iframe = this.windows[e.target.dataset.appName].contentElement.querySelector('iframe');
-				if (!iframe) return;
-
-				iframe.src = iframe.src;
-				//iframe.contentWindow.location.reload(); // try reload
-				//iframe.contentWindow.postMessage({ type: 'reload' }, this.windows[e.target.dataset.appName].origin);
+				this.windows[e.target.dataset.appName].refreshIframeSrc();
+				this.windows[e.target.dataset.appName].setDarkModeAccordingToBoard();
 				return;
 			case 'fold': this.toggleAppWindow(e.target.dataset.appName); return;
 			case 'expand':

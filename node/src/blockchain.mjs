@@ -184,7 +184,7 @@ export class Blockchain {
     async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
         const startTime = performance.now();
         indexStart = Math.max(0, indexStart);
-        if (indexStart > indexEnd) { return; }
+        if (indexStart > indexEnd) return;
 
         const addressesTxsRefsSnapHeight = this.addressesTxsRefsStorage.snapHeight;
         if (addressesTxsRefsSnapHeight >= indexEnd) { console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`); return; }
@@ -235,7 +235,7 @@ export class Blockchain {
             totalDuplicates += duplicate;
             duplicateCountTime += (performance.now() - duplicateStart);
 
-            await this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs);
+            await this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs, indexStart);
 
             //if (i % 300 === 0) { await new Promise(resolve => setTimeout(resolve, 50)); } // avoid p2p disconnection
             await breather.breathe();

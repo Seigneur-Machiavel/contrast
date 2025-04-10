@@ -147,7 +147,9 @@ window.addEventListener('resize', function(e) {
 	}
 });
 function formatedUrl(urlStr = 'http://localhost:27271/') {
-	// result : http://localhost:27271
+	if (!urlStr) return;
+	
+	// ex result : http://localhost:27271
 	const url = new URL(urlStr);
 	return `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
 }
@@ -161,6 +163,21 @@ window.addEventListener('message', function(e) {
 			appsManager.setFrontWindow(app);
 			break;
 		}
+	}
+
+	if (e.data?.type === 'copy_text') {
+		const authorizedCopyTextOrigins = ['https://cybercon.app', 'http://pinkparrot.science:27280'];
+		if (!authorizedCopyTextOrigins.includes(formatedUrl(e.origin))) {
+			console.error('Unauthorized origin for copy_text:', e.origin);
+			return;
+		}
+
+		navigator.clipboard.writeText(e.data.value).then(() => {
+			//console.log('Text copied to clipboard:', e.data.value);
+			console.log('Text copied to clipboard!');
+		}).catch(err => {
+			console.error('Failed to copy text to clipboard:', err);
+		});
 	}
 
 	const isCyberCon = formatedUrl(e.origin) === formatedUrl(appsManager.windows.cybercon?.origin);
