@@ -228,12 +228,13 @@ export class CheckpointsStorage {
             //! we only can save snapshot that can't be modified in the checkpoint.
             //const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
             //zip.addLocalFolder(snapshotsPath, 'snapshots');
+            //! NOW WE DO NOT INCLUDES ADDRESSES-TXS-REFS IN THE CHECKPOINTS
 
             await breather.breathe();
             //const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
             //zip.addLocalFolder(addTxsRefsPath, 'addresses-txs-refs');
             //! folder is to heavy, we pass subFolder one by one
-            const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
+            /*const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
             const lvl0Folders = fs.readdirSync(addTxsRefsPath);
             for (let i = 0; i < lvl0Folders.length; i++) {
                 const lvl0 = lvl0Folders[i];
@@ -249,7 +250,7 @@ export class CheckpointsStorage {
             
             await breather.breathe();
             const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
-            zip.addLocalFile(addTxsRefsConfigPath);
+            zip.addLocalFile(addTxsRefsConfigPath);*/
 
             await breather.breathe();
             const buffer = zip.toBuffer();
@@ -378,6 +379,8 @@ export class AddressesTxsRefsStorage {
  * @property {number} totalTxsRefs - The total number of transactions referenced (excluding temp refs)
  */
 export class AddressesTxsRefsStorage_V2 {
+    version = 2;
+    loaded = false;
     configPath = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
     batchSize = 1000; // number of transactions references per file
     snapHeight = -1;
@@ -390,23 +393,42 @@ export class AddressesTxsRefsStorage_V2 {
 
     #load() {
         if (!fs.existsSync(this.configPath)) {
-            storageMiniLogger.log('no config file found', (m) => { console.error(m); });
+            storageMiniLogger.log(`no config file found: ${this.configPath}`, (m) => { console.error(m); });
             return;
         }
 
         try {
             /** @type {number} */
             const config = JSON.parse(fs.readFileSync(this.configPath));
+            this.version = config.version;
             this.snapHeight = config.snapHeight || -1;
             this.architecture = config.architecture || {};
             this.involedAddressesOverHeights = config.involedAddressesOverHeights || {};
 
             storageMiniLogger.log('[AddressesTxsRefsStorage] => config loaded', (m) => { console.log(m); });
+            this.loaded = true;
         } catch (error) { storageMiniLogger.log(error, (m) => { console.error(m); }); }
     }
+    #pruneInvoledAddressesOverHeights() {
+        // SORT BY DESCENDING HEIGHTS
+        const keys = Object.keys(this.involedAddressesOverHeights).map(Number).sort((a, b) => b - a);
+
+        // KEEP ONLY THE UPPER HEIGHTS
+        for (let i = 0; i < keys.length; i++) {
+            if (i <= this.maxInvoledHeights) continue;
+            delete this.involedAddressesOverHeights[keys[i]];
+        }
+    }
     save(indexEnd) {
+        this.#pruneInvoledAddressesOverHeights();
+
         this.snapHeight = indexEnd;
-        const config = { snapHeight: indexEnd, architecture: this.architecture, involedAddressesOverHeights: this.involedAddressesOverHeights };
+        const config = {
+            version: this.version || 2,
+            snapHeight: this.snapHeight,
+            architecture: this.architecture,
+            involedAddressesOverHeights: this.involedAddressesOverHeights
+        };
         fs.writeFileSync(this.configPath, JSON.stringify(config));
     }
     #dirPathOfAddress(address = '') {
@@ -428,7 +450,7 @@ export class AddressesTxsRefsStorage_V2 {
         if (!this.architecture[lvl0][lvl1][address]) { return; }
 
         const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
-        if (!fs.existsSync(dirPath)) { // Clean the architecture if the file is missing
+        if (!fs.existsSync(dirPath)) { // Clean the architecture if the folder is missing
             delete this.architecture[lvl0][lvl1][address];
             if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) { delete this.architecture[lvl0][lvl1]; }
             if (Object.keys(this.architecture[lvl0]).length === 0) { delete this.architecture[lvl0]; }
@@ -467,11 +489,9 @@ export class AddressesTxsRefsStorage_V2 {
         const filePath = path.join(dirPath, `${batchIndex -1}.bin`);
         return fs.promises.writeFile(filePath, serialized); //? not sure "return" is good here
     }
-    async #saveTempTxsRefs(address = '', txsRefs = []) {
+    async #saveTempTxsRefs(address = '', txsRefs = [], highestIndex = -1) {
         const serialized = serializer.serialize.txsReferencesArray(txsRefs);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        this.architecture[lvl0][lvl1][address] = true;
-
         const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
         if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
 
@@ -488,23 +508,93 @@ export class AddressesTxsRefsStorage_V2 {
 
         // UPDATE ARCHITECTURE INFO
         const highestIndex = Number(txsRefs[txsRefs.length - 1].split(':')[0]);
+        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         if (!this.architecture[lvl0][lvl1][address])
             this.architecture[lvl0][lvl1][address] = { highestIndex, totalTxsRefs: 0 };
 
         // SAVE BATCH IF TOO BIG
-        if (txsRefs.length >= this.batchSize)
+        /*if (txsRefs.length >= this.batchSize) 
             await this.#saveNewBatchOfTxsRefs(address, txsRefs.splice(0, this.batchSize));
 
+        await this.#saveTempTxsRefs(address, txsRefs, highestIndex)*/
+
+        // trying to faster a bit
+        let promises = [];
+        while (txsRefs.length > this.batchSize)
+            promises.push(this.#saveNewBatchOfTxsRefs(address, txsRefs.splice(0, this.batchSize)));
+
         // SAVE TEMP TXS REFS
-        await this.#saveTempTxsRefs(address, txsRefs);
+        promises.push(this.#saveTempTxsRefs(address, txsRefs, highestIndex));
+
+        if (promises.length > 0) await Promise.allSettled(promises);
+
+        this.architecture[lvl0][lvl1][address].highestIndex = highestIndex;
+    }
+
+    #pruneBatchRefsUpperThan(batch = [], height = 0) {
+        return batch.filter(txsRef => Number(txsRef.split(':')[0]) <= height);
+    }
+    #pruneAddressRefsUpperThan(address = '', height = 0) {
+        if (typeof address !== 'string' || address.length !== 20) return false;
+        
+        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
+        if (!this.architecture[lvl0][lvl1][address]) return false;
+        if (this.#clearArchitectureIfFolderMissing(lvl0, lvl1, address)) return false;
+
+        const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
+        const existingBatch = Math.floor(exists / this.batchSize);
+        
+        let batchNegativeIndex = -1;
+        const fileName = batchNegativeIndex === 0 ? 'temp.bin' : `${existingBatch + batchNegativeIndex}.bin`;
+        const filePath = path.join(dirPath, fileName);
+
+        while (true) {
+            const exists = fs.existsSync(filePath);
+            if (exists) {
+                const serialized = fs.readFileSync(filePath);
+                const txsRefs = serializer.deserialize.txsReferencesArray(serialized);
+                const prunedTxsRefs = this.#pruneBatchRefsUpperThan(txsRefs, height);
+                const removedTxs = txsRefs.length - prunedTxsRefs.length;
+
+                if (batchNegativeIndex !== 0) this.architecture[lvl0][lvl1][address].totalTxsRefs -= removedTxs;
+                if (prunedTxsRefs.length === 0) fs.rmSync(filePath); // delete the file if empty
+                else fs.writeFileSync(filePath, serializer.serialize.txsReferencesArray(prunedTxsRefs));
+            } else if (batchNegativeIndex !== 0) break; // no more files to check
+
+            batchNegativeIndex--;
+        }
+
+        // if the address is empty, we can delete it from the architecture
+        const totalTxsRefs = this.architecture[lvl0][lvl1][address].totalTxsRefs;
+        if (!totalTxsRefs || totalTxsRefs <= 0) {
+            fs.rmSync(dirPath, { recursive: true }); // delete the folder
+            delete this.architecture[lvl0][lvl1][address];
+            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) { delete this.architecture[lvl0][lvl1]; }
+            if (Object.keys(this.architecture[lvl0]).length === 0) { delete this.architecture[lvl0]; }
+        }
+    }
+    /** Pruning to use while loading a snapshot */
+    pruneAllUpperThan(height = 0) {
+        const keys = Object.keys(this.involedAddressesOverHeights).map(Number).filter(h => h > height);
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            for (const address in this.involedAddressesOverHeights[key])
+                this.#pruneAddressRefsUpperThan(address, key);
+
+            delete this.involedAddressesOverHeights[key];
+        }
+
+        this.snapHeight = Math.min(this.snapHeight, height);
+        console.log(`Pruned all transactions references upper than ${height}`);
     }
     reset() {
         if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true }); }
         if (fs.existsSync(this.configPath)) { fs.rmSync(this.configPath); }
         
         fs.mkdirSync(PATH.TXS_REFS);
-        this.architecture = {};
         this.snapHeight = -1;
+        this.architecture = {};
+        this.involedAddressesOverHeights = {};
     }
 }
 

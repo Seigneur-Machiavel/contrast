@@ -46,6 +46,7 @@ export class SnapshotSystem {
 	knownPubKeysAddressesSnapInfo = { height: 0, hash: '' };
 	
 	// SNAPSHOTS
+	/** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
 	mySnapshotsHeights() {
 		return readSnapshotsHeightsOfDir(PATH.SNAPSHOTS);
 	}
@@ -187,9 +188,9 @@ export class CheckpointSystem {
 
 	minGapTryCheckpoint = 720; // 24h
 	checkpointHeightModulo = 100;
-	checkpointToConserve = 3;
+	checkpointToConserve = 5;
 	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
-	rndControlDiceFaces = 12;
+	rndControlDiceFaces = 27; // 1 in 27 chance to verify the block hash
 
 	// MY CHECKPOINTS
 	#getCheckpointsInfos() {
@@ -227,7 +228,7 @@ export class CheckpointSystem {
 	async newCheckpoint(height = 1000, fromPath, overwrite = false) {
 		// We prefer to not overwrite existing checkpoints, but it's possible to force it
 		//! The danger is to overwrite a valid checkpoint with a corrupted one:
-		//! The "addresses-txs-refs" can be different and includes unexisting txs
+		//! The "addresses-txs-refs" as been removed from checkpoints
 		const heightPath = path.join(PATH.CHECKPOINTS, height.toString());
 		if (fs.existsSync(heightPath)) { console.error(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`); return false; }
 		if (fs.existsSync(heightPath) && !overwrite) { return false; }
@@ -261,11 +262,16 @@ export class CheckpointSystem {
 			}
 		}
 
+		//! BYPASS CHECKPOINTS WHILE UPDATING TO 0.3.1
+		//! THIS IS A TEMPORARY FIX TO AVOID CHECKPOINTS PROBLEMS DURING THE UPDATE
+		//TODO RE ENABLE IN PRODUCTION
+		this.lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
+
 		return this.lastCheckpointInfo;
 	}
 
 	// ACTIVE CHECKPOINT
-	#randomDiceRoll(diceFaces = 6) { return Math.floor(Math.random() * diceFaces) + 1 === 1; }
+	#randomDiceRoll(diceFaces = 27) { return Math.floor(Math.random() * diceFaces) + 1 === 1; }
 	checkForActiveCheckpoint() {
 		if (!fs.existsSync(this.activeCheckpointPath)) { return false; }
 
@@ -329,6 +335,7 @@ export class CheckpointSystem {
 		// Hash verification, argon2 based, cost CPU time (~500ms)
 		const verify = this.#randomDiceRoll(this.rndControlDiceFaces);
 		if (verify) {
+			console.info(`Checkpoint fill: verifying block hash ${finalizedBlock.index}...`);
 			const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
         	if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
 		}
@@ -361,8 +368,8 @@ export class CheckpointSystem {
 		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks'), PATH.BLOCKS);
 		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks-info'), PATH.BLOCKS_INFO);
 		fs.renameSync(path.join(this.activeCheckpointPath, 'snapshots'), PATH.SNAPSHOTS);
-		fs.renameSync(path.join(this.activeCheckpointPath, 'addresses-txs-refs'), PATH.TXS_REFS);
-		fs.renameSync(path.join(this.activeCheckpointPath, 'AddressesTxsRefsStorage_config.json'), txsRefsConfigDest);
+		//! fs.renameSync(path.join(this.activeCheckpointPath, 'addresses-txs-refs'), PATH.TXS_REFS);
+		//! fs.renameSync(path.join(this.activeCheckpointPath, 'AddressesTxsRefsStorage_config.json'), txsRefsConfigDest);
 		fs.rmSync(this.activeCheckpointPath, { recursive: true, force: true });
 
 		this.activeCheckpointHeight = false;

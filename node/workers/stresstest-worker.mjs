@@ -20,6 +20,18 @@ const cryptoLight = new CryptoLight();
 cryptoLight.argon2Hash = argon2Hash;
 const dashApp = new DashboardWsApp(undefined, cryptoLight, nodePort, dashboardPort, false);
 
+const monitoringInterval = 1000;
+let lastCheckTime = Date.now();
+function monitorPerformance() {
+	// IF TIME ELAPSED IS GREATER THAN 500ms CONSIDER IT AS A POTENTIAL FREEZE
+	const currentTime = Date.now();
+	if (currentTime - lastCheckTime - monitoringInterval > 500)
+	console.log(`|!| POTENTIAL FREEZE DETECTED: ${currentTime - lastCheckTime - monitoringInterval}ms`);
+
+	lastCheckTime = currentTime;
+}
+setInterval(monitorPerformance, monitoringInterval);
+
 // START
 const fingerPrint = nodeMachineId.machineIdSync();
 let passwordExist = Storage.isFileExist('passHash.bin');
@@ -51,6 +63,7 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     if (nodeInitialized) return; // avoid double init
 
     initializingNode = true;
+	parentPort.postMessage({ type: 'node_starting' });
     const initialized = await dashApp.init(privateKey, forceRelay);
     if (!initialized && dashApp.waitingForPrivKey) {
         parentPort.postMessage({ type: 'message_to_mainWindow', data: 'waiting-for-priv-key' });

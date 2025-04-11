@@ -1,4 +1,5 @@
 if (false) { const { NodeAppWorker } = require('./node/workers/workers-classes.mjs'); } // For better completion
+process.on('uncaughtException', (error) => { console.error('Uncatched exception:', error.stack); });
 
 const fs = require('fs');
 const path = require('path');

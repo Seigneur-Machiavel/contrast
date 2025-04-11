@@ -358,6 +358,8 @@ export class SyncHandler {
         }
 
         try {
+            let syncResPromise;
+
             while (desiredBlock <= peerHeight) {
                 let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
                 if (checkpointMode) { endIndex = Math.min(endIndex, activeCheckpointTargetHeight); }
@@ -365,7 +367,21 @@ export class SyncHandler {
                 this.node.updateState(`Downloading blocks #${desiredBlock} to #${endIndex}...`);
                 const message = { type: 'getBlocks', startIndex: desiredBlock, endIndex };
                 if (checkpointMode) { message.includesBlockInfo = true; }
-                const syncRes = await this.#sendSyncRequest(peerIdStr, message);
+                //const syncRes = await this.#sendSyncRequest(peerIdStr, message); // old code
+
+                // TRYING TO ANTICIPATE BY REQUESTING THE NEXT BLOCKS
+                let syncRes;
+                if (syncResPromise) syncRes = await syncResPromise; // FILL WITH THE ANTICIPATED PROMISE
+                else syncRes = await this.#sendSyncRequest(peerIdStr, message, 1); // FIRST REQUEST
+                syncResPromise = null; // reset the promise
+
+                // SEND ANTICIPATED REQUEST IF POSSIBLE
+                const anticipatedMsg = message;
+                anticipatedMsg.startIndex = message.endIndex + 1;
+                anticipatedMsg.endIndex = Math.min(anticipatedMsg.startIndex + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
+                if (anticipatedMsg.startIndex <= anticipatedMsg.endIndex)
+                    syncResPromise = this.#sendSyncRequest(peerIdStr, anticipatedMsg, 1);
+
                 if (!syncRes || syncRes.data.byteLength === 0) {
                     this.miniLogger.log(`'getBlocks ${desiredBlock}-${endIndex}' request failed`, (m) => { console.error(m); });
                     break;

@@ -52,6 +52,15 @@ ipcRenderer.on('waiting-for-priv-key', (event, ...args) => {
 		'Restore wallet': () => assistant.requestPrivateKey()
 	});
 });
+/*ipcRenderer.on('node-starting', () => { //? USELESS
+	console.log('Node starting...');
+	if (!appsManager.buttonsBar.buttonsByAppNames['dashboard']) return;
+
+	// MAKE DASHBOARD BUTTON ACTIVE (but not window front)
+	appsManager.buttonsBar.buttonsByAppNames['dashboard'].classList.remove('disabled')
+	appsManager.toggleAppWindow('dashboard', true);
+	//appsManager.unlock();
+});*/
 ipcRenderer.on('node-started', (event, ...args) => {
 	const privateKey = args[0];
 	biw = new BoardInternalWallet(privateKey);

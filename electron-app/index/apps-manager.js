@@ -299,7 +299,7 @@ class AppsManager {
 			if (this.appsConfig[app].preload) this.loadApp(app);
 		}
 	}
-	loadApp(appName) {
+	loadApp(appName, startHidden = false) {
 		if (!this.appsConfig[appName]) return;
 
 		const origin = this.buttonsBar.getButtonOrigin(appName);
@@ -327,15 +327,20 @@ class AppsManager {
 		if (fullScreen || setFront) {
 			setTimeout(() => {
 				if (fullScreen) this.windows[appName].setFullScreen(this.calculateBoardSize(), 0);
-				if (!setFront) return;
+				if (!setFront || startHidden) return;
 				this.windows[appName].toggleFold(origin.x, origin.y, 600);
 				this.setFrontWindow(appName);
 			}, 400);
 		}
 	}
-	toggleAppWindow(appName) {
+	/**
+	 * load app window and create button if not already created
+	 * @param {string} appName - name of the app to load
+	 * @param {boolean} [startHidden] - if true, the app will be loaded but not shown (folded) -default: false */
+	toggleAppWindow(appName, startHidden = false) {
 		if (!this.appsConfig[appName]) return;
-		if (!this.windows[appName]) { this.loadApp(appName); }
+		if (!this.windows[appName]) this.loadApp(appName, startHidden);
+		if (startHidden) return;
 		
 		const isFront = this.windows[appName].element.classList.contains('front');
 		const unfoldButNotFront = isFront === false && this.windows[appName].folded === false;
@@ -345,7 +350,7 @@ class AppsManager {
 			const origin = this.buttonsBar.getButtonOrigin(appName);
 			const folded = this.windows[appName].toggleFold(origin.x, origin.y, this.transitionsDuration);
 			const firstUnfolded = Object.values(this.windows).find(w => w.folded === false);
-			if (folded && firstUnfolded) { appToFocus = firstUnfolded.appName; }
+			if (folded && firstUnfolded) appToFocus = firstUnfolded.appName;
 		}
 
 		console.log('appToFocus', appToFocus);

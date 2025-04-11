@@ -123,6 +123,9 @@ export class OpStack {
             const byteLength = task.data ? task.data.byteLength ? task.data.byteLength : undefined : undefined;
 
             switch (task.type) {
+                case 'reBuildAddrsTxsRefs':
+                    await this.node.reBuildAddrsTxsRefs(content);
+                    break;
                 case 'pushTransaction':
                     try {
                         await this.node.memPool.pushTransaction(this.node.utxoCache, content);

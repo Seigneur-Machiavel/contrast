@@ -146,18 +146,21 @@ export class Node {
         await this.timeSynchronizer.syncTimeWithRetry(5, 500);
         this.miniLogger.log(`Node ${this.id} (${this.roles.join('_')}) => started at time: ${this.timeSynchronizer.getCurrentTime()}`, (m) => { console.info(m); });
 
-        for (let i = 0; i < this.nbOfWorkers; i++) { this.workers.push(new ValidationWorker(i)); }
+        for (let i = 0; i < this.nbOfWorkers; i++) this.workers.push(new ValidationWorker(i));
         this.opStack = OpStack.buildNewStack(this);
         this.miner = new Miner(this.minerAddress || this.account.address, this);
         this.miner.useDevArgon2 = this.useDevArgon2;
 
+        // PRUNE CHECKPOINTS AND LOAD SNAPSHOT
         const activeCheckpoint = this.checkpointSystem.checkForActiveCheckpoint();
+        let persistedHeight;
         if (!activeCheckpoint && !startFromScratch) {
-            this.checkpointSystem.pruneCheckpointsLowerThanHeight(0); // will preserve 3 highest checkpoints
+            this.checkpointSystem.pruneCheckpointsLowerThanHeight(0); //? will preserve 3 highest checkpoints
             Storage.dumpTrashFolder();
             this.updateState("Loading blockchain");
+
             const startHeight = await this.blockchain.load(this.snapshotSystem);
-            await this.loadSnapshot(startHeight);
+            persistedHeight = await this.loadSnapshot(startHeight);
         }
 
         this.updateState("Initializing P2P network");
@@ -165,9 +168,9 @@ export class Node {
         await this.p2pNetwork.start(uniqueHash, this.isRelayCandidate);
         this.syncHandler = new SyncHandler(this);
         const uniqueTopics = this.#subscribeTopicsRelatedToRoles(this.roles);
-        for (const topic of uniqueTopics) { this.p2pNetwork.subscribe(topic, this.p2pHandler); }
+        for (const topic of uniqueTopics) this.p2pNetwork.subscribe(topic, this.p2pHandler);
 
-        if (this.roles.includes('miner')) { this.miner.startWithWorker(); }
+        if (this.roles.includes('miner')) this.miner.startWithWorker();
 
         const nbOfPeers = await this.#waitSomePeers();
         if (!nbOfPeers || nbOfPeers < 1) {
@@ -177,12 +180,16 @@ export class Node {
         }
 
         this.miniLogger.log('P2P network is ready - we are connected baby', (m) => { console.info(m); });
-        if (!this.roles.includes('validator')) { return; }
+        if (!this.roles.includes('validator')) return;
 
         const elapsed = performance.now() - startTime;
         await new Promise(resolve => setTimeout(resolve, Math.max(3000 - elapsed, 0))); // ~maxTime to connect nodes
-        if (!activeCheckpoint) { this.opStack.pushFirst('createBlockCandidateAndBroadcast', null); }
+        
+        if (!activeCheckpoint) this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
         this.opStack.pushFirst('syncWithPeers', null);
+
+        if (!activeCheckpoint && persistedHeight)
+            this.opStack.pushFirst('reBuildAddrsTxsRefs', persistedHeight);
     }
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 30, delay = 5000) {
         const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
@@ -280,10 +287,15 @@ export class Node {
 
     // SNAPSHOT: LOAD/SAVE ---------------------------------------------------------------
     async loadSnapshot(snapshotIndex = 0, eraseHigher = true) {
-        if (snapshotIndex < 0) { return; }
+        const snapHeights = this.snapshotSystem.mySnapshotsHeights();
+        const olderSnapHeight = snapHeights[0];
+        const persistedHeight = olderSnapHeight - this.snapshotSystem.snapshotHeightModulo;
+
+        if (snapshotIndex < 0) return persistedHeight;
 
         this.miniLogger.log(`Last known snapshot index: ${snapshotIndex}`, (m) => { console.info(m); });
         this.blockchain.currentHeight = snapshotIndex;
+        this.blockchain.addressesTxsRefsStorage.pruneAllUpperThan(persistedHeight);
         this.blockCandidate = null;
         await this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
@@ -294,10 +306,11 @@ export class Node {
         }
 
         this.blockchain.lastBlock = this.blockchain.getBlock(snapshotIndex);
-        if (!eraseHigher) { return; }
 
         // place snapshot to trash folder, we can restaure it if needed
-        this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
+        if (eraseHigher) this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
+
+        return persistedHeight;
     }
     /** @param {BlockData} finalizedBlock */
     async #saveSnapshot(finalizedBlock) {
@@ -307,8 +320,9 @@ export class Node {
 
         // erase the outdated blocks cache and persist the addresses transactions references to disk
         const cacheErasable = this.blockchain.cache.erasableLowerThan(finalizedBlock.index - (eraseUnder - 1));
+        this.updateState(`snapshot - erase cache #${cacheErasable.from} to #${cacheErasable.to}`);
         if (cacheErasable !== null && cacheErasable.from < cacheErasable.to) {
-            await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, cacheErasable.from, cacheErasable.to);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, cacheErasable.from, cacheErasable.to);
             this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 
@@ -323,19 +337,59 @@ export class Node {
     }
     /** @param {BlockData} finalizedBlock */
     async #saveCheckpoint(finalizedBlock) {
-        if (finalizedBlock.index < 100) { return; }
+        if (finalizedBlock.index < 100) return;
 
         const startTime = performance.now();
         const snapshotGap = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve; // 5 * 10 = 50
         // trigger example: #1050 - (5 * 10) % 100 === 0;
         const trigger = (finalizedBlock.index - snapshotGap) % this.checkpointSystem.checkpointHeightModulo === 0;
-        if (!trigger) { return; }
+        if (!trigger) return;
 
         // oldest example: #1050 - (5 * 10) = 1000
         const oldestSnapHeight = finalizedBlock.index - snapshotGap;
+        this.updateState(`creating checkpoint #${oldestSnapHeight}`);
         const result = await this.checkpointSystem.newCheckpoint(oldestSnapHeight);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
         this.miniLogger.log(`${logText} ${oldestSnapHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
+    }
+    /** Function used to rebuild addressesTxsRefs from the known blocks */
+    async reBuildAddrsTxsRefs(startHeight) {
+        // startHeight correspond to the persistedHeight,
+        // addrsTxsRefs has been pruned at this height
+
+        // IN CASE OF UPGRADE: reset the storage to rebuild it entirely
+        if (this.blockchain.addressesTxsRefsStorage.version !== 2)
+            this.blockchain.addressesTxsRefsStorage.reset();
+
+        if (this.blockchain.addressesTxsRefsStorage.snapHeight >= startHeight) return;
+
+        // going fast 1000 by 1000
+        const lastHeightOp1 = startHeight - 2000;
+        const startHeightOp1 = Math.max(this.blockchain.addressesTxsRefsStorage.snapHeight, 0);
+        let startHeightOp2 = startHeightOp1;
+        for (let i = startHeightOp1; i < lastHeightOp1; i += 1000) {
+            this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + 1000}`);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, i, i + 1000);
+            startHeightOp2 = i + 1000;
+        }
+
+        // going slower 100 by 100
+        const lastHeightOp2 = startHeight - 200;
+        let startHeightOp3 = startHeightOp2;
+        for (let i = startHeightOp2; i < lastHeightOp2; i += 100) {
+            this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + 100}`);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, i, i + 100);
+            startHeightOp3 = i + 100;
+        }
+
+        // going 5 by 5 like snapshots saving (modulo = 5)
+        const modulo = this.snapshotSystem.snapshotHeightModulo;
+        //const lastHeightOp3 = this.blockchain.currentHeight - (this.blockchain.currentHeight % modulo);
+        const lastHeightOp3 = startHeight;
+        for (let i = startHeightOp3; i < lastHeightOp3; i += modulo) {
+            this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + modulo}`);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, i, i + modulo);
+        }
     }
 
     // FINALIZED BLOCK HANDLING ----------------------------------------------------------

@@ -437,6 +437,9 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
                     if (this.#avoidMainWindowMessage(message)) return;
                     this.mainWindow.webContents.send(message.data);
                     break;
+                case 'node_starting':
+                    if (this.mainWindow) this.mainWindow.webContents.send('node-starting');
+                    break;
                 case 'node_started':
                     this.nodeStarted = true;
                     if (this.#avoidMainWindowMessage(message)) return;

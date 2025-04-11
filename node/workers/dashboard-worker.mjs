@@ -47,6 +47,7 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     if (nodeInitialized) return; // avoid double init
 
     initializingNode = true;
+    parentPort.postMessage({ type: 'node_starting' });
     const initialized = await dashApp.init(privateKey, forceRelay);
     if (!initialized && dashApp.waitingForPrivKey) {
         parentPort.postMessage({ type: 'message_to_mainWindow', data: 'waiting-for-priv-key' });

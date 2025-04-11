@@ -1,4 +1,4 @@
-import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage-manager.mjs';
+import { BlockchainStorage, AddressesTxsRefsStorage, AddressesTxsRefsStorage_V2 } from '../../utils/storage-manager.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
@@ -84,7 +84,7 @@ export class Blockchain {
     miniLogger = new MiniLogger('blockchain');
     cache = new BlocksCache(this.miniLogger);
     blockStorage = new BlockchainStorage();
-    addressesTxsRefsStorage = new AddressesTxsRefsStorage();
+    addressesTxsRefsStorage = new AddressesTxsRefsStorage_V2();
 
     /** @param {string} nodeId - The ID of the node. */
     constructor(nodeId) {
@@ -179,6 +179,82 @@ export class Blockchain {
             this.miniLogger.log(`Failed to apply block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
             throw error;
         }
+    }
+    /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
+    async persistAddressesTransactionsReferencesToDisk_V2(memPool, indexStart, indexEnd, breathing = true) {
+        let existingSnapHeight = this.addressesTxsRefsStorage.snapHeight;
+        if (existingSnapHeight === -1) existingSnapHeight = 0;
+        if (existingSnapHeight !== indexStart) {
+            this.miniLogger.log(`Addresses transactions references snapHeight mismatch: ${existingSnapHeight} != ${indexStart}`, (m) => { console.error(m); });
+            return;
+        }
+        
+        const startTime = performance.now();
+        let totalGTROA_time = 0;
+        indexStart = Math.max(0, indexStart);
+        if (indexStart > indexEnd) return;
+
+        const addressesTxsRefsSnapHeight = this.addressesTxsRefsStorage.snapHeight;
+        if (addressesTxsRefsSnapHeight >= indexEnd) { console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`); return; }
+
+        const breather = new Breather();
+
+        /** @type {Object<string, string[]>} */
+        const actualizedAddrsTxsRefs = {};
+        for (let i = indexStart; i <= indexEnd; i++) {
+            const finalizedBlock = this.getBlock(i);
+            if (!finalizedBlock) { console.error(`Block not found #${i}`); continue; }
+
+            const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(finalizedBlock, memPool.knownPubKeysAddresses);
+            for (const address of Object.keys(transactionsReferencesSortedByAddress)) {
+                if (actualizedAddrsTxsRefs[address]) { continue; } // already loaded
+                const startGTROA = performance.now();
+                actualizedAddrsTxsRefs[address] = this.addressesTxsRefsStorage.getTxsReferencesOfAddress(address);
+                totalGTROA_time += (performance.now() - startGTROA);
+                if (breathing) await breather.breathe();
+            }
+
+            for (const [address, newTxsReferences] of Object.entries(transactionsReferencesSortedByAddress)) {
+                const concatenated = actualizedAddrsTxsRefs[address].concat(newTxsReferences);
+                actualizedAddrsTxsRefs[address] = concatenated;
+                if (breathing) await breather.breathe();
+            }
+        }
+
+        let duplicateCountTime = 0;
+        let totalRefs = 0;
+        let totalDuplicates = 0;
+        let savePromises = [];
+        const saveStart = performance.now();
+        for (let i = 0; i < Object.keys(actualizedAddrsTxsRefs).length; i++) {
+            const address = Object.keys(actualizedAddrsTxsRefs)[i];
+            const actualizedAddressTxsRefs = actualizedAddrsTxsRefs[address];
+            const cleanedTxsRefs = [];
+
+            const duplicateStart = performance.now();
+            const txsRefsDupiCounter = {};
+            let duplicate = 0;
+            for (let i = 0; i < actualizedAddressTxsRefs.length; i++) {
+                totalRefs++;
+                const txRef = actualizedAddressTxsRefs[i];
+                if (txsRefsDupiCounter[txRef]) duplicate++;
+                else cleanedTxsRefs.push(txRef);
+
+                txsRefsDupiCounter[txRef] = true;
+            }
+            totalDuplicates += duplicate;
+            duplicateCountTime += (performance.now() - duplicateStart);
+
+            savePromises.push(this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs, indexStart));
+            if (breathing) await breather.breathe();
+        }
+
+        await Promise.allSettled(savePromises);
+        this.addressesTxsRefsStorage.save(indexEnd);
+        const saveTime = performance.now() - saveStart;
+        
+        const logText = `AddressesTxsRefs persisted from #${indexStart} to #${indexEnd}(included) [${breather.breath} breaths] -> Duplicates: ${totalDuplicates}/${totalRefs}(${duplicateCountTime.toFixed(2)}ms) - TotalTime: ${(performance.now() - startTime).toFixed(2)}ms - GTROA: ${totalGTROA_time.toFixed(2)}ms - SaveTime: ${saveTime.toFixed(2)}ms`;
+        this.miniLogger.log(logText, (m) => { console.info(m); });
     }
     /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
     async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
