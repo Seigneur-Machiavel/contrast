@@ -329,6 +329,21 @@ export class Blockchain {
         // try to get the txs references from the DB first
         let txsRefs = from >= cacheStartIndex ? [] : this.addressesTxsRefsStorage.getTxsReferencesOfAddress(address);
 
+        // complete with the cache
+        for (let index = cacheStartIndex; index <= to; index++) {
+            const blockHash = this.cache.blocksHashByHeight.get(index);
+            if (!blockHash) { break; }
+
+            const block = this.cache.blocksByHash.get(blockHash);
+            const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(block, memPool.knownPubKeysAddresses);
+            if (!transactionsReferencesSortedByAddress[address]) { continue; }
+
+            const newTxsReferences = transactionsReferencesSortedByAddress[address];
+            txsRefs = txsRefs.concat(newTxsReferences);
+        }
+
+        if (txsRefs.length === 0) { return txsRefs; }
+
         // remove duplicates
         const txsRefsDupiCounter = {};
         const txsRefsWithoutDuplicates = [];
@@ -342,29 +357,14 @@ export class Blockchain {
 
         if (duplicate > 0) { console.warn(`[DB] ${duplicate} duplicate txs references found for address ${address}`); }
 
-        // complete with the cache
-        for (let index = cacheStartIndex; index <= to; index++) {
-            const blockHash = this.cache.blocksHashByHeight.get(index);
-            if (!blockHash) { break; }
-
-            const block = this.cache.blocksByHash.get(blockHash);
-            const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(block, memPool.knownPubKeysAddresses);
-            if (!transactionsReferencesSortedByAddress[address]) { continue; }
-
-            const newTxsReferences = transactionsReferencesSortedByAddress[address];
-            txsRefs = txsRefsWithoutDuplicates.concat(newTxsReferences);
-        }
-
-        if (txsRefs.length === 0) { return txsRefs; }
-
         // filter to preserve only the txs references in the range
         let finalTxsRefs = [];
-        for (let i = 0; i < txsRefs.length; i++) {
-            const txRef = txsRefs[i];
+        for (let i = 0; i < txsRefsWithoutDuplicates.length; i++) {
+            const txRef = txsRefsWithoutDuplicates[i];
             const height = parseInt(txRef.split(':')[0], 10);
             if (from > height) { continue; }
 
-            finalTxsRefs = txsRefs.slice(i);
+            finalTxsRefs = txsRefsWithoutDuplicates.slice(i);
             break;
         }
         for (let i = finalTxsRefs.length - 1; i >= 0; i--) {

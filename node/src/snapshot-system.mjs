@@ -188,7 +188,7 @@ export class CheckpointSystem {
 
 	minGapTryCheckpoint = 720; // 24h
 	checkpointHeightModulo = 100;
-	checkpointToConserve = 5;
+	checkpointToConserve = 4;
 	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	rndControlDiceFaces = 27; // 1 in 27 chance to verify the block hash
 
@@ -351,11 +351,8 @@ export class CheckpointSystem {
 		if (this.activeCheckpointHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint not set`); }
 		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
 
-		if (saveZipArchive) {
+		if (saveZipArchive)
 			await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
-			//const checkpointSaved = await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
-			//if (!checkpointSaved) { throw new Error(`(Checkpoint deploy) Checkpoint save failed`); }
-		}
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
 		if (fs.existsSync(txsRefsConfigDest)) fs.rmSync(txsRefsConfigDest, { force: true });

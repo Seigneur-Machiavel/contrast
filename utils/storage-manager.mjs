@@ -207,7 +207,7 @@ export class StorageAsync {
 
 export class CheckpointsStorage {
     /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
-    static async archiveCheckpoint(checkpointHeight = 0, fromPath) {
+    static async archiveCheckpointOLD(checkpointHeight = 0, fromPath) {
         try {
             /** @type {AdmZip} */
             const zip = new AdmZip();
@@ -251,6 +251,30 @@ export class CheckpointsStorage {
             await breather.breathe();
             const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
             zip.addLocalFile(addTxsRefsConfigPath);*/
+
+            await breather.breathe();
+            const buffer = zip.toBuffer();
+            const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+
+            await breather.breathe();
+            const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight.toString());
+            if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
+            fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
+            return hash;
+        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
+        
+        return false;
+    }
+    /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
+    static async archiveCheckpoint(checkpointHeight = 0, fromPath) {
+        try {
+            /** @type {AdmZip} */
+            const zip = new AdmZip();
+            const breather = new Breather();
+            const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
+            if (!fs.existsSync(snapshotsPath)) throw new Error(`Snapshots folder not found at ${snapshotsPath}`);
+            
+            zip.addLocalFolder(snapshotsPath, 'snapshots');
 
             await breather.breathe();
             const buffer = zip.toBuffer();
