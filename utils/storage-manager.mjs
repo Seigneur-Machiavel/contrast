@@ -206,6 +206,7 @@ export class StorageAsync {
 }
 
 export class CheckpointsStorage {
+    static maxSnapshotsInCheckpoints = 5; // number of snapshots to keep in checkpoints
     /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
     static async archiveCheckpointOLD(checkpointHeight = 0, fromPath) {
         try {
@@ -265,8 +266,8 @@ export class CheckpointsStorage {
         
         return false;
     }
-    /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
-    static async archiveCheckpoint(checkpointHeight = 0, fromPath) {
+    /** @param {number} checkpointHeight @param {string} fromPath @param {number} snapshotsHeights - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
+    static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights) {
         try {
             /** @type {AdmZip} */
             const zip = new AdmZip();
@@ -274,9 +275,18 @@ export class CheckpointsStorage {
             const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
             if (!fs.existsSync(snapshotsPath)) throw new Error(`Snapshots folder not found at ${snapshotsPath}`);
             
-            zip.addLocalFolder(snapshotsPath, 'snapshots');
+            let snapIncluded = 0;
+            for (let i = snapshotsHeights.length - 1; i >= 0; i--) {
+                if (snapIncluded >= CheckpointsStorage.maxSnapshotsInCheckpoints) break;
+                const snapshotHeight = snapshotsHeights[i].toString();
+                const snapshotPath = path.join(snapshotsPath, snapshotHeight);
+                if (!fs.existsSync(snapshotPath)) throw new Error(`Snapshot ${snapshotHeight} not found at ${snapshotPath}`);
+                zip.addLocalFolder(snapshotPath, `snapshots/${snapshotHeight}`);
+                await breather.breathe();
+                snapIncluded++;
+            }
+            //zip.addLocalFolder(snapshotsPath, 'snapshots');
 
-            await breather.breathe();
             const buffer = zip.toBuffer();
             const hash = crypto.createHash('sha256').update(buffer).digest('hex');
 

@@ -233,7 +233,8 @@ export class CheckpointSystem {
 		if (fs.existsSync(heightPath)) { console.error(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`); return false; }
 		if (fs.existsSync(heightPath) && !overwrite) { return false; }
 
-		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath); // save new checkpoint archive (.zip)
+		const snapshotsHeights = readSnapshotsHeightsOfDir(path.join(fromPath, 'snapshots'));
+		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath, snapshotsHeights); // save new checkpoint archive (.zip)
 		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return false; }
 
 		this.lastCheckpointInfo = { height, hash };
