@@ -30,8 +30,8 @@ let archiver, AdmZip, crypto, fs, path, url;
     try { url = await import('url'); } catch (error) { url = window.url; }
     try { AdmZip = await import('adm-zip').then(module => module.default); } catch (error) {
         try { AdmZip = window.AdmZip; } catch (error) {} };
-    try { archiver = await import('archiver').then(module => module.default); } catch (error) {
-        try { archiver = window.archiver; } catch (error) {} };
+   /* try { archiver = await import('archiver').then(module => module.default); } catch (error) {
+        try { archiver = window.archiver; } catch (error) {} };*/
     try { crypto = await import('crypto'); } catch (error) { crypto = window.crypto; }
 })();
 
