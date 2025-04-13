@@ -323,8 +323,10 @@ export class CheckpointsStorage {
     /** @param {Buffer} buffer @param {string} hashToVerify */
     static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify) {
         try {
-            //const buffer = Buffer.from(checkpointBuffer);
-            //const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+            const buffer = Buffer.from(checkpointBuffer);
+            const hash_V1 = crypto.createHash('sha256').update(buffer).digest('hex');
+            const isValidHash_V1 = hash_V1 === hashToVerify;
+            if (!isValidHash_V1) console.log('<> Hash V1 mismatch! <>');
             //if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
     
             const destPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
@@ -335,6 +337,7 @@ export class CheckpointsStorage {
             zip.extractAllTo(destPath, true);
 
             // CHECK HASH
+            let isValidHash_V2 = false;
             try {
                 /** @type {Buffer[]} */
                 const snapshotsHashes = [];
@@ -350,14 +353,14 @@ export class CheckpointsStorage {
                 }
     
                 const buffer = Buffer.concat(snapshotsHashes);
-                const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-                if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
-            } catch (error) {
-                console.error('-----------------------------------');
-                console.error('Hash mismatch!');
-                console.error(error.stack);
-                console.error('-----------------------------------');
-            }
+                const hash_V2 = crypto.createHash('sha256').update(buffer).digest('hex');
+                if (hash_V2 !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
+                isValidHash_V2 = hash_V2 === hashToVerify;
+            } catch (error) { console.error(error.stack); }
+
+            if (!isValidHash_V2) console.log('<> Hash V1 mismatch! <>');
+
+            if (!isValidHash_V1 && !isValidHash_V2) console.log('--- Checkpoint is corrupted! ---');
     
             return true;
         } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
