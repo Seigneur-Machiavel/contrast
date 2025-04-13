@@ -320,9 +320,9 @@ export class Node {
 
         // erase the outdated blocks cache and persist the addresses transactions references to disk
         const cacheErasable = this.blockchain.cache.erasableLowerThan(finalizedBlock.index - (eraseUnder - 1));
-        this.updateState(`snapshot - erase cache #${cacheErasable.from} to #${cacheErasable.to}`);
         if (cacheErasable !== null && cacheErasable.from < cacheErasable.to) {
             await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, cacheErasable.from, cacheErasable.to);
+            this.updateState(`snapshot - erase cache #${cacheErasable.from} to #${cacheErasable.to}`);
             this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 

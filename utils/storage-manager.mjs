@@ -14,6 +14,7 @@ const path = await import('path');
 const url = await import('url');*/ // -> DEPRECATED
 if (false) {
     const AdmZip = require('adm-zip');
+    const archiver = require('archiver');
     const fs = require('fs');
     const path = require('path');
     const crypto = require('crypto');
@@ -22,12 +23,13 @@ if (false) {
 
 // -> Imports compatibility for Node.js, Electron and browser
 
-let AdmZip, crypto, fs, path, url;
+let archiver, AdmZip, crypto, fs, path, url;
 (async () => {
     try { fs = await import('fs'); } catch (error) { fs = window.fs; }
     try { path = await import('path'); } catch (error) { path = window.path; }
     try { url = await import('url'); } catch (error) { url = window.url; }
     try { AdmZip = await import('adm-zip').then(module => module.default); } catch (error) { AdmZip = window.AdmZip; }
+    try { archiver = await import('archiver').then(module => module.default); } catch (error) { archiver = window.archiver; }
     try { crypto = await import('crypto'); } catch (error) { crypto = window.crypto; }
 })();
 
@@ -213,7 +215,6 @@ export class CheckpointsStorage {
             /** @type {AdmZip} */
             const zip = new AdmZip();
             const breather = new Breather();
-
             if (fromPath) {
                 const snapshotsPath = path.join(fromPath, 'snapshots');
                 if (!fs.existsSync(snapshotsPath)) { throw new Error(`Snapshots folder not found at ${snapshotsPath}`); }
@@ -266,30 +267,50 @@ export class CheckpointsStorage {
         
         return false;
     }
+    static hashOfSnapshotFolder(folderPath) {
+        // load files (.bin) of snapshot folder to hash them
+        const files = fs.readdirSync(folderPath);
+        let hashBin = Buffer.alloc(0);
+        for (const file of files) {
+            const filePath = path.join(folderPath, file);
+            const bin = fs.readFileSync(filePath);
+            const fileHash = crypto.createHash('sha256').update(bin).digest();
+            // addition of hashes to create a unique hash for the folder
+            hashBin = Buffer.concat([hashBin, fileHash]);
+        }
+
+        /** @type {Buffer} */
+        const folderHash = crypto.createHash('sha256').update(hashBin).digest();
+        return folderHash;
+    }
     /** @param {number} checkpointHeight @param {string} fromPath @param {number} snapshotsHeights - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
     static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights) {
         try {
             /** @type {AdmZip} */
             const zip = new AdmZip();
             const breather = new Breather();
-            const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
-            if (!fs.existsSync(snapshotsPath)) throw new Error(`Snapshots folder not found at ${snapshotsPath}`);
+            const fromSnapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
+            if (!fs.existsSync(fromSnapshotsPath)) throw new Error(`Snapshots folder not found at ${fromSnapshotsPath}`);
             
-            let snapIncluded = 0;
+            /** @type {Buffer[]} */
+            const snapshotsHashes = [];
             for (let i = snapshotsHeights.length - 1; i >= 0; i--) {
-                if (snapIncluded >= CheckpointsStorage.maxSnapshotsInCheckpoints) break;
+                if (snapshotsHashes.length >= CheckpointsStorage.maxSnapshotsInCheckpoints) break;
                 const snapshotHeight = snapshotsHeights[i].toString();
-                const snapshotPath = path.join(snapshotsPath, snapshotHeight);
+                const snapshotPath = path.join(fromSnapshotsPath, snapshotHeight);
                 if (!fs.existsSync(snapshotPath)) throw new Error(`Snapshot ${snapshotHeight} not found at ${snapshotPath}`);
+
+                snapshotsHashes.push(CheckpointsStorage.hashOfSnapshotFolder(snapshotPath));
                 zip.addLocalFolder(snapshotPath, `snapshots/${snapshotHeight}`);
                 await breather.breathe();
-                snapIncluded++;
             }
             //zip.addLocalFolder(snapshotsPath, 'snapshots');
+            
+            const hashesBuffer = Buffer.concat(snapshotsHashes);
+            /** @type {string} */
+            const hash = crypto.createHash('sha256').update(hashesBuffer).digest('hex');
 
             const buffer = zip.toBuffer();
-            const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-
             await breather.breathe();
             const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight.toString());
             if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
@@ -302,9 +323,9 @@ export class CheckpointsStorage {
     /** @param {Buffer} buffer @param {string} hashToVerify */
     static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify) {
         try {
-            const buffer = Buffer.from(checkpointBuffer);
-            const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-            if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
+            //const buffer = Buffer.from(checkpointBuffer);
+            //const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+            //if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
     
             const destPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
             if (fs.existsSync(destPath)) { fs.rmSync(destPath, { recursive: true }); }
@@ -312,6 +333,31 @@ export class CheckpointsStorage {
             /** @type {AdmZip} */
             const zip = new AdmZip(buffer);
             zip.extractAllTo(destPath, true);
+
+            // CHECK HASH
+            try {
+                /** @type {Buffer[]} */
+                const snapshotsHashes = [];
+                const snapshotsDir = path.join(destPath, 'snapshots');
+                if (!fs.existsSync(snapshotsDir)) { throw new Error(`Snapshots folder not found at ${snapshotsDir}`); }
+    
+                const snapshotsFolders = fs.readdirSync(snapshotsDir);
+                for (const folder of snapshotsFolders) {
+                    const folderPath = path.join(snapshotsDir, folder);
+                    if (!fs.lstatSync(folderPath).isDirectory()) continue;
+    
+                    snapshotsHashes.push(CheckpointsStorage.hashOfSnapshotFolder(folderPath));
+                }
+    
+                const buffer = Buffer.concat(snapshotsHashes);
+                const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+                if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
+            } catch (error) {
+                console.error('-----------------------------------');
+                console.error('Hash mismatch!');
+                console.error(error.stack);
+                console.error('-----------------------------------');
+            }
     
             return true;
         } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }

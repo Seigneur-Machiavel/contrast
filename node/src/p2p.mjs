@@ -508,11 +508,11 @@ class P2PNetwork extends EventEmitter {
                 this.peersManager.digestSelfUpdateRemoveEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:connect':
-                this.miniLogger.log(`PUB CONNECT =${from.toString()}=> ${content.addrStr}`, (m) => console.info(m));
+                //this.miniLogger.log(`PUB CONNECT =${from.toString()}=> ${content.addrStr}`, (m) => console.info(m));
                 this.peersManager.digestConnectEvent(from.toString(), content.addrStr, content.timestamp);
                 return; // no need to emit
             case 'pub:disconnect':
-                this.miniLogger.log(`PUB DISCONNECT =${from.toString()}=> ${content.peerIdStr}`, (m) => console.info(m));
+                //this.miniLogger.log(`PUB DISCONNECT =${from.toString()}=> ${content.peerIdStr}`, (m) => console.info(m));
                 this.peersManager.digestDisconnectEvent(from.toString(), content.peerIdStr, content.timestamp);
                 return; // no need to emit
         }

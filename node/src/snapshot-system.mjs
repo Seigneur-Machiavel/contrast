@@ -187,7 +187,7 @@ export class CheckpointSystem {
 	activeCheckpointPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
 
 	minGapTryCheckpoint = 720; // 24h
-	checkpointHeightModulo = 100;
+	checkpointHeightModulo = 5; // TODO : set 50 again in production
 	checkpointToConserve = 4;
 	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	rndControlDiceFaces = 27; // 1 in 27 chance to verify the block hash
@@ -233,7 +233,8 @@ export class CheckpointSystem {
 		if (fs.existsSync(heightPath)) { console.error(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`); return false; }
 		if (fs.existsSync(heightPath) && !overwrite) { return false; }
 
-		const snapshotsHeights = readSnapshotsHeightsOfDir(path.join(fromPath, 'snapshots'));
+		const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
+		const snapshotsHeights = readSnapshotsHeightsOfDir(snapshotsPath);
 		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath, snapshotsHeights); // save new checkpoint archive (.zip)
 		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return false; }
 
