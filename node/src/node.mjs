@@ -348,13 +348,14 @@ export class Node {
         if (!trigger) return;
 
         // oldest example: #1050 - (5 * 10) = 1000
-        const oldestSnapHeight = finalizedBlock.index - snapshotGap;
-        this.updateState(`creating checkpoint #${oldestSnapHeight}`);
-        const result = await this.checkpointSystem.newCheckpoint(oldestSnapHeight);
+        //const oldestSnapHeight = finalizedBlock.index - snapshotGap;
+        const checkpointHeight = finalizedBlock.index - this.checkpointSystem.checkpointHeightModulo;
+        this.updateState(`creating checkpoint #${checkpointHeight}`);
+        const result = await this.checkpointSystem.newCheckpoint(checkpointHeight, this.snapshotSystem.snapshotHeightModulo);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
-        this.miniLogger.log(`${logText} ${oldestSnapHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
+        this.miniLogger.log(`${logText} ${checkpointHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
     
-        this.checkpointSystem.pruneCheckpointsLowerThanHeight();
+        if (pruning) this.checkpointSystem.pruneCheckpointsLowerThanHeight();
     }
     /** Function used to rebuild addressesTxsRefs from the known blocks */
     async reBuildAddrsTxsRefs(startHeight) {

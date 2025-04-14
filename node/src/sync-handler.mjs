@@ -354,7 +354,7 @@ export class SyncHandler {
         let desiredBlock = (checkpointMode ? activeCheckpointHeight : this.node.blockchain.currentHeight) + 1;
         if (checkpointMode && activeCheckpointHeight === activeCheckpointTargetHeight) { // checkpoint is ready to be deployed
             this.node.updateState(`Deploying checkpoint #${this.node.checkpointSystem.activeCheckpointHeight}...`); // can be long...
-            await this.node.checkpointSystem.deployActiveCheckpoint(); // throws on failure
+            await this.node.checkpointSystem.deployActiveCheckpoint(this.node.snapshotSystem.snapshotHeightModulo); // throws on failure
             return 'Checkpoint deployed';
         }
 
@@ -417,7 +417,7 @@ export class SyncHandler {
 
                     if (checkpointMode && activeCheckpointTargetHeight === block.index) {
                         this.node.updateState(`Deploying checkpoint #${this.node.checkpointSystem.activeCheckpointHeight}...`); // can be long...
-                        await this.node.checkpointSystem.deployActiveCheckpoint(); // throws if failure
+                        await this.node.checkpointSystem.deployActiveCheckpoint(this.node.snapshotSystem.snapshotHeightModulo); // throws if failure
                         return 'Checkpoint deployed';
                     }
 

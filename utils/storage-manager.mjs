@@ -210,7 +210,7 @@ export class StorageAsync {
 }
 
 export class CheckpointsStorage {
-    static maxSnapshotsInCheckpoints = 5; // number of snapshots to keep in checkpoints
+    static maxSnapshotsInCheckpoints = 3; // number of snapshots to keep in checkpoints
     /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
     static async archiveCheckpointOLD(checkpointHeight = 0, fromPath) {
         try {
@@ -285,19 +285,24 @@ export class CheckpointsStorage {
         const folderHash = crypto.createHash('sha256').update(hashBin).digest();
         return folderHash;
     }
-    /** @param {number} checkpointHeight @param {string} fromPath @param {number} snapshotsHeights - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
-    static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights) {
+    /** 
+     * @param {number} checkpointHeight
+     * @param {string} fromPath
+     * @param {number[]} snapshotsHeights - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder
+     * @param {number[]} neededSnapHeights */
+    static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights, neededSnapHeights) {
         try {
             /** @type {AdmZip} */
             const zip = new AdmZip();
             const breather = new Breather();
             const fromSnapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
             if (!fs.existsSync(fromSnapshotsPath)) throw new Error(`Snapshots folder not found at ${fromSnapshotsPath}`);
-            
+
             /** @type {Buffer[]} */
             const snapshotsHashes = [];
             for (let i = snapshotsHeights.length - 1; i >= 0; i--) {
                 if (snapshotsHashes.length >= CheckpointsStorage.maxSnapshotsInCheckpoints) break;
+                if (!neededSnapHeights.includes(snapshotsHeights[i])) continue; // skip the needed snapshots
                 const snapshotHeight = snapshotsHeights[i].toString();
                 const snapshotPath = path.join(fromSnapshotsPath, snapshotHeight);
                 if (!fs.existsSync(snapshotPath)) throw new Error(`Snapshot ${snapshotHeight} not found at ${snapshotPath}`);

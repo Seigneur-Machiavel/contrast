@@ -187,7 +187,7 @@ export class CheckpointSystem {
 	activeCheckpointPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
 
 	minGapTryCheckpoint = 720; // 24h
-	checkpointHeightModulo = 25; // TODO : set 50 again in production
+	checkpointHeightModulo = 25;
 	checkpointToConserve = 4;
 	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	rndControlDiceFaces = 27; // 1 in 27 chance to verify the block hash
@@ -225,7 +225,7 @@ export class CheckpointSystem {
 		if (result.erased.length === 0) return; // no need to log
 		console.info(`Checkpoints pruned | erased: ${result.erased.join(', ')} | preserved: ${result.preserved.join(', ')}`);
 	}
-	async newCheckpoint(height = 1000, fromPath, overwrite = false) {
+	async newCheckpoint(height = 1000, snapshotHeightModulo, fromPath, overwrite = false) {
 		// We prefer to not overwrite existing checkpoints, but it's possible to force it
 		//! The danger is to overwrite a valid checkpoint with a corrupted one:
 		//! The "addresses-txs-refs" as been removed from checkpoints
@@ -235,7 +235,12 @@ export class CheckpointSystem {
 
 		const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
 		const snapshotsHeights = readSnapshotsHeightsOfDir(snapshotsPath);
-		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath, snapshotsHeights); // save new checkpoint archive (.zip)
+		const neededSnapHeights = [
+			height,
+			height - snapshotHeightModulo,
+			height - (snapshotHeightModulo * 2)
+		];
+		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath, snapshotsHeights, neededSnapHeights); // save new checkpoint archive (.zip)
 		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return false; }
 
 		this.lastCheckpointInfo = { height, hash };
@@ -355,12 +360,12 @@ export class CheckpointSystem {
 
 		return true;
 	}
-	async deployActiveCheckpoint(saveZipArchive = true) {
+	async deployActiveCheckpoint(snapshotHeightModulo, saveZipArchive = true) {
 		if (this.activeCheckpointHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint not set`); }
 		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
 
 		if (saveZipArchive)
-			await this.newCheckpoint(this.activeCheckpointHeight, this.activeCheckpointPath);
+			await this.newCheckpoint(this.activeCheckpointHeight, snapshotHeightModulo, this.activeCheckpointPath);
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
 		if (fs.existsSync(txsRefsConfigDest)) fs.rmSync(txsRefsConfigDest, { force: true });
