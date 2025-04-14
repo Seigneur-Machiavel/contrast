@@ -187,7 +187,7 @@ export class CheckpointSystem {
 	activeCheckpointPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
 
 	minGapTryCheckpoint = 720; // 24h
-	checkpointHeightModulo = 5; // TODO : set 50 again in production
+	checkpointHeightModulo = 25; // TODO : set 50 again in production
 	checkpointToConserve = 4;
 	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	rndControlDiceFaces = 27; // 1 in 27 chance to verify the block hash
@@ -211,7 +211,7 @@ export class CheckpointSystem {
 		result.heights.sort((a, b) => a - b);
 		return result;
 	}
-	pruneCheckpointsLowerThanHeight(height = 1000) { // dangerous to prune checkpoints, use with caution
+	pruneCheckpointsLowerThanHeight(height = 0) { // dangerous to prune checkpoints, use with caution
 		const result = { erased: [], preserved: [] };
 		const descendingHeights = this.#getCheckpointsInfos().heights.reverse();
 		for (const h of descendingHeights) {
@@ -332,11 +332,17 @@ export class CheckpointSystem {
 	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock, serializedBlockInfo) {
 		if (this.activeCheckpointHeight === false) { throw new Error('(Checkpoint fill) Active checkpoint not set'); }
 		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) { throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`); }
-		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { throw new Error(`(Checkpoint fill) Block prevHash mismatch: ${finalizedBlock.prevHash} !== ${this.activeCheckpointHash}`); }
+		
+		// on invalid hash!=prevHash => erase the block batch folder, trying to resolve conflict
+		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { 
+			const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
+			const batchFolderPath = path.join(this.activeCheckpointPath, 'blocks', batchFolderName);
+			if (fs.existsSync(batchFolderPath)) fs.rmSync(batchFolderPath, { recursive: true, force: true });
+			return 'restart'
+		}
 
 		// Hash verification, argon2 based, cost CPU time (~500ms)
-		const verify = this.#randomDiceRoll(this.rndControlDiceFaces);
-		if (verify) {
+		if (this.#randomDiceRoll(this.rndControlDiceFaces)) {
 			console.info(`Checkpoint fill: verifying block hash ${finalizedBlock.index}...`);
 			const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
         	if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }

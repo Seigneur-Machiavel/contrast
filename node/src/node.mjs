@@ -155,7 +155,7 @@ export class Node {
         const activeCheckpoint = this.checkpointSystem.checkForActiveCheckpoint();
         let persistedHeight;
         if (!activeCheckpoint && !startFromScratch) {
-            this.checkpointSystem.pruneCheckpointsLowerThanHeight(0); //? will preserve 3 highest checkpoints
+            this.checkpointSystem.pruneCheckpointsLowerThanHeight(); //? will preserve 3 highest checkpoints
             Storage.dumpTrashFolder();
             this.updateState("Loading blockchain");
 
@@ -336,7 +336,7 @@ export class Node {
         this.snapshotSystem.restoreLoadedSnapshot();
     }
     /** @param {BlockData} finalizedBlock */
-    async #saveCheckpoint(finalizedBlock) {
+    async #saveCheckpoint(finalizedBlock, pruning = true) {
         if (finalizedBlock.index < 100) return;
 
         const startTime = performance.now();
@@ -351,13 +351,15 @@ export class Node {
         const result = await this.checkpointSystem.newCheckpoint(oldestSnapHeight);
         const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
         this.miniLogger.log(`${logText} ${oldestSnapHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m) => { console.info(m); });
+    
+        this.checkpointSystem.pruneCheckpointsLowerThanHeight();
     }
     /** Function used to rebuild addressesTxsRefs from the known blocks */
     async reBuildAddrsTxsRefs(startHeight) {
         // startHeight correspond to the persistedHeight,
         // addrsTxsRefs has been pruned at this height
 
-        // IN CASE OF UPGRADE: reset the storage to rebuild it entirely
+        // IN CASE OF UPGRADE: reset the ATRS to rebuild it entirely
         if (this.blockchain.addressesTxsRefsStorage.version !== 2)
             this.blockchain.addressesTxsRefsStorage.reset();
 
@@ -384,7 +386,6 @@ export class Node {
 
         // going 5 by 5 like snapshots saving (modulo = 5)
         const modulo = this.snapshotSystem.snapshotHeightModulo;
-        //const lastHeightOp3 = this.blockchain.currentHeight - (this.blockchain.currentHeight % modulo);
         const lastHeightOp3 = startHeight;
         for (let i = startHeightOp3; i < lastHeightOp3; i += modulo) {
             this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + modulo}`);

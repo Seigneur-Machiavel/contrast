@@ -388,11 +388,6 @@ export class SyncHandler {
                     break;
                 }
                 
-                //const serializedBlocks = serializer.deserialize.rawData(syncRes.data);
-                //if (!serializedBlocks) { this.miniLogger.log(`Failed to get serialized blocks`, (m) => { console.error(m); }); break; }
-                //if (!Array.isArray(serializedBlocks)) { this.miniLogger.log(`Invalid serialized blocks format`, (m) => { console.error(m); }); break; }
-                //if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks received`, (m) => { console.error(m); }); break; }
-                
                 /** @type {GetBlocksAnwser} */
                 const getBlocksAnwser = serializer.deserialize.rawData(syncRes.data);
                 if (!getBlocksAnwser) { this.miniLogger.log(`Failed to get serialized blocks`, (m) => { console.error(m); }); break; }
@@ -403,7 +398,6 @@ export class SyncHandler {
                 if (!Array.isArray(serializedBlocks)) { this.miniLogger.log(`Invalid serialized blocks format`, (m) => { console.error(m); }); break; }
                 if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks received`, (m) => { console.error(m); }); break; }
 
-                //for (const serializedBlock of serializedBlocks) {
                 for (let i = 0; i < serializedBlocks.length; i++) {
                     const serializedBlock = serializedBlocks[i];
                     const byteLength = serializedBlock.byteLength;
@@ -412,7 +406,11 @@ export class SyncHandler {
                         this.node.updateState(`Fills checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`);
                         this.miniLogger.log(`Fills checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`, (m) => { console.info(m); });
                         const serializedBlockInfo = serializedBlocksInfo[i];
-                        await this.node.checkpointSystem.fillActiveCheckpointWithBlock(block, serializedBlock, serializedBlockInfo); // throws if failure
+                        const actionRequested = await this.node.checkpointSystem.fillActiveCheckpointWithBlock(block, serializedBlock, serializedBlockInfo); // throws if failure
+                        if (actionRequested === 'restart') {
+                            this.node.restartRequested = 'syncHandler (#getMissingBlocks) fillActiveCheckpointWithBlock()';
+                            return 'Restart requested';
+                        }
                     } else {
                         await this.node.digestFinalizedBlock(block, { broadcastNewCandidate: false, isSync: true }, byteLength); // throws if failure
                     }
