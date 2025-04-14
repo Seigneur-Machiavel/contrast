@@ -33,7 +33,7 @@ export class OpStack {
     static buildNewStack(node) {
         const newCallStack = new OpStack();
         newCallStack.node = node;
-        newCallStack.#stackLoop();
+        //newCallStack.#stackLoop();
         newCallStack.#healthCheckLoop();
         return newCallStack;
     }
@@ -79,7 +79,8 @@ export class OpStack {
         this.syncRequested = false;
     }
     /** @param {number} delayMS */
-    async #stackLoop(delayMS = 50) {
+    //async #stackLoop(delayMS = 50) {
+    async startStackLoop(delayMS = 50) {
         while (true) {
             if (this.terminated) { break; }
 
@@ -211,6 +212,10 @@ export class OpStack {
                     this.node.createBlockCandidateAndBroadcast(content || 0); // content = delay(ms)
                     // RE CREATE AND BROADCAST(if owner of best candidate) AFTER HALF BLOCK_TIME FOR MORE CONSISTENCY
                     this.node.createBlockCandidateAndBroadcast((content || 0) + BLOCKCHAIN_SETTINGS.targetBlockTime / 2);
+                    break;
+                case 'startMiner':
+                    this.node.miner.startWithWorker();
+                    this.miniLogger.log(`[OpStack] Miner started`, (m) => console.info(m));
                     break;
                 case 'rollBackTo':
                     this.miniLogger.log(`[OpStack] Rollback to #${content}`, (m) => console.info(m));

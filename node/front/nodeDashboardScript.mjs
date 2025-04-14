@@ -676,7 +676,7 @@ function togglePasswordVisibility(inputElement, toggleButton) {
         toggleButton.textContent = 'Show';
     }
 }
-function adjustInputValue(targetInput, delta, min = 0, max = 8) {
+function adjustInputValue(targetInput, delta, min = 0, max = 4) {
     const currentValue = parseInt(targetInput.value);
     if (isNaN(currentValue)) {
         targetInput.value = min;
@@ -686,7 +686,7 @@ function adjustInputValue(targetInput, delta, min = 0, max = 8) {
 
     targetInput.dispatchEvent(new Event('change'));
 }
-function updateMinerThreadsDisabledButtons(min = 0, max = 8) {
+function updateMinerThreadsDisabledButtons(min = 0, max = 4) {
     eHTML.minerThreads.decrementBtn.classList.remove('disabled');
     eHTML.minerThreads.incrementBtn.classList.remove('disabled');
     if (parseInt(eHTML.minerThreads.input.value) <= min) { eHTML.minerThreads.decrementBtn.classList.add('disabled'); }

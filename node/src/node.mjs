@@ -170,8 +170,6 @@ export class Node {
         const uniqueTopics = this.#subscribeTopicsRelatedToRoles(this.roles);
         for (const topic of uniqueTopics) this.p2pNetwork.subscribe(topic, this.p2pHandler);
 
-        if (this.roles.includes('miner')) this.miner.startWithWorker();
-
         const nbOfPeers = await this.#waitSomePeers();
         if (!nbOfPeers || nbOfPeers < 1) {
             this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); });
@@ -185,11 +183,15 @@ export class Node {
         const elapsed = performance.now() - startTime;
         await new Promise(resolve => setTimeout(resolve, Math.max(3000 - elapsed, 0))); // ~maxTime to connect nodes
         
+        //if (this.roles.includes('miner')) this.miner.startWithWorker();
         if (!activeCheckpoint) this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
+        if (this.roles.includes('miner')) this.opStack.pushFirst('startMiner', null); // delayed
         this.opStack.pushFirst('syncWithPeers', null);
 
         if (!activeCheckpoint && persistedHeight)
             this.opStack.pushFirst('reBuildAddrsTxsRefs', persistedHeight);
+
+        this.opStack.startStackLoop();
     }
     async #waitSomePeers(nbOfPeers = 1, maxAttempts = 30, delay = 5000) {
         const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
