@@ -334,7 +334,7 @@ export class Node {
         // at this stage we know that the loaded snapshot is consistent with the blockchain
         if (this.snapshotSystem.loadedSnapshotHeight < finalizedBlock.index - (eraseUnder*2))
             this.snapshotSystem.loadedSnapshotHeight = 0;
-        
+
         this.snapshotSystem.restoreLoadedSnapshot();
     }
     /** @param {BlockData} finalizedBlock */

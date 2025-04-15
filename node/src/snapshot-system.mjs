@@ -269,11 +269,6 @@ export class CheckpointSystem {
 			}
 		}
 
-		//! BYPASS CHECKPOINTS WHILE UPDATING TO 0.3.1
-		//! THIS IS A TEMPORARY FIX TO AVOID CHECKPOINTS PROBLEMS DURING THE UPDATE
-		//TODO RE ENABLE IN PRODUCTION
-		this.lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
-
 		return this.lastCheckpointInfo;
 	}
 

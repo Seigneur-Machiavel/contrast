@@ -225,11 +225,11 @@ export class SyncHandler {
             for (const peerStatus of peersStatus) {
                 const { peerIdStr, checkpointInfo } = peerStatus;
                 if (checkpointInfo.height !== consensus.checkpointInfo.height) { continue; }
-                //!if (checkpointInfo.hash !== consensus.checkpointInfo.hash) { continue; }
+                if (checkpointInfo.hash !== consensus.checkpointInfo.hash) { continue; } //? enabled
 
                 this.miniLogger.log(`Attempting to sync checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
-                //!const success = await this.#getCheckpoint(peerIdStr, consensus.checkpointInfo.hash);
-                const success = await this.#getCheckpoint(peerIdStr, checkpointInfo.hash);
+                const success = await this.#getCheckpoint(peerIdStr, consensus.checkpointInfo.hash); //? enabled
+                //const success = await this.#getCheckpoint(peerIdStr, checkpointInfo.hash);
                 if (!success) { continue; }
                 
                 this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
