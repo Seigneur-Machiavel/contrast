@@ -165,25 +165,14 @@ autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
     });
 });
 const autoUpdaterCheckLoop = async () => {
-    let downloadingVersion;
-    while (!downloadingVersion && downloadingVersion !== version) {
-        console.log('Checking for updates...');
-        //autoUpdater.forceDevUpdateConfig = true; autoUpdater.currentVersion = '0.2.1'; // Dev update test
-        try {
-            //ipcRenderer.send('assistant-message', 'Checking for updates...');
-            updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
-            downloadingVersion = updateCheckResult?.updateInfo?.version;
-            //ipcRenderer.send('assistant-message', `No updates found, checking again in 1h...`);
-        } catch (error) {
-            console.error('Error during update check:', error.stack);
-        }
+    while (true) {
+        autoUpdater.checkForUpdatesAndNotify(); //! await this one: crash the program!
 
-        const delay = Math.floor(Math.random() * 10_000) + 10_000; // rnd delay beetwen 30sec and 1min
-        //const delay = Math.floor(Math.random() * 60_000) + 60_000; // rnd delay beetwen 30sec and 1min
+        // avoid all peers updating at the same time by using a rnd delay
+        const delay = Math.floor(Math.random() * 900_000) + 300_000; // 300s to 1200s (5min to 20min)
         console.log(`Next update check in ${(delay / 1000).toFixed(2)}s`);
-        await new Promise(resolve => setTimeout(resolve, delay)); // avoid all peers updating at the same time
+        await new Promise(resolve => setTimeout(resolve, delay));
     }
-    console.log(`Update check loop stopped, downloading version: ${downloadingVersion}`);
 };
 
 // IPC EVENTS
@@ -282,8 +271,8 @@ app.on('before-quit', () => {
 app.on('will-quit', async () => await new Promise(resolve => setTimeout(resolve, 3000))); // let time for the node to stop properly
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); }); // quit when all windows are closed
 app.on('ready', async () => {
-    //if (!isDev) autoUpdaterCheckLoop();
-    if (!isDev) autoUpdater.checkForUpdatesAndNotify();
+    if (!isDev) autoUpdaterCheckLoop();
+    //if (!isDev) autoUpdater.checkForUpdatesAndNotify(); //! await this one: crash the program!
     await loadUserPreferences();
 
     windows.boardWindow = await createWindow(windowsOptions.boardWindow);
