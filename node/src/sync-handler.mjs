@@ -229,7 +229,6 @@ export class SyncHandler {
 
                 this.miniLogger.log(`Attempting to sync checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
                 const success = await this.#getCheckpoint(peerIdStr, consensus.checkpointInfo.hash); //? enabled
-                //const success = await this.#getCheckpoint(peerIdStr, checkpointInfo.hash);
                 if (!success) { continue; }
                 
                 this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });

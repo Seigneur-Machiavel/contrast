@@ -996,7 +996,7 @@ export class BlockExplorerWidget {
         table.appendChild(thead);
         
         const tbody = document.createElement('tbody');
-        const txsReferences = addressExhaustiveData.addressTxsReferences;
+        const txsReferences = addressExhaustiveData.addressTxsReferences.reverse();
         for (const txReference of txsReferences) {
             const transaction = this.transactionsByReference[txReference];
             const row = createHtmlElement('tr', undefined, ['cbe-addressTxRow'], tbody);

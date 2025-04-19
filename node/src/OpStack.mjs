@@ -33,9 +33,19 @@ export class OpStack {
     static buildNewStack(node) {
         const newCallStack = new OpStack();
         newCallStack.node = node;
-        //newCallStack.#stackLoop();
-        newCallStack.#healthCheckLoop();
+        //newCallStack.#healthCheckLoop();
         return newCallStack;
+    }
+    /** Will try sync with peers every 3-10 minutes */
+    async #rndSyncCheck(minDelay = 180_000, maxDelay = 600_000) {
+        while(!this.terminated) {
+            const delay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+            await new Promise(resolve => setTimeout(resolve, delay));
+            if (this.terminated) break;
+            if (this.executingTask && this.executingTask.type === 'syncWithPeers') continue;
+            if (this.tasks[0] && this.tasks[0].type === 'syncWithPeers') continue;
+            this.pushFirst('syncWithPeers', null);
+        }
     }
     async #healthCheckLoop() {
         const delayBetweenChecks = 10_000; // 10 second
@@ -79,10 +89,10 @@ export class OpStack {
         this.syncRequested = false;
     }
     /** @param {number} delayMS */
-    //async #stackLoop(delayMS = 50) {
     async startStackLoop(delayMS = 50) {
+        this.#rndSyncCheck();
         while (true) {
-            if (this.terminated) { break; }
+            if (this.terminated) break;
 
             if (this.tasks.length === 0 || this.paused) {
                 await new Promise(resolve => setTimeout(resolve, delayMS));
@@ -93,7 +103,7 @@ export class OpStack {
             await new Promise(resolve => setImmediate(resolve));
 
             let task = this.tasks.shift();
-            if (!task) { continue; }
+            if (!task) continue;
 
             const nextTaskIsPushTransaction = this.tasks[0] && this.tasks[0].type === 'pushTransaction';
             if (!nextTaskIsPushTransaction) {
@@ -204,7 +214,8 @@ export class OpStack {
                         default:
                             this.healthInfo.lastReorgCheckTime = Date.now();
                             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('syncWithPeers failed');
-                            if (reorgTasks) { this.securelyPushFirst(reorgTasks); } else { this.pushFirst('syncWithPeers', null); }
+                            if (reorgTasks) this.securelyPushFirst(reorgTasks);
+                            else this.pushFirst('syncWithPeers', null);
                     }
 
                     break;

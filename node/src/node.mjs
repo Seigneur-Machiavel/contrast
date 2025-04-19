@@ -171,7 +171,7 @@ export class Node {
         for (const topic of uniqueTopics) this.p2pNetwork.subscribe(topic, this.p2pHandler);
 
         const nbOfPeers = await this.#waitSomePeers();
-        if (!nbOfPeers || nbOfPeers < 1) {
+        if (!nbOfPeers || nbOfPeers < 2) {
             this.miniLogger.log('Failed to connect to peers, stopping the node', (m) => { console.error(m); });
             this.restartRequested = 'Failed to connect to peers';
             return;

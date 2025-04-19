@@ -26,8 +26,6 @@ const isDev = !app.isPackaged;
  * @property {boolean} [startHidden] - default true
  * @property {boolean} [isMainWindow] - default false */
 
-
-
 /** @type {Storage} */
 let mainStorage;
 (async () => {
@@ -49,7 +47,6 @@ let userPreferences = {};
 const version = isDev ? JSON.parse(fs.readFileSync('package.json')).version : app.getVersion();
 const mainLogger = new MiniLogger('main');
 const myAppAutoLauncher = new AutoLaunch({ name: 'Contrast' });
-const nodeApp = isDev ? 'stresstest' : 'dashboard';
 let isQuiting = false;
 /** @type {UpdateCheckResult | null} */
 let updateCheckResult = null;
@@ -101,7 +98,7 @@ function saveUserPreferencesAfterTimeout() {
 }
 
 /** @type {NodeAppWorker} */
-let dashboardWorker;
+let nodeAppWorker;
 
 async function randomRestartTest() { // DEV FUNCTION
     await new Promise(resolve => setTimeout(resolve, 5000)); // wait for the dashboard to start
@@ -109,7 +106,7 @@ async function randomRestartTest() { // DEV FUNCTION
         const restartTime = Math.floor(Math.random() * 480000) + 120000;
         mainLogger.log(`--- Restarting node worker in ${(restartTime / 1000).toFixed(2)}s ---`, (m) => { console.log(m); });
         await new Promise(resolve => setTimeout(resolve, restartTime));
-        dashboardWorker.restart();
+        nodeAppWorker.restart();
     }
 }
 
@@ -196,19 +193,19 @@ ipcMain.on('maximize-btn-click', () => windows.boardWindow.isMaximized() ? windo
 ipcMain.on('close-btn-click', () => app.quit());
 ipcMain.on('set-password', async (event, password) => {
     console.log('setting password...');
-    const { channel, data } = await dashboardWorker.setPasswordAndWaitResult(password);
+    const { channel, data } = await nodeAppWorker.setPasswordAndWaitResult(password);
     event.reply(channel, data);
     
     // randomRestartTest(); // -- test restart each 120s to 600s --
     windows.logger = await createWindow(windowsOptions.logger);
     setShortcuts(windows, isDev);
 });
-ipcMain.on('generate-private-key-and-start-node', () => dashboardWorker.generatePrivateKeyAndStartNode());
+ipcMain.on('generate-private-key-and-start-node', () => nodeAppWorker.generatePrivateKeyAndStartNode());
 ipcMain.on('set-private-key-and-start-node', (event, privateKey) => {
-    dashboardWorker.setPrivateKeyAndStartNode(privateKey)
+    nodeAppWorker.setPrivateKeyAndStartNode(privateKey)
 });
 ipcMain.on('extract-private-key', async (event, password) => {
-    const extractedHex = await dashboardWorker.extractPrivateKeyAndWaitResult(password === '' ? 'fingerPrint' : password);
+    const extractedHex = await nodeAppWorker.extractPrivateKeyAndWaitResult(password === '' ? 'fingerPrint' : password);
     if (!extractedHex) return event.reply('assistant-message', 'Password is incorrect, try again!');
 
     event.reply('assistant-message', 'Your private key will be show in 5s, do not reveal it to anyone!');
@@ -226,7 +223,7 @@ ipcMain.on('set-auto-launch', async (event, value) => {
     event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
 });
 ipcMain.on('reset-private-key', async (event) => {
-    if (dashboardWorker) await dashboardWorker.stop();
+    if (nodeAppWorker) await nodeAppWorker.stop();
     await new Promise(resolve => setTimeout(resolve, 7000)); // wait for the node to stop properly
     mainStorage.deleteFile('passHash.bin');
     mainStorage.deleteFile('nodeSetting.bin');
@@ -235,7 +232,7 @@ ipcMain.on('reset-private-key', async (event) => {
     app.quit();
 });
 ipcMain.on('reset-all-data', async (event) => {
-    if (dashboardWorker) await dashboardWorker.stop();
+    if (nodeAppWorker) await nodeAppWorker.stop();
     await new Promise(resolve => setTimeout(resolve, 7000)); // wait for the node to stop properly
     await import('./clear.mjs');
     if (!app.isPackaged) return;
@@ -243,7 +240,7 @@ ipcMain.on('reset-all-data', async (event) => {
     app.quit();
 });
 ipcMain.on('generate-new-address', async (event, prefix) => {
-    const newAddress = await dashboardWorker.generateNewAddressAndWaitResult(prefix);
+    const newAddress = await nodeAppWorker.generateNewAddressAndWaitResult(prefix);
     event.reply('new-address-generated', newAddress);
 });
 ipcMain.on('store-app-data', async (event, appName, filename, data, secure = true) => {
@@ -260,7 +257,7 @@ ipcMain.on('store-app-data', async (event, appName, filename, data, secure = tru
     }
     
     try {
-        const cypherTextData = await dashboardWorker.cypherTextAndWaitResult(data);
+        const cypherTextData = await nodeAppWorker.cypherTextAndWaitResult(data);
         mainStorage.saveJSON(`${appName}/${filename}`, cypherTextData);
         event.reply('app-data-stored', appName, filename, cypherTextData);
     } catch (error) { event.reply('error', 'Error while storing app data:', error); }
@@ -278,7 +275,7 @@ ipcMain.on('delete-app-data', async (event, appName, filename) => {
 app.on('before-quit', () => {
     try {
         isQuiting = true;
-        if (dashboardWorker) dashboardWorker.stop();
+        if (nodeAppWorker) nodeAppWorker.stop();
         globalShortcut.unregisterAll();
     } catch (error) { console.error('Error during app quit:', error); }
 });
@@ -298,12 +295,6 @@ app.on('ready', async () => {
     windows.boardWindow.on('leave-full-screen', () => saveUserPreferencesAfterTimeout());
 
     const { NodeAppWorker } = await import('./node/workers/workers-classes.mjs');
-    dashboardWorker = new NodeAppWorker(nodeApp, 27260, 27271, 27270, windows.boardWindow);
-
-    /*let checkForUpdates = !isDev;
-    while(checkForUpdates) { // check for updates every 5 minutes
-        await new Promise(resolve => setTimeout(resolve, 300000));
-        const updateCheckResult = await autoUpdater.checkForUpdatesAndNotify();
-        updateCheckResult.
-    }*/
+    const appName = 'unified'; // dashboard, stresstest, unified
+    nodeAppWorker = new NodeAppWorker(appName, 27260, 27271, 27270, windows.boardWindow);
 });
