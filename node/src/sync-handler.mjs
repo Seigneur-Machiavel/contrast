@@ -214,14 +214,12 @@ export class SyncHandler {
         if (consensus.height === 0 || consensus.height <= myCurrentHeight) { return 'Already at the consensus height'; }
         
         this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height} (${consensus.checkpointPeers} peers)`, (m) => { console.info(m); });
-        // wait a bit before starting the sync, time for previous connections to be closed
-        //?await new Promise((resolve) => setTimeout(resolve, 5000));
 
         // try to sync by checkpoint at first
         const activeCheckpoint = this.node.checkpointSystem.activeCheckpointHeight !== false;
         const tryToSyncCheckpoint = myCurrentHeight + this.node.checkpointSystem.minGapTryCheckpoint < consensus.checkpointInfo.height;
         if (!activeCheckpoint && tryToSyncCheckpoint) {
-            this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`); // can be long...
+            this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`);
             for (const peerStatus of peersStatus) {
                 const { peerIdStr, checkpointInfo } = peerStatus;
                 if (checkpointInfo.height !== consensus.checkpointInfo.height) { continue; }
@@ -362,18 +360,18 @@ export class SyncHandler {
 
             while (desiredBlock <= peerHeight) {
                 let endIndex = Math.min(desiredBlock + this.MAX_BLOCKS_PER_REQUEST - 1, peerHeight);
-                if (checkpointMode) { endIndex = Math.min(endIndex, activeCheckpointTargetHeight); }
+                if (checkpointMode) endIndex = Math.min(endIndex, activeCheckpointTargetHeight);
     
                 this.node.updateState(`Downloading blocks #${desiredBlock} to #${endIndex}...`);
                 const message = { type: 'getBlocks', startIndex: desiredBlock, endIndex };
-                if (checkpointMode) { message.includesBlockInfo = true; }
+                if (checkpointMode) message.includesBlockInfo = true;
                 //const syncRes = await this.#sendSyncRequest(peerIdStr, message); // old code
 
                 // TRYING TO ANTICIPATE BY REQUESTING THE NEXT BLOCKS
                 let syncRes;
                 if (syncResPromise) syncRes = await syncResPromise; // FILL WITH THE ANTICIPATED PROMISE
                 else syncRes = await this.#sendSyncRequest(peerIdStr, message, 1); // FIRST REQUEST
-                syncResPromise = null; // reset the promise
+                syncResPromise = undefined; // reset the promise
 
                 // SEND ANTICIPATED REQUEST IF POSSIBLE
                 const anticipatedMsg = message;

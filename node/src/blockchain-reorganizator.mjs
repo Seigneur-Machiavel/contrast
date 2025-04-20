@@ -27,7 +27,7 @@ export class Reorganizator {
     #pruneBranch(finalizedBlocks) {
         for (const block of finalizedBlocks) {
             const index = block.index;
-            if (!this.finalizedBlocksCache[index]) { continue; }
+            if (!this.finalizedBlocksCache[index]) continue;
             delete this.finalizedBlocksCache[index][block.hash];
         }
     }
@@ -42,7 +42,7 @@ export class Reorganizator {
         // the most legitimate chain is the one with the lowest mining final difficulty
         // mining final difficulty affected by: posTimestamp
         const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
-        if (snapshotsHeights.length < 2) { return legitimateReorg; }
+        if (snapshotsHeights.length < 2) return legitimateReorg;
 
         const usableSnapshots = {
             lastBlock: null,
@@ -54,7 +54,7 @@ export class Reorganizator {
         usableSnapshots.preLastBlock = this.node.blockchain.getBlock(usableSnapshots.preLastHeight);
 
         const lastBlock = this.node.blockchain.lastBlock;
-        if (!lastBlock) { return legitimateReorg; }
+        if (!lastBlock) return legitimateReorg;
 
         legitimateReorg.lastTimestamp = lastBlock.timestamp;
         legitimateReorg.lastHeight = lastBlock.index;
@@ -63,14 +63,14 @@ export class Reorganizator {
         while (this.finalizedBlocksCache[index]) {
             const blocks = Object.values(this.finalizedBlocksCache[index]);
             for (const block of blocks) {
-                if (block.hash === lastBlock.hash) { continue; }
+                if (block.hash === lastBlock.hash) continue;
                 
                 const blockTimestamp = block.timestamp;
                 const sameIndex = legitimateReorg.lastHeight === block.index;
-                if (sameIndex && blockTimestamp > legitimateReorg.lastTimestamp) { continue; }
+                if (sameIndex && blockTimestamp > legitimateReorg.lastTimestamp) continue; 
 
                 const tasksToReorg = this.#buildChainReorgTasksFromHighestToLowest(block, usableSnapshots);
-                if (!tasksToReorg) { continue; }
+                if (!tasksToReorg) continue;
 
                 legitimateReorg.tasks = tasksToReorg;
                 legitimateReorg.lastHeight = block.index;
@@ -87,17 +87,18 @@ export class Reorganizator {
         const blocks = [];
         let block = highestBlock;
         while (block.index > usableSnapshots.preLastHeight) {
-            if (!block) { return false; }
-            if (this.#isFinalizedBlockBanned(block)) { return false; }
+            if (!block) return false;
+            if (this.#isFinalizedBlockBanned(block)) return false;
 
             blocks.push(block);
-            if (this.node.blockchain.lastBlock.hash === block.prevHash) { break; } // can build the chain with the last block
-            if (usableSnapshots.lastBlock.hash === block.prevHash) { break; } // can build the chain with the last snapshot
-            if (usableSnapshots.preLastBlock.hash === block.prevHash) { break; } // can build the chain with the pre-last snapshot
+            if (this.node.blockchain.lastBlock.hash === block.prevHash) break; // can build the chain with the last block
+            if (usableSnapshots.lastBlock.hash === block.prevHash) break; // can build the chain with the last snapshot
+            if (usableSnapshots.preLastBlock.hash === block.prevHash) break; // can build the chain with the pre-last snapshot
 
             const prevBlocks = this.finalizedBlocksCache[block.index - 1];
-            if (!prevBlocks || !prevBlocks[block.prevHash]) { return false; } // missing block
-
+            if (!prevBlocks || !prevBlocks[block.prevHash]) return false; // missing block
+            if (block.index <= usableSnapshots.preLastHeight) break; // stop before setting block
+ 
             block = prevBlocks[block.prevHash];
         }
 
@@ -116,9 +117,9 @@ export class Reorganizator {
             broadcastNewCandidate = false;
         }
 
-        if (this.node.blockchain.lastBlock.hash === block.prevHash) { return tasks; }
+        if (this.node.blockchain.lastBlock.hash !== block.prevHash)
+            tasks.push({ type: 'rollBackTo', data: block.index - 1 });
 
-        tasks.push({ type: 'rollBackTo', data: block.index - 1 });
         return tasks;
     }
     /** @returns {Promise<boolean | Object[]>} - false if no reorg needed, otherwise return reorg tasks */
@@ -139,7 +140,7 @@ export class Reorganizator {
     storeFinalizedBlockInCache(finalizedBlock) {
         const index = finalizedBlock.index;
         const hash = finalizedBlock.hash;
-        if (!this.finalizedBlocksCache[index]) { this.finalizedBlocksCache[index] = {}; }
+        if (!this.finalizedBlocksCache[index]) this.finalizedBlocksCache[index] = {};
         if (this.finalizedBlocksCache[index][hash]) { return; }
 
         this.finalizedBlocksCache[index][hash] = finalizedBlock;
@@ -155,7 +156,7 @@ export class Reorganizator {
     banFinalizedBlock(finalizedBlock) {
         const index = finalizedBlock.index;
         const hash = finalizedBlock.hash;
-        if (!this.bannedBlockHashesByHeight[index]) { this.bannedBlockHashesByHeight[index] = {}; }
+        if (!this.bannedBlockHashesByHeight[index]) this.bannedBlockHashesByHeight[index] = {};
         this.bannedBlockHashesByHeight[index][hash] = true;
 
         console.info(`[REORGANIZATOR] Banned block #${index} | hash:${hash.slice(0, 10)}...`);
@@ -163,20 +164,20 @@ export class Reorganizator {
     pruneCache() {
         const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();
         const preLastSnapshot = snapshotsHeights[snapshotsHeights.length - 2];
-        if (preLastSnapshot === undefined) { return; }
+        if (preLastSnapshot === undefined) return;
 
         const eraseUntil = preLastSnapshot -1;
-        if (eraseUntil < 0) { return; }
+        if (eraseUntil < 0) return;
 
         const blocksHeight = Object.keys(this.finalizedBlocksCache);
         for (const height of blocksHeight) {
-            if (height > eraseUntil) { continue; }
+            if (height > eraseUntil) continue;
             delete this.finalizedBlocksCache[height];
         }
 
         const bannedHeights = Object.keys(this.bannedBlockHashesByHeight);
         for (const height of bannedHeights) {
-            if (height > eraseUntil) { continue; }
+            if (height > eraseUntil) continue;
             delete this.bannedBlockHashesByHeight[height];
         }
     }
