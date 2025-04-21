@@ -95,7 +95,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             const relatedTx = this.blockchain.getTransactionByReference(txRef);
             if (!relatedTx) { utxosObj[anchor] = undefined; continue; } // doesn't exist
 
-            const output = relatedTx.outputs[outputIndex];
+            const output = relatedTx.tx.outputs[outputIndex];
             if (!output) { utxosObj[anchor] = undefined; continue; } // doesn't exist
 
             utxosObj[anchor] = UTXO(anchor, output.amount, output.rule, output.address, true); // spent
@@ -118,7 +118,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         if (!relatedTx) { return undefined; } // doesn't exist
 
         const outputIndex = Number(anchor.split(':')[2]);
-        const output = relatedTx.outputs[outputIndex];
+        const output = relatedTx.tx.outputs[outputIndex];
         if (!output) { return undefined; } // doesn't exist
 
         /** @type {UTXO} */

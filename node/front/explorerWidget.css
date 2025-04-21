@@ -488,6 +488,18 @@ button {
 .cbe-TxRow:hover td, .cbe-addressTxRow:hover td {
     color: var(--color1);
 }
+.cbe-TxRow, .cbe-addressTxRow .cbe-addressTxAmount {
+    width: 20%;
+}
+.cbe-TxRow, .cbe-addressTxRow .cbe-addressTxFee {
+    width: 20%;
+}
+.cbe-TxRow, .cbe-addressTxRow .cbe-addressTxReference {
+    width: 30%;
+}
+.cbe-TxRow, .cbe-addressTxRow .cbe-addressTxDate {
+    width: 30%;
+}
 
 #cbe-TxDetails {
     position: absolute;

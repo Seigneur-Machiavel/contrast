@@ -606,6 +606,9 @@ export class ObserverWsApp {
                     exhaustiveBlockData = this.node.getExhaustiveBlockDataByHash(data);
                     ws.send(JSON.stringify({ type: 'blocks_data_requested', data: exhaustiveBlockData }));
                     break;
+                case 'get_cached_blocks_timestamps':
+                    ws.send(JSON.stringify({ type: 'blocks_timestamps_requested', data: this.node.getCachedBlocksTimestamps() }));
+                    break;
                 case 'get_new_block_confirmed':
                     const blocksInfo = this.node.getBlocksInfo(this.node.blockchain.currentHeight);
                     ws.send(JSON.stringify({ type: 'new_block_confirmed', data: blocksInfo[0] }));
@@ -647,9 +650,9 @@ export class ObserverWsApp {
                     break;
                 case 'get_transaction_with_balanceChange_by_reference':
                     //const result = { transaction, balanceChange, inAmount, outAmount, fee };
-                    const { transaction, balanceChange, inAmount, outAmount, fee } = this.node.getTransactionByReference(data.txReference, data.address);
+                    const { transaction, balanceChange, inAmount, outAmount, fee, timestamp } = this.node.getTransactionByReference(data.txReference, data.address, true);
                     if (!transaction) { console.error(`[OBSERVER] Transaction not found: ${data.txReference}`); return; }
-                    ws.send(JSON.stringify({ type: 'transaction_requested', data: { transaction, balanceChange, inAmount, outAmount, fee, txReference: data.txReference } }));
+                    ws.send(JSON.stringify({ type: 'transaction_requested', data: { transaction, balanceChange, inAmount, outAmount, fee, txReference: data.txReference, timestamp } }));
                     break;
                 case 'get_best_block_candidate':
                     while(!this.node.miner.bestCandidate) { await new Promise(resolve => setTimeout(resolve, 1000)); }

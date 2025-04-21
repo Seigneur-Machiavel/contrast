@@ -34,6 +34,7 @@
     "nat-upnp": "^1.1.1",
     "node-machine-id": "^1.1.12",
     "ntp-client": "^0.5.3",
+    "plotly.js-dist-min": "^3.0.1",
     "tough-cookie": "^5.1.2",
     "ws": "^8.18.0"
   },

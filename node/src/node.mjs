@@ -129,11 +129,10 @@ export class Node {
     }
     #loadBootstrapNodesList() {
         const loadedBootstrapNodes = Storage.loadJSON('bootstrapNodes');
-        if (loadedBootstrapNodes) {
-            for (const node of loadedBootstrapNodes) {
-                if (!this.bootstrapNodes.includes(node)) { this.bootstrapNodes.push(node); }
-            }
-        }
+        if (!loadedBootstrapNodes) return;
+        
+        for (const node of loadedBootstrapNodes)
+            if (!this.bootstrapNodes.includes(node)) this.bootstrapNodes.push(node);
     }
     async start(startFromScratch = false) {
         const startTime = performance.now();
@@ -212,7 +211,7 @@ export class Node {
     // BLOCK CANDIDATE CREATION ---------------------------------------------------------
     #calculateAverageBlockTimeAndDifficulty() {
         const lastBlock = this.blockchain.lastBlock;
-        if (!lastBlock) { return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty }; }
+        if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
         
         const olderBlock = this.blockchain.getBlock(Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
         const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
@@ -637,15 +636,13 @@ export class Node {
     getBlocksInfo(fromHeight = 0, toHeightParam) {
         const toHeight = toHeightParam || this.blockchain.currentHeight;
         try {
-            if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
+            if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
             //if (toHeight - fromHeight > 10) { throw new Error('Cannot retrieve more than 10 blocks at once'); }
 
             /** @type {BlockInfo[]} */
             const blocksInfo = [];
-            for (let i = fromHeight; i <= toHeight; i++) {
-                const blockInfo = this.blockchain.blockStorage.getBlockInfoByIndex(i);
-                blocksInfo.push(blockInfo);
-            }
+            for (let i = fromHeight; i <= toHeight; i++)
+                blocksInfo.push(this.blockchain.blockStorage.getBlockInfoByIndex(i));
 
             return blocksInfo;
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return []; }
@@ -675,6 +672,9 @@ export class Node {
             return this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo);
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return null; }
     }
+    getCachedBlocksTimestamps() {
+        return this.blockchain.cache.getAllBlocksTimestamps();
+    }
     /** @param {BlockData} blockData @param {BlockInfo} blockInfo */
     #exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo) {
         blockData.powReward = blockData.Txs[0].outputs[0].amount;
@@ -694,42 +694,46 @@ export class Node {
         const addressUTXOs = this.getAddressUtxos(address);
         return { addressUTXOs, addressTxsReferences };
     }
-    /** @param {string} txReference - ex: 12:0f0f0f @param {string} address - optional: also return balanceChange for this address */
-    getTransactionByReference(txReference, address = undefined) {
+    /** 
+     * @param {string} txReference - ex: 12:0f0f0f
+     * @param {string} address - optional: also return balanceChange for this address
+     * @param {boolean} [includeTimestamp] - optional: include timestamp in the result */
+    getTransactionByReference(txReference, address = undefined, includeTimestamp) {
+        const result = { transaction: undefined, balanceChange: 0, inAmount: 0, outAmount: 0, fee: 0, timestamp: 0 };
         try {
-            if (address) { addressUtils.conformityCheck(address); }
-            const result = { transaction: undefined, balanceChange: 0, inAmount: 0, outAmount: 0, fee: 0 };
-            result.transaction = this.blockchain.getTransactionByReference(txReference);
-            if (!result.transaction) { return result; }
-            if (address === undefined) { return result; }
+            if (address) addressUtils.conformityCheck(address);
+            const txFromStorage = this.blockchain.getTransactionByReference(txReference, includeTimestamp);
+            if (!txFromStorage) return result; // not found
+
+            result.transaction = txFromStorage.tx;
+            result.timestamp = txFromStorage.timestamp;
+            if (address === undefined) return result;
 
             for (const output of result.transaction.outputs) {
                 result.outAmount += output.amount;
-                if (output.address === address) { result.balanceChange += output.amount; }
+                if (output.address === address) result.balanceChange += output.amount;
             }
 
             for (const anchor of result.transaction.inputs) {
-                if (!typeValidation.isConformAnchor(anchor)) { continue; }
+                if (!typeValidation.isConformAnchor(anchor)) continue;
                 const txRef = `${anchor.split(":")[0]}:${anchor.split(":")[1]}`;
                 const utxoRelatedTx = this.blockchain.getTransactionByReference(txRef);
-                if (!utxoRelatedTx) { continue; }
+                if (!utxoRelatedTx) continue;
                 
                 const outputIndex = parseInt(anchor.split(":")[2]);
                 const output = utxoRelatedTx.outputs[outputIndex];
                 result.inAmount += output.amount;
 
                 //if (!addressTxsReferences.includes(txRef)) { continue; }
-                if (output.address !== address) { continue; }
-
+                if (output.address !== address) continue;
                 result.balanceChange -= output.amount;
             }
 
             result.fee = result.inAmount === 0 ? 0 : result.inAmount - result.outAmount;
-
             return result;
         } catch (error) {
             this.miniLogger.log(error, (m) => { console.error(m); });
-            return { transaction: undefined, balanceChange: undefined };
+            return result; // not found
         }
     }
     getAddressUtxos(address) {

@@ -309,17 +309,17 @@ export class Blockchain {
         return null;
     }
     /** @param {string} txReference - The transaction reference in the format "height:txId" */
-    getTransactionByReference(txReference) {
+    getTransactionByReference(txReference, includeTimestamp) {
         const [height, txId] = txReference.split(':');
         const index = parseInt(height, 10);
         
         if (this.cache.blocksHashByHeight.has(index)) { // Try from cache first
             const block = this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(index));
             const tx = block.Txs.find(tx => tx.id === txId);
-            return tx ? tx : null;
+            return tx ? { tx, timestamp: block.timestamp } : null;
         }
 
-        try { return this.blockStorage.retreiveTx(txReference); }
+        try { return this.blockStorage.retreiveTx(txReference, includeTimestamp); } // Try from disk
         catch (error) { this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); }); }
 
         return null;

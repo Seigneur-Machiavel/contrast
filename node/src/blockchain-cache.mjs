@@ -28,6 +28,12 @@ export class BlocksCache {
         this.blocksHashByHeight.set(block.index, block.hash);
         this.blockHeightByHash.set(block.hash, block.index);
     }
+    getAllBlocksTimestamps() {
+        /** @type {number[]} */
+        const timestamps = [];
+        for (const block of this.blocksByHash.values()) timestamps.push(block.timestamp);
+        return timestamps;
+    }
     /** @param {number} index @param {string} hash */
     deleteBlock(index, hash) {
         this.blocksHashByHeight.delete(index);

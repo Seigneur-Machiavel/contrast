@@ -2,6 +2,7 @@ await new Promise((resolve) => { setTimeout(() => { resolve(); }, 1); });
 console.log('run/explorerScript.mjs');
 if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 	const anime = require('animejs');
+    const Plotly = require('plotly.js-dist-min');
 }
 
 //import { StakeReference } from '../src/vss.mjs';
@@ -71,6 +72,7 @@ const SETTINGS = {
 //#region WEB SOCKET
 function onOpen() {
     console.log('Connection opened');
+    ws.send(JSON.stringify({ type: 'get_cached_blocks_timestamps' }));
 }
 function onClose(url = '') {
     console.info(`Connection closed: ${url}`);
@@ -91,6 +93,10 @@ async function onMessage(event) {
 
     const lastBlockInfoIndex = blockExplorerWidget.lastBlockInfoIndex;
     switch (message.type) {
+        case 'blocks_timestamps_requested':
+            if (!data || !data.length) return;
+            displayBlocksTimestampsChart(data);
+            break;
         case 'current_height':
             console.info(`current_height #${data} | lastBlockIndex #${lastBlockInfoIndex} -> `);
             //if (lastBlockInfoIndex === -1) return;
@@ -129,6 +135,7 @@ async function onMessage(event) {
             }
             displayLastConfirmedBlock(data.header);
             blockExplorerWidget.fillBlockInfo(data);
+            ws.send(JSON.stringify({ type: 'get_cached_blocks_timestamps' }));
             break;
         case 'blocks_data_requested':
             for (const blockData of data) { blockExplorerWidget.saveBlockData(blockData); }
@@ -147,7 +154,7 @@ async function onMessage(event) {
             break;
         case 'address_exhaustive_data_requested':
             // { address, addressUTXOs, addressTxsReferences }
-            blockExplorerWidget.addressesExhaustiveData[data.address] = new AddressExhaustiveData(data.addressUTXOs.UTXOs, data.addressTxsReferences);
+            blockExplorerWidget.addressesExhaustiveData[data.address] = new AddressExhaustiveData(data.addressUTXOs.UTXOs, data.addressTxsReferences.reverse());
             blockExplorerWidget.navigateUntilTarget(true);
             break;
         case 'transaction_requested':
@@ -158,9 +165,10 @@ async function onMessage(event) {
             transactionWithDetails.inAmount = data.inAmount;
             transactionWithDetails.outAmount = data.outAmount;
             transactionWithDetails.fee = data.fee;
+            transactionWithDetails.timestamp = data.timestamp;
             blockExplorerWidget.transactionsByReference[data.txReference] = transactionWithDetails;
             // set html
-            blockExplorerWidget.fillAddressTxRow(data.txReference, data.balanceChange, data.fee);
+            blockExplorerWidget.fillAddressTxRow(data.txReference, data.balanceChange, data.fee, data.timestamp);
             break;
         default:
             break;
@@ -220,12 +228,15 @@ const eHTML = {
     chainHeight: document.getElementById('cbe-chainHeight'),
     circulatingSupply: document.getElementById('cbe-circulatingSupply'),
     lastBlocktime: document.getElementById('cbe-lastBlocktime'),
+
+    averageBlocksTimeGap: document.getElementById('cbe-averageBlocksTimeGap'),
+    cacheBlocksTimesChart: document.getElementById('cbe-cacheBlocksTimesChart'),
 }
 //#region HTML ONE-SHOT FILLING -------------------------------------------
 if (SETTINGS.ROLES.includes('chainExplorer')) {
     document.getElementById('cbe-maxSupply').textContent = convert.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply)
     document.getElementById('cbe-targetBlocktime').textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
-    document.getElementById('cbe-targetBlockday').textContent = `${(24 * 60 * 60) / (BLOCKCHAIN_SETTINGS.targetBlockTime / 1000)}`;
+    //document.getElementById('cbe-targetBlockday').textContent = `${(24 * 60 * 60) / (BLOCKCHAIN_SETTINGS.targetBlockTime / 1000)}`;
 }
 //#endregion --------------------------------------------------------------
 
@@ -407,7 +418,7 @@ export class BlockExplorerWidget {
             },
             'cbe-addressTxRow': (event) => {
                 try {
-                    if (this.cbeHTML.txDetails()) { this.cbeHTML.txDetails().remove(); }
+                    if (this.cbeHTML.txDetails()) this.cbeHTML.txDetails().remove();
         
                     const rowElement = event.target.closest('.cbe-addressTxRow');
                     const txReference = rowElement.querySelector('.cbe-addressTxReference').textContent;
@@ -709,7 +720,10 @@ export class BlockExplorerWidget {
         const twoContainerWrap = createHtmlElement('div', undefined, ['cbe-twoContainerWrap'], contentWrap);
 
         const leftContainer = createHtmlElement('div', undefined, ['cbe-leftContainer'], twoContainerWrap);
-        createSpacedTextElement('Supply', [], `${convert.formatNumberAsCurrency(blockData.supply)}`, [], leftContainer);
+        //createSpacedTextElement('Supply', [], `${convert.formatNumberAsCurrency(blockData.supply)}`, [], leftContainer);
+        
+        const readableLocalDate = new Date(blockData.timestamp).toLocaleString();
+        createSpacedTextElement('Date', [], readableLocalDate, [], leftContainer);
         createSpacedTextElement('Size', [], `${(blockData.blockBytes / 1024).toFixed(2)} KB`, [], leftContainer);
         createSpacedTextElement('Transactions', [], `${blockData.nbOfTxs}`, [], leftContainer);
         createSpacedTextElement('Total fees', [], `${convert.formatNumberAsCurrency(blockData.totalFees)}`, [], leftContainer);
@@ -748,14 +762,14 @@ export class BlockExplorerWidget {
         contentWrap.style = 'margin-top: 56px; padding-top: 0; height: calc(100% - 76px);';
         this.#createAddressInfoElement(addressExhaustiveData, 'cbe-addressExhaustiveData', contentWrap);
     }
-    fillAddressTxRow(txReference, balanceChange, fee) {
+    fillAddressTxRow(txReference, balanceChange, fee, timestamp) {
         const addressTxRows = document.querySelectorAll(`.cbe-addressTxRow`);
         for (const addressTxRow of addressTxRows) {
-            if (addressTxRow.querySelector('.cbe-addressTxReference').textContent === txReference) {
-                addressTxRow.querySelector('.cbe-addressTxAmount').textContent = convert.formatNumberAsCurrencyChange(balanceChange);
-                addressTxRow.querySelector('.cbe-addressTxFee').textContent = convert.formatNumberAsCurrency(fee);
-                return;
-            }
+            if (addressTxRow.querySelector('.cbe-addressTxReference').textContent !== txReference) continue;
+            addressTxRow.querySelector('.cbe-addressTxAmount').textContent = convert.formatNumberAsCurrencyChange(balanceChange);
+            addressTxRow.querySelector('.cbe-addressTxFee').textContent = convert.formatNumberAsCurrency(fee);
+            addressTxRow.querySelector('.cbe-addressTxDate').textContent = new Date(timestamp).toLocaleString();
+            return;
         }
 
         console.error('fillAddressTxRow => error: txReference not found');
@@ -961,7 +975,7 @@ export class BlockExplorerWidget {
         createSpacedTextElement('History', [], '▼', ['.cbe-arrowBtn'], wrap1);
 
         const txHistoryWrap = createHtmlElement('div', undefined, ['cbe-TxHistoryWrap', 'cbe-folded'], wrap1);
-        setTimeout(() => { this.#createTxHistoryFilledWithTxsReferencesElement(addressExhaustiveData, txHistoryWrap); }, 1000);
+        setTimeout(() => this.#createTxHistoryFilledWithTxsReferencesElement(addressExhaustiveData, txHistoryWrap), 1000);
 
         // create UTXOs folded element
         const wrap2 = createHtmlElement('div', undefined, ['cbe-folderWrap'], addressInfoElement);
@@ -988,12 +1002,13 @@ export class BlockExplorerWidget {
         createHtmlElement('th', undefined, [], headerRow).textContent = 'Amount';
         createHtmlElement('th', undefined, [], headerRow).textContent = 'Fee';
         createHtmlElement('th', undefined, [], headerRow).textContent = 'Anchor';
+        createHtmlElement('th', undefined, [], headerRow).textContent = 'Date';
         
         thead.appendChild(headerRow);
         table.appendChild(thead);
         
         const tbody = document.createElement('tbody');
-        const txsReferences = addressExhaustiveData.addressTxsReferences.reverse();
+        const txsReferences = addressExhaustiveData.addressTxsReferences;
         for (const txReference of txsReferences) {
             const transaction = this.transactionsByReference[txReference];
             const row = createHtmlElement('tr', undefined, ['cbe-addressTxRow'], tbody);
@@ -1002,6 +1017,8 @@ export class BlockExplorerWidget {
             const feeText = createHtmlElement('td', undefined, ['cbe-addressTxFee'], row);
             feeText.textContent = transaction ? convert.formatNumberAsCurrency(transaction.fee) : '...';
             createHtmlElement('td', undefined, ['cbe-addressTxReference'], row).textContent = txReference;
+            const dateText = createHtmlElement('td', undefined, ['cbe-addressTxDate'], row);
+            dateText.textContent = transaction ? new Date(transaction.timestamp).toLocaleString() : '...';
         }
         
         table.appendChild(tbody);
@@ -1306,7 +1323,10 @@ function displayLastConfirmedBlock(blockHeader) {
     if (SETTINGS.ROLES.includes('chainExplorer')) {
         eHTML.chainHeight.textContent = blockHeader.index;
         eHTML.circulatingSupply.textContent = convert.formatNumberAsCurrency(blockHeader.supply + blockHeader.coinBase);
-        eHTML.lastBlocktime.textContent = `${((blockHeader.timestamp - blockHeader.posTimestamp) / 1000).toFixed(2)}s`;
+        
+        const readableLocalDate = new Date(blockHeader.timestamp).toLocaleString();
+        const agoText = `${((blockHeader.timestamp - blockHeader.posTimestamp) / 1000).toFixed(2)}s`;
+        eHTML.lastBlocktime.textContent = `${readableLocalDate} (${agoText})`;
     }
 
     // 2. contrastBlocksWidget
@@ -1335,6 +1355,42 @@ function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-blockHas
 
     if (divToInject) divToInject.appendChild(spacedTextDiv);
     return spacedTextDiv;
+}
+function displayBlocksTimestampsChart(timestamps = []) {
+    const chart = eHTML.cacheBlocksTimesChart;
+    if (!chart) return;
+    
+    // use plotly to create the chart
+    // x axis: block height, y axis: time between blocks
+    const x = timestamps.map((_, i) => i + 1);
+    const y = timestamps.map((_, i) => i === 0 ? 0 : (timestamps[i] - timestamps[i - 1]) / 1000);
+    for (let i = 0; i < x.length; i++) x[i] -= 2;
+    x.shift();
+    y.shift();
+    console.log('timestamps', timestamps, 'x', x, 'y', y);
+
+    const averageGap = y.reduce((a, b) => a + b, 0) / y.length;
+    eHTML.averageBlocksTimeGap.textContent = ` | average: ${averageGap.toFixed(2)}s`;
+
+    const data = [{
+        x,
+        y,
+        type: 'scatter',
+        mode: 'lines+markers',
+        line: { color: '#000000', width: 2 },
+    }];
+
+    const layout = {
+        xaxis: { title: 'Block height' },
+        yaxis: { title: 'Time (s)', dtick: 60, tickmode: 'linear', range: [0, 300] },
+        showlegend: false,
+        margin: { t: 20, b: 30, l: 40, r: 0 },
+        height: 300,
+    };
+
+    // not interactive, no menu
+    Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false, staticPlot: true });
+    chart.style.pointerEvents = 'none'; // disable hover events
 }
 //#endregion --------------------------------------------------------------
 

@@ -865,6 +865,9 @@ export class BlockchainStorage {
 
         return null;
     }
+    #extractSerializedBlockTimestamp(serializedBlock) {
+        return this.fastConverter.uint86BytesToNumber(serializedBlock.slice(62, 68));
+    }
     /** @param {Uint8Array} serializedBlock @param {number} index @param {number} start @param {number} end */
     #readTxInSerializedBlockUsingPointer(serializedBlock, index = 0, start = 0, end = 1) {
         const txBuffer = serializedBlock.slice(start, end);
@@ -875,18 +878,19 @@ export class BlockchainStorage {
         
         return tx;
     }
-    retreiveTx(txRef = '41:5fbcae93') {
+    retreiveTx(txRef = '41:5fbcae93', includeTimestamp) {
         const blockIndex = parseInt(txRef.split(':')[0], 10);
         const serializedBlock = this.retreiveBlock(blockIndex, false);
-        if (!serializedBlock) { return null; }
+        if (!serializedBlock) return null;
 
+        const timestamp = includeTimestamp ? this.#extractSerializedBlockTimestamp(serializedBlock) : undefined;
         const txOffset = this.#findTxPointerInSerializedBlock(serializedBlock, txRef);
-        if (!txOffset) { return null; }
+        if (!txOffset) return null;
 
         const { index, start, end } = txOffset;
         const tx = this.#readTxInSerializedBlockUsingPointer(serializedBlock, index, start, end);
 
-        return tx;
+        return { tx, timestamp };
     }
 
     removeBlock(blockIndex = 0) {

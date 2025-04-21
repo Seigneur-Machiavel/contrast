@@ -7,6 +7,7 @@
     <!--<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">-->
     <title>Contrast Explorer v1.0</title>
     <script src="/libs/anime.min.js"></script>
+    <script src="/libs/plotly-3.0.1.min.js"></script>
     <script src="/front/explorerScript.mjs" type="module"></script>
     <link rel="stylesheet" href="/styles/contrast-style.css">
     <link rel="stylesheet" href="/front/explorerWidget.css">
@@ -43,10 +44,13 @@
                 <h3>Last blockTime:</h3>
                 <h3 id="cbe-lastBlocktime">~120s</h3>
             </div>
-            <div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockday">
+            <!--<div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockday">
                 <h3>Blocks/day:</h3>
                 <h3 id="cbe-targetBlockday">720</h3>
-            </div>
+            </div>-->
+
+            <h1 style="margin-top: 40px;">Last blocks time-gap<span id="cbe-averageBlocksTimeGap" style="opacity: .6; font-size: .6em"></span></h1>
+            <div id="cbe-cacheBlocksTimesChart"></div>
         </div>
     </div>
 </body>
