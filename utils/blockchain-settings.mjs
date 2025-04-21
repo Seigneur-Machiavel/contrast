@@ -5,6 +5,8 @@ export const BLOCKCHAIN_SETTINGS = {
     maxTransactionSize: 100_000, // ~100KB
     
     // DISTRIBUTION
+    // 1 000 000mC = 1 Contrast
+    // In the code we only speak in mC, but in the UI we will use the Contrast unit
     rewardMagicNb1: 102_334_155, // Fibonacci n+2
     rewardMagicNb2: 63_245_986, // Fibonacci n+1
     blockReward: 102_334_155 - 63_245_986, // Fibonacci n = 39_088_169
@@ -30,8 +32,8 @@ export const MINING_PARAMS = {
     nonceLength: 4,
     initialDifficulty: 27,
     blocksBeforeAdjustment: 30, // ~120sec * 30 = ~3600 sec = ~1 hour
-    thresholdPerDiffIncrement: 3.2, // meaning 3.4% threshold for 1 diff point
+    thresholdPerDiffIncrement: 3.2, // meaning 3.2% threshold for 1 diff point
     maxDiffIncrementPerAdjustment: 32, // 32 diff points = 100% of diff
     diffAdjustPerLegitimacy: 16, // 16 diff points = 50% of diff
-    maxTimeDifferenceAdjustment: 128, // in difficutly points, affect max penalty, but max bonus is infinite
+    maxTimeDifferenceAdjustment: 128, // in difficutly points, affect max penality, but max bonus is infinite
 };

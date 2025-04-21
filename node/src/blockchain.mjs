@@ -1,12 +1,12 @@
-import { BlockchainStorage, AddressesTxsRefsStorage, AddressesTxsRefsStorage_V2 } from '../../utils/storage-manager.mjs';
+import { BlockchainStorage, AddressesTxsRefsStorage_V2 } from '../../utils/storage-manager.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
 import { FastConverter } from '../../utils/converters.mjs';
 import { Breather } from '../../utils/breather.mjs';
+import { BlocksCache } from './blockchain-cache.mjs';
 
 /**
-* @typedef {import("../src/block-tree.mjs").TreeNode} TreeNode
 * @typedef {import("./block-classes.mjs").BlockInfo} BlockInfo
 * @typedef {import("./block-classes.mjs").BlockData} BlockData
 * @typedef {import("../src/vss.mjs").Vss} Vss
@@ -14,69 +14,6 @@ import { Breather } from '../../utils/breather.mjs';
 * @typedef {import("../src/memPool.mjs").MemPool} MemPool
 * @typedef {import("../src/snapshot-system.mjs").SnapshotSystem} SnapshotSystem
 */
-
-class BlocksCache {
-    /** @type {Map<string, BlockData>} */
-    blocksByHash = new Map();
-    /** @type {Map<number, string>} */
-    blocksHashByHeight = new Map();
-    /** @type {Map<string, number>} */
-    blockHeightByHash = new Map();
-
-    /** @param {MiniLogger} miniLogger */
-    constructor(miniLogger) {
-        /** @type {MiniLogger} */
-        this.miniLogger = miniLogger;
-    }
-
-    oldestBlockHeight() {
-        if (this.blocksHashByHeight.size === 0) { return -1; }
-        return Math.min(...this.blocksHashByHeight.keys());
-    }
-    /** @param {BlockData} block */
-    addBlock(block) {
-        this.blocksByHash.set(block.hash, block);
-        this.blocksHashByHeight.set(block.index, block.hash);
-        this.blockHeightByHash.set(block.hash, block.index);
-    }
-    /** @param {number} index @param {string} hash */
-    deleteBlock(index, hash) {
-        this.blocksHashByHeight.delete(index);
-        this.blockHeightByHash.delete(hash);
-        this.blocksByHash.delete(hash);
-    }
-    /** returns the height of erasable blocks without erasing them. @param {number} height */
-    erasableLowerThan(height = 0) {
-        let erasableUntil = null;
-        const oldestHeight = this.oldestBlockHeight();
-        if (oldestHeight >= height) { return null; }
-
-        for (let i = oldestHeight; i < height; i++) {
-            const blockHash = this.blocksHashByHeight.get(i);
-            if (!blockHash) { continue; }
-            erasableUntil = i;
-        }
-
-        this.miniLogger.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`, (m) => { console.debug(m); });
-        return { from: oldestHeight, to: erasableUntil };
-    }
-    /** Erases the cache from the oldest block to the specified height(included). */
-    eraseFromTo(fromHeight = 0, toHeight = 100) {
-        if (fromHeight > toHeight) { return; }
-
-        let erasedUntil = null;
-        for (let i = fromHeight; i <= toHeight; i++) {
-            const blockHash = this.blocksHashByHeight.get(i);
-            if (!blockHash) { continue; }
-
-            this.deleteBlock(i, blockHash);
-            erasedUntil = i;
-        }
-
-        this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
-        return { from: fromHeight, to: erasedUntil };
-    }
-}
 
 /** Represents the blockchain and manages its operations. */
 export class Blockchain {
@@ -119,15 +56,15 @@ export class Blockchain {
         // Cache + db cleanup
         this.blockStorage.removeBlocksHigherThan(startHeight);
 
-        if (startHeight === -1) { this.reset(); } // no snapshot to load => reset the db
+        if (startHeight === -1) this.reset(); // no snapshot to load => reset the db
         return startHeight;
     }
     #loadBlocksFromStorageToCache(indexStart = 0, indexEnd = 9) {
-        if (indexStart > indexEnd) { return; }
+        if (indexStart > indexEnd) return;
 
         for (let i = indexStart; i <= indexEnd; i++) {
             const block = this.getBlock(i);
-            if (!block) { break; }
+            if (!block) break;
 
             this.cache.addBlock(block);
         }
@@ -169,7 +106,7 @@ export class Blockchain {
         const blockDataCloneToDigest = BlockUtils.cloneBlockData(block); // clone to avoid modification
         try {
             const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = utxoCache.preDigestFinalizedBlock(blockDataCloneToDigest);
-            if (!vss.newStakesCanBeAdded(newStakesOutputs)) { throw new Error('VSS: Max supply reached.'); }
+            if (!vss.newStakesCanBeAdded(newStakesOutputs)) throw new Error('VSS: Max supply reached.');
 
             // here we are sure that the block can be applied
             utxoCache.digestFinalizedBlock(blockDataCloneToDigest, newUtxos, consumedUtxoAnchors);
@@ -195,7 +132,10 @@ export class Blockchain {
         if (indexStart > indexEnd) return;
 
         const addressesTxsRefsSnapHeight = this.addressesTxsRefsStorage.snapHeight;
-        if (addressesTxsRefsSnapHeight >= indexEnd) { console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`); return; }
+        if (addressesTxsRefsSnapHeight >= indexEnd) {
+            console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`);
+            return;
+        }
 
         const breather = new Breather();
 
@@ -207,7 +147,7 @@ export class Blockchain {
 
             const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(finalizedBlock, memPool.knownPubKeysAddresses);
             for (const address of Object.keys(transactionsReferencesSortedByAddress)) {
-                if (actualizedAddrsTxsRefs[address]) { continue; } // already loaded
+                if (actualizedAddrsTxsRefs[address]) continue; // already loaded
                 const startGTROA = performance.now();
                 actualizedAddrsTxsRefs[address] = this.addressesTxsRefsStorage.getTxsReferencesOfAddress(address);
                 totalGTROA_time += (performance.now() - startGTROA);
@@ -256,72 +196,6 @@ export class Blockchain {
         const logText = `AddressesTxsRefs persisted from #${indexStart} to #${indexEnd}(included) [${breather.breath} breaths] -> Duplicates: ${totalDuplicates}/${totalRefs}(${duplicateCountTime.toFixed(2)}ms) - TotalTime: ${(performance.now() - startTime).toFixed(2)}ms - GTROA: ${totalGTROA_time.toFixed(2)}ms - SaveTime: ${saveTime.toFixed(2)}ms`;
         this.miniLogger.log(logText, (m) => { console.info(m); });
     }
-    /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
-    async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
-        const startTime = performance.now();
-        indexStart = Math.max(0, indexStart);
-        if (indexStart > indexEnd) return;
-
-        const addressesTxsRefsSnapHeight = this.addressesTxsRefsStorage.snapHeight;
-        if (addressesTxsRefsSnapHeight >= indexEnd) { console.info(`[DB] Addresses transactions already persisted to disk: snapHeight=${addressesTxsRefsSnapHeight} / indexEnd=${indexEnd}`); return; }
-
-        const breather = new Breather();
-
-        /** @type {Object<string, string[]>} */
-        const actualizedAddressesTxsRefs = {};
-        for (let i = indexStart; i <= indexEnd; i++) {
-            const finalizedBlock = this.getBlock(i);
-            if (!finalizedBlock) { console.error(`Block not found #${i}`); continue; }
-
-            const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(finalizedBlock, memPool.knownPubKeysAddresses);
-
-            for (const address of Object.keys(transactionsReferencesSortedByAddress)) {
-                if (actualizedAddressesTxsRefs[address]) { continue; } // already loaded
-                actualizedAddressesTxsRefs[address] = this.addressesTxsRefsStorage.getTxsReferencesOfAddress(address);
-                await breather.breathe();
-            }
-
-            for (const [address, newTxsReferences] of Object.entries(transactionsReferencesSortedByAddress)) {
-                const concatenated = actualizedAddressesTxsRefs[address].concat(newTxsReferences);
-                actualizedAddressesTxsRefs[address] = concatenated;
-                await breather.breathe();
-            }
-
-            //await new Promise(resolve => setTimeout(resolve, 50)); // avoid p2p disconnection
-        }
-
-        let duplicateCountTime = 0;
-        let totalRefs = 0;
-        let totalDuplicates = 0;
-        for (let i = 0; i < Object.keys(actualizedAddressesTxsRefs).length; i++) {
-            const address = Object.keys(actualizedAddressesTxsRefs)[i];
-            const actualizedAddressTxsRefs = actualizedAddressesTxsRefs[address];
-            const cleanedTxsRefs = [];
-
-            const duplicateStart = performance.now();
-            const txsRefsDupiCounter = {};
-            let duplicate = 0;
-            for (let i = 0; i < actualizedAddressTxsRefs.length; i++) {
-                totalRefs++;
-                const txRef = actualizedAddressTxsRefs[i];
-                if (txsRefsDupiCounter[txRef]) { duplicate++; } else { cleanedTxsRefs.push(txRef); }
-
-                txsRefsDupiCounter[txRef] = true;
-            }
-            totalDuplicates += duplicate;
-            duplicateCountTime += (performance.now() - duplicateStart);
-
-            await this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs, indexStart);
-
-            //if (i % 300 === 0) { await new Promise(resolve => setTimeout(resolve, 50)); } // avoid p2p disconnection
-            await breather.breathe();
-        }
-
-        this.addressesTxsRefsStorage.save(indexEnd);
-        
-        const logText = `AddressesTxsRefs persisted from #${indexStart} to #${indexEnd}(included) [${breather.breath} breaths] -> Duplicates: ${totalDuplicates}/${totalRefs}(${duplicateCountTime.toFixed(2)}ms) - TotalTime: ${(performance.now() - startTime).toFixed(2)}ms`;
-        this.miniLogger.log(logText, (m) => { console.info(m); });
-    }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */
     getTxsReferencesOfAddress(memPool, address, from = 0, to = this.currentHeight) {
         const cacheStartIndex = this.cache.oldestBlockHeight();
@@ -332,17 +206,17 @@ export class Blockchain {
         // complete with the cache
         for (let index = cacheStartIndex; index <= to; index++) {
             const blockHash = this.cache.blocksHashByHeight.get(index);
-            if (!blockHash) { break; }
+            if (!blockHash) break;
 
             const block = this.cache.blocksByHash.get(blockHash);
             const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(block, memPool.knownPubKeysAddresses);
-            if (!transactionsReferencesSortedByAddress[address]) { continue; }
+            if (!transactionsReferencesSortedByAddress[address]) continue;
 
             const newTxsReferences = transactionsReferencesSortedByAddress[address];
             txsRefs = txsRefs.concat(newTxsReferences);
         }
 
-        if (txsRefs.length === 0) { return txsRefs; }
+        if (txsRefs.length === 0) return txsRefs;
 
         // remove duplicates
         const txsRefsDupiCounter = {};
@@ -355,14 +229,14 @@ export class Blockchain {
             txsRefsWithoutDuplicates.push(txsRefs[i]);
         }
 
-        if (duplicate > 0) { console.warn(`[DB] ${duplicate} duplicate txs references found for address ${address}`); }
+        if (duplicate > 0) console.warn(`[DB] ${duplicate} duplicate txs references found for address ${address}`);
 
         // filter to preserve only the txs references in the range
         let finalTxsRefs = [];
         for (let i = 0; i < txsRefsWithoutDuplicates.length; i++) {
             const txRef = txsRefsWithoutDuplicates[i];
             const height = parseInt(txRef.split(':')[0], 10);
-            if (from > height) { continue; }
+            if (from > height) continue;
 
             finalTxsRefs = txsRefsWithoutDuplicates.slice(i);
             break;
@@ -370,7 +244,7 @@ export class Blockchain {
         for (let i = finalTxsRefs.length - 1; i >= 0; i--) {
             const txRef = finalTxsRefs[i];
             const height = parseInt(txRef.split(':')[0], 10);
-            if (to < height) { continue; }
+            if (to < height) continue;
 
             finalTxsRefs = finalTxsRefs.slice(0, i + 1);
             break;
@@ -383,25 +257,25 @@ export class Blockchain {
      * @param {number} [toHeight=999_999_999] - The ending height of the range.
      * @param {boolean} [deserialize=true] - Whether to deserialize the blocks. */
     getRangeOfBlocksByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
-        if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') { throw new Error('Invalid block range: not numbers'); }
-        if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
+        if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') throw new Error('Invalid block range: not numbers');
+        if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
 
         const blocksData = [];
         for (let i = fromHeight; i <= toHeight; i++) {
             const blockData = this.getBlock(i, deserialize);
-            if (!blockData) { break; }
+            if (!blockData) break;
             blocksData.push(blockData);
         }
         return blocksData;
     }
     getRangeOfBlocksInfoByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
-        if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') { throw new Error('Invalid block range: not numbers'); }
-        if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
+        if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') throw new Error('Invalid block range: not numbers');
+        if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
 
         const blocksInfo = [];
         for (let i = fromHeight; i <= toHeight; i++) {
             const blockInfo = this.blockStorage.getBlockInfoByIndex(i, deserialize);
-            if (!blockInfo) { break; }
+            if (!blockInfo) break;
             blocksInfo.push(blockInfo);
         }
         return blocksInfo;
