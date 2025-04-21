@@ -27,7 +27,7 @@ document.addEventListener("visibilitychange", function() { pageFocused = documen
 let ws;
 async function readyWS() {
     return new Promise((resolve, reject) => {
-        if (ws.readyState === 1) { resolve(); return; }
+        if (ws.readyState === 1) resolve();
         let interval = setInterval(() => {
             if (ws.readyState === 1) {
                 clearInterval(interval);
@@ -80,21 +80,21 @@ function onError(error) {
     console.info('WebSocket error: ' + error);
 }
 async function onMessage(event) {
-    if (!pageFocused) { return; }
+    if (!pageFocused) return;
     const message = JSON.parse(event.data);
     const trigger = message.trigger;
     const data = message.data;
     
     /** @type {BlockExplorerWidget} */
     const blockExplorerWidget = window.blockExplorerWidget;
-    if (!blockExplorerWidget) { return; }
+    if (!blockExplorerWidget) return;
 
     const lastBlockInfoIndex = blockExplorerWidget.lastBlockInfoIndex;
     switch (message.type) {
         case 'current_height':
             console.info(`current_height #${data} | lastBlockIndex #${lastBlockInfoIndex} -> `);
-            //if (lastBlockInfoIndex === -1) { return; }
-            if (data === lastBlockInfoIndex) { return; }
+            //if (lastBlockInfoIndex === -1) return;
+            if (data === lastBlockInfoIndex) return;
             if (data === lastBlockInfoIndex + 1) { // need the new block
                 console.info(`get_new_block_confirmed #${data} sent`);
                 if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'get_new_block_confirmed', data: data }))
@@ -108,20 +108,20 @@ async function onMessage(event) {
             }
             break;
         case 'last_confirmed_blocks':
-            if (!data || !data[data.length - 1]) { return; }
+            if (!data || !data[data.length - 1]) return;
             //console.log(`last_confirmed_block from ${data[0].header.index} to ${data[data.length - 1].header.index}`);
             //console.log('last_confirmed_block', data[data.length - 1]);
             const blocksToDisplay = data.length > SETTINGS.NB_OF_CONFIRMED_BLOCKS ? data.slice(data.length - SETTINGS.NB_OF_CONFIRMED_BLOCKS) : data;
             displayLastConfirmedBlock(blocksToDisplay[blocksToDisplay.length - 1].header);
-            for (const blockInfo of blocksToDisplay) { blockExplorerWidget.fillBlockInfo(blockInfo); }
+            for (const blockInfo of blocksToDisplay) blockExplorerWidget.fillBlockInfo(blockInfo);
             break;
         case 'broadcast_new_candidate':
             //console.log('broadcast_new_candidate', data);
             break;
         case 'new_block_confirmed':
             //console.log('new_block_confirmed', data);
-            if (!data) { return; }
-            if (data.header.index === lastBlockInfoIndex) { return; }
+            if (!data) return;
+            if (data.header.index === lastBlockInfoIndex) return;
             if (data.header.index !== lastBlockInfoIndex + 1) {
                 console.info('new_block_confirmed n+1 -> ws.close()');
                 try { ws.close() } catch (error) {};
@@ -188,10 +188,10 @@ function connectWS() {
 async function connectWSLoop() {
     connectWS();
     while (true) {
-        await new Promise((resolve) => { setTimeout(() => { resolve(); }, SETTINGS.RECONNECT_INTERVAL); });
-        if (ws && ws.readyState === 1) { continue; } // already connected
+        await new Promise((resolve) => { setTimeout(() => resolve(), SETTINGS.RECONNECT_INTERVAL); });
+        if (ws && ws.readyState === 1) continue; // already connected
         // if connecting, wait... 
-        while(ws && ws.readyState === 0) { await new Promise(resolve => setTimeout(resolve, 100)); }
+        while(ws && ws.readyState === 0) await new Promise(resolve => setTimeout(resolve, 100));
 
         console.info('--- reseting blockExplorerWidget >>>');
 
@@ -208,7 +208,7 @@ async function connectWSLoop() {
 async function getHeightsLoop() {
     while (true) {
         await new Promise((resolve) => { setTimeout(() => { resolve(); }, SETTINGS.GET_CURRENT_HEIGHT_INTERVAL); });
-        if (!ws || ws.readyState !== 1) { continue; }
+        if (!ws || ws.readyState !== 1) continue;
         try { ws.send(JSON.stringify({ type: 'get_height' })) } catch (error) {};
     }
 }; getHeightsLoop();
@@ -295,10 +295,10 @@ export class BlockExplorerWidget {
                 }
 
                 // ensure the click is on the modal container and not on its children
-                if (event.target.id !== 'cbe-modalContainer') { return; }
+                if (event.target.id !== 'cbe-modalContainer') return;
 
                 const modalContainer = this.cbeHTML.modalContainer();
-                if (!modalContainer) { return; }
+                if (!modalContainer) return;
                 modalContainer.style.opacity = 0;
 
                 this.animations.modalContainerAnim = anime({
@@ -311,7 +311,7 @@ export class BlockExplorerWidget {
                 });
             },
             'cbe-modalContentWrap': (event) => {
-                if (event.target.id === 'cbe-TxDetails') { return; }
+                if (event.target.id === 'cbe-TxDetails') return;
                 const cbeTxDetailsElement = this.cbeHTML.txDetails();
                 if (cbeTxDetailsElement) { cbeTxDetailsElement.remove(); }
             },
@@ -321,10 +321,7 @@ export class BlockExplorerWidget {
 
                 const blockSquare = event.target.closest('.cbe-blockSquare');
                 const blockIndex = Number(blockSquare.querySelector('.cbe-blockIndex').textContent.replace('#', ''));
-                if (isNaN(blockIndex)) {
-                    console.info(`todo: handle n+x blocks`);
-                    return;
-                }
+                if (isNaN(blockIndex)) { console.info(`todo: handle n+x blocks`); return }
         
                 const blockRect = blockSquare.getBoundingClientRect();
                 const blockCenter = { x: blockRect.left + blockRect.width / 2, y: blockRect.top + blockRect.height / 2 };
@@ -334,7 +331,7 @@ export class BlockExplorerWidget {
                 this.navigationTarget.blockReference = blockIndex;
 
                 // we prepared the container and target, we can send the request
-                if (this.getBlockDataFromMemoryOrSendRequest(blockIndex) === 'request sent') { return; }
+                if (this.getBlockDataFromMemoryOrSendRequest(blockIndex) === 'request sent') return;
                 
                 this.navigateUntilTarget(false);
             },
@@ -351,7 +348,7 @@ export class BlockExplorerWidget {
                 console.log('address span clicked', address);
 
                 this.navigationTarget.address = address;
-                if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(address) === 'request sent') { return; }
+                if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(address) === 'request sent') return;
 
                 // display address infos
                 this.navigateUntilTarget(true);
@@ -394,7 +391,7 @@ export class BlockExplorerWidget {
                 console.log(`folderWrap clicked, event target: ${event.target.className}`);
                 // cbe-spacedText:first-child -> is the button
                 const folderButton = folderWrap.querySelector('.cbe-spacedText:first-child');
-                if (!folderButton || event.target !== folderButton) { return; }
+                if (!folderButton || event.target !== folderButton) return;
 
                 // '▼' -> '▲'
                 const arrowBtn = folderButton.getElementsByClassName('.cbe-arrowBtn')[0];
@@ -416,7 +413,7 @@ export class BlockExplorerWidget {
                     const txReference = rowElement.querySelector('.cbe-addressTxReference').textContent;
                     const address = document.querySelector('.cbe-addressTitle').textContent;
                     const transaction = this.getTransactionFromMemoryOrSendRequest(txReference, address);
-                    if (transaction === 'request sent') { return; }
+                    if (transaction === 'request sent') return;
         
                     const txDetails = this.#createTransactionDetailsElement(transaction);
                     rowElement.insertAdjacentElement('afterend', txDetails); // inject txDetails under row line
@@ -429,7 +426,7 @@ export class BlockExplorerWidget {
             'cbe-searchInput': (event) => {
                 const inputText = event.target.value.replace(/\s/g, '');
 
-                if (event.key !== 'Enter') { return; }
+                if (event.key !== 'Enter') return;
 
                 // find the search type (height: number, hash: 64chars, address: conformAddres, txReference, anchor...)
 
@@ -458,7 +455,8 @@ export class BlockExplorerWidget {
                     console.log('address conform:', inputText);
 
                     this.navigationTarget.address = inputText;
-                    if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(inputText) === 'request sent') { return; }
+                    if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(inputText) === 'request sent') 
+                        return;
     
                     // display address infos
                     this.navigateUntilTarget(true);
@@ -473,12 +471,12 @@ export class BlockExplorerWidget {
                 const rowElement = event.target.closest('.cbe-addressTxRow');
                 const txAmountElement = rowElement.querySelector('.cbe-addressTxAmount');
                 const txAmount = txAmountElement.textContent;
-                if (txAmount !== '...') { return; } // already filled
+                if (txAmount !== '...') return; // already filled
 
                 const address = document.querySelector('.cbe-addressTitle').textContent;
                 const txReference = rowElement.querySelector('.cbe-addressTxReference').textContent;
                 const transaction = this.getTransactionFromMemoryOrSendRequest(txReference, address);
-                if (transaction === 'request sent') { return; }
+                if (transaction === 'request sent') return;
 
                 txAmountElement.textContent = convert.formatNumberAsCurrencyChange(transaction.balanceChange);
             }
@@ -536,7 +534,7 @@ export class BlockExplorerWidget {
         const blockData = isNaN(blockReference) ? this.blocksDataByHash[blockReference] : this.blocksDataByIndex[blockReference];
         if (!blockData) { console.info('navigateUntilTarget => error: blockData not found'); return; }
         this.#fillModalContentWithBlockData(blockData);
-        if (!txId) { return; }
+        if (!txId) return;
 
         await new Promise((resolve) => { setTimeout(() => { resolve(); }, modalContentCreated ? 1000 : 200); });
 
@@ -551,7 +549,7 @@ export class BlockExplorerWidget {
         this.#scrollUntilVisible(txRow, modalContentWrap, scrollDuration);
         this.#blinkElementScaleY(txRow, 200, scrollDuration, () => { 
             txRow.click();
-            if (outputIndex === null) { return; }
+            if (outputIndex === null) return;
 
             const txDetails = this.cbeHTML.txDetails();
             if (!txDetails) { console.error('navigateUntilTarget => error: txDetails not found'); return; }
@@ -603,7 +601,7 @@ export class BlockExplorerWidget {
         this.blocksTimeInterval = setInterval(() => {
             for (const blockInfo of this.blocksInfo) {
                 const blockSquare = this.bcElmtsManager.getCorrespondingBlockElement(blockInfo.header.index);
-                if (!blockSquare) { continue; }
+                if (!blockSquare) continue;
 
                 const timeAgo = blockSquare.querySelector('.cbe-timeAgo');
                 timeAgo.textContent = getTimeSinceBlockConfirmedString(blockInfo.header.timestamp);
@@ -643,7 +641,7 @@ export class BlockExplorerWidget {
                 }
             }*/
 
-            if (this.incomingBlocksInfo.length === 0) { continue; }
+            if (this.incomingBlocksInfo.length === 0) continue;
             
             const blockInfo = this.incomingBlocksInfo.shift();
             for (let i = 0; i < this.blocksInfo; i++) { //TODO: find a better way to avoid empty blocks in the chain
@@ -655,11 +653,11 @@ export class BlockExplorerWidget {
                         break;
                     }
                 }
-                if (blockElement) { continue; }
+                if (blockElement) continue;
     
                 console.info(`Missing block ${blockInfo.header.index}, trying to recover...`);
                 this.bcElmtsManager.createChainOfEmptyBlocksUntilFillTheDiv(chainWrap);
-                for (const blockInfo of this.blocksInfo) { this.fillBlockInfo(blockInfo); }
+                for (const blockInfo of this.blocksInfo) this.fillBlockInfo(blockInfo);
     
                 console.info('recovered');
                 break;
@@ -673,7 +671,7 @@ export class BlockExplorerWidget {
             
             numberOfConfirmedBlocksShown = this.bcElmtsManager.getNumberOfConfirmedBlocksShown();
             isFilled = numberOfConfirmedBlocksShown > this.nbOfConfirmedBlocks;
-            if (!isFilled) { continue; }
+            if (!isFilled) continue;
     
             this.blocksInfo.shift();
             const nbOfBlocksInQueue = this.incomingBlocksInfo.length;
@@ -842,7 +840,8 @@ export class BlockExplorerWidget {
         const headerRow = document.createElement('tr');
 
         const headers = ['Index', 'Transaction id', 'Total amount spent', '(bytes) Weight'];
-        for (const headerText of headers) { createHtmlElement('th', undefined, [], headerRow).textContent = headerText; }
+        for (const headerText of headers) 
+            createHtmlElement('th', undefined, [], headerRow).textContent = headerText;
 
         thead.appendChild(headerRow);
         table.appendChild(thead);
@@ -872,8 +871,8 @@ export class BlockExplorerWidget {
 
         const indexElmnt = createHtmlElement('td', undefined, [], row)
         indexElmnt.textContent = txIndex;
-        if (txIndex === 0) { indexElmnt.textContent = indexElmnt.textContent + ' (CoinBase)'; }
-        if (txIndex === 1) { indexElmnt.textContent = indexElmnt.textContent + ' (Validator)'; }
+        if (txIndex === 0) indexElmnt.textContent = indexElmnt.textContent + ' (CoinBase)';
+        if (txIndex === 1) indexElmnt.textContent = indexElmnt.textContent + ' (Validator)';
 
         createHtmlElement('td', undefined, [], row).textContent = tx.id;
         createHtmlElement('td', undefined, [], row).textContent = `${convert.formatNumberAsCurrency(outputsAmount)} c`;
@@ -885,7 +884,7 @@ export class BlockExplorerWidget {
     /** @param {Transaction} tx @param {string} id */
     #createTransactionDetailsElement(tx, id = 'cbe-TxDetails', killExisting = true) {
         const cbeTxDetailsElement = this.cbeHTML.txDetails();
-        if (killExisting && cbeTxDetailsElement) { cbeTxDetailsElement.remove(); }
+        if (killExisting && cbeTxDetailsElement) cbeTxDetailsElement.remove();
 
         const txDetails = createHtmlElement('div', id);
         
@@ -915,7 +914,7 @@ export class BlockExplorerWidget {
         const titleText = isMinerTx ? 'Miner nonce' : isValidatorTx ? 'Validator Tx (no input)' : `Inputs (${tx.inputs.length})`;
         createHtmlElement('h3', undefined, [], inputsWrap).textContent = titleText;
         for (const anchor of tx.inputs) {
-            if (isValidatorTx) { continue; }
+            if (isValidatorTx) continue;
             const inputDiv = createHtmlElement('div', `cbe-TxInput-${anchor}`, ['cbe-TxInput'], inputsWrap);
             if (isMinerTx) { inputDiv.textContent = anchor; continue; }
             // check conformity of anchor to avoid code injection
@@ -938,9 +937,7 @@ export class BlockExplorerWidget {
         if (tx.fee) {
             const feeDiv = createHtmlElement('div', undefined, ['cbe-TxFee'], outputsWrap);
             feeDiv.textContent = `Fee: ${convert.formatNumberAsCurrency(tx.fee)}`;
-        } else {
-            console.info('tx fee not found');
-        }
+        } else { console.info('tx fee not found'); }
 
         return txDetails;
     }
@@ -1039,11 +1036,10 @@ export class BlockExplorerWidget {
     // GETTERS -------------------------------------------------------------
     #getTxRowElement(txId, parentElement) {
         const txRows = parentElement.getElementsByClassName('cbe-TxRow');
-        for (const row of txRows) {
-            for (const td of row.children) {
-                if (td.textContent === txId) { return row; }
-            }
-        }
+        for (const row of txRows)
+            for (const td of row.children)
+                if (td.textContent === txId) return row;
+            
         return null;
     }
     /** @param {string | number} blockReference block hash or block index */
@@ -1051,7 +1047,7 @@ export class BlockExplorerWidget {
         const referenceIsHash = typeof blockReference === 'string';
 
         const fromMemory = referenceIsHash ? this.blocksDataByHash[blockReference] : this.blocksDataByIndex[blockReference];
-        if (fromMemory) { return fromMemory; }
+        if (fromMemory) return fromMemory;
 
         // get the block data from the server
         const requestType = referenceIsHash ? 'get_blocks_data_by_hash' : 'get_blocks_data_by_height';
@@ -1063,21 +1059,21 @@ export class BlockExplorerWidget {
     getTransactionFromMemoryOrSendRequest(txReference, address = undefined) {
         let comply = true;
         const fromMemory = this.transactionsByReference[txReference];
-        if (fromMemory && address) { comply = fromMemory.balanceChange !== undefined; }
-        if (fromMemory && comply) { return fromMemory; }
+        if (fromMemory && address) comply = fromMemory.balanceChange !== undefined;
+        if (fromMemory && comply) return fromMemory;
 
         console.log(`requesting tx data: ${txReference}`);
-        if (address) {
+        if (address)
             ws.send(JSON.stringify({ type: 'get_transaction_with_balanceChange_by_reference', data: { txReference, address } }));
-        } else {
+        else
             ws.send(JSON.stringify({ type: 'get_transaction_by_reference', data: txReference }));
-        }
+        
         return 'request sent';
     }
     /** @param {string} address */
     getAddressExhaustiveDataFromMemoryOrSendRequest(address) {
         const fromMemory = this.addressesExhaustiveData[address];
-        if (fromMemory) { return fromMemory; }
+        if (fromMemory) return fromMemory;
 
         console.log(`requesting address exhaustive data: address: ${address}`);
         sendWsWhenReady({ type: 'get_address_exhaustive_data', data: address });
@@ -1117,33 +1113,33 @@ export class AddressExhaustiveData {
     mergeNewUTXOs(UTXOs) {
         const newBalances = utxoExtraction.balances(UTXOs);
         for (const key in newBalances) {
-            if (this.balances[key]) { this.balances[key] += newBalances[key]; }
-            else { this.balances[key] = newBalances[key]; }
+            if (this.balances[key]) this.balances[key] += newBalances[key];
+            else this.balances[key] = newBalances[key];
         }
        
         const newUTXOsByRules = utxoExtraction.byRules(UTXOs);
         for (const rule in newUTXOsByRules) {
-            if (this.UTXOsByRules[rule]) { this.UTXOsByRules[rule].push(...newUTXOsByRules[rule]); }
-            else { this.UTXOsByRules[rule] = newUTXOsByRules[rule]; }
+            if (this.UTXOsByRules[rule]) this.UTXOsByRules[rule].push(...newUTXOsByRules[rule]);
+            else this.UTXOsByRules[rule] = newUTXOsByRules[rule];
         }
     }
     /** @param {string[]} txsReferences */
     mergeNewTxsReferences(newTxsReferences) {
         for (const txReference of newTxsReferences) {
-            if (this.addressTxsReferences.includes(txReference)) { continue; }
+            if (this.addressTxsReferences.includes(txReference)) continue;
             this.addressTxsReferences.push(txReference);
         }
     }
     /** @param {AddressExhaustiveData} newData @param {boolean} replaceBalances */
     mergeAddressExhaustiveData(newData, replaceBalances = true) {
         for (const key in newData.balances) {
-            if (!replaceBalances) { continue; }
+            if (!replaceBalances) continue;
             this.balances[key] = newData.balances[key];
         }
 
         for (const rule in newData.UTXOsByRules) {
-            if (this.UTXOsByRules[rule]) { this.UTXOsByRules[rule].push(...newData.UTXOsByRules[rule]); }
-            else { this.UTXOsByRules[rule] = newData.UTXOsByRules[rule]; }
+            if (this.UTXOsByRules[rule]) this.UTXOsByRules[rule].push(...newData.UTXOsByRules[rule]);
+            else this.UTXOsByRules[rule] = newData.UTXOsByRules[rule];
         }
 
         this.mergeNewTxsReferences(newData.addressTxsReferences);
@@ -1154,7 +1150,7 @@ export class AddressExhaustiveData {
         for (const rule in this.UTXOsByRules) {
             for (const UTXO of this.UTXOsByRules[rule]) {
                 const height = UTXO.anchor.split(':')[0];
-                if (height > highestHeight) { highestHeight = UTXO.height; }
+                if (height > highestHeight) highestHeight = UTXO.height;
             }
         }
         return highestHeight;
@@ -1179,7 +1175,7 @@ class BlockChainElementsManager {
             chainWrap.appendChild(block);
 
             const blockRect = block.getBoundingClientRect();
-            if (blockRect.left > parentRect.right) { break; }
+            if (blockRect.left > parentRect.right) break;
         }
     }
     createEmptyBlockElement() {
@@ -1210,7 +1206,7 @@ class BlockChainElementsManager {
     /** @param {BlockInfo} blockInfo */
     fillFirstEmptyBlockElement(blockInfo) {
         const blockElement = this.#getFirstEmptyBlockElement();
-        if (!blockElement) { return; }
+        if (!blockElement) return;
 
         const blockSquare = blockElement.querySelector('.cbe-blockSquare');
 
@@ -1233,9 +1229,9 @@ class BlockChainElementsManager {
     }
     #splitHash(hash, nbOfCharsPerLine = 16) {
         const hashSplitted = [];
-        for (let i = 0; i < hash.length; i += nbOfCharsPerLine) {
+        for (let i = 0; i < hash.length; i += nbOfCharsPerLine)
             hashSplitted.push(hash.slice(i, i + nbOfCharsPerLine));
-        }
+
         return hashSplitted;
     }
     #getFirstEmptyBlockElement() {
@@ -1299,7 +1295,7 @@ window.blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget')
 //#region FUNCTIONS -------------------------------------------------------
 function getTimeSinceBlockConfirmedString(timestamp) {
     const minuteSince = Math.floor((Date.now() - timestamp) / 60000);
-    if (minuteSince >= 1) { return `~${minuteSince} min ago`; }
+    if (minuteSince >= 1) return `~${minuteSince} min ago`;
 
     const secondsSince = Math.floor((Date.now() - timestamp) / 1000);
     return `~${secondsSince} s ago`;
@@ -1322,11 +1318,11 @@ function displayLastConfirmedBlock(blockHeader) {
 function createHtmlElement(tag, id, classes = [], divToInject = undefined) {
     /** @type {HTMLElement} */
     const element = document.createElement(tag);
-    if (id) { element.id = id; }
+    if (id) element.id = id;
 
-    for (const cl of classes) { element.classList.add(cl); }
+    for (const cl of classes) element.classList.add(cl);
 
-    if (divToInject) { divToInject.appendChild(element); }
+    if (divToInject) divToInject.appendChild(element);
     return element;
 }
 function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-blockHash'], value = '#123', valueClasses = ['cbe-blockIndex'], divToInject = undefined) {
@@ -1337,7 +1333,7 @@ function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-blockHas
     const valueDiv = createHtmlElement('div', undefined, valueClasses, spacedTextDiv);
     valueDiv.textContent = value;
 
-    if (divToInject) { divToInject.appendChild(spacedTextDiv); }
+    if (divToInject) divToInject.appendChild(spacedTextDiv);
     return spacedTextDiv;
 }
 //#endregion --------------------------------------------------------------
@@ -1348,12 +1344,12 @@ document.addEventListener('click', (event) => {
 
     /** @type {BlockExplorerWidget} */
     const blockExplorerWidget = window.blockExplorerWidget;
-    if (!blockExplorerWidget) { return; }
+    if (!blockExplorerWidget) return;
     const nbOfParentToTry = 5;
 
     let element = event.target;
     for (let i = 0; i < nbOfParentToTry; i++) {
-        if (!blockExplorerWidget) { return; }
+        if (!blockExplorerWidget) return;
         
         // trying by id
         let listener = blockExplorerWidget.clickEventsListeners[element.id];
@@ -1363,17 +1359,17 @@ document.addEventListener('click', (event) => {
         listener = blockExplorerWidget.clickEventsListeners[element.classList[0]];
         if (listener) { listener(event); return; }
 
-        if (element.parentElement === null) { return; }
+        if (element.parentElement === null) return;
         element = element.parentElement
     }
 });
 document.addEventListener('keyup', (event) => {
     /** @type {BlockExplorerWidget} */
     const blockExplorerWidget = window.blockExplorerWidget;
-    if (!blockExplorerWidget) { return; }
+    if (!blockExplorerWidget) return;
 
     let listener = blockExplorerWidget.inputEventsListeners[event.target.id];
-    if (listener) { listener(event); }
+    if (listener) listener(event);
 });
 // event hover
 document.addEventListener('mouseover', (event) => {
@@ -1381,12 +1377,12 @@ document.addEventListener('mouseover', (event) => {
 
     /** @type {BlockExplorerWidget} */
     const blockExplorerWidget = window.blockExplorerWidget;
-    if (!blockExplorerWidget) { return; }
+    if (!blockExplorerWidget) return;
     const nbOfParentToTry = 3;
 
     let element = event.target;
     for (let i = 0; i < nbOfParentToTry; i++) {
-        if (!blockExplorerWidget) { return; }
+        if (!blockExplorerWidget) return;
 
         // trying by id
         let listener = blockExplorerWidget.hoverEventsListeners[element.id];
@@ -1396,13 +1392,14 @@ document.addEventListener('mouseover', (event) => {
         listener = blockExplorerWidget.hoverEventsListeners[element.classList[0]];
         if (listener) { listener(event); return; }
 
-        if (element.parentElement === null) { return; }
+        if (element.parentElement === null) return;
         element = element.parentElement
     }
 });
 window.addEventListener('message', function(event) {
     const data = event.data;
     if (data.type === 'darkMode' && typeof data.value === 'boolean') {
-        if (data.value) { document.body.classList.add('dark-mode'); } else { document.body.classList.remove('dark-mode'); }
+        if (data.value) document.body.classList.add('dark-mode');
+        else document.body.classList.remove('dark-mode');
     }
 });
