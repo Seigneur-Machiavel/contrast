@@ -18,6 +18,12 @@ import { Transaction_Builder, utxoExtraction } from '../src/transaction.mjs';
 * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
 * @typedef {import("../src/transaction.mjs").Transaction} Transaction
 * @typedef {import("../src/transaction.mjs").UTXO} UTXO
+* @typedef {Object} StakeReference
+* @property {string} address - Example: "WCHMD65Q7qR2uH9XF5dJ"
+* @property {string} anchor - Example: "0:bdadb7ab:0"
+* @property {number} amount - Example: 100
+* 
+* @typedef {Object<string, StakeReference | undefined>} Spectrum
 */
 
 /** @type {BlockExplorerWidget} */
@@ -73,6 +79,9 @@ const SETTINGS = {
 function onOpen() {
     console.log('Connection opened');
     ws.send(JSON.stringify({ type: 'get_cached_blocks_timestamps' }));
+    ws.send(JSON.stringify({ type: 'get_round_legitimacies' }));
+    ws.send(JSON.stringify({ type: 'get_vss_spectrum' }));
+    ws.send(JSON.stringify({ type: 'get_biggests_holders_balances' }));
 }
 function onClose(url = '') {
     console.info(`Connection closed: ${url}`);
@@ -123,6 +132,22 @@ async function onMessage(event) {
             break;
         case 'broadcast_new_candidate':
             //console.log('broadcast_new_candidate', data);
+            ws.send(JSON.stringify({ type: 'get_round_legitimacies' }));
+            break;
+        case 'round_legitimacies_requested':
+            //console.log('round_legitimacies_requested', data);
+            eHTML.legHeight.textContent = data.height;
+            displayRoundLegitimaciesChart(data.roundLegitimacies);
+            break;
+        case 'vss_spectrum_requested':
+            //console.log('vss_spectrum_requested', data);
+            displayVssChart(data);
+            break;
+        case 'biggests_balances_requested':
+            // [{address, balance}, ...]
+            console.log('biggests_balances_requested', data);
+            if (!data || !data.length) return;
+            displayBiggestsHoldersBalancesChart(data);
             break;
         case 'new_block_confirmed':
             //console.log('new_block_confirmed', data);
@@ -136,6 +161,7 @@ async function onMessage(event) {
             displayLastConfirmedBlock(data.header);
             blockExplorerWidget.fillBlockInfo(data);
             ws.send(JSON.stringify({ type: 'get_cached_blocks_timestamps' }));
+            ws.send(JSON.stringify({ type: 'get_round_legitimacies' }));
             break;
         case 'blocks_data_requested':
             for (const blockData of data) { blockExplorerWidget.saveBlockData(blockData); }
@@ -204,11 +230,10 @@ async function connectWSLoop() {
         console.info('--- reseting blockExplorerWidget >>>');
 
         const clonedData = window.blockExplorerWidget.getCloneBeforeReset();
-        window.blockExplorerWidget = null;
 
-        const blockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
-        if (clonedData.modalContainer) { blockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer); }
-        window.blockExplorerWidget = blockExplorerWidget;
+        const newBlockExplorerWidget = new BlockExplorerWidget('cbe-contrastBlocksWidget', clonedData.blocksDataByHash, clonedData.blocksDataByIndex, clonedData.blocksInfo);
+        if (clonedData.modalContainer) newBlockExplorerWidget.cbeHTML.containerDiv.appendChild(clonedData.modalContainer);
+        window.blockExplorerWidget = newBlockExplorerWidget;
 
         connectWS();
     }
@@ -231,6 +256,12 @@ const eHTML = {
 
     averageBlocksTimeGap: document.getElementById('cbe-averageBlocksTimeGap'),
     cacheBlocksTimesChart: document.getElementById('cbe-cacheBlocksTimesChart'),
+    cacheBlocksValidatorsChart: document.getElementById('cbe-cacheBlocksValidatorsChart'),
+
+    legHeight: document.getElementById('cbe-legHeight'),
+    roundLegitimaciesChart: document.getElementById('cbe-roundLegitimaciesChart'),
+    vssChart: document.getElementById('cbe-vssChart'),
+    biggestsHoldersBalancesChart: document.getElementById('cbe-biggestsHoldersBalancesChart'),
 }
 //#region HTML ONE-SHOT FILLING -------------------------------------------
 if (SETTINGS.ROLES.includes('chainExplorer')) {
@@ -246,6 +277,7 @@ const HTML_ELEMENTS_ATTRIBUTES = {
 
 export class BlockExplorerWidget {
     lastBlockInfoIndex = -1;
+    lastCirculatingSupply = 0;
     constructor(divToInjectId = 'cbe-contrastBlocksWidget', blocksDataByHash = {}, blocksDataByIndex = {}, blocksInfo = []) {
         /** @type {Object<string, HTMLElement>} */
         this.cbeHTML = {
@@ -640,18 +672,6 @@ export class BlockExplorerWidget {
             const chainWrap = this.cbeHTML.chainWrap();
             if (!chainWrap) { console.error('fillBlockInfo() error: chainWrap not found'); continue; }
 
-            /*const lastBlockElement = chainWrap.lastElementChild;
-            if (canTryToModifyNbOfConfirmedBlocks && lastBlockElement) {
-                const parentRect = chainWrap.parentElement.parentElement.getBoundingClientRect();
-                const lastBlocklockRect = lastBlockElement.getBoundingClientRect();
-                
-                if (lastBlocklockRect.left > parentRect.right) {
-                    console.log('to many blocks, removing the first one');
-                    this.nbOfConfirmedBlocks--;
-                    canTryToModifyNbOfConfirmedBlocks = false;
-                }
-            }*/
-
             if (this.incomingBlocksInfo.length === 0) continue;
             
             const blockInfo = this.incomingBlocksInfo.shift();
@@ -677,6 +697,7 @@ export class BlockExplorerWidget {
             if (blockInfo.header.index <= this.lastBlockInfoIndex) { console.info(`already have block ${blockInfo.header.index}`); continue; }
             
             this.lastBlockInfoIndex = blockInfo.header.index;
+            this.lastCirculatingSupply = blockInfo.header.supply + blockInfo.header.coinBase;
             this.blocksInfo.push(blockInfo);
             this.bcElmtsManager.fillFirstEmptyBlockElement(blockInfo);
             
@@ -1367,7 +1388,7 @@ function displayBlocksTimestampsChart(timestamps = []) {
     for (let i = 0; i < x.length; i++) x[i] -= 2;
     x.shift();
     y.shift();
-    console.log('timestamps', timestamps, 'x', x, 'y', y);
+    //console.log('timestamps', timestamps, 'x', x, 'y', y);
 
     const averageGap = y.reduce((a, b) => a + b, 0) / y.length;
     eHTML.averageBlocksTimeGap.textContent = ` | average: ${averageGap.toFixed(2)}s`;
@@ -1388,9 +1409,217 @@ function displayBlocksTimestampsChart(timestamps = []) {
         height: 300,
     };
 
-    // not interactive, no menu
+    //Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false });
+    // better not interactive, no menu
     Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false, staticPlot: true });
     chart.style.pointerEvents = 'none'; // disable hover events
+}
+function displayBestValidatorsChart() {} // TODO
+/** @param {Spectrum} spectrum @param {number} [limit] */
+function mergeAndSortVssSpectrum(spectrum, limit = 20) {
+    /** @type {Object<string, number>} */
+    const addressesStakes = {};
+    let start = 0;
+    for (const [key, stakeRef] of Object.entries(spectrum)) {
+        const value = parseInt(key) - start;
+        const address = stakeRef.address;
+        start = parseInt(key);
+
+        if (!addressesStakes[address]) addressesStakes[address] = 0;
+        addressesStakes[address] += value;
+    }
+
+    
+    /** @type {Object<string, number>} */
+    const sortedSpectrum = {};
+    let biggestStake = 0;
+    const sortedAddresses = Object.keys(addressesStakes).sort((a, b) => addressesStakes[b] - addressesStakes[a]);
+    for (let i = 0; i < sortedAddresses.length; i++) {
+        const address = i < limit ? sortedAddresses[i] : 'Others';
+        const stake = addressesStakes[sortedAddresses[i]];
+
+        if (!sortedSpectrum[address]) sortedSpectrum[address] = 0;
+        sortedSpectrum[address] += stake;
+
+        if (sortedSpectrum[address] > biggestStake) biggestStake = sortedSpectrum[address];
+    }
+
+    return { sortedSpectrum, biggestStake };
+}
+function displayVssChart(spectrum, minColor = 255) {
+    const chart = eHTML.vssChart;
+    if (!chart) return;
+
+    const { sortedSpectrum, biggestStake } = mergeAndSortVssSpectrum(spectrum, 10);
+    console.log('sortedSpectrum', sortedSpectrum);
+
+    // Pie Charts
+    const values = Object.values(sortedSpectrum);
+    const texts = Object.keys(sortedSpectrum).map((address) => {
+        const stake = sortedSpectrum[address];
+        return `  ${address} | ${convert.formatNumberAsCurrency(stake)}c  `;
+    });
+
+    const data = [{
+        values: values,
+        labels: Object.keys(sortedSpectrum),
+        type: 'pie',
+        //direction: 'clockwise',
+        
+        text: Object.keys(sortedSpectrum).map((address, i) => {
+            const stake = sortedSpectrum[address];
+            const stakeText = convert.formatNumberAsCurrency(stake);
+            //const addressText = address.length > 10 ? address.slice(0, 4) + '...' + address.slice(-4) : address;
+            //return `  ${addressText} | ${stakeText}c  `;
+            const addressText = address.length > 10 ? address.slice(0, 4) + '...' + address.slice(-4) : address;
+            return `  ${addressText}  `;
+        }),
+        textposition: 'inside',
+        insidetextfont: { color: '#ffffff', weight: '600', size: 10, family: '"IBM Plex Mono", monospace' },
+        insidetextorientation: 'radial',
+        insidetextanchor: 'middle',
+        marker: { 
+            colors: values.map((value) => {
+                const grey = minColor - Math.floor((value / biggestStake) * minColor);
+                return `rgb(${grey}, ${grey}, ${grey})`;
+            })
+        },
+        //hoverinfo: 'text',
+        hovertemplate: texts.map((text) => text + '<extra></extra>'),
+    }];
+
+    const layout = {
+        title: 'VSS Spectrum',
+        showlegend: false,
+        height: 300,
+        width: 300,
+        margin: { t: 20, b: 0, l: 0, r: 0 },
+    };
+
+    Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false }).then(() => {
+        chart.on('plotly_click', function(data){
+            const point = data.points[0];
+            const clickedAddress = point.label;
+            navigator.clipboard.writeText(clickedAddress).then(() => {
+                console.log('Address copied to clipboard:', clickedAddress);
+            }).catch((err) => { 
+                console.error('Failed to copy address: ', err);
+            });
+        });
+    });
+}
+function displayRoundLegitimaciesChart(roundLegitimacies = {}, max = 10, minColor = 255) {
+    const chart = eHTML.roundLegitimaciesChart;
+    if (!chart) return;
+
+    // use plotly to create the chart
+    // x axis: legitimacy, y axis: address
+    const x = Object.values(roundLegitimacies).slice(0, max).reverse();
+    const y = Object.keys(roundLegitimacies).slice(0, max).reverse();
+    
+    // decay by 2 to offer space for the labels
+    const decay = 20;
+    const xDecayed = x.map((value) => value += decay);
+    const total = x.length + decay; // add decay to the total to offer space for the labels
+    
+    // bar color from black to gray
+    const data = [{
+        x: xDecayed,
+        y,
+        mode: 'markers',
+        type: 'bar',
+        orientation: 'h',
+        marker: {
+            color: x.map((value) => {
+                const grey = Math.floor((value / x.length) * minColor);
+                return `rgb(${grey}, ${grey}, ${grey})`;
+            }),
+        },
+        text: x.map((value, index) => `${value} | ${y[index]}  `),
+        textposition: 'inside', 
+        textfont: { color: '#ffffff', size: 10, weight: '600', family: '"IBM Plex Mono", monospace' },
+        hoverinfo: 'none',
+    }];
+
+    const layout = {
+        xaxis: { title: 'Legitimacy', showticklabels: false, showgrid: false, range: [Math.floor(decay * .5), total] },
+        yaxis: { title: 'Address', showticklabels: false, showgrid: false },
+        showlegend: false,
+        margin: { t: 20, b: 0, l: 0, r: 0 },
+        height: 300,
+        width: 400,
+    };
+
+    Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false }).then(() => {
+        chart.on('plotly_click', function(data){
+            const point = data.points[0];
+            const clickedAddress = point.label;
+            navigator.clipboard.writeText(clickedAddress).then(() => {
+                console.log('Address copied to clipboard:', clickedAddress);
+            }).catch((err) => { 
+                console.error('Failed to copy address: ', err);
+            });
+        });
+    });
+}
+async function displayBiggestsHoldersBalancesChart(biggestsHoldersBalances, minColor = 255) {
+    // [{address, balance}, ...]
+    const chart = eHTML.biggestsHoldersBalancesChart;
+    if (!chart) return;
+
+    // bars chart
+    // x: values, y: addresses
+    while (!window.blockExplorerWidget?.lastCirculatingSupply) await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const biggestBalance = biggestsHoldersBalances[0].balance;
+    biggestsHoldersBalances.reverse();
+    const circulatingSupply = window.blockExplorerWidget?.lastCirculatingSupply || 0;
+    console.log('circulatingSupply', circulatingSupply);
+    const x = biggestsHoldersBalances.map((holder) => holder.balance);
+    const y = biggestsHoldersBalances.map((holder) => holder.address);
+    const texts = biggestsHoldersBalances.map((holder) => ` ${holder.address}  |  ${convert.formatNumberAsCurrency(holder.balance)}c  `);
+
+    const data = [{
+        x,
+        y,
+        type: 'bar',
+        orientation: 'h',
+        marker: {
+            color: x.map((value) => {
+                const grey = Math.floor(minColor - ((value / biggestBalance) * minColor));
+                return `rgb(${grey}, ${grey}, ${grey})`;
+            }),
+        },
+        text: x.map((value, index) => {
+            const supplyPercent = ((value / circulatingSupply) * 100).toFixed(2);
+            //return `${supplyPercent}% | ${y[index].slice(0, 4)}... `;
+            return `${supplyPercent}% `;
+        }),
+        textposition: 'inside', 
+        textfont: { color: '#ffffff', size: 10, weight: '600', family: '"IBM Plex Mono", monospace' },
+        hovertemplate: texts.map((text) => text + '<extra></extra>'),
+    }];
+
+    const layout = {
+        xaxis: { title: 'Balance', showticklabels: false, showgrid: false },
+        yaxis: { title: 'Address', showticklabels: false, showgrid: false },
+        showlegend: false,
+        margin: { t: 20, b: 0, l: 0, r: 0 },
+        /*height: 300,
+        width: 400,*/
+    };
+
+    Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false, staticPlot: false }).then(() => {
+        chart.on('plotly_click', function(data){
+            const point = data.points[0];
+            const clickedAddress = point.label;
+            navigator.clipboard.writeText(clickedAddress).then(() => {
+                console.log('Address copied to clipboard:', clickedAddress);
+            }).catch((err) => { 
+                console.error('Failed to copy address: ', err);
+            });
+        });
+    });
 }
 //#endregion --------------------------------------------------------------
 

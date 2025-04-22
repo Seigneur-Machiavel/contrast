@@ -104,9 +104,10 @@ export class Vss {
     }
     /** @param {string} blockHash @param {number} [maxResultingArrayLength] @param {number} [maxTry] */
     async calculateRoundLegitimacies(blockHash, maxResultingArrayLength = 27, maxTry = 100) {
-        const startTimestamp = Date.now();
-        if (this.blockLegitimaciesByAddress[blockHash]) { return; } // already calculated
+        if (this.blockLegitimaciesByAddress[blockHash])
+            return this.blockLegitimaciesByAddress[blockHash]; // already calculated
         
+        const startTimestamp = Date.now();
         // everyone has considered 0 legitimacy when not enough stakes
         const maxRange = spectrumFunctions.getHighestUpperBound(this.spectrum);
         if (maxRange < 999_999) { this.blockLegitimaciesByAddress[blockHash] = []; return; } // no calculation needed
@@ -123,26 +124,31 @@ export class Vss {
             if (!stakeReference) { console.error(`[VSS] Stake not found for winning number: ${winningNumber}`); continue; }
 
             // if stakeReference already in roundLegitimacies, try again
-            if (roundLegitimacies[stakeReference.address] !== undefined) { continue; }
+            if (roundLegitimacies[stakeReference.address] !== undefined) continue;
             
             //roundLegitimacies.push(stakeReference);
             roundLegitimacies[stakeReference.address] = leg;
             leg++;
 
-            if (leg >= spectrumLength) { break; } // If all stakes have been selected
-            if (leg >= maxResultingArrayLength) { break; } // If the array is full
+            if (leg >= spectrumLength) break; // If all stakes have been selected
+            if (leg >= maxResultingArrayLength) break; // If the array is full
         }
 
         //console.log(`[VSS] -- Calculated round legitimacies in ${((Date.now() - startTimestamp)/1000).toFixed(2)}s. | ${i} iterations. -->`);
         //console.info(roundLegitimacies);
         
         this.blockLegitimaciesByAddress[blockHash] = roundLegitimacies;
+        const toRemove = Object.keys(this.blockLegitimaciesByAddress).length - 10;
+        if (toRemove > 0) {
+            const keys = Object.keys(this.blockLegitimaciesByAddress);
+            for (let i = 0; i < toRemove; i++) delete this.blockLegitimaciesByAddress[keys[i]];
+        }
         return roundLegitimacies;
     }
     /** @param {string} address @param {string} prevHash */
     async getAddressLegitimacy(address, prevHash) {
         const legitimacies = this.blockLegitimaciesByAddress[prevHash] || await this.calculateRoundLegitimacies(prevHash);
-        if (!legitimacies) { return 0; }
+        if (!legitimacies) return 0;
 
         // if not found, return last index + 1 (= array length)
         const legitimacy = legitimacies[address] !== undefined ? legitimacies[address] : Object.keys(legitimacies).length;

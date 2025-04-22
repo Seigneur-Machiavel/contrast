@@ -14,6 +14,13 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         this.totalSupply = 0;
         this.totalOfBalances = 0;
 
+        // BALANCES VALUES ARE ONLY USED IN FRONT CONTEXT, DISPLAYED IN THE UI
+        /** @type {Object<string, number>} */
+        this.balances = {}; // { address: balance }
+        this.biggestsHoldersToConserve = 10;
+        /** @type {array<{ address: string, balance: number }>} */
+        this.biggestsHoldersBalances = [];
+
         /** @type {Object<string, WebSocketCallBack>} */
         this.wsCallbacks = {}; // not used yet
 
@@ -160,23 +167,48 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         } catch (error) { return false; }
     }
     /** Re build the addressesAnchors from the unspentMiniUtxos after loading or snapshot loading */
-    buildAddressesAnchorsFromUnspentMiniUtxos() {
+    buildAddressesAnchorsFromUnspentMiniUtxos(updateBiggestsHolders = true) {
         this.addressesAnchors = {};
+        this.balances = {};
 
         const addressesAnchors = {};
         const start = performance.now();
         const anchors = Object.keys(this.unspentMiniUtxos);
         for (const anchor of anchors) {
-            const { address } = serializer.deserialize.miniUTXO(this.unspentMiniUtxos[anchor]);
-            if (!addressesAnchors[address]) { addressesAnchors[address] = {}; }
+            const { address, amount } = serializer.deserialize.miniUTXO(this.unspentMiniUtxos[anchor]);
+            if (!addressesAnchors[address]) addressesAnchors[address] = {};
             addressesAnchors[address][anchor] = true;
+            this.balances[address] = (this.balances[address] || 0) + amount;
         }
 
-        for (const address of Object.keys(addressesAnchors)) {
+        for (const address of Object.keys(addressesAnchors))
             this.addressesAnchors[address] = serializer.serialize.anchorsObjToArray(addressesAnchors[address]);
-        }
+
+        if (updateBiggestsHolders) this.#updateBiggestsHolders();
     }
     // ----- PRIVATE METHODS -----
+    #updateBiggestsHolders() {
+        this.biggestsHoldersBalances = [];
+        for (let i = 0; i < this.biggestsHoldersToConserve; i++)
+            this.biggestsHoldersBalances.push({ address: '', balance: 0 });
+
+        for (const address in this.balances) {
+            const balance = this.balances[address];
+            const lowestBiggestsHolder = this.biggestsHoldersBalances[this.biggestsHoldersToConserve - 1].balance;
+            if (balance <= lowestBiggestsHolder) continue; // not a biggest holder
+
+            for (let i = 0; i < this.biggestsHoldersToConserve; i++) {
+                if (balance <= this.biggestsHoldersBalances[i].balance) continue;
+                // insert
+                const partA = this.biggestsHoldersBalances.slice(0, i);
+                const partB = this.biggestsHoldersBalances.slice(i);
+                this.biggestsHoldersBalances = [...partA, { address, balance }, ...partB];
+                this.biggestsHoldersBalances.pop();
+
+                break;
+            }
+        }
+    }
     /** @param {string} address */
     #getAddressAnchorsObj(address) {
         const serializedAnchors = this.addressesAnchors[address];
@@ -217,6 +249,9 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             this.unspentMiniUtxos[utxo.anchor] = serializedMiniUtxo;
             this.totalOfBalances += utxo.amount;
 
+            if (this.balancesInitalized)
+                this.balances[utxo.address] = (this.balances[utxo.address] || 0) + utxo.amount;
+
             if (!newAnchorsByAddress[utxo.address]) { newAnchorsByAddress[utxo.address] = []; }
             newAnchorsByAddress[utxo.address].push(utxo.anchor);
         }
@@ -248,6 +283,9 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             
             delete this.unspentMiniUtxos[anchor];
             this.totalOfBalances -= utxo.amount;
+
+            if (this.balancesInitalized)
+                this.balances[utxo.address] = (this.balances[utxo.address] || 0) - utxo.amount;
 
             if (!consumedUtxosByAddress[utxo.address]) { consumedUtxosByAddress[utxo.address] = []; }
             consumedUtxosByAddress[utxo.address].push(utxo.anchor);

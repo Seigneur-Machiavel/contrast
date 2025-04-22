@@ -27,30 +27,58 @@
                 <h3 class="cbe-heightText">#<span id="cbe-chainHeight">0</span></h3>
             </div>
 
-            <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
-                <h3>Max supply:</h3>
-                <h3 id="cbe-maxSupply">27,000,000.000000</h3>
-            </div>
             <div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockTime">
-                <h3>Target blockTime:</h3>
+                <h3>Target blockTime</h3>
                 <h3 id="cbe-targetBlocktime">120</h3>
             </div>
-
-            <div class="cbe-spacedText" data-infokey="circulatingSupply">
-                <h3>Circulating supply:</h3>
-                <h3 id="cbe-circulatingSupply">0.000000</h3>
-            </div>
             <div class="cbe-spacedText" data-infokey="lastBlocktime">
-                <h3>Last blockTime:</h3>
+                <h3>Last blockTime</h3>
                 <h3 id="cbe-lastBlocktime">~120s</h3>
             </div>
+            <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
+                <h3>Circulating / <span style="opacity: .6;">Max supply</span></h3>
+                <h3><span id="cbe-circulatingSupply">0.000000</span> / <span id="cbe-maxSupply" style="opacity: .6;">27,000,000.000000</span></h3>
+            </div>
+            <!--<div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
+                <h3>Max supply:</h3>
+                <h3 id="cbe-maxSupply">27,000,000.000000</h3>
+            </div>-->
+            <!--<div class="cbe-spacedText" data-infokey="circulatingSupply">
+                <h3>Circulating supply:</h3>
+                <h3 id="cbe-circulatingSupply">0.000000</h3>
+            </div>-->
             <!--<div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockday">
                 <h3>Blocks/day:</h3>
                 <h3 id="cbe-targetBlockday">720</h3>
             </div>-->
 
-            <h1 style="margin-top: 40px;">Last blocks time-gap<span id="cbe-averageBlocksTimeGap" style="opacity: .6; font-size: .6em"></span></h1>
+            <h1 class="cbe-title-with-separator">Last 50 blocks time-gap<span id="cbe-averageBlocksTimeGap"></span></h1>
             <div id="cbe-cacheBlocksTimesChart"></div>
+
+            <!--<div id="cbe-cacheBlocksValidatorsChart"></div>-->
+
+            <div id="legitimaciesVssWrap">
+                <!--<div class="wrap">
+                    <h1 class="cbe-title">Round #<span id="cbe-legHeight">0</span> legitimacies <span>(lower is better)</span></h1>
+                    <div id="cbe-roundLegitimaciesChart"></div>
+                </div>
+
+                <div class="cbe-vssChartContainer">
+                    <div id="cbe-vssChart"></div>
+                    <h1 class="cbe-title" style="text-align: right;"><span>(staking distribution)</span> VSS</h1>
+                </div>-->
+                <h1 class="cbe-title-with-separator">Round #<span id="cbe-legHeight">0</span> legitimacies <span>(lower is better)</span></h1>
+
+                <div style="display: flex; justify-content: space-between;">
+                    <div id="cbe-roundLegitimaciesChart"></div>
+                    <div id="cbe-vssChart"></div>
+                </div>
+
+                <h1 class="cbe-title" style="text-align: right;"><span>(staking distribution)</span> VSS</h1>
+
+                <h1 class="cbe-title-with-separator">Biggests holders</h1>
+                <div id="cbe-biggestsHoldersBalancesChart" style="margin-bottom: 100px;"></div>
+            </div>
         </div>
     </div>
 </body>

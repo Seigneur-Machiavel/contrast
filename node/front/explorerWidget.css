@@ -104,6 +104,31 @@ button {
 }
 /* FROM HTML END */
 
+.cbe-title-with-separator {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: solid 1px var(--color1_1);
+}
+.cbe-title span, .cbe-title-with-separator span {
+    opacity: .6;
+    font-size: .6em;
+}
+#cbe-vssChart .plot-container, #cbe-roundLegitimaciesChart .plot-container {
+    cursor: pointer;
+}
+#cbe-legHeight {
+    opacity: .8;
+    font-size: 1em;
+}
+#cbe-roundLegitimaciesChart .cursor-crosshair {
+    cursor: initial !important;
+}
+/*#legitimaciesVssWrap {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: solid 1px var(--color1_1);
+}*/
+
 #cbe-contrastBlocksWidget {
     position: relative;
     /*padding: 0 10px;*/

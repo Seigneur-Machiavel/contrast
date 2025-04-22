@@ -609,6 +609,20 @@ export class ObserverWsApp {
                 case 'get_cached_blocks_timestamps':
                     ws.send(JSON.stringify({ type: 'blocks_timestamps_requested', data: this.node.getCachedBlocksTimestamps() }));
                     break;
+                case 'get_round_legitimacies':
+                    const roundLegitimacies = await this.node.vss.calculateRoundLegitimacies(data?.preHash || this.node.blockchain.lastBlock.hash);
+                    ws.send(JSON.stringify({ type: 'round_legitimacies_requested', data: { roundLegitimacies, height: data?.height || this.node.blockchain.currentHeight} }));
+                    break;
+                case 'get_vss_spectrum':
+                    ws.send(JSON.stringify({ type: 'vss_spectrum_requested', data: this.node.vss.spectrum }));
+                    break;
+                case 'get_biggests_holders_balances':
+                    //const biggestsHolders = this.node.utxoCache.biggestsHolders;
+                    /*const biggestsHoldersBalances = biggestsHolders.map(address => {
+                        return { address, balance: this.node.utxoCache.balances[address] };
+                    });*/
+                    ws.send(JSON.stringify({ type: 'biggests_balances_requested', data: this.node.utxoCache.biggestsHoldersBalances }));
+                    break;
                 case 'get_new_block_confirmed':
                     const blocksInfo = this.node.getBlocksInfo(this.node.blockchain.currentHeight);
                     ws.send(JSON.stringify({ type: 'new_block_confirmed', data: blocksInfo[0] }));
@@ -691,9 +705,7 @@ export class ObserverWsApp {
                     ws.send(JSON.stringify({ type: 'error', data: `unknown message type: ${parsedMessage.type}` }));
                     break;
             }
-        } catch (error) {
-            console.error(`[OBSERVER] Error on message: ${error.message}`);
-        }
+        } catch (error) { console.error(`[OBSERVER] Error on message: ${error.message}`) }
     }
     stop() {
         if (!this.wss || this.stopped) { return; }
