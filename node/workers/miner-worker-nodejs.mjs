@@ -15,13 +15,11 @@ async function mineBlock(blockCandidate, signatureHex, nonce, useDevArgon2) {
 		const argon2Fnc = useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
 
 		const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
-		if (!blockHash) { throw new Error('Invalid block hash'); }
+		if (!blockHash) throw new Error('Invalid block hash');
 
 		blockCandidate.hash = blockHash.hex;
 		return { finalizedBlock: blockCandidate, bitsArrayAsString: blockHash.bitsArray.join('') };
-	} catch (err) {
-		throw err;
-	}
+	} catch (err) { throw err; }
 }
 class hashrateCalculator {
 	constructor(parentPort) {
@@ -85,7 +83,7 @@ async function mineBlockUntilValid() {
 			//console.log('hashTime', Math.round(performance.now() - startTime), 'ms');
 			
 			const { conform } = mining.verifyBlockHashConformToDifficulty(mined.bitsArrayAsString, mined.finalizedBlock);
-			if (!conform) { continue; }
+			if (!conform) continue;
 
 			const now = Date.now() + minerVars.timeOffset;
 			const blockReadyIn = Math.max(mined.finalizedBlock.timestamp - now, 0);

@@ -29,10 +29,15 @@ export class BlocksCache {
         this.blockHeightByHash.set(block.hash, block.index);
     }
     getAllBlocksTimestamps() {
-        /** @type {number[]} */
-        const timestamps = [];
-        for (const block of this.blocksByHash.values()) timestamps.push(block.timestamp);
-        return timestamps;
+        /** @type {Object<number, number>} */
+        const blocksTimestamps = {};
+        for (const block of this.blocksHashByHeight.values()) {
+            const blockData = this.blocksByHash.get(block);
+            if (!blockData) continue;
+            //blocksTimestamps.push(blockData.timestamp);
+            blocksTimestamps[blockData.index] = blockData.timestamp;
+        }
+        return blocksTimestamps;
     }
     /** @param {number} index @param {string} hash */
     deleteBlock(index, hash) {

@@ -672,9 +672,6 @@ export class Node {
             return this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo);
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return null; }
     }
-    getCachedBlocksTimestamps() {
-        return this.blockchain.cache.getAllBlocksTimestamps();
-    }
     /** @param {BlockData} blockData @param {BlockInfo} blockInfo */
     #exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo) {
         blockData.powReward = blockData.Txs[0].outputs[0].amount;

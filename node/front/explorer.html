@@ -8,6 +8,7 @@
     <title>Contrast Explorer v1.0</title>
     <script src="/libs/anime.min.js"></script>
     <script src="/libs/plotly-3.0.1.min.js"></script>
+    <script src="/libs/d3.v7.min.js"></script>
     <script src="/front/explorerScript.mjs" type="module"></script>
     <link rel="stylesheet" href="/styles/contrast-style.css">
     <link rel="stylesheet" href="/front/explorerWidget.css">
@@ -36,9 +37,14 @@
                 <h3 id="cbe-lastBlocktime">~120s</h3>
             </div>
             <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
-                <h3>Circulating / <span style="opacity: .6;">Max supply</span></h3>
-                <h3><span id="cbe-circulatingSupply">0.000000</span> / <span id="cbe-maxSupply" style="opacity: .6;">27,000,000.000000</span></h3>
+                <h3>Circulating supply</h3>
+                <h3><span id="cbe-circulatingSupply">0.000000</span></h3>
             </div>
+            <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
+                <h3>Distribution progress</h3>
+                <h3><span id="cbe-circulatingSupplyPercent">0</span> % of <span id="cbe-maxSupply" style="opacity: .6;">27,000,000.000000</span></h3>
+            </div>
+
             <!--<div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
                 <h3>Max supply:</h3>
                 <h3 id="cbe-maxSupply">27,000,000.000000</h3>
@@ -52,7 +58,7 @@
                 <h3 id="cbe-targetBlockday">720</h3>
             </div>-->
 
-            <h1 class="cbe-title-with-separator">Last 50 blocks time-gap<span id="cbe-averageBlocksTimeGap"></span></h1>
+            <h1 class="cbe-title-with-separator">Last blocks time-gap<span id="cbe-averageBlocksTimeGap"></span></h1>
             <div id="cbe-cacheBlocksTimesChart"></div>
 
             <!--<div id="cbe-cacheBlocksValidatorsChart"></div>-->
@@ -76,7 +82,7 @@
 
                 <h1 class="cbe-title" style="text-align: right;"><span>(staking distribution)</span> VSS</h1>
 
-                <h1 class="cbe-title-with-separator">Biggests holders</h1>
+                <h1 class="cbe-title-with-separator">10 Biggests holders <span>(includes staked balance)</span></h1>
                 <div id="cbe-biggestsHoldersBalancesChart" style="margin-bottom: 100px;"></div>
             </div>
         </div>

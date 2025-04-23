@@ -15,7 +15,7 @@ import { createLibp2p } from 'libp2p';
 import { webRTCDirect, webRTC } from '@libp2p/webrtc';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 import { dcutr } from '@libp2p/dcutr';
-import { P2PNetwork, PROTOCOLS, STREAM, FILTERS } from './p2p.mjs';
+import { P2PNetwork, PROTOCOLS, STREAM, FILTERS } from '../src/p2p.mjs';
 
 /**
  * @typedef {import('@multiformats/multiaddr').Multiaddr} Multiaddr

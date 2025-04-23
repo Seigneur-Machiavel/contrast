@@ -607,7 +607,7 @@ export class ObserverWsApp {
                     ws.send(JSON.stringify({ type: 'blocks_data_requested', data: exhaustiveBlockData }));
                     break;
                 case 'get_cached_blocks_timestamps':
-                    ws.send(JSON.stringify({ type: 'blocks_timestamps_requested', data: this.node.getCachedBlocksTimestamps() }));
+                    ws.send(JSON.stringify({ type: 'blocks_timestamps_requested', data: this.node.blockchain.cache.getAllBlocksTimestamps() }));
                     break;
                 case 'get_round_legitimacies':
                     const roundLegitimacies = await this.node.vss.calculateRoundLegitimacies(data?.preHash || this.node.blockchain.lastBlock.hash);

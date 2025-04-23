@@ -16,8 +16,8 @@ export const mining = {
         if (difficulty < 1) { console.error('Invalid difficulty < 1'); return 1; }
 
         if (typeof blockIndex !== 'number') { console.error('Invalid blockIndex'); return difficulty; }
-        if (blockIndex === 0) { return difficulty; }
-        if (blockIndex % MINING_PARAMS.blocksBeforeAdjustment !== 0) { return difficulty; }
+        if (blockIndex === 0) return difficulty;
+        if (blockIndex % MINING_PARAMS.blocksBeforeAdjustment !== 0) return difficulty;
 
         const deviation = 1 - (averageBlockTimeMS / BLOCKCHAIN_SETTINGS.targetBlockTime);
         const deviationPercentage = deviation * 100; // over zero = too fast / under zero = too slow
@@ -108,6 +108,7 @@ export const mining = {
         const adjust = difficulty % 16;
         return { zeros, adjust };
     },
+
     /** @param {string} HashBitsAsString @param {BlockData} blockData */
     verifyBlockHashConformToDifficulty: (HashBitsAsString = '', blockData) => {
         if (typeof HashBitsAsString !== 'string') { return false; } //throw new Error('Invalid HashBitsAsString'); }

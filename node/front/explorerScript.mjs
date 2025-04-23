@@ -103,8 +103,9 @@ async function onMessage(event) {
     const lastBlockInfoIndex = blockExplorerWidget.lastBlockInfoIndex;
     switch (message.type) {
         case 'blocks_timestamps_requested':
-            if (!data || !data.length) return;
+            if (!data || typeof data !== 'object') return;
             displayBlocksTimestampsChart(data);
+            //displayBlocksTimestampsChartD3(data);
             break;
         case 'current_height':
             console.info(`current_height #${data} | lastBlockIndex #${lastBlockInfoIndex} -> `);
@@ -145,8 +146,8 @@ async function onMessage(event) {
             break;
         case 'biggests_balances_requested':
             // [{address, balance}, ...]
-            console.log('biggests_balances_requested', data);
-            if (!data || !data.length) return;
+            //console.log('biggests_balances_requested', data);
+            if (!data || data.length === 0) return;
             displayBiggestsHoldersBalancesChart(data);
             break;
         case 'new_block_confirmed':
@@ -252,6 +253,7 @@ const eHTML = {
     contrastExplorer: document.getElementById('cbe-contrastExplorer'),
     chainHeight: document.getElementById('cbe-chainHeight'),
     circulatingSupply: document.getElementById('cbe-circulatingSupply'),
+    circulatingSupplyPercent: document.getElementById('cbe-circulatingSupplyPercent'),
     lastBlocktime: document.getElementById('cbe-lastBlocktime'),
 
     averageBlocksTimeGap: document.getElementById('cbe-averageBlocksTimeGap'),
@@ -1344,7 +1346,9 @@ function displayLastConfirmedBlock(blockHeader) {
     if (SETTINGS.ROLES.includes('chainExplorer')) {
         eHTML.chainHeight.textContent = blockHeader.index;
         eHTML.circulatingSupply.textContent = convert.formatNumberAsCurrency(blockHeader.supply + blockHeader.coinBase);
-        
+        const percent = ((blockHeader.supply + blockHeader.coinBase) / BLOCKCHAIN_SETTINGS.maxSupply * 100).toFixed(2);
+        eHTML.circulatingSupplyPercent.textContent = `~${percent}`;
+
         const readableLocalDate = new Date(blockHeader.timestamp).toLocaleString();
         const agoText = `${((blockHeader.timestamp - blockHeader.posTimestamp) / 1000).toFixed(2)}s`;
         eHTML.lastBlocktime.textContent = `${readableLocalDate} (${agoText})`;
@@ -1377,42 +1381,68 @@ function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-blockHas
     if (divToInject) divToInject.appendChild(spacedTextDiv);
     return spacedTextDiv;
 }
-function displayBlocksTimestampsChart(timestamps = []) {
+/** @param {Object<number, number>} */
+async function displayBlocksTimestampsChart(blocksTimestamps = {}) {
     const chart = eHTML.cacheBlocksTimesChart;
     if (!chart) return;
     
+    console.log('blocksTimestamps', blocksTimestamps);
     // use plotly to create the chart
     // x axis: block height, y axis: time between blocks
-    const x = timestamps.map((_, i) => i + 1);
-    const y = timestamps.map((_, i) => i === 0 ? 0 : (timestamps[i] - timestamps[i - 1]) / 1000);
-    for (let i = 0; i < x.length; i++) x[i] -= 2;
+    const x = Object.keys(blocksTimestamps).map((key) => parseInt(key));
+    const timestamps = Object.values(blocksTimestamps);
+    const y = timestamps.map((_, i) => i === 0 ? 0 : (timestamps[i] - timestamps[i - 1]) / 1000); // convert to seconds
     x.shift();
     y.shift();
-    //console.log('timestamps', timestamps, 'x', x, 'y', y);
+    console.log('timestamps', timestamps, 'x', x, 'y', y);
 
     const averageGap = y.reduce((a, b) => a + b, 0) / y.length;
     eHTML.averageBlocksTimeGap.textContent = ` | average: ${averageGap.toFixed(2)}s`;
 
-    const data = [{
+    // line black at 120s, grey at 0s, grey at 240s
+    const colors = y.map((value, index) => {
+        const a = Math.abs(value - 120);
+        if (a < 0 || a > 120 ) return 'rgb(0, 0, 0)';
+
+        const grey = Math.floor(200 - (a / 120) * 200);
+        return `rgb(${grey}, ${grey}, ${grey})`;
+    });
+
+    const scatterData = {
         x,
         y,
         type: 'scatter',
-        mode: 'lines+markers',
-        line: { color: '#000000', width: 2 },
-    }];
+        mode: 'markers',
+        marker: { color: colors, size: 7 },
+        hovertemplate: x.map((value, index) => ` #${value} | ${y[index].toFixed(2)}s <extra></extra>`),
+        hoverlabel: { bgcolor: 'rgb(0, 0, 0)', font: { color: '#ffffff', size: 10, family: '"IBM Plex Mono", monospace' } },
+    };
+    const averageLine = {
+        x: [Math.min(...x), Math.max(...x)],
+        y: [averageGap, averageGap],
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: 'rgb(227, 227, 227)', width: 2, dash: 'dot' },
+        hoverinfo: 'skip',
+    };
+    const data = [scatterData, averageLine];
 
     const layout = {
-        xaxis: { title: 'Block height' },
-        yaxis: { title: 'Time (s)', dtick: 60, tickmode: 'linear', range: [0, 300] },
+        xaxis: {
+            title: 'Block height',
+            tickvals: x.filter((_, index) => index % 5 === 0),
+            ticktext: x.filter((_, index) => index % 5 === 0).map(value => `#${value}`),
+            tickfont: { color: '#000000', size: 10, family: '"IBM Plex Mono", monospace' },
+            tickangle: -45,
+            fixedrange: true
+        },
+        yaxis: { title: 'Time (s)', dtick: 60, tickmode: 'linear', range: [0, Math.max(...y) + 60], fixedrange: true },
         showlegend: false,
-        margin: { t: 20, b: 30, l: 40, r: 0 },
+        margin: { t: 20, b: 40, l: 40, r: 0 },
         height: 300,
     };
-
-    //Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false });
-    // better not interactive, no menu
-    Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false, staticPlot: true });
-    chart.style.pointerEvents = 'none'; // disable hover events
+    // disable zoom and pan
+    Plotly.newPlot(chart, data, layout, { responsive: true, displayModeBar: false });
 }
 function displayBestValidatorsChart() {} // TODO
 /** @param {Spectrum} spectrum @param {number} [limit] */
@@ -1486,6 +1516,7 @@ function displayVssChart(spectrum, minColor = 255) {
         },
         //hoverinfo: 'text',
         hovertemplate: texts.map((text) => text + '<extra></extra>'),
+        hoverlabel: { bgcolor: '#000000', font: { color: '#ffffff' } },
     }];
 
     const layout = {
@@ -1542,8 +1573,8 @@ function displayRoundLegitimaciesChart(roundLegitimacies = {}, max = 10, minColo
     }];
 
     const layout = {
-        xaxis: { title: 'Legitimacy', showticklabels: false, showgrid: false, range: [Math.floor(decay * .5), total] },
-        yaxis: { title: 'Address', showticklabels: false, showgrid: false },
+        xaxis: { title: 'Legitimacy', showticklabels: false, showgrid: false, range: [Math.floor(decay * .5), total], fixedrange: true },
+        yaxis: { title: 'Address', showticklabels: false, showgrid: false, fixedrange: true },
         showlegend: false,
         margin: { t: 20, b: 0, l: 0, r: 0 },
         height: 300,
@@ -1577,7 +1608,8 @@ async function displayBiggestsHoldersBalancesChart(biggestsHoldersBalances, minC
     console.log('circulatingSupply', circulatingSupply);
     const x = biggestsHoldersBalances.map((holder) => holder.balance);
     const y = biggestsHoldersBalances.map((holder) => holder.address);
-    const texts = biggestsHoldersBalances.map((holder) => ` ${holder.address}  |  ${convert.formatNumberAsCurrency(holder.balance)}c  `);
+    const texts = biggestsHoldersBalances.map((holder) =>
+        ` ${holder.address}  |  ${convert.formatNumberAsCurrency(holder.balance)}c  (${((holder.balance / BLOCKCHAIN_SETTINGS.maxSupply) * 100).toFixed(2)}% of max supply) `);
 
     const data = [{
         x,
@@ -1592,17 +1624,18 @@ async function displayBiggestsHoldersBalancesChart(biggestsHoldersBalances, minC
         },
         text: x.map((value, index) => {
             const supplyPercent = ((value / circulatingSupply) * 100).toFixed(2);
-            //return `${supplyPercent}% | ${y[index].slice(0, 4)}... `;
-            return `${supplyPercent}% `;
+            if (supplyPercent < 4) return `${supplyPercent}% `;
+            return `${supplyPercent}% | ${y[index].slice(0, 4)}... `;
         }),
         textposition: 'inside', 
-        textfont: { color: '#ffffff', size: 10, weight: '600', family: '"IBM Plex Mono", monospace' },
+        insidetextfont: { color: '#ffffff', size: 10, weight: '600', family: '"IBM Plex Mono", monospace' },
         hovertemplate: texts.map((text) => text + '<extra></extra>'),
+        hoverlabel: { bgcolor: '#000000', font: { color: '#ffffff' } },
     }];
 
     const layout = {
-        xaxis: { title: 'Balance', showticklabels: false, showgrid: false },
-        yaxis: { title: 'Address', showticklabels: false, showgrid: false },
+        xaxis: { title: 'Balance', showticklabels: false, showgrid: false, fixedrange: true },
+        yaxis: { title: 'Address', showticklabels: false, showgrid: false, fixedrange: true },
         showlegend: false,
         margin: { t: 20, b: 0, l: 0, r: 0 },
         /*height: 300,

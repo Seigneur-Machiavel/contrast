@@ -14,7 +14,7 @@ import { createLibp2p } from 'libp2p';
 import { dcutr } from '@libp2p/dcutr';
 import { generateKeyPairFromSeed } from '@libp2p/crypto/keys';
 import { tcp } from '@libp2p/tcp';
-import { P2PNetwork, STREAM, PROTOCOLS, FILTERS } from './p2p.mjs';
+import { P2PNetwork, STREAM, PROTOCOLS, FILTERS } from '../src/p2p.mjs';
 
 function filterLocalAddrs(ma) {
 	let localAddrs = ma.filter(addr => addr.toString().includes('/192') === false);
