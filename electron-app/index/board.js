@@ -175,29 +175,22 @@ window.addEventListener('message', function(e) {
 	}
 
 	if (e.data?.type === 'copy_text') {
-		const authorizedCopyTextOrigins = ['https://cybercon.app', 'http://pinkparrot.science:27280'];
+		const authorizedCopyTextOrigins = ['https://cybercon.app', 'http://pinkparrot.science:27280', 'http://localhost:27270', 'http://localhost:27271'];
 		if (!authorizedCopyTextOrigins.includes(formatedUrl(e.origin))) {
 			console.error('Unauthorized origin for copy_text:', e.origin);
 			return;
 		}
 
-		navigator.clipboard.writeText(e.data.value).then(() => {
-			//console.log('Text copied to clipboard:', e.data.value);
-			console.log('Text copied to clipboard!');
-		}).catch(err => {
-			console.error('Failed to copy text to clipboard:', err);
-		});
+		navigator.clipboard.writeText(e.data.value).then(() => { console.log('Text copied to clipboard!');
+		}).catch(err => { console.error('Failed to copy text to clipboard:', err); });
 	}
 
 	const isCyberCon = formatedUrl(e.origin) === formatedUrl(appsManager.windows.cybercon?.origin);
-	if (isCyberCon && e.data?.type === 'set_auth_info') {
-		// appName, fileName, data, secure
+	if (isCyberCon && e.data?.type === 'set_auth_info')
 		ipcRenderer.send('store-app-data', 'cyberCon', 'auth_info', e.data.value, true);
-	}
 
-	if (isCyberCon && e.data?.type === 'reset_game') {
+	if (isCyberCon && e.data?.type === 'reset_game')
 		ipcRenderer.send('delete-app-data', 'cyberCon', 'auth_info');
-	}
 });
 
 //await new Promise(resolve => setTimeout(resolve, 400));

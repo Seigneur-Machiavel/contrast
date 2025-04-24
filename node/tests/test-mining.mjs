@@ -10,6 +10,7 @@ let totalSuccess = 0;
 let sessionStart = Date.now();
 let powCounter = 0;
 let success = 0;
+const limitHashPerSecond = 2; // limit to 1H/s for testing
 
 /** @param {string} signatureHex @param {string} nonce */
 async function mineBlock(signatureHex, nonce) {
@@ -74,8 +75,12 @@ async function mineBlockUntilValid() {
             const headerNonce = mining.generateRandomNonce().Hex;
             const coinbaseNonce = mining.generateRandomNonce().Hex;
             const nonce = `${headerNonce}${coinbaseNonce}`;
-            const mined = await mineBlock(signatureHex, nonce, false);
+            const mined = await mineBlock(signatureHex, nonce);
             if (!mined) throw new Error('Invalid block hash');
+            
+            const elTime = performance.now() - startTime;
+            if (limitHashPerSecond && elTime < 1000 / limitHashPerSecond)
+                await new Promise((resolve) => setTimeout(resolve, 1000 / limitHashPerSecond - elTime));
     
             hashRateCalculator.newHash(performance.now() - startTime);
             powCounter++;
@@ -86,18 +91,15 @@ async function mineBlockUntilValid() {
 
             success++;
             totalSuccess++;
-            const elapsedTime = Date.now() - testStart;
-            const elapsedTimeInSeconds = (elapsedTime / 1000).toFixed(2);
-            const hashRate = (powCounter / elapsedTimeInSeconds).toFixed(2);
-
+            const sessionElapsedTime = Date.now() - sessionStart;
+            const hashRate = (powCounter / (sessionElapsedTime / 1000)).toFixed(2);
             console.log(`totalSuccess: ${totalSuccess} | totalPOW: ${totalPowCounter} | Hash rate: ${hashRate} H/s`);
 
-            const senssionElapsedTime = Date.now() - sessionStart;
-            const avgSuccessTime = senssionElapsedTime / success;
-            const newDiff = mining.difficultyAdjustment({ index: success, difficulty: finalDifficulty }, avgSuccessTime);
+            const avgSuccessTime = sessionElapsedTime / success;
+            const newDiff = mining.difficultyAdjustment({ index: success + 20, difficulty: finalDifficulty }, avgSuccessTime);
             if (finalDifficulty === newDiff) continue; // no adjustment needed
 
-            console.log(`New difficulty: ${newDiff} | Avg success time: ${avgSuccessTime.toFixed(2)}ms`);
+            console.log(`New difficulty: ${newDiff} | Avg success time: ${(avgSuccessTime*.001).toFixed(3)}s`);
             finalDifficulty = newDiff;
             powCounter = 0;
             success = 0;

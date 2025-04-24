@@ -123,11 +123,10 @@ button {
 #cbe-roundLegitimaciesChart .cursor-crosshair {
     cursor: initial !important;
 }
-/*#legitimaciesVssWrap {
-    margin-top: 60px;
-    padding-top: 20px;
-    border-top: solid 1px var(--color1_1);
-}*/
+.cbe-chart {
+    filter: invert(var(--dark-mode-boolean));
+    transition: filter .2s;
+}
 
 #cbe-contrastBlocksWidget {
     position: relative;

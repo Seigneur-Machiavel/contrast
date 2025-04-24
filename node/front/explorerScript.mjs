@@ -26,8 +26,7 @@ import { Transaction_Builder, utxoExtraction } from '../src/transaction.mjs';
 * @typedef {Object<string, StakeReference | undefined>} Spectrum
 */
 
-/** @type {BlockExplorerWidget} */
-let blockExplorerWidget;
+const isIFrame = window.parent && window !== window.parent;
 let pageFocused = true;
 document.addEventListener("visibilitychange", function() { pageFocused = document.visibilityState === 'visible'; });
 /** @type {WebSocket} */
@@ -382,11 +381,7 @@ export class BlockExplorerWidget {
             },
             'cbe-blockHash': (event) => {
                 const blockHash = event.target.textContent;
-                navigator.clipboard.writeText(blockHash).then(() => {
-                    console.log('Block hash copied to clipboard:', blockHash);
-                }).catch((error) => {
-                    console.error('Block hash copy error:', error);
-                });
+                copyClipboardOrPostMessageToParent(blockHash);
             },
             'cbe-addressSpan': (event) => {
                 const address = event.target.textContent;
@@ -1382,11 +1377,17 @@ function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-blockHas
     return spacedTextDiv;
 }
 /** @param {Object<number, number>} */
-async function displayBlocksTimestampsChart(blocksTimestamps = {}) {
+async function displayBlocksTimestampsChart(blocksTimestamps = {}, dtick = 60) {
     const chart = eHTML.cacheBlocksTimesChart;
     if (!chart) return;
     
-    console.log('blocksTimestamps', blocksTimestamps);
+    //console.log('blocksTimestamps', blocksTimestamps);
+
+    // TEST WITH BITCOIN BLOCKS
+    /*const timestamps = [1745469466, 1745469278, 1745468167, 1745467923, 1745467220, 1745467052, 1745466670, 1745465703, 1745465663, 1745465211, 1745465164, 1745464731, 1745464034, 1745463799, 1745463577, 1745463098, 1745461405, 1745460032, 1745459096, 1745458838, 1745458789, 1745458327, 1745457777, 1745457142, 1745456297, 1745455739, 1745455097, 1745455074, 1745455059, 1745454872, 1745453257, 1745453199, 1745452935, 1745451271, 1745449675, 1745448888, 1745447951, 1745447788, 1745446962, 1745445807, 1745445526, 1745444934, 1745443425, 1745441844, 1745441598, 1745441322, 1745441131, 1745440590, 1745440077, 1745440024, 1745439344, 1745437974, 1745436834, 1745435873, 1745433504, 1745432362, 1745431813, 1745431605, 1745430922, 1745430509, 1745430036, 1745429214, 1745428164, 1745427719, 1745427168, 1745426853, 1745426438, 1745425085, 1745424888, 1745423583, 1745422741, 1745422472, 1745421288, 1745421123, 1745420647, 1745420027, 1745419375, 1745418200, 1745416889, 1745416282, 1745416193, 1745416137, 1745416004, 1745415843, 1745414936, 1745413226, 1745413126, 1745411323, 1745410884, 1745409928, 1745409370, 1745408794, 1745406396, 1745406249, 1745406001, 1745405707, 1745404715, 1745403930, 1745403604, 1745402626];
+    const x = timestamps.map((_, i) => i);
+    const y = timestamps.map((_, i) => i === 0 ? 0 : (Math.abs(timestamps[i] - timestamps[i - 1])));*/
+
     // use plotly to create the chart
     // x axis: block height, y axis: time between blocks
     const x = Object.keys(blocksTimestamps).map((key) => parseInt(key));
@@ -1394,7 +1395,7 @@ async function displayBlocksTimestampsChart(blocksTimestamps = {}) {
     const y = timestamps.map((_, i) => i === 0 ? 0 : (timestamps[i] - timestamps[i - 1]) / 1000); // convert to seconds
     x.shift();
     y.shift();
-    console.log('timestamps', timestamps, 'x', x, 'y', y);
+    //console.log('timestamps', timestamps, 'x', x, 'y', y);
 
     const averageGap = y.reduce((a, b) => a + b, 0) / y.length;
     eHTML.averageBlocksTimeGap.textContent = ` | average: ${averageGap.toFixed(2)}s`;
@@ -1436,7 +1437,7 @@ async function displayBlocksTimestampsChart(blocksTimestamps = {}) {
             tickangle: -45,
             fixedrange: true
         },
-        yaxis: { title: 'Time (s)', dtick: 60, tickmode: 'linear', range: [0, Math.max(...y) + 60], fixedrange: true },
+        yaxis: { title: 'Time (s)', dtick: dtick, tickmode: 'linear', range: [0, Math.max(...y) + dtick], fixedrange: true },
         showlegend: false,
         margin: { t: 20, b: 40, l: 40, r: 0 },
         height: 300,
@@ -1481,7 +1482,7 @@ function displayVssChart(spectrum, minColor = 255) {
     if (!chart) return;
 
     const { sortedSpectrum, biggestStake } = mergeAndSortVssSpectrum(spectrum, 10);
-    console.log('sortedSpectrum', sortedSpectrum);
+    //console.log('sortedSpectrum', sortedSpectrum);
 
     // Pie Charts
     const values = Object.values(sortedSpectrum);
@@ -1531,11 +1532,7 @@ function displayVssChart(spectrum, minColor = 255) {
         chart.on('plotly_click', function(data){
             const point = data.points[0];
             const clickedAddress = point.label;
-            navigator.clipboard.writeText(clickedAddress).then(() => {
-                console.log('Address copied to clipboard:', clickedAddress);
-            }).catch((err) => { 
-                console.error('Failed to copy address: ', err);
-            });
+            copyClipboardOrPostMessageToParent(clickedAddress);
         });
     });
 }
@@ -1585,11 +1582,7 @@ function displayRoundLegitimaciesChart(roundLegitimacies = {}, max = 10, minColo
         chart.on('plotly_click', function(data){
             const point = data.points[0];
             const clickedAddress = point.label;
-            navigator.clipboard.writeText(clickedAddress).then(() => {
-                console.log('Address copied to clipboard:', clickedAddress);
-            }).catch((err) => { 
-                console.error('Failed to copy address: ', err);
-            });
+            copyClipboardOrPostMessageToParent(clickedAddress);
         });
     });
 }
@@ -1605,7 +1598,7 @@ async function displayBiggestsHoldersBalancesChart(biggestsHoldersBalances, minC
     const biggestBalance = biggestsHoldersBalances[0].balance;
     biggestsHoldersBalances.reverse();
     const circulatingSupply = window.blockExplorerWidget?.lastCirculatingSupply || 0;
-    console.log('circulatingSupply', circulatingSupply);
+    //console.log('circulatingSupply', circulatingSupply);
     const x = biggestsHoldersBalances.map((holder) => holder.balance);
     const y = biggestsHoldersBalances.map((holder) => holder.address);
     const texts = biggestsHoldersBalances.map((holder) =>
@@ -1646,13 +1639,24 @@ async function displayBiggestsHoldersBalancesChart(biggestsHoldersBalances, minC
         chart.on('plotly_click', function(data){
             const point = data.points[0];
             const clickedAddress = point.label;
-            navigator.clipboard.writeText(clickedAddress).then(() => {
-                console.log('Address copied to clipboard:', clickedAddress);
-            }).catch((err) => { 
-                console.error('Failed to copy address: ', err);
-            });
+            copyClipboardOrPostMessageToParent(clickedAddress);
         });
     });
+}
+//#endregion --------------------------------------------------------------
+//#region CONTRAST APP FUNCTIONS ----------------------------------
+const validParentOrigins = [`https://www.contrast.science`, `http://pinkparrot.science:4321`, `http://localhost:4321`, 'file://'];
+function copyClipboardOrPostMessageToParent(value) {
+	if (!isIFrame) {
+		navigator.clipboard.writeText(value).then(() => {
+			console.log('Copied to clipboard:', value);
+		}).catch(err => {
+			console.error('Failed to copy: ', err);
+		});
+	} else {
+		for (const origin of validParentOrigins)
+			window.parent.postMessage({ type: 'copy_text', value }, origin);
+	}
 }
 //#endregion --------------------------------------------------------------
 
