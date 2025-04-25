@@ -146,6 +146,10 @@ h3 {
     color: var(--color2_3);
 }
 
+#minerThreadsIncrementalInput input {
+    width: 60px;
+}
+
 .spacedText {
     display: flex;
     justify-content: space-between;

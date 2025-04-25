@@ -91,7 +91,7 @@ const appsConfig = {
 		disableOnLock: true,
 		minWidth: 420,
 		minHeight: 300,
-		initHeight: 540,
+		initHeight: 610,
 		initTop: 0,
 		iconWidth: '69%',
 		title: '~~ DASHBOARD ___\\',

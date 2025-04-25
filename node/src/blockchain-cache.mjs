@@ -1,4 +1,5 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 /**
 * @typedef {import("./block-classes.mjs").BlockData} BlockData
@@ -75,5 +76,18 @@ export class BlocksCache {
 
         this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
         return { from: fromHeight, to: erasedUntil };
+    }
+    getAverageBlocksFinalDifficulty() {
+        const blocks = [...this.blocksByHash.values()];
+        if (blocks.length === 0) return null;
+
+        const finalDiffs = [];
+        for (const block of blocks) {
+            const adj = MINING_PARAMS.diffAdjustPerLegitimacy * block.legitimacy;
+            finalDiffs.push(block.difficulty + adj);
+        }
+
+        const average = finalDiffs.reduce((a, b) => a + b, 0) / finalDiffs.length;
+        return average;
     }
 }

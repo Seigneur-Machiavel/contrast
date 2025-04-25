@@ -33,7 +33,13 @@ export const MINING_PARAMS = {
     initialDifficulty: 27,
     blocksBeforeAdjustment: 30, // ~120sec * 30 = ~3600 sec = ~1 hour
     thresholdPerDiffIncrement: 3.2, // meaning 3.2% threshold for 1 diff point
-    maxDiffIncrementPerAdjustment: 32, // 32 diff points = 100% of diff
-    diffAdjustPerLegitimacy: 16, // 16 diff points = 50% of diff
+    maxDiffIncrementPerAdjustment: 32, // 32 diff points = 200% of diff
+    diffAdjustPerLegitimacy: 16, // 16 diff points = 100% of diff
     maxTimeDifferenceAdjustment: 128, // in difficutly points, affect max penality, but max bonus is infinite
+    
+    
+    // HARDCODE VALUES, USED FOR REFERENCE ONLY
+    doubleDiffPoints: 16, // 16 diff points = 100% of diff
+    oneHsDiffBasis: 112, // 1 Hash/s = 112 difficulty points
+    blocksPerDay: 60 * 60 * 24 / (BLOCKCHAIN_SETTINGS.targetBlockTime * .001) // 720 blocks per day at 120s per block
 };

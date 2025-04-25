@@ -209,7 +209,7 @@ export class Node {
     }
 
     // BLOCK CANDIDATE CREATION ---------------------------------------------------------
-    #calculateAverageBlockTimeAndDifficulty() {
+    calculateAverageBlockTimeAndDifficulty() {
         const lastBlock = this.blockchain.lastBlock;
         if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
         
@@ -238,7 +238,7 @@ export class Node {
             }
             if (myLegitimacy > maxLegitimacyToBroadcast) { return null; }
 
-            const { averageBlockTime, newDifficulty } = this.#calculateAverageBlockTimeAndDifficulty();
+            const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty();
             this.blockchainStats.averageBlockTime = averageBlockTime;
             const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
             const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
@@ -421,7 +421,7 @@ export class Node {
         timer.endPhase('legitimacy');
 
         timer.startPhase('difficulty-check');
-        const { averageBlockTime, newDifficulty } = this.#calculateAverageBlockTimeAndDifficulty();
+        const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty();
         if (finalizedBlock.difficulty !== newDifficulty) throw new Error(`!banBlock! !applyOffense! Invalid difficulty: ${finalizedBlock.difficulty} - expected: ${newDifficulty}`);
         const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
         if (!hashConfInfo.conform) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (difficulty): ${finalizedBlock.hash} -> ${hashConfInfo.message}`);

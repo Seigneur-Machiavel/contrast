@@ -13,6 +13,9 @@ import { Wallet } from './wallet.mjs';
 import { Node } from './node.mjs';
 import { CallBackManager } from './websocketCallback.mjs';
 import { EasyUpnp } from '../../utils/easy-upnp.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
+import { convert } from '../../utils/converters.mjs';
 
 /**
 * @typedef {import("./wallet.mjs").Account} Account
@@ -43,6 +46,22 @@ APPS_VARS.__contrastDir = path.dirname(APPS_VARS.__nodeDir);
 console.log(APPS_VARS);*/
 
 class AppStaticFncs {
+    /** @param {Node} node */
+    static estimateDailyMiningReward(coinBase = 10, globalHashrate = 1, myHashrate = 1) {
+        if (typeof globalHashrate !== 'number' || typeof myHashrate !== 'number') return 0;
+        if (globalHashrate <= 0 || myHashrate <= 0) return 0;
+        if (globalHashrate === 1) return 0; // no mining possible
+        if (myHashrate > globalHashrate) return 0; // no mining possible
+
+        // half coinbase for the miner (other half for the validator)
+        const totalMiningDailyReward = (coinBase / 2) * MINING_PARAMS.blocksPerDay; // 720 blocks per day at 120s per block
+        const myHashratePercentage = myHashrate / globalHashrate;
+        const estReward = Math.round(totalMiningDailyReward * myHashratePercentage); // in micro-Contrast
+
+        const estRewardStr = convert.formatNumberAsCurrency(estReward);
+        //console.log(estRewardStr);
+        return estRewardStr;
+    }
     /** @param {Node} node */
     static extractPrivateNodeInfo(node) {
         if (!node) { return { error: 'No active node' }; }
@@ -75,6 +94,11 @@ class AppStaticFncs {
             result.bestCandidateLegitimacy = node.miner.bestCandidateLegitimacy();
             result.minerHashRate = node.miner.hashRate;
             result.minerThreads = node.miner.nbOfWorkers;
+
+            const avgFinalDiff = node.blockchain.cache.getAverageBlocksFinalDifficulty();
+            result.globalHashRate = mining.estimateGlobalHashrate(avgFinalDiff);
+            result.coinBase = node.blockchain.lastBlock.coinBase;
+            result.miningDailyReward = AppStaticFncs.estimateDailyMiningReward(result.coinBase, result.globalHashRate, result.minerHashRate);
         }
         result.peersConnected = node.p2pNetwork?.getConnectedPeers().length ?? "Not Connected";
 

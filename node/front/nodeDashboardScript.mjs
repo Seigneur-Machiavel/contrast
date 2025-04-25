@@ -163,7 +163,9 @@ const eHTML = {
     minerHeight: document.getElementById('minerHeight'),
     minerLegitimacy: document.getElementById('minerLegitimacy'),
     minerBalance: document.getElementById('minerBalance'),
+    globalHashRate: document.getElementById('globalHashRate'),
     hashRate: document.getElementById('hashRate'),
+    miningDailyReward: document.getElementById('miningDailyReward'),
 
     minerThreads: {
         wrap: document.getElementById('minerThreadsIncrementalInput'),
@@ -224,7 +226,9 @@ function displayNodeInfo(data) {
     eHTML.minerBalance.textContent = convert.formatNumberAsCurrency(minerBalance);
     eHTML.minerHeight.textContent = data.bestCandidateIndex || 0;
     eHTML.minerLegitimacy.textContent = `Legitimacy: ${data.bestCandidateLegitimacy || 0}`;
+    eHTML.globalHashRate.textContent = data.globalHashRate ? data.globalHashRate.toFixed(2) : 0;
     eHTML.hashRate.textContent = data.minerHashRate ? data.minerHashRate.toFixed(2) : 0;
+    eHTML.miningDailyReward.textContent = data.miningDailyReward || 'na';
     eHTML.minerThreads.input.value = data.minerThreads ? data.minerThreads : 0;
     updateMinerThreadsDisabledButtons();
 

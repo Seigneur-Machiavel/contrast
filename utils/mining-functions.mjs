@@ -127,5 +127,23 @@ export const mining = {
 
         if (result.message === 'na') { result.conform = true; result.message = 'lucky'; }
         return result;
+    },
+    estimateGlobalHashrate: (avgFinalDiff = 130) => {
+        if (typeof avgFinalDiff !== 'number') return 1;
+        if (avgFinalDiff < 1) return 1;
+
+        const base1HsDiff = MINING_PARAMS.oneHsDiffBasis; // Difficulty for 1H/s: 112
+        const exceedingDiff = avgFinalDiff - base1HsDiff; // 130 - 112 = 16
+        if (exceedingDiff <= 0) return 1; // 1H/s
+
+        const doubleHashDiffIncrement = MINING_PARAMS.doubleDiffPoints; // 16
+        const exp = Math.floor(exceedingDiff / doubleHashDiffIncrement); // 18 / 16 = 1
+        const rem = exceedingDiff % doubleHashDiffIncrement; // 18 % 16 = 2
+        const percentPerPoint = 1 / MINING_PARAMS.doubleDiffPoints; // 1 / 16 = 0.0625
+        
+        let totalHashrate = 1 * Math.pow(2, exp); // 1 * 2^1 = 2H/s
+        totalHashrate *= 1 + (rem * percentPerPoint); // 2 * (1 + 0.125 = 1.125) = 2.25H/s
+
+        return totalHashrate; // 2.25H/s
     }
 };
