@@ -13,9 +13,13 @@ const nodePort = workerData.nodePort || 27260;
 const dashboardPort = workerData.dashboardPort || 27271;
 const observerPort = workerData.observerPort || 27270;
 const forceRelay = workerData.forceRelay || false;
-const cryptoLight = new CryptoLight();
-cryptoLight.argon2Hash = argon2Hash;
-const dashApp = new DashboardWsApp(undefined, cryptoLight, nodePort, dashboardPort, false);
+const cryptolights = {
+    v0: new CryptoLight(argon2Hash), // old version for backward compatibility
+    finger: new CryptoLight(argon2Hash), // fingerPrint based encryptiuon, software usage
+    pass: new CryptoLight(argon2Hash) // password based encryption, user usage
+}
+const loadCryptoLight = cryptolights.v0;
+const dashApp = new DashboardWsApp(undefined, loadCryptoLight, nodePort, dashboardPort, false);
 
 monitorPerformance(); // Detect potential freeze
 const stressTester = new StressTester(dashApp.node);
@@ -23,6 +27,11 @@ const fingerPrint = nodeMachineId.machineIdSync();
 let passwordExist = Storage.isFileExist('passHash.bin');
 let initializingNode = false;
 let nodeInitialized = false;
+
+const fingerPrintUint8 = new Uint8Array(Buffer.from(fingerPrint, 'hex'));
+cryptolights.finger.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8);
+cryptolights.finger.generateKey(fingerPrint); // async ...
+dashApp.cryptoFinger = cryptolights.finger; // upgrade v2
 
 // FUNCTIONS
 async function initDashAppAndSaveSettings(privateKey = '') {
@@ -43,11 +52,12 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     
     parentPort.postMessage({ type: 'node_started', data: dashApp.extractNodeSetting().privateKey });
     dashApp.saveNodeSettingBinary();
+    dashApp.saveNodeSettingBinary_v2();
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
 }
 async function setPassword(password = 'toto') {
     const passwordStr = password === 'fingerPrint' ? fingerPrint.slice(0, 30) : password;
-    const passHash = await cryptoLight.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
+    const passHash = await loadCryptoLight.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
     if (!passHash) { console.error('Argon2 hash failed'); return false; }
 
     if (!passwordExist) {
@@ -66,13 +76,12 @@ async function setPassword(password = 'toto') {
         console.info('Existing password hash match');
     }
 
-    if (cryptoLight.isReady()) return true;
+    if (loadCryptoLight.isReady()) return true;
 
     const concatenated = fingerPrint + passwordStr;
-    const fingerPrintUint8 = new Uint8Array(Buffer.from(fingerPrint, 'hex'));
-    cryptoLight.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8)
-    await cryptoLight.generateKey(concatenated);
-    console.info('cryptoLight Key Derived');
+    loadCryptoLight.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8);
+    await loadCryptoLight.generateKey(concatenated);
+
     return true;
 }
 async function connexionResumePostLoop() {
@@ -139,21 +148,22 @@ parentPort.on('message', async (message) => {
             parentPort.postMessage({ type: 'new_address_generated', data: newAddress });
             break;
         case 'cypher_text':
-            if (!cryptoLight.isReady()) return false;
+            if (!loadCryptoLight.isReady()) return false;
             if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
-            const cipherText = await cryptoLight.encryptText(message.data, undefined, true);
+            const cipherText = await loadCryptoLight.encryptText(message.data, undefined, true);
             if (!cipherText) { console.error('Cypher text failed'); return; }
             parentPort.postMessage({ type: 'cypher_text_result', data: cipherText });
             break;
         case 'decipher_text':
-            if (!cryptoLight.isReady()) return false;
+            if (!loadCryptoLight.isReady()) return false;
             if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
-            const decipherText = await cryptoLight.decryptText(message.data, undefined);
+            const decipherText = await loadCryptoLight.decryptText(message.data, undefined);
             if (!decipherText) { console.error('Decipher text failed'); return; }
             parentPort.postMessage({ type: 'decipher_text_result', data: decipherText });
             break;
         case 'stress_test':
-            
+            console.info('Stress test fnc not enabled yet');
+            break;
         default:
             console.error('Unknown message type:', message.type);
     }

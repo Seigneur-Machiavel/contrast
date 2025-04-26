@@ -60,6 +60,7 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     
     parentPort.postMessage({ type: 'node_started', data: dashApp.extractNodeSetting().privateKey });
     dashApp.saveNodeSettingBinary();
+    dashApp.saveNodeSettingBinary_v2();
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
 }
 async function setPassword(password = 'toto') {

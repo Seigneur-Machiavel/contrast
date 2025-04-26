@@ -69,10 +69,10 @@ ipcRenderer.on('node-started', (event, ...args) => {
 	assistant.sendMessage('We are connected baby!');
 	setTimeout(() => assistant.idleMenu(), 1000);
 	setTimeout(() => appsManager.toggleAppWindow('assistant'), 2000);
-	setTimeout(() => appsManager.unlock(), 3000);
-	setTimeout(() => appsManager.toggleAppWindow('dashboard'), 4000);
-	setTimeout(() => appsManager.toggleAppWindow('explorer'), 6000);
-	//setTimeout(() => appsManager.toggleAppWindow('wallet'), 4000);
+	setTimeout(() => appsManager.unlock(), 2400);
+	setTimeout(() => appsManager.toggleAppWindow('dashboard'), 3200);
+	//setTimeout(() => appsManager.toggleAppWindow('explorer'), 8000);
+	//setTimeout(() => appsManager.toggleAppWindow('wallet'), 10000);
 });
 ipcRenderer.on('connexion-resume', (event, ...args) => {
 	const resumeElement = document.getElementById('connexion-resume');

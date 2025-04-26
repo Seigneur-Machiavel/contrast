@@ -29,6 +29,12 @@ export class CryptoLight {
     #iv1 = null;
     /** @type {Uint8Array} */
     #salt1 = null;
+
+    /** @param {argon2HashFunction} [argon2Hash] */
+    constructor(argon2Hash) {
+        this.argon2Hash = argon2Hash;
+    }
+    
     clear() {
         this.#key = null;
         this.#iv = null;

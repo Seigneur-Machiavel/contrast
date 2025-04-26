@@ -77,12 +77,19 @@ class Assistant {
         this.isFirstMessage = false;
 
         const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message');
+        messageDiv.classList.add('board-message');
         messageDiv.classList.add(sender);
 
         const needObfuscate = sender === 'user' && this.eHTML.input.type === 'password';
         messageDiv.textContent = needObfuscate ? this.#obfuscateString(message) : message;
         this.eHTML.messagesContainer.appendChild(messageDiv);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.classList.add('board-delete-btn');
+        deleteBtn.textContent = 'X';
+        deleteBtn.addEventListener('click', () => messageDiv.remove());
+        messageDiv.appendChild(deleteBtn);
+
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
 
         if (sender === 'system') return;

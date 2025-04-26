@@ -21,7 +21,7 @@
     align-items: flex-start;
     height: -webkit-fill-available;
 }
-#board-messages-container .message {
+.board-message {
     user-select: text;
     pointer-events: all;
     margin: 5px 40px 5px 10px;
@@ -32,7 +32,27 @@
     transform-origin: left;
     animation: messageAppear .2s forwards;
 }
-#board-messages-container .message.user {
+.board-message .board-delete-btn {
+    position: absolute;
+    z-index: -1;
+    border-radius: 50%;
+    top: 0px;
+    right: 0px;
+    opacity: 0;
+    transform: translate(0%, 0%);
+    transition: transform .12s, opacity .12s;
+    background-color: var(--color1_1);
+    color: var(--color2);
+}
+.board-message:hover .board-delete-btn, .board-delete-btn:hover {
+    opacity: 1;
+    transform: translate(40%, -40%);
+}
+.board-delete-btn:hover {
+    background-color: var(--color2);
+    color: var(--color1);
+}
+.board-message.user {
     margin: 5px 10px 5px 40px;
     align-self: flex-end;
     color: var(--color1);
@@ -40,7 +60,7 @@
     transform-origin: right;
     animation: messageAppear .2s forwards;
 }
-/*#board-messages-container .message.wordslist {
+/*.board-message.wordslist {
     display: flex;
     width: fit-content;
     gap: 5px;

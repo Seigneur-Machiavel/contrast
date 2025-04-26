@@ -149,6 +149,9 @@ export class DashboardWsApp {
     stopped = false;
     waitingForPrivKey = false;
     portMapped;
+    /** @type {CryptoLight} */
+    cryptoFinger = null;
+
     /** @param {Node} node @param {CryptoLight} cryptoLight */
     constructor(node, cryptoLight, nodePort = 27260, dashboardPort = 27271, autoInit = true) {
         this.miniLogger = new MiniLogger('dashboard');
@@ -173,7 +176,11 @@ export class DashboardWsApp {
     }
     async init(privateKey, forceRelay) {
         // NODE CLIENT INIT
-        await this.loadNodeSettingBinary();// UPDATED TO NEW VERSION WITH ENCRYPTION
+
+        // load the new version of the node settings
+        const nodeSettingsLoadedAsV2 = await this.loadNodeSettingBinary_v2();
+        // or fallback to the old version if not loaded as v2
+        if (!nodeSettingsLoadedAsV2) await this.loadNodeSettingBinary();// UPDATED TO NEW VERSION WITH ENCRYPTION
 
         if (privateKey) this.waitingForPrivKey = false; // prevent waiting for priv key if provided even if node is not active
 
@@ -328,6 +335,7 @@ export class DashboardWsApp {
             case 'set_private_key':
                 await this.init(data);
                 await this.saveNodeSettingBinary();
+                await this.saveNodeSettingBinary_v2();
                 break;
             case 'update_git':
                 this.miniLogger.log(`update_git disabled`, (m) => { console.log(m); });
@@ -343,6 +351,7 @@ export class DashboardWsApp {
 
                     this.#injectNodeSettings(this.node.id);
                     await this.saveNodeSettingBinary();
+                    await this.saveNodeSettingBinary_v2();
                 } catch (error) {
                     console.error(`Error setting validator address: ${data}, not conform`);
                 }
@@ -355,6 +364,7 @@ export class DashboardWsApp {
                     this.#nodeSetting.minerAddress = data;
                     this.#injectNodeSettings(this.node.id);
                     await this.saveNodeSettingBinary();
+                    await this.saveNodeSettingBinary_v2();
                 } catch (error) {
                     console.error(`Error setting miner address: ${data}, not conform`);
                 }
@@ -377,6 +387,7 @@ export class DashboardWsApp {
                 this.#nodeSetting.minerThreads = Number(data);
                 this.#injectNodeSettings(this.node.id);
                 await this.saveNodeSettingBinary();
+                await this.saveNodeSettingBinary_v2();
                 break;
             case 'new_unsigned_transaction':
                 console.log(`DISABLED new_unsigned_transaction`, (m) => { console.log(m); });
@@ -443,6 +454,31 @@ export class DashboardWsApp {
         if (!this.#isNodeSettingValide(nodeSetting)) { console.error('Invalid nodeSetting'); return; }
 
         this.#nodeSetting = nodeSetting;
+    }
+    async loadNodeSettingBinary_v2() {
+        const encrypted = Storage.loadBinary('nodeSetting_v2');
+        if (!encrypted) { console.log('No nodeSetting found'); return; }
+        if (!this.cryptoFinger.isReady()) { console.error('cryptoFinger not ready'); return; }
+        
+        const serialized = await this.cryptoFinger.decryptText(encrypted, false, true);
+        if (serialized.length !== 65) { console.error('Invalid nodeSetting length'); return; }
+
+        const nodeSetting = serializer.deserialize.nodeSetting(serialized);
+        if (!this.#isNodeSettingValide(nodeSetting)) { console.error('Invalid nodeSetting'); return; }
+
+        this.#nodeSetting = nodeSetting;
+    }
+    async saveNodeSettingBinary_v2() {
+        /** @type {NodeSetting} */
+        const nodeSetting = this.#nodeSetting;
+        if (!this.#isNodeSettingValide(nodeSetting)) { console.error('Invalid nodeSetting'); return; }
+
+        const serialized = serializer.serialize.nodeSetting(nodeSetting);
+        if (!this.cryptoFinger.isReady()) { console.error('cryptoFinger not ready'); return; }
+
+        /** @type {Uint8Array} */
+        const encrypted = await this.cryptoFinger.encryptText(serialized, undefined, false);
+        Storage.saveBinary('nodeSetting_v2', encrypted);
     }
     /** @param {NodeSetting} nodeSetting */
     #isNodeSettingValide(nodeSetting) {
