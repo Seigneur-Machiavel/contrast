@@ -83,7 +83,7 @@ export class BlocksCache {
 
         const finalDiffs = [];
         for (const block of blocks) {
-            const adj = MINING_PARAMS.diffAdjustPerLegitimacy * block.legitimacy;
+            const adj = block.legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
             finalDiffs.push(block.difficulty + adj);
         }
 

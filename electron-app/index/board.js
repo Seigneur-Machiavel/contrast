@@ -71,7 +71,7 @@ ipcRenderer.on('node-started', (event, ...args) => {
 	setTimeout(() => appsManager.toggleAppWindow('assistant'), 2000);
 	setTimeout(() => appsManager.unlock(), 3000);
 	setTimeout(() => appsManager.toggleAppWindow('dashboard'), 4000);
-	setTimeout(() => appsManager.toggleAppWindow('explorer'), 5000);
+	setTimeout(() => appsManager.toggleAppWindow('explorer'), 6000);
 	//setTimeout(() => appsManager.toggleAppWindow('wallet'), 4000);
 });
 ipcRenderer.on('connexion-resume', (event, ...args) => {

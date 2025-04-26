@@ -14,7 +14,7 @@ const WS_SETTINGS = {
     DOMAIN: window.location.hostname,
     PORT: window.location.port,
     RECONNECT_INTERVAL: 5000,
-    GET_NODE_INFO_INTERVAL: 2000,
+    GET_NODE_INFO_INTERVAL: 5000,
 }
 
 let nodeId;
@@ -114,8 +114,8 @@ function connectWS() {
 
 (async() => {
     while (true) {
-        await new Promise((resolve) => { setTimeout(() => { resolve(); }, WS_SETTINGS.GET_NODE_INFO_INTERVAL); });
-        if (!ws || ws.readyState !== 1) { continue; }
+        await new Promise((resolve) => { setTimeout(() => resolve(), WS_SETTINGS.GET_NODE_INFO_INTERVAL); });
+        if (!ws || ws.readyState !== 1) continue;
         try { ws.send(JSON.stringify({ type: 'get_node_info', data: Date.now() })) } catch (error) {};
     }
 })(); // INIT ANONYMOUS FUNCTION -> await ws then send "get_node_info"

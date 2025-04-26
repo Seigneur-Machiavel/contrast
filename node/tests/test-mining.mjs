@@ -1,18 +1,19 @@
 import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from '../src/conCrypto.mjs';
 import { conditionnals } from '../../utils/conditionnals.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 const testStart = Date.now();
-//let finalDifficulty = 115 - 32;
-let finalDifficulty = 64;
+let baseDifficulty = 61;
 let totalPowCounter = 0;
 let totalSuccess = 0;
 
 let sessionStart = Date.now();
 let powCounter = 0;
+let posTimestamp = 0;
 let success = 0;
 const limitHashPerSecond = 1; // limit to 1H/s for testing (doesn't affect simulation's hasrate)
-const hashPerSecond = 32; // SIMULATION, set false for real mining
+const hashPerSecond = 16; // SIMULATION, set false for real mining
 
 /** @param {string} signatureHex @param {string} nonce */
 async function mineBlock(signatureHex, nonce) {
@@ -51,8 +52,9 @@ class hashrateCalculator {
         if (this.hashCount >= 50) this.reset();
     }
 }
-function verify(HashBitsAsString = 'toto') {
-    const { zeros, adjust } = mining.decomposeDifficulty(finalDifficulty);
+function verify(HashBitsAsString = 'toto', timeDiffAdjustment = 0) {
+    const FD = Math.max(baseDifficulty + timeDiffAdjustment, 1); // cap at 1 minimum
+    const { zeros, adjust } = mining.decomposeDifficulty(FD);
 
     const condition1 = conditionnals.binaryStringStartsWithZeros(HashBitsAsString, zeros);
     if (!condition1) return false;
@@ -115,9 +117,14 @@ async function mineBlockUntilValid(hps = false) {
             powCounter++;
             totalPowCounter++;
             
-            const conform = verify(bitsArrayAsString);
+            const differenceRatio = (Date.now() - posTimestamp) / BLOCKCHAIN_SETTINGS.targetBlockTime;
+
+            const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
+            const conform = verify(bitsArrayAsString, timeDiffAdjustment);
+            //const conform = verify(bitsArrayAsString, 0);
             if (!conform) continue;
 
+            posTimestamp = Date.now();
             success++;
             totalSuccess++;
             const sessionElapsedTime = Date.now() - sessionStart;
@@ -125,11 +132,11 @@ async function mineBlockUntilValid(hps = false) {
             //console.log(`totalSuccess: ${totalSuccess} | totalPOW: ${totalPowCounter} | Hash rate: ${hashRate} H/s`);
 
             const avgSuccessTime = sessionElapsedTime / success;
-            const newDiff = mining.difficultyAdjustment({ index: success, difficulty: finalDifficulty }, avgSuccessTime);
-            if (finalDifficulty === newDiff) continue; // no adjustment needed
+            const newDiff = mining.difficultyAdjustment({ index: success, difficulty: baseDifficulty }, avgSuccessTime);
+            if (baseDifficulty === newDiff) continue; // no adjustment needed
 
-            console.log(`New difficulty: ${newDiff} | Avg success time: ${(avgSuccessTime*.001).toFixed(3)}s | Hash rate: ${hashRate} H/s`);
-            finalDifficulty = newDiff;
+            console.log(`New difficulty: ${newDiff} | Avg success time: ${(avgSuccessTime*.001).toFixed(3)}s | Hash rate: ${hashRate} H/s | tS/tPow: ${totalSuccess}/${totalPowCounter}`);
+            baseDifficulty = newDiff;
             powCounter = 0;
             success = 0;
             sessionStart = Date.now();
@@ -139,4 +146,5 @@ async function mineBlockUntilValid(hps = false) {
     }
 }
 
+posTimestamp = Date.now();
 mineBlockUntilValid(hashPerSecond);

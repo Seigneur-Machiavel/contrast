@@ -91,8 +91,8 @@ export const mining = {
         const { difficulty, legitimacy, posTimestamp, timestamp } = blockData;
         const powTimestamp = timestamp || posTimestamp + BLOCKCHAIN_SETTINGS.targetBlockTime;
 
-        if (!typeValidation.numberIsPositiveInteger(posTimestamp)) { throw new Error('Invalid posTimestamp'); }
-        if (!typeValidation.numberIsPositiveInteger(powTimestamp)) { throw new Error('Invalid timestamp'); }
+        if (!typeValidation.numberIsPositiveInteger(posTimestamp)) throw new Error('Invalid posTimestamp');
+        if (!typeValidation.numberIsPositiveInteger(powTimestamp)) throw new Error('Invalid timestamp');
 
         const differenceRatio = (powTimestamp - posTimestamp) / BLOCKCHAIN_SETTINGS.targetBlockTime;
         const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);

@@ -75,10 +75,10 @@ class AppStaticFncs {
             result.validatorAddress = node.account.address;
             result.validatorRewardAddress = node.validatorRewardAddress;
             result.validatorBalance = balance;
-            result.validatorUTXOs = UTXOs;
+            result.validatorUTXOs = UTXOs; //? Repeated ?
             result.validatorSpendableBalance = spendableBalance;
             result.validatorStakes = node.vss.getAddressStakesInfo(node.account.address);
-            result.validatorUtxos = node.account.UTXOs;
+            result.validatorUtxos = node.account.UTXOs; //? Repeated ?
             result.currentHeight = node.blockchain.currentHeight;
         }
 
