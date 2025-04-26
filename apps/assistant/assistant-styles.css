@@ -52,25 +52,34 @@
     background-color: var(--color2);
     color: var(--color1);
 }
+
 .board-message.user {
     margin: 5px 10px 5px 40px;
     align-self: flex-end;
-    color: var(--color1);
+    color: var(--color1_1);
     background-color: var(--color2);
     transform-origin: right;
     animation: messageAppear .2s forwards;
+}
+.board-message.user .board-delete-btn {
+    background-color: var(--color2);
+    color: var(--color1_1);
+}
+.board-message.user .board-delete-btn:hover {
+    background-color: var(--color1_1);
+    color: var(--color2);
 }
 /*.board-message.wordslist {
     display: flex;
     width: fit-content;
     gap: 5px;
 }*/ /* looks useless */
-.wordslist-row {
+.board-wordslist-row {
     display: flex;
     width: 400px;
     justify-content: space-around;
 }
-.wordslist-word {
+.board-wordslist-word {
     width: 180px;
 }
 @keyframes messageAppear {

@@ -72,6 +72,13 @@ class Assistant {
     #obfuscateString(string = '') {
         return string.replace(/./g, '•');
     }
+    #addMesasgeDeleteBtn(messageDiv) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.classList.add('board-delete-btn');
+        deleteBtn.textContent = 'X';
+        deleteBtn.addEventListener('click', () => messageDiv.remove());
+        messageDiv.appendChild(deleteBtn);
+    }
     async sendMessage(message, sender = 'system') {
         if (sender === 'system' && !this.isFirstMessage) { await new Promise(resolve => setTimeout(resolve, 600)); }
         this.isFirstMessage = false;
@@ -82,14 +89,9 @@ class Assistant {
 
         const needObfuscate = sender === 'user' && this.eHTML.input.type === 'password';
         messageDiv.textContent = needObfuscate ? this.#obfuscateString(message) : message;
+        
         this.eHTML.messagesContainer.appendChild(messageDiv);
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.classList.add('board-delete-btn');
-        deleteBtn.textContent = 'X';
-        deleteBtn.addEventListener('click', () => messageDiv.remove());
-        messageDiv.appendChild(deleteBtn);
-
+        this.#addMesasgeDeleteBtn(messageDiv);
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
 
         if (sender === 'system') return;
@@ -102,27 +104,26 @@ class Assistant {
         const wordsList = bip39.entropyToMnemonic(privateKeyHex);
         const hexFromList = bip39.mnemonicToEntropy(wordsList).toString('hex');
         if (hexFromList !== privateKeyHex) return this.sendMessage('Error while extracting the private key!', 'system');
-
         
         //this.sendMessage(wordsList, 'system'); just to test: ok
         const messageDiv = document.createElement('div');
-        messageDiv.classList.add('message');
-        messageDiv.classList.add('wordslist');
+        messageDiv.classList.add('board-message');
+        messageDiv.classList.add('board-wordslist');
 
         const wordsArray = wordsList.split(' ');
         if (wordsArray.length % 2 !== 0) return this.sendMessage('wordsArray.length % 2 !== 0', 'system');
 
         for (let i = 0; i < wordsArray.length -1; i += 2) {
             const rowDiv = document.createElement('div');
-            rowDiv.classList.add('wordslist-row');
+            rowDiv.classList.add('board-wordslist-row');
 
             const firstWordDiv = document.createElement('div');
-            firstWordDiv.classList.add('wordslist-word');
+            firstWordDiv.classList.add('board-wordslist-word');
             firstWordDiv.textContent = `${i + 1}. ${wordsArray[i]}`;
             rowDiv.appendChild(firstWordDiv);
 
             const secondWordDiv = document.createElement('div');
-            secondWordDiv.classList.add('wordslist-word');
+            secondWordDiv.classList.add('board-wordslist-word');
             secondWordDiv.textContent = `${i + 2}. ${wordsArray[i + 1]}`;
             rowDiv.appendChild(secondWordDiv);
 
@@ -130,6 +131,7 @@ class Assistant {
         }
 
         this.eHTML.messagesContainer.appendChild(messageDiv);
+        this.#addMesasgeDeleteBtn(messageDiv);
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
     }
 
