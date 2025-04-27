@@ -25,11 +25,8 @@ export class Reorganizator {
     }
     /** @param {BlockData[]} finalizedBlocks */
     #pruneBranch(finalizedBlocks) {
-        for (const block of finalizedBlocks) {
-            const index = block.index;
-            if (!this.finalizedBlocksCache[index]) continue;
-            delete this.finalizedBlocksCache[index][block.hash];
-        }
+        for (const block of finalizedBlocks)
+            if (this.finalizedBlocksCache[block.index]) delete this.finalizedBlocksCache[block.index][block.hash];
     }
     async #getLegitimateReorg() {
         const legitimateReorg = {
@@ -112,8 +109,7 @@ export class Reorganizator {
         const tasks = [];
         let broadcastNewCandidate = true; // broadcast candidate for the highest block only
         for (const block_ of blocks) {
-            const options = { broadcastNewCandidate };
-            tasks.push({ type: 'digestPowProposal', data: block_, options });
+            tasks.push({ type: 'digestPowProposal', data: block_, options: { broadcastNewCandidate } });
             broadcastNewCandidate = false;
         }
 
@@ -124,7 +120,7 @@ export class Reorganizator {
     }
     /** @returns {Promise<boolean | Object[]>} - false if no reorg needed, otherwise return reorg tasks */
     async reorgIfMostLegitimateChain(reason = false) {
-        if (!this.node.blockchain.lastBlock) { return false; }
+        if (!this.node.blockchain.lastBlock) return false;
         const legitimateReorg = await this.#getLegitimateReorg();
         if (legitimateReorg.tasks.length === 0) {
             console.warn(`[REORGANIZATOR] Reorg: no legitimate branch > ${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''}`);
@@ -141,7 +137,7 @@ export class Reorganizator {
         const index = finalizedBlock.index;
         const hash = finalizedBlock.hash;
         if (!this.finalizedBlocksCache[index]) this.finalizedBlocksCache[index] = {};
-        if (this.finalizedBlocksCache[index][hash]) { return; }
+        if (this.finalizedBlocksCache[index][hash]) return;
 
         this.finalizedBlocksCache[index][hash] = finalizedBlock;
         console.info(`[REORGANIZATOR] Stored finalized block #${index} | hash: ${hash.slice(0, 10)}...`);
@@ -169,16 +165,10 @@ export class Reorganizator {
         const eraseUntil = preLastSnapshot -1;
         if (eraseUntil < 0) return;
 
-        const blocksHeight = Object.keys(this.finalizedBlocksCache);
-        for (const height of blocksHeight) {
-            if (height > eraseUntil) continue;
-            delete this.finalizedBlocksCache[height];
-        }
+        for (const height of Object.keys(this.finalizedBlocksCache))
+            if (height <= eraseUntil) delete this.finalizedBlocksCache[height];
 
-        const bannedHeights = Object.keys(this.bannedBlockHashesByHeight);
-        for (const height of bannedHeights) {
-            if (height > eraseUntil) continue;
-            delete this.bannedBlockHashesByHeight[height];
-        }
+        for (const height of Object.keys(this.bannedBlockHashesByHeight))
+            if (height <= eraseUntil) delete this.bannedBlockHashesByHeight[height];
     }
 }

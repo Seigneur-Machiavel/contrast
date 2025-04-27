@@ -16,25 +16,25 @@ import { Breather } from '../../utils/breather.mjs';
 /** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
 function readSnapshotsHeightsOfDir(dirPath = '') {
 	const snapshotDirs = fs.readdirSync(dirPath);
-	if (snapshotDirs.length === 0) { return []; }
+	if (snapshotDirs.length === 0) return [];
 	
 	// clean malformed snapshots
 	for (const snapshotDir of snapshotDirs) {
 		const snapshotPath = path.join(dirPath, snapshotDir);
 		const files = fs.readdirSync(snapshotPath);
 		let missingFiles = [];
-		if (!files.includes('memPool.bin')) { missingFiles.push('memPool.bin'); }
-		if (!files.includes('utxoCache.bin')) { missingFiles.push('utxoCache.bin'); }
-		if (!files.includes('vss.bin')) { missingFiles.push('vss.bin'); }
-		if (missingFiles.length === 0) { continue; }
+		if (!files.includes('memPool.bin')) missingFiles.push('memPool.bin');
+		if (!files.includes('utxoCache.bin')) missingFiles.push('utxoCache.bin');
+		if (!files.includes('vss.bin')) missingFiles.push('vss.bin');
+		if (missingFiles.length === 0) continue;
 
 		console.error(`Erasing malformed snapshot #${snapshotDir} | missing files: ${missingFiles.join(', ')}`);
-		fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
+		fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) console.error(err); });
 	}
 
 	// read heights and sort them in ascending order
 	const snapshotsHeights = [];
-	for (const snapshotDir of snapshotDirs) { snapshotsHeights.push(Number(snapshotDir)); }
+	for (const snapshotDir of snapshotDirs) snapshotsHeights.push(Number(snapshotDir));
 	return snapshotsHeights.sort((a, b) => a - b);
 }
 
@@ -45,11 +45,8 @@ export class SnapshotSystem {
 	snapshotToConserve = 10;
 	knownPubKeysAddressesSnapInfo = { height: 0, hash: '' };
 	
-	// SNAPSHOTS
 	/** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
-	mySnapshotsHeights() {
-		return readSnapshotsHeightsOfDir(PATH.SNAPSHOTS);
-	}
+	mySnapshotsHeights() { return readSnapshotsHeightsOfDir(PATH.SNAPSHOTS) }
 	/** Save a snapshot of the current state of the blockchain's utxoCache and vss
 	 * @param {UtxoCache} utxoCache 
 	 * @param {Vss} vss 
@@ -145,31 +142,28 @@ export class SnapshotSystem {
 		const trashTargetPath = path.join(PATH.TRASH, `${height}`);
 		if (fs.existsSync(trashTargetPath)) fs.rmSync(trashTargetPath, { recursive: true, force: true });
 		fs.renameSync(targetPath, trashTargetPath);
-		
 		console.info(`Snapshot #${height} moved to trash`);
 	}
 	/** Move all snapshots with a height higher than the given one to trash @param {number} height */
 	moveSnapshotsHigherThanHeightToTrash(height) {
-		for (const snapHeight of this.mySnapshotsHeights()) {
-			if (snapHeight > height) { this.#moveSnapshotToTrash(snapHeight); }
-		}
+		for (const snapHeight of this.mySnapshotsHeights())
+			if (snapHeight > height) this.#moveSnapshotToTrash(snapHeight);
 	}
 	/** Move all snapshots with a height lower than the given one to trash @param {number} height */
 	moveSnapshotsLowerThanHeightToTrash(height) {
-		for (const snapHeight of this.mySnapshotsHeights()) {
-			if (snapHeight < height) { this.#moveSnapshotToTrash(snapHeight); }
-		}
+		for (const snapHeight of this.mySnapshotsHeights())
+			if (snapHeight < height) this.#moveSnapshotToTrash(snapHeight);
 	}
 	/** Restore a snapshot from the trash */
 	restoreLoadedSnapshot(overwrite = false) {
-		if (this.loadedSnapshotHeight === 0) { return false; }
+		if (this.loadedSnapshotHeight === 0) return false;
 
 		const targetPath = path.join(PATH.SNAPSHOTS, `${this.loadedSnapshotHeight}`);
 		const trashTargetPath = path.join(PATH.TRASH, `${this.loadedSnapshotHeight}`);
 
-		if (!fs.existsSync(trashTargetPath)) { return false; } // trash snapshot not found
+		if (!fs.existsSync(trashTargetPath)) return false; // trash snapshot not found
 		if (fs.existsSync(targetPath)) {
-			if (!overwrite) { return false; }
+			if (!overwrite) return false;
 			fs.rmSync(targetPath, { recursive: true, force: true }, (err) => { if (err) { console.error(err); } });
 		}
 
@@ -197,7 +191,7 @@ export class CheckpointSystem {
 		/** @type {{ heights: number[], hashes: { [height: number]: string } }} */
 		const result = { heights: [], hashes: {} };
 		const dirs = fs.readdirSync(PATH.CHECKPOINTS);
-		if (dirs.length === 0) { return result; }
+		if (dirs.length === 0) return result;
 
 		for (const dirName of dirs) {
 			const height = Number(dirName);
@@ -249,21 +243,19 @@ export class CheckpointSystem {
 	readCheckpointZipArchive(archiveHash) {
 		const checkpointsHashes = this.#getCheckpointsInfos().hashes;
 		for (const height of Object.keys(checkpointsHashes)) {
-			if (checkpointsHashes[height] !== archiveHash) { continue; }
+			if (checkpointsHashes[height] !== archiveHash) continue;
 
-			try {
-				return fs.readFileSync( path.join(PATH.CHECKPOINTS, height, `${archiveHash}.zip`) );
-			} catch (error) { console.error(error.stack); }
-			return false;
+			try { return fs.readFileSync( path.join(PATH.CHECKPOINTS, height, `${archiveHash}.zip`) ) }
+			catch (error) { console.error(error.stack); return false }
 		}
 	}
 	/** Read one time only if necessary, this.lastCheckpointInfo filled by: newCheckpoint () */
 	myLastCheckpointInfo() {
 		if (!this.lastCheckpointInfo.height) {
 			const checkpointsInfos = this.#getCheckpointsInfos();
-			if (checkpointsInfos.heights.length === 0) {
+			if (checkpointsInfos.heights.length === 0)
 				this.lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
-			} else {
+			else {
 				const lastHeight = checkpointsInfos.heights[checkpointsInfos.heights.length - 1];
 				this.lastCheckpointInfo = { height: lastHeight, hash: checkpointsInfos.hashes[lastHeight] };
 			}
@@ -275,7 +267,7 @@ export class CheckpointSystem {
 	// ACTIVE CHECKPOINT
 	#randomDiceRoll(diceFaces = 27) { return Math.floor(Math.random() * diceFaces) + 1 === 1; }
 	checkForActiveCheckpoint() {
-		if (!fs.existsSync(this.activeCheckpointPath)) { return false; }
+		if (!fs.existsSync(this.activeCheckpointPath)) return false;
 
 		const checkpointSnapshotsPath = path.join(this.activeCheckpointPath, 'snapshots');
 		if (!fs.existsSync(checkpointSnapshotsPath)) {
@@ -285,26 +277,26 @@ export class CheckpointSystem {
 		}
 
 		const snapshotsHeights = readSnapshotsHeightsOfDir(checkpointSnapshotsPath);
-		if (snapshotsHeights.length === 0) { return false; }
+		if (snapshotsHeights.length === 0) return false;
 		
 		this.activeCheckpointHeight = -1; // Set to -1 to indicate that the checkpoint is active (default: false)
 		this.activeCheckpointLastSnapshotHeight = snapshotsHeights[snapshotsHeights.length - 1];
 
 		const checkpointBlocksPath = path.join(this.activeCheckpointPath, 'blocks');
-		if (!fs.existsSync(checkpointBlocksPath)) { return true; } // exist but empty, need to sync missing blocks
+		if (!fs.existsSync(checkpointBlocksPath)) return true; // exist but empty, need to sync missing blocks
 
 		const blocksFoldersSorted = BlockchainStorage.getListOfFoldersInBlocksDirectory(checkpointBlocksPath);
-		if (blocksFoldersSorted.length === 0) { return true; } // exist but empty, need to sync missing blocks
+		if (blocksFoldersSorted.length === 0) return true; // exist but empty, need to sync missing blocks
 
 		const lastBlockFolder = blocksFoldersSorted[blocksFoldersSorted.length - 1];
 		const files = fs.readdirSync(path.join(checkpointBlocksPath, lastBlockFolder));
-		if (!files.length) { return true; } // exist but empty, need to sync missing blocks
+		if (!files.length) return true; // exist but empty, need to sync missing blocks
 		
 		for (let j = 0; j < files.length; j++) {
 			const fileName = files[j].split('.')[0];
 			const blockIndex = parseInt(fileName.split('-')[0], 10);
 			const blockHash = fileName.split('-')[1];
-			if (blockIndex <= this.activeCheckpointHeight) { continue; }
+			if (blockIndex <= this.activeCheckpointHeight) continue;
 
 			this.activeCheckpointHeight = blockIndex;
 			this.activeCheckpointHash = blockHash;
@@ -325,13 +317,13 @@ export class CheckpointSystem {
 		if (!fs.existsSync(batchFolderPath)) fs.mkdirSync(batchFolderPath, { recursive: true });
 		if (!fs.existsSync(infoBatchFolderPath)) fs.mkdirSync(infoBatchFolderPath, { recursive: true });
 
-		if (!Storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) { throw new Error('(Checkpoint fill) Block file save failed'); }
-		if (!Storage.saveBinary(blockFileName, serializedBlockInfo, infoBatchFolderPath)) { throw new Error('(Checkpoint fill) Block info file save failed'); }
+		if (!Storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) throw new Error('(Checkpoint fill) Block file save failed');
+		if (!Storage.saveBinary(blockFileName, serializedBlockInfo, infoBatchFolderPath)) throw new Error('(Checkpoint fill) Block info file save failed');
 	}
 	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
 	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock, serializedBlockInfo) {
-		if (this.activeCheckpointHeight === false) { throw new Error('(Checkpoint fill) Active checkpoint not set'); }
-		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) { throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`); }
+		if (this.activeCheckpointHeight === false) throw new Error('(Checkpoint fill) Active checkpoint not set');
+		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`);
 		
 		// on invalid hash!=prevHash => erase the block batch folder, trying to resolve conflict
 		if (finalizedBlock.prevHash !== this.activeCheckpointHash) { 
@@ -345,22 +337,20 @@ export class CheckpointSystem {
 		if (this.#randomDiceRoll(this.rndControlDiceFaces)) {
 			console.info(`Checkpoint fill: verifying block hash ${finalizedBlock.index}...`);
 			const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
-        	if (finalizedBlock.hash !== hex) { throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`); }
+        	if (finalizedBlock.hash !== hex) throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`);
 		}
 
 		this.#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo);
-
 		this.activeCheckpointHeight = finalizedBlock.index;
 		this.activeCheckpointHash = finalizedBlock.hash;
 
 		return true;
 	}
 	async deployActiveCheckpoint(snapshotHeightModulo, saveZipArchive = true) {
-		if (this.activeCheckpointHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint not set`); }
-		if (this.activeCheckpointLastSnapshotHeight === false) { throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`); }
+		if (this.activeCheckpointHeight === false) throw new Error(`(Checkpoint deploy) Active checkpoint not set`);
+		if (this.activeCheckpointLastSnapshotHeight === false) throw new Error(`(Checkpoint deploy) Active checkpoint last snapshot height not set`);
 
-		if (saveZipArchive)
-			await this.newCheckpoint(this.activeCheckpointHeight, snapshotHeightModulo, this.activeCheckpointPath);
+		if (saveZipArchive) await this.newCheckpoint(this.activeCheckpointHeight, snapshotHeightModulo, this.activeCheckpointPath);
 
 		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
 		if (fs.existsSync(txsRefsConfigDest)) fs.rmSync(txsRefsConfigDest, { force: true });
@@ -386,12 +376,11 @@ export class CheckpointSystem {
 		this.lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	}
 	resetActiveCheckpoint() {
-		if (this.activeCheckpointHeight === false) { return false; }
+		if (this.activeCheckpointHeight === false) return false;
 		fs.rmSync(this.activeCheckpointPath, { recursive: true, force: true });
 		this.activeCheckpointHeight = false;
 		this.activeCheckpointLastSnapshotHeight = false;
 		this.activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // fake hash
-
 		return true;
 	}
 }

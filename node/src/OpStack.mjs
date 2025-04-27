@@ -20,22 +20,11 @@ export class OpStack {
     terminated = false;
     paused = false;
     executingTask = null;
-    healthInfo = {
-        lastDigestTime: null,
-        lastSyncTime: null,
-        lastReorgCheckTime: null,
-        delayBeforeReorgCheck: BLOCKCHAIN_SETTINGS.targetBlockTime,
-        delayBeforeSyncCheck: BLOCKCHAIN_SETTINGS.targetBlockTime * 2.5,
-        delayBeforeRestart: BLOCKCHAIN_SETTINGS.targetBlockTime * 5
-    }
+    healthInfo = { lastDigestTime: 0, lastSyncTime: 0, lastReorgCheckTime: 0 }
 
     /** @param {Node} node */
-    static buildNewStack(node) {
-        const newCallStack = new OpStack();
-        newCallStack.node = node;
-        //newCallStack.#healthCheckLoop();
-        return newCallStack;
-    }
+    constructor(node) { this.node = node }
+
     /** Will try sync with peers every 3-10 minutes */
     async #rndSyncCheck(minDelay = 180_000, maxDelay = 600_000) {
         while(!this.terminated) {
@@ -45,43 +34,6 @@ export class OpStack {
             if (this.executingTask && this.executingTask.type === 'syncWithPeers') continue;
             if (this.tasks[0] && this.tasks[0].type === 'syncWithPeers') continue;
             this.pushFirst('syncWithPeers', null);
-        }
-    }
-    async #healthCheckLoop() {
-        const delayBetweenChecks = 10_000; // 10 second
-        while (!this.terminated) {
-            await new Promise(resolve => setTimeout(resolve, delayBetweenChecks));
-            
-            const now = Date.now();
-            if (this.healthInfo.lastDigestTime === null && this.healthInfo.lastSyncTime === null) { continue; }
-            const lastDigestTime = this.healthInfo.lastDigestTime || 0;
-            const lastSyncTime = this.healthInfo.lastSyncTime || 0;
-            const lastDigestOrSyncTime = Math.max(lastDigestTime, lastSyncTime);
-            const timeSinceLastDigestOrSync = now - lastDigestOrSyncTime;
-
-            if (timeSinceLastDigestOrSync > this.healthInfo.delayBeforeRestart) {
-                this.miniLogger.log(`[OpStack] Restart requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                this.node.restartRequested = 'OpStack.healthCheckLoop() -> delayBeforeRestart reached!';
-                this.terminate();
-                break;
-            }
-
-            if (!this.syncRequested && timeSinceLastDigestOrSync > this.healthInfo.delayBeforeSyncCheck) {
-                this.pushFirst('syncWithPeers', null);
-                this.miniLogger.log(`syncWithPeers requested by healthCheck, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                continue;
-            }
-            
-            const lastReorgCheckTime = this.healthInfo.lastReorgCheckTime;
-            const timeSinceLastReorgCheck = lastReorgCheckTime ? now - lastReorgCheckTime : now - lastDigestOrSyncTime;
-            if (timeSinceLastDigestOrSync < this.healthInfo.delayBeforeReorgCheck) { continue; }
-            if (timeSinceLastReorgCheck > this.healthInfo.delayBeforeReorgCheck) {
-                this.healthInfo.lastReorgCheckTime = Date.now();
-                const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('healthCheck');
-                if (!reorgTasks) { continue; }
-
-                this.securelyPushFirst(reorgTasks);
-            }
         }
     }
     terminate() {
@@ -96,7 +48,7 @@ export class OpStack {
 
             if (this.tasks.length === 0 || this.paused) {
                 await new Promise(resolve => setTimeout(resolve, delayMS));
-                if (this.node.miner) { this.node.miner.canProceedMining = true; }
+                if (this.node.miner) this.node.miner.canProceedMining = true;
                 continue;
             }
 
@@ -106,28 +58,25 @@ export class OpStack {
             if (!task) continue;
 
             const nextTaskIsPushTransaction = this.tasks[0] && this.tasks[0].type === 'pushTransaction';
-            if (!nextTaskIsPushTransaction) {
-                this.executingTask = task;
-                await this.#executeTask(task);
-                continue;
-            }
+            if (!nextTaskIsPushTransaction) { await this.#executeTask(task); continue; }
 
             // Upgrade successive pushTransaction tasks to a single pushTransactions
             const upgradedTask = { type: 'pushTransactions', data: [] };
             while (task.type === 'pushTransaction') {
                 upgradedTask.data.push(task.data);
                 task = this.tasks.shift();
-                if (!task) { break; }
+                if (!task) break;
                 if (task.type !== 'pushTransaction') { this.tasks.unshift(task); break; }
             }
 
-            this.executingTask = upgradedTask;
             await this.#executeTask(upgradedTask);
         }
 
         this.miniLogger.log('--------- OpStack terminated ---------', (m) => console.info(m));
     }
-    async #executeTask(task) {
+    async #executeTask(task = 'toto') {
+        this.executingTask = task;
+
         try {
             const options = task.options ? task.options : {};
             const content = task.data ? task.data.content ? task.data.content : task.data : undefined;
@@ -138,15 +87,11 @@ export class OpStack {
                     await this.node.reBuildAddrsTxsRefs(content);
                     break;
                 case 'pushTransaction':
-                    try {
-                        await this.node.memPool.pushTransaction(this.node.utxoCache, content);
-                    } catch (error) {
-                        if (error.message.includes('Transaction already in mempool')) { break; }
-                        if (error.message.includes('Conflicting UTXOs')) { break; }
-                        if (error.message.includes('UTXO not found in involvedUTXOs')) {
-                            this.miniLogger.log(`${content.id} -> rejecting transaction`, (m) => console.error(m));
-                            break;
-                        }
+                    try { await this.node.memPool.pushTransaction(this.node.utxoCache, content) }
+                    catch (error) {
+                        if (error.message.includes('Transaction already in mempool')) break;
+                        if (error.message.includes('Conflicting UTXOs')) break;
+                        if (error.message.includes('UTXO not found in involvedUTXOs')) break;
 
                         this.miniLogger.log(`[OpStack] Error while pushing transaction:`, (m) => console.error(m));
                         this.miniLogger.log(error, (m) => console.error(m));
@@ -159,9 +104,8 @@ export class OpStack {
                 case 'digestPowProposal':
                     if (content.Txs[1].inputs[0] === undefined) { this.miniLogger.log(`[OpStack] Invalid block validator`, (m) => console.error(m)); return; }
                     let result;
-                    try {
-                        result = await this.node.digestFinalizedBlock(content, options, byteLength);
-                    } catch (error) {
+                    try { result = await this.node.digestFinalizedBlock(content, options, byteLength) }
+                    catch (error) {
                         this.isReorging = false;
                         this.node.blockchainStats.state = 'idle';
                         await this.#digestPowProposalErrorHandler(error, content, task);
@@ -169,12 +113,11 @@ export class OpStack {
                     }
                     
                     this.node.reorganizator.pruneCache();
-
-                    if (typeof result === 'number') { this.pushFirst('createBlockCandidateAndBroadcast', result); }
+                    if (typeof result === 'number') this.pushFirst('createBlockCandidateAndBroadcast', result);
 
                     // If many blocks are self validated, we are probably in a fork
                     const blockValidatorAddress = content.Txs[1].inputs[0].split(':')[0];
-                    if (this.node.account.address === blockValidatorAddress) { return; }
+                    if (this.node.account.address === blockValidatorAddress) return;
                     
                     this.healthInfo.lastDigestTime = Date.now();
                     break;
@@ -217,7 +160,6 @@ export class OpStack {
                             if (reorgTasks) this.securelyPushFirst(reorgTasks);
                             else this.pushFirst('syncWithPeers', null);
                     }
-
                     break;
                 case 'createBlockCandidateAndBroadcast':
                     this.node.createBlockCandidateAndBroadcast(content || 0); // content = delay(ms)
@@ -253,7 +195,6 @@ export class OpStack {
             }
         } catch (error) { this.miniLogger.log(error, (m) => console.error(m)); }
     }
-    // HANDLERS
     /** @param {Error} error @param {BlockData} block @param {object} task */
     async #digestPowProposalErrorHandler(error, block, task) {
         if (error.message.includes('Anchor not found')) {
@@ -266,7 +207,7 @@ export class OpStack {
         if (error.message.includes('!reorg!')) {
             this.healthInfo.lastReorgCheckTime = Date.now();
             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('digestPowProposal: !reorg!');
-            if (reorgTasks) { this.securelyPushFirst(reorgTasks); }
+            if (reorgTasks) this.securelyPushFirst(reorgTasks);
         }
 
         // ban/offenses management
@@ -275,14 +216,14 @@ export class OpStack {
             this.node.reorganizator.banFinalizedBlock(block); // avoid using the block in future reorgs
         }
         if (error.message.includes('!applyMinorOffense!')) {
-            if (task.data.from === undefined) { return }
+            if (task.data.from === undefined) return;
             this.node.p2pNetwork.reputationManager.applyOffense(
                 {peerId : task.data.from},
                 ReputationManager.OFFENSE_TYPES.MINOR_PROTOCOL_VIOLATIONS
             );
         }
         if (error.message.includes('!applyOffense!')) {
-            if (task.data.from === undefined) { return }
+            if (task.data.from === undefined) return;
             this.node.p2pNetwork.reputationManager.applyOffense(
                 {peerId : task.data.from},
                 ReputationManager.OFFENSE_TYPES.INVALID_BLOCK_SUBMISSION
@@ -296,36 +237,24 @@ export class OpStack {
         this.miniLogger.log(error, (m) => console.error(m));
     }
 
-    /** @param {string} type @param {object} data */
-    push(type, data) {
-        if (type === 'syncWithPeers') {
-            if (this.node.syncHandler.isSyncing) { return; }
-            if (this.syncRequested) { return; }
-            this.syncRequested = true;
-        }
+    push(type = 'toto', data) {
+        if (type === 'syncWithPeers')
+            if (this.node.syncHandler.isSyncing || this.syncRequested) return;
+            else this.syncRequested = true;
 
         this.tasks.push({ type, data });
     }
-    /** @param {string} type @param {object} data */
-    pushFirst(type, data) {
-        if (type === 'syncWithPeers') {
-            if (this.node.syncHandler.isSyncing) { return; }
-            if (this.syncRequested) { return; }
-            this.syncRequested = true;
-        }
+    pushFirst(type = 'toto', data) {
+        if (type === 'syncWithPeers')
+            if (this.node.syncHandler.isSyncing || this.syncRequested) return;
+            else this.syncRequested = true;
 
         this.tasks.unshift({ type, data });
     }
     securelyPushFirst(tasks) {
         this.paused = true;
-        for (const task of tasks) {
-            //this.miniLogger.log(`[OpStack] securelyPushFirst: ${JSON.stringify(task)}`, (m) => console.info(m));
-            if (task === 'reorg_start' && this.isReorging) { return; }
-            if (task === 'reorg_start') { this.miniLogger.log(`[OpStack] --- reorg_start`, (m) => console.info(m)); }
-            if (task.type === 'rollBackTo') { this.miniLogger.log(`[OpStack] --- rollBackTo -> #${task.data}`, (m) => console.info(m)); }
-            if (task.type === 'digestPowProposal') { this.miniLogger.log(`[OpStack] --- digestPowProposal -> #${task.data.index}`, (m) => console.info(m)); }
-            this.tasks.unshift(task);
-        }
+        for (const task of tasks) if (task === 'reorg_start' && this.isReorging) return; // avoid double reorg
+        for (const task of tasks) this.tasks.unshift(task);
         this.paused = false;
     }
 }

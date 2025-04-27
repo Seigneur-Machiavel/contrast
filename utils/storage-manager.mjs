@@ -13,12 +13,11 @@ const fs = await import('fs');
 const path = await import('path');
 const url = await import('url');*/ // -> DEPRECATED
 if (false) {
-    const AdmZip = require('adm-zip');
-    const archiver = require('archiver');
     const fs = require('fs');
     const path = require('path');
-    const crypto = require('crypto');
     const url = require('url');
+    const crypto = require('crypto');
+    const AdmZip = require('adm-zip');
 }
 
 // -> Imports compatibility for Node.js, Electron and browser
@@ -28,11 +27,9 @@ let archiver, AdmZip, crypto, fs, path, url;
     try { fs = await import('fs'); } catch (error) { fs = window.fs; }
     try { path = await import('path'); } catch (error) { path = window.path; }
     try { url = await import('url'); } catch (error) { url = window.url; }
-    try { AdmZip = await import('adm-zip').then(module => module.default); } catch (error) {
-        try { AdmZip = window.AdmZip; } catch (error) {} };
-   /* try { archiver = await import('archiver').then(module => module.default); } catch (error) {
-        try { archiver = window.archiver; } catch (error) {} };*/
     try { crypto = await import('crypto'); } catch (error) { crypto = window.crypto; }
+    try { AdmZip = await import('adm-zip').then(module => module.default); }
+    catch (error) { try { AdmZip = window.AdmZip; } catch (error) {} };
 })();
 
 /**
@@ -118,24 +115,16 @@ export class Storage {
             const filePath = path.join(directoryPath__, `${fileName}.bin`);
             fs.writeFileSync(filePath, serializedData);
             return true;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
-
-        return false;
+        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
     }
     /** @param {string} fileName @param {string} directoryPath */
     static loadBinary(fileName, directoryPath) {
         const directoryPath__ = directoryPath || PATH.STORAGE;
         const filePath = path.join(directoryPath__, `${fileName}.bin`);
-        try {
-            const buffer = fs.readFileSync(filePath);
-            // const serializedData = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-            return buffer; // work as Uint8Array
-        } catch (error) {
-            if (error.code === 'ENOENT') {
-                storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
-            } else {
-                storageMiniLogger.log(error.stack, (m) => { console.error(m); });
-            }
+        try { return fs.readFileSync(filePath) } // work as Uint8Array
+        catch (error) {
+            if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
+            else storageMiniLogger.log(error.stack, (m) => { console.error(m); });
         }
         return false;
     }
@@ -149,23 +138,15 @@ export class Storage {
         try {
             const filePath = path.join(PATH.STORAGE, `${fileName}.json`);
             const subFolder = path.dirname(filePath);
-            if (!fs.existsSync(subFolder)) { fs.mkdirSync(subFolder); }
+            if (!fs.existsSync(subFolder)) fs.mkdirSync(subFolder);
             fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-        } catch (error) {
-            storageMiniLogger.log(error.stack, (m) => { console.error(m); });
-            return false;
-        }
+        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false }
     }
     /** Load data from a JSON file @param {string} fileName - The name of the file */
     static loadJSON(fileName) {
-        try {
-            const filePath = path.join(PATH.STORAGE, `${fileName}.json`);
-            return JSON.parse(fs.readFileSync(filePath));
-        } catch (error) {
-            return false;
-        }
+        try { return JSON.parse(fs.readFileSync( path.join(PATH.STORAGE, `${fileName}.json`) )) }
+        catch (error) { return false }
     }
-
     static deleteFile(fileNameWithExtension = 'toto.bin', directoryPath = PATH.STORAGE) {
         const filePath = path.join(directoryPath, fileNameWithExtension);
         if (fs.existsSync(filePath)) fs.rmSync(filePath);
@@ -190,7 +171,6 @@ export class StorageAsync {
 
         return false;
     }
-
     /** @param {string} fileName @param {string} directoryPath */
     static async loadBinary(fileName, directoryPath) {
         const directoryPath__ = directoryPath || PATH.STORAGE;
@@ -199,11 +179,8 @@ export class StorageAsync {
             const buffer = await fs.promises.readFile(filePath);
             return buffer;
         } catch (error) {
-            if (error.code === 'ENOENT') {
-                storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
-            } else {
-                storageMiniLogger.log(error.stack, (m) => { console.error(m); });
-            }
+            if (error.code !== 'ENOENT') storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+            else storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
         }
         return false;
     }
@@ -211,64 +188,6 @@ export class StorageAsync {
 
 export class CheckpointsStorage {
     static maxSnapshotsInCheckpoints = 3; // number of snapshots to keep in checkpoints
-    /** @param {number} checkpointHeight @param {string} fromPath - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder */
-    static async archiveCheckpointOLD(checkpointHeight = 0, fromPath) {
-        try {
-            /** @type {AdmZip} */
-            const zip = new AdmZip();
-            const breather = new Breather();
-            if (fromPath) {
-                const snapshotsPath = path.join(fromPath, 'snapshots');
-                if (!fs.existsSync(snapshotsPath)) { throw new Error(`Snapshots folder not found at ${snapshotsPath}`); }
-                zip.addLocalFolder(snapshotsPath, 'snapshots');
-            } else {
-                // we only need the corresponding snapshot for the checkpoint
-                //! important to have valid AddressesTransactionsReferences in the archive
-                const snapshotPath = path.join(PATH.SNAPSHOTS, checkpointHeight.toString());
-                if (!fs.existsSync(snapshotPath)) { throw new Error(`Snapshot ${checkpointHeight.toString()} not found at ${snapshotPath}`); }
-                zip.addLocalFolder(snapshotPath, `snapshots/${checkpointHeight.toString()}`);
-            }
-            //! old method avoided because of inconsistency with the snapshots:
-            //! we only can save snapshot that can't be modified in the checkpoint.
-            //const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
-            //zip.addLocalFolder(snapshotsPath, 'snapshots');
-            //! NOW WE DO NOT INCLUDES ADDRESSES-TXS-REFS IN THE CHECKPOINTS
-
-            await breather.breathe();
-            //const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
-            //zip.addLocalFolder(addTxsRefsPath, 'addresses-txs-refs');
-            //! folder is to heavy, we pass subFolder one by one
-            /*const addTxsRefsPath = fromPath ? path.join(fromPath, 'addresses-txs-refs') : PATH.TXS_REFS;
-            const lvl0Folders = fs.readdirSync(addTxsRefsPath);
-            for (let i = 0; i < lvl0Folders.length; i++) {
-                const lvl0 = lvl0Folders[i];
-                const lvl0Path = path.join(addTxsRefsPath, lvl0);
-                const lvl1Folders = fs.readdirSync(lvl0Path);
-                for (let j = 0; j < lvl1Folders.length; j++) {
-                    const lvl1 = lvl1Folders[j];
-                    const lvl1Path = path.join(lvl0Path, lvl1);
-                    zip.addLocalFolder(lvl1Path, path.join('addresses-txs-refs', lvl0, lvl1));
-                    breather.breathe();
-                }
-            }
-            
-            await breather.breathe();
-            const addTxsRefsConfigPath = fromPath ? path.join(fromPath, 'AddressesTxsRefsStorage_config.json') : path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
-            zip.addLocalFile(addTxsRefsConfigPath);*/
-
-            await breather.breathe();
-            const buffer = zip.toBuffer();
-            const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-
-            await breather.breathe();
-            const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight.toString());
-            if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
-            fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
-            return hash;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
-        
-        return false;
-    }
     static hashOfSnapshotFolder(folderPath) {
         // load files (.bin) of snapshot folder to hash them
         const files = fs.readdirSync(folderPath);
@@ -323,9 +242,7 @@ export class CheckpointsStorage {
             if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
             fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
             return hash;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
-        
-        return false;
+        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
     }
     /** @param {Buffer} buffer @param {string} hashToVerify */
     static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify) {
@@ -337,26 +254,26 @@ export class CheckpointsStorage {
             //if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
     
             const destPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
-            if (fs.existsSync(destPath)) { fs.rmSync(destPath, { recursive: true }); }
+            if (fs.existsSync(destPath)) fs.rmSync(destPath, { recursive: true });
             fs.mkdirSync(destPath, { recursive: true });
+
             /** @type {AdmZip} */
             const zip = new AdmZip(buffer);
             zip.extractAllTo(destPath, true);
 
-            // CHECK HASH
+            // HASH CHECK
             let isValidHash_V2 = false;
             try {
                 /** @type {Buffer[]} */
                 const snapshotsHashes = [];
                 const snapshotsDir = path.join(destPath, 'snapshots');
-                if (!fs.existsSync(snapshotsDir)) { throw new Error(`Snapshots folder not found at ${snapshotsDir}`); }
+                if (!fs.existsSync(snapshotsDir)) throw new Error(`Snapshots folder not found at ${snapshotsDir}`);
     
                 const snapshotsFolders = fs.readdirSync(snapshotsDir);
                 for (const folder of snapshotsFolders) {
                     const folderPath = path.join(snapshotsDir, folder);
-                    if (!fs.lstatSync(folderPath).isDirectory()) continue;
-    
-                    snapshotsHashes.push(CheckpointsStorage.hashOfSnapshotFolder(folderPath));
+                    if (fs.lstatSync(folderPath).isDirectory())
+                        snapshotsHashes.push(CheckpointsStorage.hashOfSnapshotFolder(folderPath));
                 }
     
                 const buffer = Buffer.concat(snapshotsHashes);
@@ -366,16 +283,12 @@ export class CheckpointsStorage {
             } catch (error) { console.error(error.stack); }
 
             if (!isValidHash_V2) console.log('<> Hash V1 mismatch! <>');
-
             if (!isValidHash_V1 && !isValidHash_V2) console.log('--- Checkpoint is corrupted! ---');
-    
             return true;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
-
-        return false;
+        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false }
     }
     static reset() {
-        if (fs.existsSync(PATH.CHECKPOINTS)) { fs.rmSync(PATH.CHECKPOINTS, { recursive: true }); }
+        if (fs.existsSync(PATH.CHECKPOINTS)) fs.rmSync(PATH.CHECKPOINTS, { recursive: true });
     }
 }
 
@@ -411,28 +324,28 @@ export class AddressesTxsRefsStorage {
         const lvl0 = address.slice(0, 2);
         if (this.architecture[lvl0] === undefined) {
             this.architecture[lvl0] = {};
-            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0))) { fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0)); }
+            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0))) fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0));
         }
 
         const lvl1 = address.slice(2, 3);
         if (this.architecture[lvl0][lvl1] === undefined) {
             this.architecture[lvl0][lvl1] = {};
-            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0, lvl1))) { fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0, lvl1)); }
+            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0, lvl1))) fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0, lvl1));
         }
 
         return { lvl0, lvl1 };
     }
     getTxsReferencesOfAddress(address = '') {
-        if (typeof address !== 'string' || address.length !== 20) { return []; }
+        if (typeof address !== 'string' || address.length !== 20) return [];
 
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        if (!this.architecture[lvl0][lvl1][address]) { return []; }
+        if (!this.architecture[lvl0][lvl1][address]) return [];
 
         const filePath = path.join(PATH.TXS_REFS, lvl0, lvl1, `${address}.bin`);
         if (!fs.existsSync(filePath)) { // Clean the architecture if the file is missing
             delete this.architecture[lvl0][lvl1][address];
-            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) { delete this.architecture[lvl0][lvl1]; }
-            if (Object.keys(this.architecture[lvl0]).length === 0) { delete this.architecture[lvl0]; }
+            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
+            if (Object.keys(this.architecture[lvl0]).length === 0) delete this.architecture[lvl0];
             return [];
         }
 
@@ -447,15 +360,14 @@ export class AddressesTxsRefsStorage {
         this.architecture[lvl0][lvl1][address] = true;
 
         const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1);
-        if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
         const filePath = path.join(dirPath, `${address}.bin`);
-        //fs.writeFileSync(filePath, serialized);
         await fs.promises.writeFile(filePath, serialized);
     }
     reset() {
-        if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true }); }
-        if (fs.existsSync(this.configPath)) { fs.rmSync(this.configPath); }
+        if (fs.existsSync(PATH.TXS_REFS)) fs.rmSync(PATH.TXS_REFS, { recursive: true });
+        if (fs.existsSync(this.configPath)) fs.rmSync(this.configPath);
         
         fs.mkdirSync(PATH.TXS_REFS);
         this.architecture = {};
@@ -500,14 +412,10 @@ export class AddressesTxsRefsStorage_V2 {
         } catch (error) { storageMiniLogger.log(error, (m) => { console.error(m); }); }
     }
     #pruneInvoledAddressesOverHeights() {
-        // SORT BY DESCENDING HEIGHTS
+        // SORT BY DESCENDING HEIGHTS -> KEEP ONLY THE UPPER HEIGHTS
         const keys = Object.keys(this.involedAddressesOverHeights).map(Number).sort((a, b) => b - a);
-
-        // KEEP ONLY THE UPPER HEIGHTS
-        for (let i = 0; i < keys.length; i++) {
-            if (i <= this.maxInvoledHeights) continue;
-            delete this.involedAddressesOverHeights[keys[i]];
-        }
+        for (let i = 0; i < keys.length; i++)
+            if (i > this.maxInvoledHeights) delete this.involedAddressesOverHeights[keys[i]];
     }
     save(indexEnd) {
         this.#pruneInvoledAddressesOverHeights();
@@ -537,13 +445,13 @@ export class AddressesTxsRefsStorage_V2 {
         return { lvl0, lvl1 };
     }
     #clearArchitectureIfFolderMissing(lvl0, lvl1, address) {
-        if (!this.architecture[lvl0][lvl1][address]) { return; }
+        if (!this.architecture[lvl0][lvl1][address]) return;
 
         const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
         if (!fs.existsSync(dirPath)) { // Clean the architecture if the folder is missing
             delete this.architecture[lvl0][lvl1][address];
-            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) { delete this.architecture[lvl0][lvl1]; }
-            if (Object.keys(this.architecture[lvl0]).length === 0) { delete this.architecture[lvl0]; }
+            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
+            if (Object.keys(this.architecture[lvl0]).length === 0) delete this.architecture[lvl0];
             return true;
         }
     }
@@ -572,7 +480,7 @@ export class AddressesTxsRefsStorage_V2 {
         this.architecture[lvl0][lvl1][address].totalTxsRefs += batch.length;
 
         const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
-        if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
         // 0-100: 0, 100-200: 1, 200-300: 2, etc...
         const batchIndex = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsRefs / this.batchSize);
@@ -603,21 +511,12 @@ export class AddressesTxsRefsStorage_V2 {
             this.architecture[lvl0][lvl1][address] = { highestIndex, totalTxsRefs: 0 };
 
         // SAVE BATCH IF TOO BIG
-        /*if (txsRefs.length >= this.batchSize) 
-            await this.#saveNewBatchOfTxsRefs(address, txsRefs.splice(0, this.batchSize));
-
-        await this.#saveTempTxsRefs(address, txsRefs, highestIndex)*/
-
-        // trying to faster a bit
         let promises = [];
         while (txsRefs.length > this.batchSize)
             promises.push(this.#saveNewBatchOfTxsRefs(address, txsRefs.splice(0, this.batchSize)));
-
-        // SAVE TEMP TXS REFS
-        promises.push(this.#saveTempTxsRefs(address, txsRefs, highestIndex));
+        promises.push(this.#saveTempTxsRefs(address, txsRefs, highestIndex)); // SAVE TEMP TXS REFS
 
         if (promises.length > 0) await Promise.allSettled(promises);
-
         this.architecture[lvl0][lvl1][address].highestIndex = highestIndex;
     }
 
@@ -659,27 +558,26 @@ export class AddressesTxsRefsStorage_V2 {
         if (!totalTxsRefs || totalTxsRefs <= 0) {
             fs.rmSync(dirPath, { recursive: true }); // delete the folder
             delete this.architecture[lvl0][lvl1][address];
-            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) { delete this.architecture[lvl0][lvl1]; }
-            if (Object.keys(this.architecture[lvl0]).length === 0) { delete this.architecture[lvl0]; }
+            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
+            if (Object.keys(this.architecture[lvl0]).length === 0) delete this.architecture[lvl0];
         }
     }
     /** Pruning to use while loading a snapshot */
     pruneAllUpperThan(height = 0) {
         const keys = Object.keys(this.involedAddressesOverHeights).map(Number).filter(h => h > height);
         for (let i = 0; i < keys.length; i++) {
-            const key = keys[i];
-            for (const address in this.involedAddressesOverHeights[key])
-                this.#pruneAddressRefsUpperThan(address, key);
+            for (const address in this.involedAddressesOverHeights[keys[i]])
+                this.#pruneAddressRefsUpperThan(address, keys[i]);
 
-            delete this.involedAddressesOverHeights[key];
+            delete this.involedAddressesOverHeights[keys[i]];
         }
 
         this.snapHeight = Math.min(this.snapHeight, height);
         console.log(`Pruned all transactions references upper than ${height}`);
     }
     reset() {
-        if (fs.existsSync(PATH.TXS_REFS)) { fs.rmSync(PATH.TXS_REFS, { recursive: true }); }
-        if (fs.existsSync(this.configPath)) { fs.rmSync(this.configPath); }
+        if (fs.existsSync(PATH.TXS_REFS)) fs.rmSync(PATH.TXS_REFS, { recursive: true });
+        if (fs.existsSync(this.configPath)) fs.rmSync(this.configPath);
         
         fs.mkdirSync(PATH.TXS_REFS);
         this.snapHeight = -1;
@@ -700,7 +598,6 @@ export class BlockchainStorage {
     constructor() { this.#init(); }
     static getListOfFoldersInBlocksDirectory(blocksPath = PATH.BLOCKS) {
         const blocksFolders = fs.readdirSync(blocksPath).filter(fileName => fs.lstatSync(path.join(blocksPath, fileName)).isDirectory());
-    
         // named as 0-999, 1000-1999, 2000-2999, etc... => sorting by the first number
         const blocksFoldersSorted = blocksFolders.sort((a, b) => parseInt(a.split('-')[0], 10) - parseInt(b.split('-')[0], 10));
         return blocksFoldersSorted;
@@ -752,9 +649,7 @@ export class BlockchainStorage {
 
             const filePath = path.join(batchFolderPath, `${blockData.index.toString()}-${blockData.hash}.bin`);
             fs.writeFileSync(filePath, binary);
-        } catch (error) {
-            storageMiniLogger.log(error.stack, (m) => { console.error(m); });
-        }
+        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
     }
     /** @param {BlockData} blockData @param {string} dirPath */
     #saveBlockDataJSON(blockData, dirPath) {
@@ -766,7 +661,7 @@ export class BlockchainStorage {
 
         /** @type {Uint8Array} */
         const serialized = fs.readFileSync(blockFilePath);
-        if (!deserialize) { return serialized; }
+        if (!deserialize) return serialized;
 
         /** @type {BlockData} */
         const blockData = serializer.deserialize.block_finalized(serialized);
@@ -783,7 +678,7 @@ export class BlockchainStorage {
     /** @param {BlockData} blockData @param {boolean} saveJSON */
     addBlock(blockData, saveJSON = false) {
         const prevHash = this.hashByIndex[blockData.index - 1];
-        if (blockData.prevHash !== prevHash) { throw new Error(`Block #${blockData.index} rejected: prevHash mismatch`); }
+        if (blockData.prevHash !== prevHash) throw new Error(`Block #${blockData.index} rejected: prevHash mismatch`);
 
         const existingBlockHash = this.hashByIndex[blockData.index];
         //if (existingBlockHash) { throw new Error(`Block #${blockData.index} already exists with hash ${existingBlockHash}`); }
@@ -793,7 +688,7 @@ export class BlockchainStorage {
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
 
-        if (isProductionEnv) { return; } // Avoid saving heavy JSON format in production
+        if (isProductionEnv) return; // Avoid saving heavy JSON format in production
         if (saveJSON || blockData.index < 200) { this.#saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
     }
     /** @param {BlockInfo} blockInfo */
@@ -813,11 +708,10 @@ export class BlockchainStorage {
     }
     /** @param {number | string} heightOrHash - The height or the hash of the block to retrieve */
     retreiveBlock(heightOrHash, deserialize = true) {
-        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') { return null; }
+        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') return null;
 
         const { blockHash, blockIndex } = this.#blockHashIndexFormHeightOrHash(heightOrHash);
-        if (blockIndex === -1) { return null; }
-        if (blockHash === undefined || blockIndex === undefined) { return null; }
+        if (blockIndex === -1 || blockHash === undefined || blockIndex === undefined) return null;
 
         const block = this.#getBlock(blockIndex, blockHash, deserialize);
         return block;
@@ -830,7 +724,7 @@ export class BlockchainStorage {
         try {
             const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
             const buffer = fs.readFileSync(blockInfoFilePath);
-            if (!deserialize) { return new Uint8Array(buffer); }
+            if (!deserialize) return new Uint8Array(buffer);
 
             /** @type {BlockInfo} */
             const blockInfo = serializer.deserialize.rawData(buffer);
@@ -852,12 +746,12 @@ export class BlockchainStorage {
         const pointersBuffer = serializedBlock.slice(pointersStart, pointersEnd + 1);
         
         for (let i = 0; i < pointersBuffer.length; i += 8) {
-            if (!pointersBuffer.slice(i, i + 4).every((v, i) => v === targetUint8Array[i])) { continue; }
+            if (!pointersBuffer.slice(i, i + 4).every((v, i) => v === targetUint8Array[i])) continue;
 
             const index = i / 8;
             const offsetStart = this.fastConverter.uint84BytesToNumber(pointersBuffer.slice(i + 4, i + 8));
             i += 8;
-            if (i >= pointersBuffer.length) { return { index, start: offsetStart, end: serializedBlock.length }; }
+            if (i >= pointersBuffer.length) return { index, start: offsetStart, end: serializedBlock.length };
             
             const offsetEnd = this.fastConverter.uint84BytesToNumber(pointersBuffer.slice(i, i + 4));
             return { index, start: offsetStart, end: offsetEnd };
@@ -892,7 +786,6 @@ export class BlockchainStorage {
 
         return { tx, timestamp };
     }
-
     removeBlock(blockIndex = 0) {
         const blockHash = this.hashByIndex[blockIndex];
         const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
@@ -935,7 +828,7 @@ class TestStorage {
     }
     #createRandomBlock() {
         const block = [];
-        for (let i = 0; i < this.txCount; i++) { block.push(this.#createRandomTx()); }
+        for (let i = 0; i < this.txCount; i++) block.push(this.#createRandomTx());
         return block;
     }
     saveBlock(block, index) {
@@ -951,7 +844,7 @@ class TestStorage {
     }
     saveBlockDecomposed(block, index) {
         const blockDir = path.join(PATH.TEST_STORAGE, index.toString());
-        for (let i = 0; i < block.length; i++) { Storage.saveBinary(`${index}-${i}`, block[i], blockDir); }
+        for (let i = 0; i < block.length; i++) Storage.saveBinary(`${index}-${i}`, block[i], blockDir);
     }
     createAndSaveBlocks(num = 100) {
         for (let i = 0; i < num; i++) {

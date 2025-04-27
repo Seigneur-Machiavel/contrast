@@ -41,7 +41,7 @@ export class BlocksCache {
         return blocksTimestamps;
     }
     /** @param {number} index @param {string} hash */
-    deleteBlock(index, hash) {
+    #deleteBlock(index, hash) {
         this.blocksHashByHeight.delete(index);
         this.blockHeightByHash.delete(hash);
         this.blocksByHash.delete(hash);
@@ -70,7 +70,7 @@ export class BlocksCache {
             const blockHash = this.blocksHashByHeight.get(i);
             if (!blockHash) continue;
 
-            this.deleteBlock(i, blockHash);
+            this.#deleteBlock(i, blockHash);
             erasedUntil = i;
         }
 

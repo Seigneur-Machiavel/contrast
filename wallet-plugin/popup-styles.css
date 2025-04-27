@@ -93,9 +93,6 @@ h1, h2 {
     width: calc(100% - 20px);
     box-shadow: 0px 0px 0px 0px var(--color2);
 }
-#cbe-contrastBlocksWidget.focused {
-
-}
 #cbe-blockExplorerWrap {
     justify-content: left !important;
 }
@@ -183,9 +180,6 @@ h1, h2 {
 }
 #popUpContent.large {
     width: 322px;
-}
-#popUpContent .wrap {
-    /*height: -webkit-fill-available !important;*/
 }
 
 .input-range {
@@ -697,9 +691,6 @@ button.classy.clicked:not(.disabled) {
     margin: 0 0 20px 0;
 }
 
-#walletForm {
-
-}
 #spendMiniForm, #stakeMiniForm {
     pointer-events: all;
     z-index: 1;

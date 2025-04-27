@@ -146,7 +146,7 @@ export class Node {
         this.miniLogger.log(`Node ${this.id} (${this.roles.join('_')}) => started at time: ${this.timeSynchronizer.getCurrentTime()}`, (m) => { console.info(m); });
 
         for (let i = 0; i < this.nbOfWorkers; i++) this.workers.push(new ValidationWorker(i));
-        this.opStack = OpStack.buildNewStack(this);
+        this.opStack = new OpStack(this);
         this.miner = new Miner(this.minerAddress || this.account.address, this);
         this.miner.useDevArgon2 = this.useDevArgon2;
 
@@ -196,11 +196,11 @@ export class Node {
         const myPeerId = this.p2pNetwork.p2pNode.peerId.toString();
         let connectedPeers = 0;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            if (this.restartRequested) { break; }
+            if (this.restartRequested) break;
 
             const peersIds = this.p2pNetwork.getConnectedPeers();
             connectedPeers = peersIds.length - (peersIds.includes(myPeerId) ? 1 : 0);
-            if (connectedPeers >= nbOfPeers) { return connectedPeers; }
+            if (connectedPeers >= nbOfPeers) return connectedPeers;
 
             await new Promise(resolve => setTimeout(resolve, delay));
         }
@@ -233,10 +233,10 @@ export class Node {
             this.blockchainStats.lastLegitimacy = myLegitimacy;
 
             let maxLegitimacyToBroadcast = this.vss.maxLegitimacyToBroadcast;
-            if (this.roles.includes('miner') && this.miner.bestCandidateIndex() === this.blockchain.lastBlock.index + 1) {
+            if (this.roles.includes('miner') && this.miner.bestCandidateIndex() === this.blockchain.lastBlock.index + 1)
                 maxLegitimacyToBroadcast = Math.min(maxLegitimacyToBroadcast, this.miner.bestCandidateLegitimacy());
-            }
-            if (myLegitimacy > maxLegitimacyToBroadcast) { return null; }
+            
+            if (myLegitimacy > maxLegitimacyToBroadcast) return null;
 
             const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty();
             this.blockchainStats.averageBlockTime = averageBlockTime;
@@ -252,7 +252,7 @@ export class Node {
         blockCandidate.Txs.unshift(signedPosFeeTx);
         blockCandidate.powReward = powReward; // for the miner
 
-        if (blockCandidate.Txs.length > 3) { this.miniLogger.log(`(Height:${blockCandidate.index}) => ${blockCandidate.Txs.length} txs, block candidate created in ${(Date.now() - startTime)}ms`, (m) => { console.info(m); }); }
+        if (blockCandidate.Txs.length > 3) this.miniLogger.log(`(Height:${blockCandidate.index}) => ${blockCandidate.Txs.length} txs, block candidate created in ${(Date.now() - startTime)}ms`, (m) => { console.info(m); });
         return blockCandidate;
     }
     /** Creates a new block candidate, signs it and broadcasts it */
@@ -260,9 +260,9 @@ export class Node {
         const startHeight = this.blockchain.currentHeight;
 
         setTimeout(async () => {
-            if (startHeight !== this.blockchain.currentHeight) { return false; } // to late
+            if (startHeight !== this.blockchain.currentHeight) return false; // to late
             this.updateState(`creating block candidate #${this.blockchain.lastBlock ? this.blockchain.lastBlock.index + 1 : 0}`);
-            if (!this.roles.includes('validator')) { return false; }
+            if (!this.roles.includes('validator')) return false;
     
             this.blockCandidate = await this.#createBlockCandidate();
             if (this.blockCandidate === null) { this.updateState("idle", "creating block candidate"); return false; }
@@ -301,10 +301,7 @@ export class Node {
         await this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.info(m); });
-        if (snapshotIndex < 1) {
-            this.blockchain.reset();
-            this.checkpointSystem.resetCheckpoints(); // reset (:not: active) Checkpoints.
-        }
+        if (snapshotIndex < 1) { this.blockchain.reset(); this.checkpointSystem.resetCheckpoints() } // reset (:not: active) Checkpoints.
 
         this.blockchain.lastBlock = this.blockchain.getBlock(snapshotIndex);
 
@@ -315,8 +312,8 @@ export class Node {
     }
     /** @param {BlockData} finalizedBlock */
     async #saveSnapshot(finalizedBlock) {
-        if (finalizedBlock.index === 0) { return; }
-        if (finalizedBlock.index % this.snapshotSystem.snapshotHeightModulo !== 0) { return; }
+        if (finalizedBlock.index === 0) return;
+        if (finalizedBlock.index % this.snapshotSystem.snapshotHeightModulo !== 0) return;
         const eraseUnder = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve;
 
         // erase the outdated blocks cache and persist the addresses transactions references to disk
@@ -532,27 +529,11 @@ export class Node {
         return Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)); // delay before sending a new candidate
     }
 
+    // P2P / PUBSUB ----------------------------------------------------------------------
     /** @param {string} topic @param {any} message */
     async p2pBroadcast(topic, message) {
         await this.p2pNetwork.broadcast(topic, message);
-        if (topic === 'new_block_finalized') { setTimeout(() => this.#reSendBlocks(message.index), 1000); }
-    }
-    /** @param {number} finalizedBlockHeight @param {number[]} sequence - default: [-10, -8, -6, -4, -2] */
-    async #reSendBlocks(finalizedBlockHeight, sequence = [-10, -8, -6, -4, -2]) {
-        const sentSequence = [];
-        for (const index of sequence) {
-            const blockIndex = finalizedBlockHeight + index;
-            if (blockIndex < 0) { continue; }
-
-            const block = this.blockchain.getBlock(blockIndex);
-            if (!block) { continue; }
-
-            await new Promise(resolve => setTimeout(resolve, 200));
-            await this.p2pNetwork.broadcast('new_block_finalized', block);
-            sentSequence.push(block.index);
-        }
-
-        this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
+        if (topic === 'new_block_finalized') setTimeout(() => this.#reSendBlocks(message.index), 1000);
     }
     /** @param {string} topic @param {object} message */
     p2pHandler = async (topic, message) => {
@@ -563,43 +544,29 @@ export class Node {
         try {
             switch (topic) {
                 case 'new_transaction':
-                    if (this.syncHandler.isSyncing || this.opStack.syncRequested) { return; }
-                    if (!this.roles.includes('validator')) { break; }
-
+                    if (this.syncHandler.isSyncing || this.opStack.syncRequested) return;
+                    if (!this.roles.includes('validator')) break;
                     this.opStack.push('pushTransaction', data);
                     break;
                 case 'new_block_candidate':
                     try { BlockValidation.checkBlockIndexIsNumber(data); } catch (error) { throw error; }
-
-                    if (this.ignoreIncomingBlocks) { break; }
-                    if (!this.roles.includes('miner')) { break; }
-                    if (!this.roles.includes('validator')) { break; }
-
-                    if (lastBlockIndex +1 !== data.index) {
-                        this.miniLogger.log(`lastBlockIndex #${lastBlockIndex} +1 !== #${data.index} -> skip candidate`, (m) => { console.info(m); });
-                        break;
-                    }
+                    if (this.ignoreIncomingBlocks) break;
+                    if (!this.roles.includes('miner') || !this.roles.includes('validator')) break;
+                    if (lastBlockIndex +1 !== data.index) break;
 
                     const legitimacyValidated = await BlockValidation.validateLegitimacy(data, this.vss, true);
-                    if (legitimacyValidated) { this.miner.updateBestCandidate(data); break; }
-                    
-                    this.miniLogger.log(`${topic} -> #${data.index} -> Invalid legitimacy!`, (m) => { console.info(m); });
+                    if (legitimacyValidated) this.miner.updateBestCandidate(data);
+                    else this.miniLogger.log(`${topic} -> #${data.index} -> Invalid legitimacy!`, (m) => { console.info(m); });
                     break;
                 case 'new_block_finalized':
                     try { BlockValidation.checkBlockIndexIsNumber(data); } catch (error) { throw error; }
-                    if (this.ignoreIncomingBlocks) { break; }
-                    if (this.syncHandler.isSyncing || this.opStack.syncRequested) { break; }
-
-                    if (!this.roles.includes('validator')) { break; }
+                    if (this.ignoreIncomingBlocks) break;
+                    if (this.syncHandler.isSyncing || this.opStack.syncRequested) break;
+                    if (!this.roles.includes('validator')) break;
 
                     const isInBlockchainCache = this.blockchain.cache.blockHeightByHash.has(data.hash);
                     const isInReorganizatorCache = this.reorganizator.isFinalizedBlockInCache(data);
-                    if (!isInBlockchainCache && !isInReorganizatorCache) {
-                        this.opStack.push('digestPowProposal', message);
-                        break;
-                    }
-                    
-                    //this.miniLogger.log(`Already processed ${topic} #${data.index} -> skip`, (m) => { console.warn(m); });
+                    if (!isInBlockchainCache && !isInReorganizatorCache) this.opStack.push('digestPowProposal', message);
                     break;
                 case 'test':
                     this.miniLogger.log(`[TEST] heavy msg bytes: ${new Uint8Array(Object.values(data)).length}`, (m) => { console.warn(m); });
@@ -608,6 +575,23 @@ export class Node {
                     this.miniLogger.log(`Unknown topic ${topic}`, (m) => { console.error(m); });
             }
         } catch (error) { this.miniLogger.log(`${topic} -> Failed! ${error}`, (m) => { console.error(m); }); }
+    }
+    /** @param {number} finalizedBlockHeight @param {number[]} sequence - default: [-10, -8, -6, -4, -2] */
+    async #reSendBlocks(finalizedBlockHeight, sequence = [-10, -8, -6, -4, -2]) {
+        const sentSequence = [];
+        for (const index of sequence) {
+            const blockIndex = finalizedBlockHeight + index;
+            if (blockIndex < 0) continue;
+
+            const block = this.blockchain.getBlock(blockIndex);
+            if (!block) continue;
+
+            await new Promise(resolve => setTimeout(resolve, 200));
+            await this.p2pNetwork.broadcast('new_block_finalized', block);
+            sentSequence.push(block.index);
+        }
+
+        this.miniLogger.log(`[NODE-${this.id.slice(0, 6)}] Re-sent blocks: [${sentSequence.join(', ')}]`, (m) => { console.info(m); });
     }
 
     // API -------------------------------------------------------------------------------
@@ -637,20 +621,17 @@ export class Node {
         const toHeight = toHeightParam || this.blockchain.currentHeight;
         try {
             if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
-            //if (toHeight - fromHeight > 10) { throw new Error('Cannot retrieve more than 10 blocks at once'); }
 
             /** @type {BlockInfo[]} */
             const blocksInfo = [];
-            for (let i = fromHeight; i <= toHeight; i++)
-                blocksInfo.push(this.blockchain.blockStorage.getBlockInfoByIndex(i));
-
+            for (let i = fromHeight; i <= toHeight; i++) blocksInfo.push(this.blockchain.blockStorage.getBlockInfoByIndex(i));
             return blocksInfo;
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return []; }
     }
     async getExhaustiveBlocksDataByHeight(fromHeight = 0, toHeight = null) {
         try {
             toHeight = toHeight || fromHeight;
-            if (fromHeight > toHeight) { throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`); }
+            if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
 
             /** @type {BlockData[]} */
             const blocksData = [];
@@ -659,7 +640,6 @@ export class Node {
                 const blockInfo = this.blockchain.blockStorage.getBlockInfoByIndex(i);
                 blocksData.push(this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo));
             }
-
             return blocksData;
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return []; }
     }
@@ -667,8 +647,7 @@ export class Node {
         try {
             const blockData = this.blockchain.getBlock(hash);
             const blockInfo = this.blockchain.blockStorage.getBlockInfoByIndex(blockData.index);
-            if (!blockData || !blockInfo) { throw new Error(`Block not found: ${hash}`); }
-
+            if (!blockData || !blockInfo) throw new Error(`Block not found: ${hash}`);
             return this.#exhaustiveBlockFromBlockDataAndInfo(blockData, blockInfo);
         } catch (error) { this.miniLogger.log(error, (m) => { console.error(m); }); return null; }
     }
@@ -693,7 +672,7 @@ export class Node {
     }
     /** 
      * @param {string} txReference - ex: 12:0f0f0f
-     * @param {string} address - optional: also return balanceChange for this address
+     * @param {string} [address] - optional: also return balanceChange for this address
      * @param {boolean} [includeTimestamp] - optional: include timestamp in the result */
     getTransactionByReference(txReference, address = undefined, includeTimestamp) {
         const result = { transaction: undefined, balanceChange: 0, inAmount: 0, outAmount: 0, fee: 0, timestamp: 0 };
@@ -721,7 +700,6 @@ export class Node {
                 const output = utxoRelatedTx.outputs[outputIndex];
                 result.inAmount += output.amount;
 
-                //if (!addressTxsReferences.includes(txRef)) { continue; }
                 if (output.address !== address) continue;
                 result.balanceChange -= output.amount;
             }
@@ -740,35 +718,21 @@ export class Node {
         const UTXOs = [];
         for (const anchor of addressAnchors) {
             const associatedMemPoolTx = this.memPool.transactionByAnchor[anchor];
-            if (associatedMemPoolTx) { continue; } // pending spent UTXO
+            if (associatedMemPoolTx) continue; // pending spent UTXO
 
             const utxo = this.utxoCache.getUTXO(anchor);
-            if (!utxo) { this.miniLogger.log(`UTXO not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
-            if (utxo.spent) { this.miniLogger.log(`UTXO spent but not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
+            if (!utxo) this.miniLogger.log(`UTXO not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); // should not happen
+            if (utxo.spent) this.miniLogger.log(`UTXO spent but not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); // should not happen
+            if (!utxo || utxo.spent) continue; // should not happen
 
             balance += utxo.amount;
             UTXOs.push(utxo);
 
-            if (utxo.rule === "sigOrSlash") { continue; }
+            if (utxo.rule === "sigOrSlash") continue;
             spendableBalance += utxo.amount;
         }
 
         return { spendableBalance, balance, UTXOs };
-    }
-    getAddressUtxosOnly(address) { // UNUSED ATM
-        const addressAnchors = this.utxoCache.getAddressAnchorsArray(address);
-        const UTXOs = [];
-        for (const anchor of addressAnchors) {
-            const associatedMemPoolTx = this.memPool.transactionByAnchor[anchor];
-            if (associatedMemPoolTx) { continue; } // pending spent UTXO
-
-            const utxo = this.utxoCache.getUTXO(anchor);
-            if (!utxo) { this.miniLogger.log(`UTXO not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
-            if (utxo.spent) { this.miniLogger.log(`UTXO spent but not removed from AddressAnchors: ${anchor}`, (m) => { console.error(m); }); continue; } // should not happen
-
-            UTXOs.push(utxo);
-        }
-        return UTXOs;
     }
 }
 

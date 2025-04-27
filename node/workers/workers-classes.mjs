@@ -7,11 +7,8 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 
 //const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
 let WorkerModule;
-try {
-    WorkerModule = (await import('worker_threads')).Worker;
-} catch (error) {
-    WorkerModule = Worker;
-}
+try { WorkerModule = (await import('worker_threads')).Worker }
+catch (error) { WorkerModule = Worker }
 
 function newWorker(scriptPath, workerCode, workerData = {}) {
     if (scriptPath) return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
@@ -100,9 +97,8 @@ export class MinerWorker {
             }
 
             if (message.hashRate) { this.hashRate = message.hashRate; return; }
-
-            if (message.result.error) { console.error(message.result.error); }
-            if (!message.result.error) { this.result = message.result; }
+            if (message.result.error) console.error(message.result.error);
+            if (!message.result.error) this.result = message.result;
             this.isWorking = false;
         });
     }
@@ -281,6 +277,7 @@ export class AccountDerivationWorker {
 }
 
 export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
+    app;
     /** @type {Worker} */
     worker = null;
     autoRestart = true;
@@ -303,11 +300,11 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
         this.autoRestart = false;
         this.worker.postMessage({ type: 'stop' });
 
-        if (!awaitTermination) { return true; }
+        if (!awaitTermination) return true;
 
         while (true) {
             await new Promise(resolve => setTimeout(resolve, 1000));
-            if (this.worker.threadId === -1) { break; }
+            if (this.worker.threadId === -1) break;
         }
         console.log('NodeAppWorker stopped');
         return true;

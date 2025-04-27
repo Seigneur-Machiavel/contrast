@@ -4,11 +4,12 @@ import { conditionnals } from '../../utils/conditionnals.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 const testStart = Date.now();
-let baseDifficulty = 61;
+let baseDifficulty = 77;
 let totalPowCounter = 0;
 let totalSuccess = 0;
 
 let sessionStart = Date.now();
+let sessionFinalDiffs = [];
 let powCounter = 0;
 let posTimestamp = 0;
 let success = 0;
@@ -52,9 +53,8 @@ class hashrateCalculator {
         if (this.hashCount >= 50) this.reset();
     }
 }
-function verify(HashBitsAsString = 'toto', timeDiffAdjustment = 0) {
-    const FD = Math.max(baseDifficulty + timeDiffAdjustment, 1); // cap at 1 minimum
-    const { zeros, adjust } = mining.decomposeDifficulty(FD);
+function verify(HashBitsAsString = 'toto', finalDiff = 0) {
+    const { zeros, adjust } = mining.decomposeDifficulty(finalDiff);
 
     const condition1 = conditionnals.binaryStringStartsWithZeros(HashBitsAsString, zeros);
     if (!condition1) return false;
@@ -117,14 +117,26 @@ async function mineBlockUntilValid(hps = false) {
             powCounter++;
             totalPowCounter++;
             
-            const differenceRatio = (Date.now() - posTimestamp) / BLOCKCHAIN_SETTINGS.targetBlockTime;
+            // simulate the bet of miner logic to be more accurate
+            // rnd from .4 to .8
+            const rnd = Math.random() * 0.4 + 0.4;
+            const bet = posTimestamp + (BLOCKCHAIN_SETTINGS.targetBlockTime * rnd);
+            const powTimestamp = Math.max(Date.now(), bet);
+
+            //const powTimestamp = Date.now(); //? not bet
+            const differenceRatio = (powTimestamp - posTimestamp) / BLOCKCHAIN_SETTINGS.targetBlockTime;
 
             const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
-            const conform = verify(bitsArrayAsString, timeDiffAdjustment);
-            //const conform = verify(bitsArrayAsString, 0);
+            const finalDiff = Math.max(baseDifficulty + timeDiffAdjustment, 1); // cap at 1 minimum
+            const conform = verify(bitsArrayAsString, finalDiff);
             if (!conform) continue;
-
-            posTimestamp = Date.now();
+            
+            //const conform = verify(bitsArrayAsString, 0);
+            // If bet the future, wait until the bet time
+            if (bet > Date.now()) await new Promise((resolve) => setTimeout(resolve, bet - Date.now()));
+            
+            sessionFinalDiffs.push(finalDiff);
+            posTimestamp = powTimestamp + 1;
             success++;
             totalSuccess++;
             const sessionElapsedTime = Date.now() - sessionStart;
@@ -133,6 +145,14 @@ async function mineBlockUntilValid(hps = false) {
 
             const avgSuccessTime = sessionElapsedTime / success;
             const newDiff = mining.difficultyAdjustment({ index: success, difficulty: baseDifficulty }, avgSuccessTime);
+            
+            if (sessionFinalDiffs.length === 30) {
+                const averageFinalDiff = sessionFinalDiffs.reduce((a, b) => a + b, 0) / sessionFinalDiffs.length;
+                const estGlobalHasrate = mining.estimateGlobalHashrate(averageFinalDiff);
+                console.log(`Estimated global hashrate: ${estGlobalHasrate} H/s`);
+                sessionFinalDiffs = [];
+            }
+            
             if (baseDifficulty === newDiff) continue; // no adjustment needed
 
             console.log(`New difficulty: ${newDiff} | Avg success time: ${(avgSuccessTime*.001).toFixed(3)}s | Hash rate: ${hashRate} H/s | tS/tPow: ${totalSuccess}/${totalPowCounter}`);

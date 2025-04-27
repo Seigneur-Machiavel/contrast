@@ -239,11 +239,11 @@ button {
     position: absolute;
     width: 22px;
     height: 22px;
-    left: 10px; /* Ajustez cette valeur pour aligner l'icône comme vous le souhaitez */
+    left: 10px;
     top: 50%;
     opacity: .6;
     transform: translateY(-50%);
-    pointer-events: none; /* Empêche l'icône d'interférer avec le comportement de l'input */
+    pointer-events: none;
     filter: invert(var(--dark-mode-boolean));
 }
 #cbe-chainWrap {

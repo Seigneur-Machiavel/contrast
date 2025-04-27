@@ -31,10 +31,8 @@ export class CryptoLight {
     #salt1 = null;
 
     /** @param {argon2HashFunction} [argon2Hash] */
-    constructor(argon2Hash) {
-        this.argon2Hash = argon2Hash;
-    }
-    
+    constructor(argon2Hash) { this.argon2Hash = argon2Hash }
+
     clear() {
         this.#key = null;
         this.#iv = null;

@@ -19,8 +19,8 @@ export class EasyUpnp {
     }
     async #renewMappingLoop() {
         while (true) {
-            try { await this.mapPort(this.mappedPort);
-            } catch (error) { console.error('Error while renewing the port mapping :', error) }
+            try { await this.mapPort(this.mappedPort) }
+            catch (error) { console.error('Error while renewing the port mapping :', error) }
             
             await new Promise(resolve => setTimeout(resolve, this.autoRenewDelaySec * 1000));
         }

@@ -283,27 +283,24 @@ export class Blockchain {
     /** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
     getBlock(heightOrHash, deserialize = true) {
         //const startTimestamp = performance.now();
-        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') { return null; }
+        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') return null;
         
         /** @type {BlockData} */
         let block;
 
         // try to get the block from the cache
-        if (deserialize && typeof heightOrHash === 'number' && this.cache.blocksHashByHeight.has(heightOrHash)) {
+        if (deserialize && typeof heightOrHash === 'number' && this.cache.blocksHashByHeight.has(heightOrHash))
             block = this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(heightOrHash));
-        }
-        if (deserialize && typeof heightOrHash === 'string' && this.cache.blocksByHash.has(heightOrHash)) {
+        
+        if (deserialize && typeof heightOrHash === 'string' && this.cache.blocksByHash.has(heightOrHash))
             block = this.cache.blocksByHash.get(heightOrHash);
-        }
         //const readCacheTime = (performance.now() - startTimestamp).toFixed(5);
-
-        if (block) { return block; }
+        if (block) return block;
 
         // try to get the block from the storage
         block = this.blockStorage.retreiveBlock(heightOrHash, deserialize);
-        //const readStorageTime = (performance.now() - startTimestamp).toFixed(5);
-        //console.warn(`[DB] Read cache: ${readCacheTime}ms - [DB] getBlock: ${readStorageTime}ms`);
-        if (block) { return block; }
+        //console.warn(`[DB] Read cache: ${readCacheTime}ms - [DB] getBlock: ${(performance.now() - startTimestamp).toFixed(5)}ms`);
+        if (block) return block;
 
         this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m) => { console.error(m); });
         return null;
@@ -324,7 +321,6 @@ export class Blockchain {
 
         return null;
     }
-    
     reset() {
         this.blockStorage.reset();
         this.addressesTxsRefsStorage.reset();

@@ -222,12 +222,12 @@ export class SyncHandler {
             this.node.updateState(`syncing checkpoint #${consensus.checkpointInfo.height}...`);
             for (const peerStatus of peersStatus) {
                 const { peerIdStr, checkpointInfo } = peerStatus;
-                if (checkpointInfo.height !== consensus.checkpointInfo.height) { continue; }
-                if (checkpointInfo.hash !== consensus.checkpointInfo.hash) { continue; } //? enabled
+                if (checkpointInfo.height !== consensus.checkpointInfo.height) continue;
+                if (checkpointInfo.hash !== consensus.checkpointInfo.hash) continue; //? enabled
 
                 this.miniLogger.log(`Attempting to sync checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
                 const success = await this.#getCheckpoint(peerIdStr, consensus.checkpointInfo.hash); //? enabled
-                if (!success) { continue; }
+                if (!success) continue;
                 
                 this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
                 return 'Checkpoint downloaded';
@@ -238,12 +238,12 @@ export class SyncHandler {
         this.miniLogger.log(`consensusHeight #${consensus.height}, current #${myCurrentHeight} -> getblocks from ${peersStatus.length} peers`, (m) => { console.info(m); });
         for (const peerStatus of peersStatus) {
             const { peerIdStr, currentHeight, latestBlockHash } = peerStatus;
-            if (latestBlockHash !== consensus.blockHash) { continue; } // Skip peers with different hash than consensus
+            if (latestBlockHash !== consensus.blockHash) continue; // Skip peers with different hash than consensus
 
             const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight);
-            if (!synchronized) { continue; }
+            if (!synchronized) continue;
 
-            if (synchronized === 'Checkpoint deployed') { return synchronized; }
+            if (synchronized === 'Checkpoint deployed') return synchronized;
             
             this.miniLogger.log(`Successfully synced blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
             return 'Verifying consensus';
@@ -255,16 +255,14 @@ export class SyncHandler {
         const peersToSync = Object.keys(this.p2pNet.peers);
         const msg = { type: 'getStatus' };
         const promises = [];
-        for (const peerIdStr of peersToSync) {
-            if (!this.p2pNet.peers[peerIdStr].dialable) continue;
-            promises.push(this.#sendSyncRequest(peerIdStr, msg, 1));
-        }
+        for (const peerIdStr of peersToSync)
+            if (this.p2pNet.peers[peerIdStr].dialable) promises.push(this.#sendSyncRequest(peerIdStr, msg, 1));
 
         /** @type {PeerStatus[]} */
         const peersStatus = [];
         for (const peerIdStr of peersToSync) {
             const response = await promises.shift();
-            if (!response || typeof response.currentHeight !== 'number') { continue; }
+            if (!response || typeof response.currentHeight !== 'number') continue;
 
             const { currentHeight, latestBlockHash, checkpointInfo } = response;
             peersStatus.push({ peerIdStr, currentHeight, latestBlockHash, checkpointInfo });
@@ -275,13 +273,13 @@ export class SyncHandler {
     }
     /** @param {PeerStatus[]} peersStatus */
     #findConsensus(peersStatus) {
-        if (!peersStatus || peersStatus.length === 0) { return false }
+        if (!peersStatus || peersStatus.length === 0) return false;
         
         /** @type {Consensus} */
         const consensus = { height: 0, peers: 0, blockHash: '' };
         const consensuses = {};
         for (const peerStatus of peersStatus) {
-            if (peerStatus.currentHeight === 0) { continue; }
+            if (peerStatus.currentHeight === 0) continue;
             const height = peerStatus.currentHeight;
             const blockHash = peerStatus.latestBlockHash;
 
@@ -289,8 +287,8 @@ export class SyncHandler {
             const heightPeers = (consensuses[height][blockHash] || 0) + 1;
             consensuses[height][blockHash] = heightPeers;
 
-            if (heightPeers < consensus.peers) { continue; }
-            if (heightPeers === consensus.peers && consensus.height > height) { continue; }
+            if (heightPeers < consensus.peers) continue;
+            if (heightPeers === consensus.peers && consensus.height > height) continue;
 
             consensus.height = height;
             consensus.peers = heightPeers;
@@ -301,15 +299,15 @@ export class SyncHandler {
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
             //this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} checkpointInfo #${peerStatus.checkpointInfo}`, (m) => { console.info(m); });
-            if (!peerStatus.checkpointInfo) { continue; }
+            if (!peerStatus.checkpointInfo) continue;
             const { height, hash } = peerStatus.checkpointInfo;
-            if (height === 0) { continue; }
+            if (height === 0) continue;
 
-            if (!checkpointConsensuses[height]) { checkpointConsensuses[height] = {}; }
+            if (!checkpointConsensuses[height]) checkpointConsensuses[height] = {};
             const checkpointPeers = (checkpointConsensuses[height][hash] || 0) + 1;
             checkpointConsensuses[height][hash] = checkpointPeers;
 
-            if (checkpointPeers < checkpointConsensus.peers) { continue; }
+            if (checkpointPeers < checkpointConsensus.peers) continue;
             if (checkpointPeers === checkpointConsensus.peers && checkpointConsensus.checkpointInfo.height > height) { continue; }
 
             checkpointConsensus.peers = checkpointPeers;
