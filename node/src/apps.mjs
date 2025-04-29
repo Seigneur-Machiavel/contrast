@@ -95,8 +95,8 @@ class AppStaticFncs {
             result.minerHashRate = node.miner.hashRate;
             result.minerThreads = node.miner.nbOfWorkers;
 
-            const avgFinalDiff = node.blockchain.cache.getAverageBlocksFinalDifficulty();
-            result.globalHashRate = mining.estimateGlobalHashrate(avgFinalDiff);
+            const { avgTG, avgDiff, avgDWL, avgFD } = node.blockchain.cache.getAverageBlocksDifficultyAndTimeGap();
+            result.globalHashRate = mining.estimateGlobalHashrate(avgDWL, avgTG, BLOCKCHAIN_SETTINGS.targetBlockTime);
             result.coinBase = node.blockchain.lastBlock.coinBase;
             result.miningDailyReward = AppStaticFncs.estimateDailyMiningReward(result.coinBase, result.globalHashRate, result.minerHashRate);
         }

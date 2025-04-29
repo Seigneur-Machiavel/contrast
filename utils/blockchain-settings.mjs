@@ -40,7 +40,7 @@ export const MINING_PARAMS = {
     
     // HARDCODE VALUES, USED FOR REFERENCE ONLY
     doubleDiffPoints: 16, // 16 diff points = 100% of diff
-    //?oneHsDiffBasis: 112, // 1 Hash/s = 112 difficulty points - deprecated
-    oneHsDiffBasis: 77, // 1 Hash/s = 77 baseDifficulty points - considering timeDiffAdjustment
+    //?oneHsDiffBasis: 112, // 1 Hash/s = 112 difficulty points -> deprecated
+    oneHsDiffBasis: 92, // 1 Hash/s = 92 baseDifficulty points -> considering timeDiffAdjustment
     blocksPerDay: 60 * 60 * 24 / (BLOCKCHAIN_SETTINGS.targetBlockTime * .001) // 720 blocks per day at 120s per block
 };

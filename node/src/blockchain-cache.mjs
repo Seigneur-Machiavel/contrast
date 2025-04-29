@@ -40,12 +40,6 @@ export class BlocksCache {
         }
         return blocksTimestamps;
     }
-    /** @param {number} index @param {string} hash */
-    #deleteBlock(index, hash) {
-        this.blocksHashByHeight.delete(index);
-        this.blockHeightByHash.delete(hash);
-        this.blocksByHash.delete(hash);
-    }
     /** returns the height of erasable blocks without erasing them. @param {number} height */
     erasableLowerThan(height = 0) {
         let erasableUntil = null;
@@ -70,24 +64,38 @@ export class BlocksCache {
             const blockHash = this.blocksHashByHeight.get(i);
             if (!blockHash) continue;
 
-            this.#deleteBlock(i, blockHash);
+            this.blockHeightByHash.delete(blockHash);
+            this.blocksByHash.delete(blockHash);
+            this.blocksHashByHeight.delete(i);
             erasedUntil = i;
         }
 
         this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
         return { from: fromHeight, to: erasedUntil };
     }
-    getAverageBlocksFinalDifficulty() {
+    getAverageBlocksDifficultyAndTimeGap() {
         const blocks = [...this.blocksByHash.values()];
         if (blocks.length === 0) return null;
 
+        const timeGaps = [];
+        const diffs = [];
+        const diffsWithLegitimacy = [];
         const finalDiffs = [];
         for (const block of blocks) {
-            const adj = block.legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
-            finalDiffs.push(block.difficulty + adj);
+            timeGaps.push(block.timestamp - block.posTimestamp);
+            diffs.push(block.difficulty);
+            const legAdj = block.legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
+            diffsWithLegitimacy.push(Math.max(block.difficulty + legAdj, 1)); // cap at 1 minimum
+            
+            const differenceRatio = difference / targetBlockTime;
+            const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
+            finalDiffs.push(Math.max(baseDifficulty + timeDiffAdjustment + legAdj, 1)); // cap at 1 minimum
         }
 
-        const average = finalDiffs.reduce((a, b) => a + b, 0) / finalDiffs.length;
-        return average;
+        const avgTG = timeGaps.reduce((a, b) => a + b, 0) / timeGaps.length;
+        const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+        const avgDWL = diffsWithLegitimacy.reduce((a, b) => a + b, 0) / diffsWithLegitimacy.length;
+        const avgFD = finalDiffs.reduce((a, b) => a + b, 0) / finalDiffs.length;
+        return { avgTG, avgDiff, avgDWL, avgFD };
     }
 }

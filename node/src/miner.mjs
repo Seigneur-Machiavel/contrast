@@ -32,10 +32,10 @@ export class Miner {
         this.workers = [];
         this.nbOfWorkers = 1;
 
-        /** @type {Object<string, number[]>} */
-        this.bets = {};
+        /** @type {number[]} */
+        this.bets = [];
         /** @type {{min: number, max: number}} */
-        this.betRange = { min: .4, max: .8 }; // will bet between 40% and 80% of the expected blockTime
+        this.betRange = { min: .7, max: .9 }; // will bet between 70% and 90% of the expected blockTime
         this.powBroadcastState = { foundHeight: -1, sentTryCount: 0, maxTryCount: 3 };
 
         this.roles = node.roles;
@@ -100,14 +100,15 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         if (blockCandidate.index !== this.bestCandidateIndex()) { this.addressOfCandidatesBroadcasted = []; }
         this.bestCandidate = blockCandidate;
         
-        this.bets[blockCandidate.index] = this.bets[blockCandidate.index] || this.#betPowTime();
+        this.#betPowTime();
         if (this.wsCallbacks.onBestBlockCandidateChange) { this.wsCallbacks.onBestBlockCandidateChange.execute(blockCandidate); }
         return true;
     }
     #betPowTime(nbOfBets = 32) {
+        if (!this.useBetTimestamp) { this.bets = []; return }
+
         const bets = [];
         for (let i = 0; i < nbOfBets; i++) {
-            if (!this.useBetTimestamp) { bets.push(0); continue; }
             const targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime;
             const betBasis = targetBlockTime * this.betRange.min;
             const betRandom = Math.random() * (this.betRange.max - this.betRange.min) * targetBlockTime;
@@ -116,7 +117,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
             bets.push(bet);
         }
 
-        return bets;
+        this.bets = bets;
     }
     #getAverageHashrate() {
         let totalHashRate = 0;
@@ -166,7 +167,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
 
         for (let i = 0; i < missingWorkers; i++) {
             const workerIndex = readyWorkers + i;
-            const blockBet = this.bets && this.bets[this.bestCandidateIndex()] ? this.bets[this.bestCandidateIndex()][workerIndex] : 0;
+            const blockBet = this.bets?[this.bestCandidateIndex()][workerIndex] : 0;
             this.workers.push(new MinerWorker(this.address, blockBet, this.timeSynchronizer.offset));
             readyWorkers++;
         }
@@ -213,7 +214,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
             timings.workersUpdate = Date.now();
             
             for (let i = 0; i < readyWorkers; i++) {
-                const blockBet = this.bets && this.bets[this.bestCandidateIndex()] ? this.bets[this.bestCandidateIndex()][i] : 0;
+                const blockBet = this.bets?[this.bestCandidateIndex()][i] : 0;
                 await this.workers[i].updateInfo(this.address, blockBet, this.timeSynchronizer.offset);
             }
             timings.updateInfo = Date.now();
