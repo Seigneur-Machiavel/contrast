@@ -1,5 +1,6 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
 
 /**
 * @typedef {import("./block-classes.mjs").BlockData} BlockData
@@ -87,9 +88,10 @@ export class BlocksCache {
             const legAdj = block.legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
             diffsWithLegitimacy.push(Math.max(block.difficulty + legAdj, 1)); // cap at 1 minimum
             
-            const differenceRatio = difference / targetBlockTime;
-            const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
-            finalDiffs.push(Math.max(baseDifficulty + timeDiffAdjustment + legAdj, 1)); // cap at 1 minimum
+            //const differenceRatio = (block.timestamp - block.posTimestamp) / BLOCKCHAIN_SETTINGS.targetBlockTime;
+            //const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
+            //finalDiffs.push(Math.max(baseDifficulty + timeDiffAdjustment + legAdj, 1)); // cap at 1 minimum
+            finalDiffs.push(mining.getBlockFinalDifficulty(block).finalDifficulty);
         }
 
         const avgTG = timeGaps.reduce((a, b) => a + b, 0) / timeGaps.length;
