@@ -24,6 +24,7 @@ window.ipcRenderer = ipcRenderer;
 
 const { InfoManager } = require('./info-manager.js');
 const { AppsManager } = require('./apps-manager.js');
+const { SettingsManager } = require('./settings-manager.js');
 const { Assistant } = require('../../apps/assistant/board-assistant.js');
 const { BoardInternalWallet } = require('../../apps/wallet/biw.js');
 
@@ -34,9 +35,13 @@ let biw;
 
 //#region IPC listeners
 ipcRenderer.on('no-existing-password', (event, ...args) => assistant.requestNewPassword() );
-ipcRenderer.on('set-new-password-result', (event, ...args) => { if (!args[0]) assistant.requestNewPassword('Password creation failed, try again'); });
+ipcRenderer.on('set-new-password-result', (event, ...args) => {
+	if (!args[0]) assistant.requestNewPassword('Password creation failed, try again');
+	else { assistant.sendMessage('Password created successfully!'); assistant.idleMenu(); }
+});
 ipcRenderer.on('password-requested', (event, ...args) => { appsManager.lock(); assistant.requestPasswordToUnlock(); });
 ipcRenderer.on('set-password-result', (event, ...args) => { if (!args[0]) assistant.requestPasswordToUnlock(true); });
+ipcRenderer.on('remove-password-result', (event, ...args) => assistant.askNewPassowrdIfRemovedSuccessfully(args[0]));
 ipcRenderer.on('no-password-required', (event, ...args) => {
 	assistant.sendMessage('No password required, initializing node...');
 	ipcRenderer.send('set-password', 'fingerPrint');
@@ -93,12 +98,16 @@ ipcRenderer.on('connexion-resume', (event, ...args) => {
 ipcRenderer.on('assistant-message', (event, ...args) => assistant.sendMessage(args[0], 'system'));
 ipcRenderer.on('assistant-private-key', (event, ...args) => assistant.showPrivateKey(args[0], true)); // show as words
 ipcRenderer.on('window-to-front', (event, ...args) => appsManager.setFrontWindow(args[0]));
+ipcRenderer.on('app-settings', (event, ...args) => settingsManager.fillSettingsMenu(args[0]));
 //#endregion
 
+const infoManager = new InfoManager();
 const windowsWrap = document.getElementById('board-windows-wrap');
 const bottomButtonsBar = document.getElementById('board-bottom-buttons-bar');
-const infoManager = new InfoManager();
 const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
+const settingsMenuElement = document.getElementById('board-settings-menu');
+const settingsManager = new SettingsManager(settingsMenuElement);
+ipcRenderer.send('get-app-settings'); // get settings to fill settings menu
 appsManager.initApps();
 window.appsManager = appsManager;
 
@@ -118,6 +127,7 @@ window.addEventListener('click', (e) => {
 	clickTitleBarButtonsHandler(e);
 	appsManager.clickAppButtonsHandler(e);
 	appsManager.clickWindowHandler(e);
+	settingsManager.clickSettingsButtonHandler(e);
 });
 window.addEventListener('mouseover', (e) => { appsManager.hoverAppButtonsHandler(e); });
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });

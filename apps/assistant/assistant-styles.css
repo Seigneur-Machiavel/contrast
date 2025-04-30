@@ -44,13 +44,14 @@
     background-color: var(--color1_1);
     color: var(--color2);
 }
-.board-message:hover .board-delete-btn, .board-delete-btn:hover {
+.board-message:hover .board-delete-btn, .board-message .board-delete-btn:hover {
     opacity: 1;
     transform: translate(40%, -40%);
 }
 .board-delete-btn:hover {
-    background-color: var(--color2);
-    color: var(--color1);
+    background-color: var(--color1) !important;
+    color: var(--color2) !important;
+    border: solid 2px var(--color2) !important;
 }
 
 .board-message.user {
@@ -62,18 +63,16 @@
     animation: messageAppear .2s forwards;
 }
 .board-message.user .board-delete-btn {
+    right: auto;
+    left: 0px;
     background-color: var(--color2);
     color: var(--color1_1);
 }
-.board-message.user .board-delete-btn:hover {
-    background-color: var(--color1_1);
-    color: var(--color2);
+.board-message.user:hover .board-delete-btn, .board-message.user .board-delete-btn:hover {
+    opacity: 1;
+    transform: translate(-40%, -40%);
 }
-/*.board-message.wordslist {
-    display: flex;
-    width: fit-content;
-    gap: 5px;
-}*/ /* looks useless */
+
 .board-wordslist-row {
     display: flex;
     width: 400px;
@@ -160,6 +159,26 @@
     box-shadow: inset 0px 0px 0px 2px var(--color1_2);
     padding: 10px;
 }
+/*#board-messages-input-possibilitiesList { // DEPRECATED
+    display: block;
+    background: var(--color1);
+    z-index: 9;
+    position: absolute;
+    border: solid 1px var(--color2);
+    font-size: small;
+}
+#board-messages-input-possibilitiesList .visible {
+    display: block;
+}*/
+/*#board-messages-input-possibilitiesList option {
+    padding: 5px 10px;
+    cursor: pointer;
+    border-bottom: solid 1px var(--color1_3);
+}
+#board-messages-input-possibilitiesList option:hover {
+    background: var(--color2);
+    color: var(--color1);
+}*/
 #board-send-btn {
     margin-top: 5px;
     display: none;

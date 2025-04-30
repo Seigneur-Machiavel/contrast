@@ -18,10 +18,10 @@ const cryptolights = {
     finger: new CryptoLight(argon2Hash), // fingerPrint based encryptiuon, software usage
     pass: new CryptoLight(argon2Hash) // password based encryption, user usage
 }
-const loadCryptoLight = cryptolights.v0;
-const dashApp = new DashboardWsApp(undefined, loadCryptoLight, nodePort, dashboardPort, false);
 
 monitorPerformance(); // Detect potential freeze
+
+const dashApp = new DashboardWsApp(undefined, cryptolights.v0, nodePort, dashboardPort, false);
 const stressTester = new StressTester(dashApp.node);
 const fingerPrint = nodeMachineId.machineIdSync();
 let passwordExist = Storage.isFileExist('passHash.bin');
@@ -30,57 +30,63 @@ let nodeInitialized = false;
 
 const fingerPrintUint8 = new Uint8Array(Buffer.from(fingerPrint, 'hex'));
 cryptolights.finger.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8);
-cryptolights.finger.generateKey(fingerPrint); // async ...
+await cryptolights.finger.generateKey(fingerPrint); // async ...
 dashApp.cryptoFinger = cryptolights.finger; // upgrade v2
 
 // FUNCTIONS
 async function initDashAppAndSaveSettings(privateKey = '') {
-    while(initializingNode) { await new Promise(resolve => setTimeout(resolve, 100)); }
+    while(initializingNode) await new Promise(resolve => setTimeout(resolve, 100));
     if (nodeInitialized) return; // avoid double init
 
     initializingNode = true;
     parentPort.postMessage({ type: 'node_starting' });
-    const initialized = await dashApp.init(privateKey, forceRelay);
-    if (!initialized && dashApp.waitingForPrivKey) {
+
+    nodeInitialized = await dashApp.init(privateKey, forceRelay);
+    if (!nodeInitialized && dashApp.waitingForPrivKey) {
         parentPort.postMessage({ type: 'message_to_mainWindow', data: 'waiting-for-priv-key' });
         console.error(`Can't init dashApp, waitingForPrivKey!`);
-    } else if (!initialized) { console.error(`Can't init dashApp, unknown reason!`) }
+    } else if (!nodeInitialized) console.error(`Can't init dashApp, unknown reason!`);
 
     initializingNode = false;
-    nodeInitialized = initialized;
-    if (!initialized) return;
+    if (!nodeInitialized) return;
     
     parentPort.postMessage({ type: 'node_started', data: dashApp.extractNodeSetting().privateKey });
-    dashApp.saveNodeSettingBinary();
-    dashApp.saveNodeSettingBinary_v2();
+    await dashApp.saveNodeSettingBinary('v0');
+    await dashApp.saveNodeSettingBinary('finger');
     parentPort.postMessage({ type: 'message_to_mainWindow', data: 'node-settings-saved' });
+}
+function verifyPasshash(passHash) {
+    if (!passHash) { console.error('passHash is undefined'); return false; }
+
+    const loadedPassBytes = Storage.loadBinary('passHash');
+    if (!loadedPassBytes) { console.error('Can\'t load existing password hash'); return false; }
+
+    for (let i = 0; i < loadedPassBytes.length; i++) {
+        if (passHash.hashUint8[i] === loadedPassBytes[i]) continue;
+        console.error('Existing password hash not match');
+        return false;
+    }
+    console.info('Existing password hash match');
+
+    return true;
 }
 async function setPassword(password = 'toto') {
     const passwordStr = password === 'fingerPrint' ? fingerPrint.slice(0, 30) : password;
-    const passHash = await loadCryptoLight.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
+    const passHash = await cryptolights.v0.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
     if (!passHash) { console.error('Argon2 hash failed'); return false; }
 
-    if (!passwordExist) {
+    if (passwordExist && !verifyPasshash(passHash)) return false; // Verify existing password hash
+    else { // Save new password hash
         Storage.saveBinary('passHash', passHash.hashUint8);
         passwordExist = true;
         console.info('New password hash saved');
-    } else {
-        const loadedPassBytes = Storage.loadBinary('passHash');
-        if (!loadedPassBytes) { console.error('Can\'t load existing password hash'); return false; }
-        
-        for (let i = 0; i < loadedPassBytes.length; i++) {
-            if (passHash.hashUint8[i] === loadedPassBytes[i]) continue;
-            console.error('Existing password hash not match');
-            return false;
-        }
-        console.info('Existing password hash match');
     }
 
-    if (loadCryptoLight.isReady()) return true;
+    if (cryptolights.v0.isReady()) return true;
 
     const concatenated = fingerPrint + passwordStr;
-    loadCryptoLight.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8);
-    await loadCryptoLight.generateKey(concatenated);
+    cryptolights.v0.set_salt1_and_iv1_from_Uint8Array(fingerPrintUint8);
+    await cryptolights.v0.generateKey(concatenated);
 
     return true;
 }
@@ -117,12 +123,25 @@ parentPort.on('message', async (message) => {
             await stop();
             break;
         case 'set_password_and_try_init_node':
+            if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
             const passwordCreation = !passwordExist;
             const setPasswordSuccess = await setPassword(message.data);
             parentPort.postMessage({ type: passwordCreation ? 'set_new_password_result' : 'set_password_result', data: setPasswordSuccess });
             if (!setPasswordSuccess) return;
 
             await initDashAppAndSaveSettings();
+            break;
+        case 'remove_password':
+            if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
+            const passwordStr = message.data === 'fingerPrint' ? fingerPrint.slice(0, 30) : message.data;
+            const passHash = await cryptolights.v0.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
+            if (!verifyPasshash(passHash))
+                { parentPort.postMessage({ type: 'remove_password_result', data: false }); return }
+
+            Storage.deleteFile('passHash.bin');
+            cryptolights.pass = new CryptoLight(argon2Hash);
+            passwordExist = false;
+            parentPort.postMessage({ type: 'remove_password_result', data: true });
             break;
         case 'set_private_key_and_start_node':
             console.info('Setting private key');
@@ -148,16 +167,16 @@ parentPort.on('message', async (message) => {
             parentPort.postMessage({ type: 'new_address_generated', data: newAddress });
             break;
         case 'cypher_text':
-            if (!loadCryptoLight.isReady()) return false;
+            if (!cryptolights.v0.isReady()) return false;
             if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
-            const cipherText = await loadCryptoLight.encryptText(message.data, undefined, true);
+            const cipherText = await cryptolights.v0.encryptText(message.data, undefined, true);
             if (!cipherText) { console.error('Cypher text failed'); return; }
             parentPort.postMessage({ type: 'cypher_text_result', data: cipherText });
             break;
         case 'decipher_text':
-            if (!loadCryptoLight.isReady()) return false;
+            if (!cryptolights.v0.isReady()) return false;
             if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
-            const decipherText = await loadCryptoLight.decryptText(message.data, undefined);
+            const decipherText = await cryptolights.v0.decryptText(message.data, undefined);
             if (!decipherText) { console.error('Decipher text failed'); return; }
             parentPort.postMessage({ type: 'decipher_text_result', data: decipherText });
             break;

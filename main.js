@@ -4,6 +4,7 @@ process.on('uncaughtException', (error) => { console.error('Uncatched exception:
 const fs = require('fs');
 const path = require('path');
 const { app, BrowserWindow, Menu, globalShortcut, dialog, ipcMain, ipcRenderer } = require('electron');
+const { AppSettings } = require('./electron-app/index/settings-manager.js');
 Menu.setApplicationMenu(null); // remove the window top menu
 const isDev = !app.isPackaged;
 
@@ -186,8 +187,14 @@ ipcMain.on('set-password', async (event, password) => {
     event.reply(channel, data);
     
     // randomRestartTest(); // -- test restart each 120s to 600s --
+    if (windows.logger) return;
     windows.logger = await createWindow(windowsOptions.logger);
     setShortcuts(windows, isDev);
+});
+ipcMain.on('remove-password', async (event, password) => {
+    console.log('removing password...');
+    const { channel, data } = await nodeAppWorker.removePasswordAndWaitResult(password);
+    event.reply(channel, data);
 });
 ipcMain.on('generate-private-key-and-start-node', () => nodeAppWorker.generatePrivateKeyAndStartNode());
 ipcMain.on('set-private-key-and-start-node', (event, privateKey) => {
@@ -210,6 +217,12 @@ ipcMain.on('set-auto-launch', async (event, value) => {
     const isNowEnabled = await myAppAutoLauncher.isEnabled();
     console.log(`Auto launch changed: ${isEnabled} -> ${isNowEnabled}`);
     event.reply('assistant-message', `Auto launch is now ${isNowEnabled ? 'enabled' : 'disabled'}`);
+});
+ipcMain.on('get-app-settings', async (event) => {
+    const appSettings = new AppSettings();
+    appSettings.autoLaunch = await myAppAutoLauncher.isEnabled();
+
+    event.reply('app-settings', appSettings);
 });
 ipcMain.on('reset-private-key', async (event) => {
     if (nodeAppWorker) await nodeAppWorker.stop();

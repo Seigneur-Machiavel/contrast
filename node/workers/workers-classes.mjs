@@ -315,18 +315,31 @@ export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     async setPasswordAndWaitResult(password = '') {
         const promise = new Promise((resolve, reject) => {
             this.worker.on('message', (message) => {
-                if (message.type === 'set_new_password_result' && typeof message.data === 'boolean') {
+                if (message.type === 'set_new_password_result' && typeof message.data === 'boolean')
                     return resolve({channel: 'set-new-password-result', data: message.data});
-                }
-                if (message.type === 'set_password_result' && typeof message.data === 'boolean') {
+                
+                if (message.type === 'set_password_result' && typeof message.data === 'boolean')
                     return resolve({channel: 'set-password-result', data: message.data});
-                }
+            
             }), setTimeout(() => { reject('Timeout'); }, 10000);
         });
 
         this.#password = password;
         this.worker.postMessage({ type: 'set_password_and_try_init_node', data: password });
         console.info('set_password msg sent to NodeAppWorker');
+
+        return promise;
+    }
+    removePasswordAndWaitResult(password = '') {
+        const promise = new Promise((resolve, reject) => {
+            this.worker.on('message', (message) => {
+                if (message.type === 'remove_password_result' && typeof message.data === 'boolean')
+                    return resolve({channel: 'remove-password-result', data: message.data});
+            }), setTimeout(() => { reject('Timeout'); }, 10000);
+        });
+
+        this.worker.postMessage({ type: 'remove_password', data: password });
+        console.info('remove_password msg sent to NodeAppWorker');
 
         return promise;
     }

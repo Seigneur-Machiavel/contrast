@@ -165,17 +165,19 @@ export class CryptoLight {
         if (iv.length !== 12) { console.error('IV must be 12 bytes long'); return false; }
         
         const buffer = typeof input === 'string' ? new TextEncoder().encode(input) : input;
-        const encryptedContent = await crypto.subtle.encrypt(
-            { name: "AES-GCM", iv},
-            this.#key,
-            buffer
-        );
-
-        const resultUint8 = new Uint8Array(encryptedContent);
-        if (!resultBase64) { return resultUint8; }
-
-        const encryptedContentBase64 = this.uint8ArrayToBase64(resultUint8);
-        return encryptedContentBase64;
+        try {
+            const encryptedContent = await crypto.subtle.encrypt(
+                { name: "AES-GCM", iv},
+                this.#key,
+                buffer
+            );
+    
+            const resultUint8 = new Uint8Array(encryptedContent);
+            if (!resultBase64) { return resultUint8; }
+    
+            const encryptedContentBase64 = this.uint8ArrayToBase64(resultUint8);
+            return encryptedContentBase64;
+        } catch (error) { return false; }
     }
     /** @param {string | Uint8Array} input - base64 or Binary @param {Uint8Array} IV */
     async decryptText(input, IV = false, resultUint8Array = false) {
@@ -187,14 +189,16 @@ export class CryptoLight {
         if (iv.length !== 12) { console.error('IV must be 12 bytes long'); return false; }
         
         const buffer = typeof input === 'string' ? this.base64ToUint8Array(input) : input;
-        const decryptedContent = await crypto.subtle.decrypt(
-            { name: "AES-GCM", iv },
-            this.#key,
-            buffer
-        );
-
-        const decryptedUint8Array = new Uint8Array(decryptedContent);
-        return resultUint8Array ? decryptedUint8Array : new TextDecoder().decode(decryptedUint8Array);
+        try {
+            const decryptedContent = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv },
+                this.#key,
+                buffer
+            );
+    
+            const decryptedUint8Array = new Uint8Array(decryptedContent);
+            return resultUint8Array ? decryptedUint8Array : new TextDecoder().decode(decryptedUint8Array);
+        } catch (error) { return false; }
     }
     #generateRandomUint8Array(bytesEntropy = 16) {
         const randomUint8Array = new Uint8Array(bytesEntropy);

@@ -76,7 +76,7 @@ async function mineBlockUntilValid() {
 			const startTime = performance.now();
 			const { signatureHex, nonce, clonedCandidate } = await prepareBlockCandidateBeforeMining();
 			const mined = await mineBlock(clonedCandidate, signatureHex, nonce, false);
-			if (!mined) { throw new Error('Invalid block hash'); }
+			if (!mined) throw new Error('Invalid block hash');
 	
 			minerVars.hashCount++;
 			hashRateCalculator.newHash(performance.now() - startTime);
@@ -87,7 +87,6 @@ async function mineBlockUntilValid() {
 
 			const now = Date.now() + minerVars.timeOffset;
 			const blockReadyIn = Math.max(mined.finalizedBlock.timestamp - now, 0);
-			
 			await new Promise((resolve) => setTimeout(resolve, blockReadyIn));
 			return mined.finalizedBlock;
 		} catch (error) {

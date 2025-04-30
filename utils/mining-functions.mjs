@@ -70,6 +70,12 @@ export const mining = {
         const Hex = Array.from(Uint8).map(b => b.toString(16).padStart(2, '0')).join('');
         return { Uint8, Hex };
     },
+    betPowTime: (min = .7, max = .9, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
+        const random = Math.random() * (max - min) + min; // random number between min and max
+        const betTime = Math.round(targetBlockTime * random); // multiply by targetBlockTime to get the bet time in ms
+        //console.log(`Bet time: ${betTime}ms`);
+        return betTime; 
+    },
     /**
      * This function uses an Argon2 hash function to perform a hashing operation.
      * The Argon2 hash function must follow the following signature:

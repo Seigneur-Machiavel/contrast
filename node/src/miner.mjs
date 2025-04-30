@@ -67,7 +67,7 @@ export class Miner {
         if (Math.abs(posReward - powReward) > 1) { console.info(`[MINER-${this.address.slice(0, 6)}] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`); return; }
 
         const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
-        if (blockCandidate.prevHash !== prevHash) { return false; }
+        if (blockCandidate.prevHash !== prevHash) return false;
         
         let reasonChange = 'none';
         if (!this.bestCandidate) {
@@ -79,18 +79,18 @@ export class Miner {
         } else if (blockCandidate.index === this.bestCandidate.index) {
             const newCandidateFinalDiff = mining.getBlockFinalDifficulty(blockCandidate).finalDifficulty;
             const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate).finalDifficulty;
-            if (newCandidateFinalDiff > bestCandidateFinalDiff) { return false; };
+            if (newCandidateFinalDiff > bestCandidateFinalDiff) return false;
             if (newCandidateFinalDiff < bestCandidateFinalDiff) { reasonChange = `(easier block: ${newCandidateFinalDiff} < ${bestCandidateFinalDiff})`; }
             // if everything is the same, then check the powReward to decide
-            if (reasonChange === 'none' && powReward > this.bestCandidate.powReward ) {
-                reasonChange = `(higher powReward: ${powReward} > ${this.bestCandidate.powReward})`;
-            }
+            if (reasonChange === 'none' && powReward > this.bestCandidate.powReward )
+                reasonChange = ` (higher powReward: ${powReward} > ${this.bestCandidate.powReward})`;
+            
             // preserve the current best candidate, but update considered as true to encourage re-bradcasting
-            if (reasonChange === 'none') { return true; }
+            if (reasonChange === 'none') return true;
         }
 
         // preserve the current best candidate, but update considered as true to encourage re-bradcasting
-        if (reasonChange === 'none') { return true; }
+        if (reasonChange === 'none') return true;
 
         console.info(`[MINER-${this.address.slice(0, 6)}] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
@@ -100,22 +100,16 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         if (blockCandidate.index !== this.bestCandidateIndex()) { this.addressOfCandidatesBroadcasted = []; }
         this.bestCandidate = blockCandidate;
         
-        this.#betPowTime();
+        this.#prepareBets();
         if (this.wsCallbacks.onBestBlockCandidateChange) { this.wsCallbacks.onBestBlockCandidateChange.execute(blockCandidate); }
         return true;
     }
-    #betPowTime(nbOfBets = 32) {
+    #prepareBets(nbOfBets = 32) {
         if (!this.useBetTimestamp) { this.bets = []; return }
 
+        const { min, max } = this.betRange;
         const bets = [];
-        for (let i = 0; i < nbOfBets; i++) {
-            const targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime;
-            const betBasis = targetBlockTime * this.betRange.min;
-            const betRandom = Math.random() * (this.betRange.max - this.betRange.min) * targetBlockTime;
-            const bet = Math.floor(betBasis + betRandom);
-
-            bets.push(bet);
-        }
+        for (let i = 0; i < nbOfBets; i++) bets.push(mining.betPowTime(min, max));
 
         this.bets = bets;
     }
@@ -167,7 +161,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
 
         for (let i = 0; i < missingWorkers; i++) {
             const workerIndex = readyWorkers + i;
-            const blockBet = this.bets?[this.bestCandidateIndex()][workerIndex] : 0;
+            const blockBet = this.bets?.[workerIndex] || 0;
             this.workers.push(new MinerWorker(this.address, blockBet, this.timeSynchronizer.offset));
             readyWorkers++;
         }
@@ -210,25 +204,25 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
             }
             
             const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
-            for (let i = 0; i < readyWorkers; i++) { await this.workers[i].updateCandidate(blockCandidate); }
+            for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
             timings.workersUpdate = Date.now();
             
             for (let i = 0; i < readyWorkers; i++) {
-                const blockBet = this.bets?[this.bestCandidateIndex()][i] : 0;
+                const blockBet = this.bets?.[i] || 0;
                 await this.workers[i].updateInfo(this.address, blockBet, this.timeSynchronizer.offset);
             }
             timings.updateInfo = Date.now();
 
             for (let i = 0; i < readyWorkers; i++) {
                 const worker = this.workers[i];
-                if (worker.isWorking) { continue; }
+                if (worker.isWorking) continue;
                 if (worker.result !== null) {
                     const finalizedBlock = worker.getResultAndClear();
                     //console.info(`[MINER-${this.address.slice(0, 6)}] Worker ${i} pow! #${finalizedBlock.index})`);
                     await this.broadcastFinalizedBlock(finalizedBlock);
                 }
 
-                if (!this.canProceedMining) { continue; }
+                if (!this.canProceedMining) continue;
                 worker.mineUntilValid();
             }
             

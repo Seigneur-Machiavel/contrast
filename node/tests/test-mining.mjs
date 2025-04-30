@@ -18,14 +18,11 @@ let sessionDiffWL = []; // diff including legitimacy
 let powCounter = 0;
 let posTimestamp = 0;
 let success = 0;
+
 const hashPerSecond = speedHash; // SIMULATION, set false for real mining
 const expectedHashtime = 1000 / hashPerSecond; // 1000ms / 32 = 31.25ms
 const adjustDiffEveryCrop = 0; // init: 30 blocks, then 15 + 15 = 30 blocks // 0 to disable adjustment
 const betRange = { min: .7, max: .9 }
-
-const betStart = false; // .1 = 10% of the target time, used to find perfect bet time, false = rnd bet
-let betRnd = 0; 
-let betRndMod = .01;
 const disableBet = false; // disable bet time adjustment
 
 /** @param {string} signatureHex @param {string} nonce */
@@ -85,8 +82,6 @@ function rndHash(len = 64) {
 let pauseTime = 0;
 async function simulatedPow(hps = 10) {
     const startTime = performance.now();
-    //const bitsArray = [];
-    //for (let i = 0; i < 256; i++) rndBitsArray.push(Math.floor(Math.random() * 2));
     const hash = rndHash(64);
     const bitsArray = convert.hex.toBits(hash);
 
@@ -134,11 +129,11 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
             }
             
             // simulate the bet of miner logic to be more accurate
-            if (betStart && !betRnd) betRnd = betStart; // init
-            if (!betStart) betRnd = Math.random() * (betRange.max - betRange.min) + betRange.min; // rnd from .4 to .8 (randomize bet time)
-            if (disableBet) betRnd = 0; // disable bet time adjustment
+            const { min, max } = betRange;
+            let betTime = mining.betPowTime(min, max); // rnd from .4 to .8 (randomize bet time)
+            if (disableBet) betTime = 0; // disable bet time adjustment
 
-            const bet = Math.round(posTimestamp + (targetBlockTime * betRnd) + 1);
+            const bet = Math.round(posTimestamp + betTime + 1);
             let powTimestamp = Math.max(Date.now(), bet);
             //const powTimestamp = Date.now(); //? test: not betting
 
@@ -177,17 +172,13 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
             const avgDiffWL = sessionDiffWL.reduce((a, b) => a + b, 0) / sessionDiffWL.length;
             //const estGlobalHasrate = mining.estimateGlobalHashrate(averageFinalDiff, avgSuccessTime, targetBlockTime, success + adjustDiffEveryCrop);
             const estGlobalHasrate = mining.estimateGlobalHashrate(avgDiffWL, avgSuccessTime, targetBlockTime);
-            console.log(`avgFD: ${averageFinalDiff.toFixed(2)} | EGH: ${estGlobalHasrate.toFixed(2)} H/s | betRnd: ${betRnd.toFixed(2)}`);
+            console.log(`avgFD: ${averageFinalDiff.toFixed(2)} | EGH: ${estGlobalHasrate.toFixed(2)} H/s | betTime: ${betTime.toFixed(2)}`);
             
             //if (baseDifficulty === newDiff) continue; // no adjustment needed
             if (success + adjustDiffEveryCrop < MINING_PARAMS.blocksBeforeAdjustment) continue; // no adjustment needed
 
             const successRate = success / powCounter * 100;
             console.log(`New difficulty: ${newDiff} | Avg success time: ${(avgSuccessTime*.001).toFixed(3)}s | Hash rate: ${hashRate} H/s | tS/tPow: ${totalSuccess}/${totalPowCounter} | ${successRate.toFixed(2)}%`);
-
-            // if slower reverse bet time increment
-            if (betStart && newDiff < baseDifficulty) betRndMod = -betRndMod;
-            betRnd += betRndMod; // increment bet time depending on last session result
 
             baseDifficulty = newDiff;
             powCounter = 0;
