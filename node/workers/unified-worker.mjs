@@ -24,7 +24,7 @@ monitorPerformance(); // Detect potential freeze
 const dashApp = new DashboardWsApp(undefined, cryptolights.v0, nodePort, dashboardPort, false);
 const stressTester = new StressTester(dashApp.node);
 const fingerPrint = nodeMachineId.machineIdSync();
-let passwordExist = Storage.isFileExist('passHash.bin');
+let passHashExist = Storage.isFileExist('passHash.bin');
 let initializingNode = false;
 let nodeInitialized = false;
 
@@ -42,7 +42,10 @@ async function initDashAppAndSaveSettings(privateKey = '') {
     parentPort.postMessage({ type: 'node_starting' });
 
     nodeInitialized = await dashApp.init(privateKey, forceRelay);
-    if (!nodeInitialized && dashApp.waitingForPrivKey) {
+    if (!nodeInitialized && dashApp.waitingForPassword) {
+        parentPort.postMessage({ type: 'message_to_mainWindow', data: 'password-requested' });
+        console.error(`Can't init dashApp, waitingForPassword!`);
+    } if (!nodeInitialized && dashApp.waitingForPrivKey) {
         parentPort.postMessage({ type: 'message_to_mainWindow', data: 'waiting-for-priv-key' });
         console.error(`Can't init dashApp, waitingForPrivKey!`);
     } else if (!nodeInitialized) console.error(`Can't init dashApp, unknown reason!`);
@@ -75,10 +78,10 @@ async function setPassword(password = 'toto') {
     const passHash = await cryptolights.v0.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
     if (!passHash) { console.error('Argon2 hash failed'); return false; }
 
-    if (passwordExist && !verifyPasshash(passHash)) return false; // Verify existing password hash
+    if (passHashExist && !verifyPasshash(passHash)) return false; // Verify existing password hash
     else { // Save new password hash
         Storage.saveBinary('passHash', passHash.hashUint8);
-        passwordExist = true;
+        passHashExist = true;
         console.info('New password hash saved');
     }
 
@@ -122,14 +125,15 @@ parentPort.on('message', async (message) => {
         case 'stop':
             await stop();
             break;
+        
         case 'set_password_and_try_init_node':
             if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
-            const passwordCreation = !passwordExist;
+            const passwordCreation = !passHashExist;
             const setPasswordSuccess = await setPassword(message.data);
             parentPort.postMessage({ type: passwordCreation ? 'set_new_password_result' : 'set_password_result', data: setPasswordSuccess });
             if (!setPasswordSuccess) return;
 
-            await initDashAppAndSaveSettings();
+            await initDashAppAndSaveSettings(); // try init node if not already initialized
             break;
         case 'remove_password':
             if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
@@ -140,7 +144,8 @@ parentPort.on('message', async (message) => {
 
             Storage.deleteFile('passHash.bin');
             cryptolights.pass = new CryptoLight(argon2Hash);
-            passwordExist = false;
+            passHashExist = false;
+            //setPassword('fingerPrint'); // reset to fingerPrint
             parentPort.postMessage({ type: 'remove_password_result', data: true });
             break;
         case 'set_private_key_and_start_node':
@@ -189,9 +194,11 @@ parentPort.on('message', async (message) => {
 });
 
 // START
-if (passwordExist) {
-    const noPassRequired = await setPassword('fingerPrint');
-    parentPort.postMessage({ type: 'message_to_mainWindow', data: noPassRequired ? 'no-password-required' : 'password-requested' });
+if (passHashExist) {
+    await initDashAppAndSaveSettings();
+    
+    //const noPassRequired = await setPassword('fingerPrint');
+    //parentPort.postMessage({ type: 'message_to_mainWindow', data: noPassRequired ? 'no-password-required' : 'password-requested' });
 } else parentPort.postMessage({ type: 'message_to_mainWindow', data: 'no-existing-password' });
 
 connexionResumePostLoop();

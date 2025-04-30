@@ -24,6 +24,7 @@
 .board-message {
     user-select: text;
     pointer-events: all;
+    font-size: small;
     margin: 5px 40px 5px 10px;
     padding: 10px;
     border-radius: 5px;
@@ -38,11 +39,16 @@
     border-radius: 50%;
     top: 0px;
     right: 0px;
+    padding: 0;
+    width: 20px;
+    aspect-ratio: 1 / 1;
+
+    background-color: var(--color1_1);
+    color: var(--color2);
+
     opacity: 0;
     transform: translate(0%, 0%);
     transition: transform .12s, opacity .12s;
-    background-color: var(--color1_1);
-    color: var(--color2);
 }
 .board-message:hover .board-delete-btn, .board-message .board-delete-btn:hover {
     opacity: 1;
@@ -146,6 +152,7 @@
     }
 }
 #board-messages-input {
+    font-size: .85em;
     width: calc(100% - 22px);
     background: var(--color1);
     color: var(--color2);
@@ -159,26 +166,6 @@
     box-shadow: inset 0px 0px 0px 2px var(--color1_2);
     padding: 10px;
 }
-/*#board-messages-input-possibilitiesList { // DEPRECATED
-    display: block;
-    background: var(--color1);
-    z-index: 9;
-    position: absolute;
-    border: solid 1px var(--color2);
-    font-size: small;
-}
-#board-messages-input-possibilitiesList .visible {
-    display: block;
-}*/
-/*#board-messages-input-possibilitiesList option {
-    padding: 5px 10px;
-    cursor: pointer;
-    border-bottom: solid 1px var(--color1_3);
-}
-#board-messages-input-possibilitiesList option:hover {
-    background: var(--color2);
-    color: var(--color1);
-}*/
 #board-send-btn {
     margin-top: 5px;
     display: none;

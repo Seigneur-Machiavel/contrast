@@ -70,6 +70,7 @@ ipcRenderer.on('node-started', (event, ...args) => {
 	const privateKey = args[0];
 	biw = new BoardInternalWallet(privateKey);
 	window.biw = biw;
+	ipcRenderer.send('node-started');
 
 	assistant.sendMessage('We are connected baby!');
 	setTimeout(() => assistant.idleMenu(), 1000);

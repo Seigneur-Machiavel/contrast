@@ -147,6 +147,7 @@ export class DashboardWsApp {
     localonly = true;
     stopping = false;
     stopped = false;
+    waitingForPassword = true;
     waitingForPrivKey = false;
     portMapped;
     /** @type {CryptoLight} */
@@ -182,13 +183,14 @@ export class DashboardWsApp {
         // or fallback to the old version if not loaded as v2
         if (!nodeSettingsLoadedAsCLFinger) await this.loadNodeSettingBinary('v0');// UPDATED TO NEW VERSION WITH ENCRYPTION
 
+        if (nodeSettingsLoadedAsCLFinger) this.waitingForPassword = false; // prevent waiting for password if settings are loaded as v2
         if (privateKey) this.waitingForPrivKey = false; // prevent waiting for priv key if provided even if node is not active
 
-        const defaultPrivKey = this.#nodeSetting?.privateKey;
-        const usablePrivKey = privateKey || defaultPrivKey;
+        const storedPrivKey = this.#nodeSetting?.privateKey;
+        const usablePrivKey = privateKey || storedPrivKey;
         if (!this.node && usablePrivKey) { await this.initMultiNode(usablePrivKey, forceRelay); }
         if (!this.node) { // fail to init node with default or provided private key
-            this.waitingForPrivKey = true;
+            this.waitingForPrivKey = true; // if the node is not started and the settings are not loaded as v2, we need to wait for the priv key
             console.info("Failed to init node... waiting For PrivKey...");
             return false;
         }
@@ -443,6 +445,8 @@ export class DashboardWsApp {
         const encrypted = await cryptoLight.encryptText(serialized, undefined, false);
         if (!encrypted) { console.error('Encryption failed'); return; }
         Storage.saveBinary('nodeSetting', encrypted);
+
+        console.log('NodeSetting saved as binary with encryption', encryption);
     }
     /** @param {'v0' | 'finger'} */
     async loadNodeSettingBinary(encryption = 'v0') {
@@ -460,6 +464,8 @@ export class DashboardWsApp {
         if (!this.#isNodeSettingValide(nodeSetting)) { console.error('Invalid nodeSetting'); return; }
 
         this.#nodeSetting = nodeSetting;
+
+        console.log('NodeSetting loaded as binary with encryption', encryption);
     }
     /** @param {NodeSetting} nodeSetting */
     #isNodeSettingValide(nodeSetting) {

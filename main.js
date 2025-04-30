@@ -185,11 +185,13 @@ ipcMain.on('set-password', async (event, password) => {
     console.log('setting password...');
     const { channel, data } = await nodeAppWorker.setPasswordAndWaitResult(password);
     event.reply(channel, data);
-    
-    // randomRestartTest(); // -- test restart each 120s to 600s --
+});
+ipcMain.on('node-started', async (event) => {
     if (windows.logger) return;
     windows.logger = await createWindow(windowsOptions.logger);
     setShortcuts(windows, isDev);
+
+    // randomRestartTest(); // -- test restart each 120s to 600s --
 });
 ipcMain.on('remove-password', async (event, password) => {
     console.log('removing password...');

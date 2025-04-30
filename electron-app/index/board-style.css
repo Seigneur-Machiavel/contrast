@@ -180,7 +180,11 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    font-size: small;
     border-bottom: solid 1px var(--color1_1);
+}
+.board-settings-line:last-child {
+    border-bottom: none;
 }
 .board-settings-line input[type="checkbox"] {
     height: fit-content;
