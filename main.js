@@ -283,7 +283,6 @@ ipcMain.on('get-logs-historical', async (event, category = 'all') => {
     const lines = miniLoggerReader.mergeHistoricals(historicals);
     const str = lines.join('\n');
     event.reply('copy-clipboard', str);
-    //ipcRenderer.send('assistant-message', `Logs copied to clipboard`);
     event.reply('assistant-message', `Logs copied to clipboard`);
 });
 
