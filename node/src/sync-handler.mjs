@@ -3,6 +3,7 @@ import { Storage, CheckpointsStorage, PATH } from '../../utils/storage-manager.m
 import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { P2PNetwork, readableId, STREAM, PROTOCOLS, P2P_OPTIONS } from './p2p.mjs';
+import { Breather } from '../../utils/breather.mjs';
 
 /**
  * @typedef {import("./node.mjs").Node} Node
@@ -152,10 +153,10 @@ export class SyncHandler {
                 msg.bytesStart = dataBytes.acquired;
                 stream = await this.p2pNet.p2pNode.dialProtocol(peer.id, PROTOCOLS.SYNC, { signal: AbortSignal.timeout(3_000) });
                 const sent = await STREAM.WRITE(stream, serializer.serialize.rawData(msg));
-                if (!sent) { throw new Error('(sendSyncRequest) Failed to write data to stream'); }
+                if (!sent) throw new Error('(sendSyncRequest) Failed to write data to stream');
 
                 const readResult = await STREAM.READ(stream);
-                if (!readResult) { throw new Error('(sendSyncRequest)  Failed to read data from stream'); }
+                if (!readResult) throw new Error('(sendSyncRequest)  Failed to read data from stream');
                 if (readResult.data.byteLength < serializer.syncResponseMinLen) throw new Error('(sendSyncRequest) Invalid response format');
                 dataBytes.lastNbChunks = readResult.nbChunks;
                 
@@ -191,7 +192,7 @@ export class SyncHandler {
                 if (failures.successive >= maxSuccessiveFailures) { return false; }
             }
 
-            if (stream) { await stream.close(); }
+            if (stream) await stream.close();
             await new Promise((resolve) => setTimeout(resolve, 2000)); // then try again
         }
 
@@ -354,6 +355,7 @@ export class SyncHandler {
         }
 
         try {
+            const breather = new Breather();
             let syncResPromise;
 
             while (desiredBlock <= peerHeight) {
@@ -417,9 +419,11 @@ export class SyncHandler {
                     }
 
                     desiredBlock++;
+                    await breather.breathe();
                 }
     
                 peerHeight = syncRes.currentHeight;
+                await breather.breathe();
             }
         } catch (error) {
             this.miniLogger.log(`#getMissingBlocks() error occurred`, (m) => { console.error(m); });

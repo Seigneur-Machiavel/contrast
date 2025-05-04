@@ -321,7 +321,7 @@ export class CheckpointSystem {
 		if (!Storage.saveBinary(blockFileName, serializedBlockInfo, infoBatchFolderPath)) throw new Error('(Checkpoint fill) Block info file save failed');
 	}
 	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
-	async fillActiveCheckpointWithBlockOLD(finalizedBlock, serializedBlock, serializedBlockInfo) { // DEPRECATED
+	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock, serializedBlockInfo) {
 		if (this.activeCheckpointHeight === false) throw new Error('(Checkpoint fill) Active checkpoint not set');
 		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`);
 		
@@ -345,38 +345,6 @@ export class CheckpointSystem {
 		this.activeCheckpointHash = finalizedBlock.hash;
 
 		return true;
-	}
-	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
-	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock, serializedBlockInfo) {
-		return new Promise((resolve, reject) => {
-			if (this.activeCheckpointHeight === false) return reject(new Error('(Checkpoint fill) Active checkpoint not set'));
-			if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) return reject(new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`));
-			
-			// on invalid hash!=prevHash => erase the block batch folder, trying to resolve conflict
-			if (finalizedBlock.prevHash !== this.activeCheckpointHash) { 
-				const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
-				const batchFolderPath = path.join(this.activeCheckpointPath, 'blocks', batchFolderName);
-				if (fs.existsSync(batchFolderPath)) fs.rmSync(batchFolderPath, { recursive: true, force: true });
-				return resolve('restart')
-			}
-
-			// Hash verification, argon2 based, cost CPU time (~500ms)
-			if (this.#randomDiceRoll(this.rndControlDiceFaces)) {
-				console.info(`Checkpoint fill: verifying block hash ${finalizedBlock.index}...`);
-				BlockUtils.getMinerHash(finalizedBlock).then(({ hex }) => {
-					if (finalizedBlock.hash !== hex) return reject(new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`));
-					this.#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo);
-					this.activeCheckpointHeight = finalizedBlock.index;
-					this.activeCheckpointHash = finalizedBlock.hash;
-					resolve(true);
-				}).catch((error) => { reject(error); });
-			} else {
-				this.#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo);
-				this.activeCheckpointHeight = finalizedBlock.index;
-				this.activeCheckpointHash = finalizedBlock.hash;
-				resolve(true);
-			}
-		});
 	}
 	async deployActiveCheckpoint(snapshotHeightModulo, saveZipArchive = true) {
 		if (this.activeCheckpointHeight === false) throw new Error(`(Checkpoint deploy) Active checkpoint not set`);

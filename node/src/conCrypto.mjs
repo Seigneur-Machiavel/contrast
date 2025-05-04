@@ -66,11 +66,11 @@ class Argon2Unified {
 export const argon2Hash = async (pass, salt, time = 1, mem = 2**20, parallelism = 1, type = 2, hashLen = 32) => {
     const params = Argon2Unified.createArgon2Params(pass, salt, time, mem, parallelism, type, hashLen);
     const hashResult = isNode ? await argon2Lib.hash(pass, params) : await argon2Lib.hash(params);
-    if (!hashResult) { return false; }
+    if (!hashResult) return false;
 
     const encoded = hashResult.encoded ? hashResult.encoded : hashResult;
     const result = Argon2Unified.standardizeArgon2FromEncoded(encoded);
-    if (!result) { return false; }
+    if (!result) return false;
 
     return result;
 }
