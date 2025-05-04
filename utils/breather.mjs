@@ -1,7 +1,7 @@
 export class Breather {
     lastBreathTime = 0;
     breath = 0;
-    constructor(msBetweenBreaths = 500, breathDuration = 50) {
+    constructor(msBetweenBreaths = 250, breathDuration = 25) {
         this.msBetweenBreaths = msBetweenBreaths;
         this.breathDuration = breathDuration;
     }

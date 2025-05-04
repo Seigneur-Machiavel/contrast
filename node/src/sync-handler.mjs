@@ -72,16 +72,17 @@ export class SyncHandler {
     }
 
     #handleIncomingStream = async (lstream) => {
-        if (this.node.restartRequested) { return; }
+        if (this.node.restartRequested) return;
         /** @type {Stream} */
         const stream = lstream.stream;
-        if (!stream) { return; }
+        if (!stream) return;
         
         const peerIdStr = lstream.connection.remotePeer.toString();
         //this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
         
         let readResultCopy;
         try {
+            const breather = new Breather();
             const readResult = await STREAM.READ(stream);
             if (!readResult) { throw new Error('(#handleIncomingStream) Failed to read data from stream'); }
             readResultCopy = readResult;
@@ -103,11 +104,12 @@ export class SyncHandler {
             if (msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number') {
                 /** @type {GetBlocksAnwser} */
                 const getBlocksAnwser = {
-                    blocks: this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false),
-                    blocksInfo: msg.includesBlockInfo ? this.node.blockchain.getRangeOfBlocksInfoByHeight(msg.startIndex, msg.endIndex, false) : []
+                    blocks: await this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false),
+                    blocksInfo: msg.includesBlockInfo ? await this.node.blockchain.getRangeOfBlocksInfoByHeight(msg.startIndex, msg.endIndex, false) : []
                 };
 
-                if (!getBlocksAnwser.blocks) { throw new Error('(#handleIncomingStream) Failed to get serialized blocks'); }
+                await breather.breathe();
+                if (!getBlocksAnwser.blocks) throw new Error('(#handleIncomingStream) Failed to get serialized blocks');
                 data = serializer.serialize.rawData(getBlocksAnwser);
             }
 

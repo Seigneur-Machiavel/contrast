@@ -1,5 +1,6 @@
 import { serializer } from '../../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { Breather } from '../../utils/breather.mjs';
 
 /**
  * @typedef {import('@multiformats/multiaddr').Multiaddr} Multiaddr
@@ -24,6 +25,7 @@ export class STREAM {
 
     /** @param {Stream} stream @param {Uint8Array} serializedMessage @param {number} [maxChunkSize] */
     static async WRITE(stream, serializedMessage, maxChunkSize = STREAM.MAX_CHUNK_SIZE) {
+        const breather = new Breather();
         // limit the speed of sending chunks, at 64 KB/chunk, 1 GB would take:
         // 1 GB / 64 KB = 16384 chunks => 16384 * 2 ms = 32.768 more seconds
         async function* generateChunks(serializedMessage, maxChunkSize, delay = 2) {
@@ -32,6 +34,7 @@ export class STREAM {
                 const start = i * maxChunkSize;
                 yield serializedMessage.slice(start, start + maxChunkSize); // send chunk
                 await new Promise(resolve => setTimeout(resolve, delay));
+                await breather.breathe(); // breathing
             }
         }
 

@@ -256,27 +256,31 @@ export class Blockchain {
      * @param {number} fromHeight - The starting height of the range.
      * @param {number} [toHeight=999_999_999] - The ending height of the range.
      * @param {boolean} [deserialize=true] - Whether to deserialize the blocks. */
-    getRangeOfBlocksByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
+    async getRangeOfBlocksByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
         if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') throw new Error('Invalid block range: not numbers');
         if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
 
         const blocksData = [];
+        const breather = new Breather();
         for (let i = fromHeight; i <= toHeight; i++) {
             const blockData = this.getBlock(i, deserialize);
             if (!blockData) break;
             blocksData.push(blockData);
+            await breather.breathe(); // breathing
         }
         return blocksData;
     }
-    getRangeOfBlocksInfoByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
+    async getRangeOfBlocksInfoByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
         if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') throw new Error('Invalid block range: not numbers');
         if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
 
         const blocksInfo = [];
+        const breather = new Breather();
         for (let i = fromHeight; i <= toHeight; i++) {
             const blockInfo = this.blockStorage.getBlockInfoByIndex(i, deserialize);
             if (!blockInfo) break;
             blocksInfo.push(blockInfo);
+            await breather.breathe(); // breathing
         }
         return blocksInfo;
     }
