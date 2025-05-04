@@ -74,7 +74,7 @@ export const mining = {
         const random = Math.random() * (max - min) + min; // random number between min and max
         const betTime = Math.round(targetBlockTime * random); // multiply by targetBlockTime to get the bet time in ms
         //console.log(`Bet time: ${betTime}ms`);
-        return betTime; 
+        return betTime;
     },
     /**
      * This function uses an Argon2 hash function to perform a hashing operation.
@@ -125,36 +125,14 @@ export const mining = {
         const result = { conform: false, message: 'na', difficulty, timeDiffAdjustment, legitimacy, finalDifficulty, zeros, adjust };
 
         const condition1 = conditionnals.binaryStringStartsWithZeros(HashBitsAsString, zeros);
-        if (!condition1) { result.message = `unlucky--(condition 1)=> hash does not start with ${zeros} zeros | finalDifficulty: ${finalDifficulty} | HashBitsAsString: ${HashBitsAsString}` };
+        if (!condition1) result.message = `unlucky--(condition 1)=> hash does not start with ${zeros} zeros | finalDifficulty: ${finalDifficulty} | HashBitsAsString: ${HashBitsAsString}`;
 
         const next5Bits = HashBitsAsString.substring(zeros, zeros + 5);
         const condition2 = conditionnals.binaryStringSupOrEqual(next5Bits, adjust);
-        if (!condition2) { result.message = `unlucky--(condition 2)=> hash does not meet the condition: ${next5Bits} >= ${adjust} | finalDifficulty: ${finalDifficulty} | HashBitsAsString: ${HashBitsAsString}` };
+        if (!condition2) result.message = `unlucky--(condition 2)=> hash does not meet the condition: ${next5Bits} >= ${adjust} | finalDifficulty: ${finalDifficulty} | HashBitsAsString: ${HashBitsAsString}`;
 
         if (result.message === 'na') { result.conform = true; result.message = 'lucky'; }
         return result;
-    },
-    estimateGlobalHashrateOLD: (avgFinalDiff = 130, avgSuccessTime, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
-        if (typeof avgFinalDiff !== 'number') return 1;
-        if (avgFinalDiff < 1) return 1;
-
-        const base1HsDiff = MINING_PARAMS.oneHsDiffBasis; // Difficulty for 1H/s: 77
-        const exceedingDiff = avgFinalDiff - base1HsDiff; // 130 - 77 = 53
-        if (exceedingDiff <= 0) return 1; // 1H/s
-
-        const exp = Math.floor(exceedingDiff / MINING_PARAMS.doubleDiffPoints); // 18 / 53 = 3
-        const rem = exceedingDiff % MINING_PARAMS.doubleDiffPoints; // 53 % 16 = 5
-        const percentPerPoint = 1 / MINING_PARAMS.doubleDiffPoints; // 1 / 16 = 0.0625
-        
-        let totalHashrate = Math.pow(2, exp); // 2^3 = 8H/s
-        totalHashrate *= 1 + (rem * percentPerPoint); // 8 * (1 + (5 * 0.0625)) = 8 * 1.3125 = 10.5H/s
-
-        const timeDiff = avgSuccessTime - targetBlockTime; // 110_000ms - 120_000ms = -10_000ms
-        const timeDiffRatio = Math.abs(timeDiff) / targetBlockTime; // 10_000 / 120_000 = 0.0833
-        if (timeDiff > 0) totalHashrate *= 1 + timeDiffRatio; // too fast: 10.5 * (1 + 0.0833) = 10.5 * 1.0833 = 11.4H/s
-        else totalHashrate *= 1 - timeDiffRatio; // too slow: 10.5 * (1 - 0.0833) = 10.5 * 0.9167 = 9.6H/s
-
-        return totalHashrate; // 10.5H/s
     },
     estimateGlobalHashrate: (avgDiffWithLegitimacy, avgTimeGap, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
         if (typeof avgDiffWithLegitimacy !== 'number') return 1;

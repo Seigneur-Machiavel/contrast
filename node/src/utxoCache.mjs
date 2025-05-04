@@ -228,12 +228,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             const utxo = UTXO(anchor, amount, rule, address); // unspent
             if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) { continue; }
 
-            if (rule === "sigOrSlash") {
-                /*const involvedUTXOs = this.extractInvolvedUTXOsOfTx(transaction);
-                if (!involvedUTXOs) { throw new Error('At least one UTXO not found in utxoCache'); }*/
-                
-                newStakesOutputsFromTx.push(utxo); // used to fill VSS stakes (for now we only create new range)
-            }
+            if (rule === "sigOrSlash") newStakesOutputsFromTx.push(utxo); // used to fill VSS stakes (for now we only create new range)
 
             newUtxosFromTx.push(utxo);
         }

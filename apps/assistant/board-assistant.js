@@ -27,6 +27,7 @@ const { ipcRenderer } = require('electron');
 const userCommandsDescriptions = [
     { command: '-help', short: '-h', description: 'Show available commands' },
     { command: '-cancel', short: '-c', description: 'Cancel current interaction' },
+    { command: '-copy_logs_history', short: '-clh', description: 'Copy logs history to clipboard' },
     { command: '-change_password', short: '-cpass', description: 'Change your password' },
     { command: '-extract_my_private_key', short: '-epk', description: 'Extract your private key' },
     { command: '-reset', short: '-r', description: 'Delete your private key and/or all data' }
@@ -189,6 +190,13 @@ class Assistant {
                 this.#cancelInteraction();
                 break;
 
+            case '-copy_logs_history':
+            case '-clh':
+            case 'copy logs history':
+                this.sendMessage('Preparing logs history...');
+                ipcRenderer.send('get-logs-historical');
+                break;
+
             case '-change_password':
             case '-cpass':
             case 'change password':
@@ -336,7 +344,7 @@ class Assistant {
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
 
         ipcRenderer.send('extract-private-key', password);
-        setTimeout(() => { this.idleMenu(); }, 6000);
+        setTimeout(() => { this.idleMenu(); }, 1000);
     }
     showPrivateKey(privateKeyHex, asWords = false) {
         if (!asWords) { this.sendMessage(privateKeyHex, 'system'); return }

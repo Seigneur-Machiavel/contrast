@@ -273,8 +273,8 @@ export class Transaction_Builder {
     static async createTransfer(senderAccount, transfers, feePerByte = Math.round(Math.random() * 10) + 1) {
         const senderAddress = senderAccount.address;
         const UTXOs = senderAccount.UTXOs.filter(utxo => utxo.rule !== 'sigOrSlash');
-        if (UTXOs.length === 0) { throw new Error('No UTXO to spend'); }
-        if (transfers.length === 0) { throw new Error('No transfer to make'); }
+        if (UTXOs.length === 0) throw new Error('No UTXO to spend');
+        if (transfers.length === 0) throw new Error('No transfer to make');
 
         this.checkMalformedAnchorsInUtxosArray(UTXOs);
         this.checkDuplicateAnchorsInUtxosArray(UTXOs);
@@ -294,20 +294,21 @@ export class Transaction_Builder {
      * @param {boolean} useOnlyNecessaryUtxos - if true, the transaction will use only the necessary UTXOs to reach the amount
      */
     static async createStakingVss(senderAccount, stakingAddress, amount, feePerByte = Math.round(Math.random() * 10) + 1) {
+        if (amount < BLOCKCHAIN_SETTINGS.minStakeAmount) throw new Error(`Amount too low: ${amount} < ${BLOCKCHAIN_SETTINGS.minStakeAmount}`);
         const senderAddress = senderAccount.address;
         const UTXOs = senderAccount.UTXOs.filter(utxo => utxo.rule !== 'sigOrSlash');
-        if (UTXOs.length === 0) { throw new Error('No UTXO to spend'); }
+        if (UTXOs.length === 0) throw new Error('No UTXO to spend');
 
         this.checkMalformedAnchorsInUtxosArray(UTXOs);
         this.checkDuplicateAnchorsInUtxosArray(UTXOs);
 
         const availableAmount = UTXOs.reduce((a, b) => a + b.amount, 0);
-        if (availableAmount < amount * 2) { throw new Error(`Not enough funds: ${availableAmount} < ${amount * 2}`); }
+        if (availableAmount < amount * 2) throw new Error(`Not enough funds: ${availableAmount} < ${amount * 2}`);
 
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom([{ recipientAddress: stakingAddress, amount }], 'sigOrSlash', 1);
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, amount);
         if (changeOutput) { outputs.push(changeOutput); }
-        if (conditionnals.arrayIncludeDuplicates(outputs)) { throw new Error('Duplicate outputs'); }
+        if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
         return await this.#newTransaction(utxos, outputs);
     }

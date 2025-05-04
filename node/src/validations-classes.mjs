@@ -59,15 +59,16 @@ export class TxValidation {
             TxValidation.isConformOutput(output);
 
             if (output.rule === "sigOrSlash") {
-                if (i !== 0) { throw new Error('sigOrSlash must be the first output'); }
+                if (i !== 0) throw new Error('sig_Or_Slash must be the first output');
+                if (output.amount < BLOCKCHAIN_SETTINGS.minStakeAmount) throw new Error(`sig_Or_Slash amount < ${BLOCKCHAIN_SETTINGS.minStakeAmount}`);
 
                 const remainingAmount = this.calculateRemainingAmount(involvedUTXOs, transaction);
-                if (remainingAmount < output.amount) { throw new Error('SigOrSlash requires fee > amount'); }
+                if (remainingAmount < output.amount) throw new Error('Sig_Or_Slash requires fee > amount');
             }
         }
 
         for (const input of transaction.inputs) {
-            if (specialTx && typeof input !== 'string') { throw new Error('Invalid coinbase input'); }
+            if (specialTx && typeof input !== 'string') throw new Error('Invalid coinbase input');
             if (specialTx) { continue; }
 
             const anchor = input;

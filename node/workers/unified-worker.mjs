@@ -73,6 +73,17 @@ function verifyPasshash(passHash) {
 
     return true;
 }
+async function verifyPassword(password = 'toto') {
+    if (!passHashExist) { console.error('No existing password hash'); return false; }
+    if (!password) { console.error('Password is undefined'); return false; }
+    if (typeof password !== 'string') { console.error('Password is not a string'); return false; }
+
+    const passwordStr = password === 'fingerPrint' ? fingerPrint.slice(0, 30) : password;
+    const passHash = await cryptolights.v0.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
+    if (!passHash) { console.error('Argon2 hash failed'); return false; }
+
+    return verifyPasshash(passHash);
+}
 async function setPassword(password = 'toto') {
     const passwordStr = password === 'fingerPrint' ? fingerPrint.slice(0, 30) : password;
     const passHash = await cryptolights.v0.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
@@ -137,9 +148,7 @@ parentPort.on('message', async (message) => {
             break;
         case 'remove_password':
             if (typeof message.data !== 'string') { console.error('Invalid data type'); return; }
-            const passwordStr = message.data === 'fingerPrint' ? fingerPrint.slice(0, 30) : message.data;
-            const passHash = await cryptolights.v0.generateArgon2Hash(passwordStr, fingerPrint, 64, 'heavy', 16);
-            if (!verifyPasshash(passHash))
+            if (!verifyPassword(message.data))
                 { parentPort.postMessage({ type: 'remove_password_result', data: false }); return }
 
             Storage.deleteFile('passHash.bin');
@@ -159,10 +168,13 @@ parentPort.on('message', async (message) => {
             break;
         case 'extract_private_key':
             console.info('Extracting private key');
-            const verified = await setPassword(message.data);
-            if (!verified) { console.error('Password not match'); return; }
-
-            parentPort.postMessage({ type: 'private_key_extracted', data: dashApp.extractNodeSetting().privateKey });
+            //const verified = await setPassword(message.data);
+            //if (!verified) { console.error('Password not match'); return; }
+            const verified = await verifyPassword(message.data);
+            parentPort.postMessage({
+                type: verified ? 'private_key_extracted' : 'assistant_message',
+                data: verified ? dashApp.extractNodeSetting().privateKey : 'password-not-match'
+            });
             break;
         case 'generate_new_address':
             const prefix = message.data;

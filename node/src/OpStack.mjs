@@ -74,7 +74,7 @@ export class OpStack {
 
         this.miniLogger.log('--------- OpStack terminated ---------', (m) => console.info(m));
     }
-    async #executeTask(task = 'toto') {
+    async #executeTask(task = { type: 'toto', data: {} }) {
         this.executingTask = task;
 
         try {
@@ -253,7 +253,7 @@ export class OpStack {
     }
     securelyPushFirst(tasks) {
         this.paused = true;
-        for (const task of tasks) if (task === 'reorg_start' && this.isReorging) return; // avoid double reorg
+        for (const task of tasks) if (task.type === 'reorg_start' && this.isReorging) return; // avoid double reorg
         for (const task of tasks) this.tasks.unshift(task);
         this.paused = false;
     }

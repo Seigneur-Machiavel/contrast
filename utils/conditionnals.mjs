@@ -15,9 +15,9 @@ export const conditionnals = {
      * @param {string} string
      * @param {number} minValue */
     binaryStringSupOrEqual: (string = '', minValue = 0) => {
-        if (typeof string !== 'string') { return false; }
-        if (typeof minValue !== 'number') { return false; }
-        if (minValue < 0) { return false; }
+        if (typeof string !== 'string') return false;
+        if (typeof minValue !== 'number') return false;
+        if (minValue < 0) return false;
 
         const intValue = parseInt(string, 2);
         return intValue >= minValue;

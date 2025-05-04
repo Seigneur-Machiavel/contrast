@@ -7,7 +7,11 @@
  * @typedef {import("./block-classes.mjs").BlockData} BlockData
  */
 
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+
 export class Reorganizator {
+    miniLogger = new MiniLogger('reorganizator');
+
     /** @param {Node} node */
     constructor(node) {
         this.node = node;
@@ -101,7 +105,8 @@ export class Reorganizator {
 
         // ensure we can build the chain
         if (!this.node.blockchain.cache.blocksByHash.has(block.prevHash)) {
-            console.info(`[NODE-${this.node.id.slice(0, 6)}] Rejected reorg, missing block: #${block.index - 1} -> prune branch`);
+            //console.info(`[NODE-${this.node.id.slice(0, 6)}] Rejected reorg, missing block: #${block.index - 1} -> prune branch`);
+            this.miniLogger.log(`[NODE-${this.node.id.slice(0, 6)}] Rejected reorg, missing block: #${block.index - 1} -> prune branch`, (m) => { console.info(m); });
             this.#pruneBranch(blocks);
             return false;
         }
@@ -113,23 +118,36 @@ export class Reorganizator {
             broadcastNewCandidate = false;
         }
 
-        if (this.node.blockchain.lastBlock.hash !== block.prevHash)
-            tasks.push({ type: 'rollBackTo', data: block.index - 1 });
+        if (this.node.blockchain.lastBlock.hash !== block.prevHash) {
+            const rollBackTargetHeight = block.index - 1;
+            const isUsableLastHeight = usableSnapshots.lastBlock.index === rollBackTargetHeight;
+            const isUsablePreLastHeight = usableSnapshots.preLastBlock.index === rollBackTargetHeight;
+            if (!isUsableLastHeight && !isUsablePreLastHeight) {
+                this.miniLogger.log(`[NODE-${this.node.id.slice(0, 6)}] Rejected reorg, block index #${rollBackTargetHeight} does not match any snapshot`, (m) => { console.info(m); });
+                return false;
+            }
+            // Snapshot can be used to roll back the chain
+            tasks.push({ type: 'rollBackTo', data: rollBackTargetHeight });
+        }
 
         return tasks;
     }
-    /** @returns {Promise<boolean | Object[]>} - false if no reorg needed, otherwise return reorg tasks */
+    /** @returns {Promise<false | Object[]>} - false if no reorg needed, otherwise return reorg tasks */
     async reorgIfMostLegitimateChain(reason = false) {
         if (!this.node.blockchain.lastBlock) return false;
         const legitimateReorg = await this.#getLegitimateReorg();
         if (legitimateReorg.tasks.length === 0) {
-            console.warn(`[REORGANIZATOR] Reorg: no legitimate branch > ${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''}`);
+            //console.warn(`[REORGANIZATOR] Reorg: no legitimate branch > ${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''}`);
+            this.miniLogger.log(`[REORGANIZATOR] Reorg: no legitimate branch > ${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''}`, (m) => { console.warn(m); });
             return false;
         }
         
-        legitimateReorg.tasks.push('reorg_end');
-        legitimateReorg.tasks.unshift('reorg_start');
-        console.warn(`[REORGANIZATOR] ---( Possible Reorg )--- (from #${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''})`);
+        //legitimateReorg.tasks.push('reorg_end');
+        //legitimateReorg.tasks.unshift('reorg_start');
+        legitimateReorg.tasks.push({ type: 'reorg_end' });
+        legitimateReorg.tasks.unshift({ type: 'reorg_start' });
+        //console.warn(`[REORGANIZATOR] ---( Possible Reorg )--- (from #${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''})`);
+        this.miniLogger.log(`[REORGANIZATOR] ---( Possible Reorg )--- (from #${this.node.blockchain.lastBlock.index}${reason ? ` | ${reason}` : ''})`, (m) => { console.warn(m); });
         return legitimateReorg.tasks;
     }
     /** @param {BlockData} finalizedBlock */
@@ -140,7 +158,8 @@ export class Reorganizator {
         if (this.finalizedBlocksCache[index][hash]) return;
 
         this.finalizedBlocksCache[index][hash] = finalizedBlock;
-        console.info(`[REORGANIZATOR] Stored finalized block #${index} | hash: ${hash.slice(0, 10)}...`);
+        //console.info(`[REORGANIZATOR] Stored finalized block #${index} | hash: ${hash.slice(0, 10)}...`);
+        this.miniLogger.log(`[REORGANIZATOR] Stored finalized block #${index} | hash: ${hash.slice(0, 10)}...`, (m) => { console.info(m); });
     }
     /** @param {BlockData} finalizedBlock */
     isFinalizedBlockInCache(finalizedBlock) {
@@ -155,7 +174,8 @@ export class Reorganizator {
         if (!this.bannedBlockHashesByHeight[index]) this.bannedBlockHashesByHeight[index] = {};
         this.bannedBlockHashesByHeight[index][hash] = true;
 
-        console.info(`[REORGANIZATOR] Banned block #${index} | hash:${hash.slice(0, 10)}...`);
+        //console.info(`[REORGANIZATOR] Banned block #${index} | hash:${hash.slice(0, 10)}...`);
+        this.miniLogger.log(`[REORGANIZATOR] Banned block #${index} | hash:${hash.slice(0, 10)}...`, (m) => { console.info(m); });
     }
     pruneCache() {
         const snapshotsHeights = this.node.snapshotSystem.mySnapshotsHeights();

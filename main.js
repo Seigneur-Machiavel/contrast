@@ -11,6 +11,7 @@ const isDev = !app.isPackaged;
 /**
  * @typedef {import('electron-updater').UpdateCheckResult} UpdateCheckResult
  * @typedef {import('./utils/storage-manager.mjs').Storage} Storage
+ * @typedef {import('./miniLogger/mini-logger-reader.mjs').MiniLoggerReader} MiniLoggerReader
  * 
  * @typedef {Object} WindowOptions
  * @property {boolean} nodeIntegration
@@ -29,8 +30,11 @@ const isDev = !app.isPackaged;
 
 /** @type {Storage} */
 let mainStorage;
+/** @type {MiniLoggerReader} */
+let miniLoggerReader;
 (async () => {
     mainStorage = (await import('./utils/storage-manager.mjs')).Storage;
+    miniLoggerReader = (await import('./miniLogger/mini-logger-reader.mjs')).MiniLoggerReader;
 })();
 
 const { autoUpdater } = require('electron-updater');
@@ -273,6 +277,14 @@ ipcMain.on('delete-app-data', async (event, appName, filename) => {
 
     mainStorage.deleteFile(`${appName}/${filename}`);
     event.reply('app-data-deleted', appName, filename);
+});
+ipcMain.on('get-logs-historical', async (event, category = 'all') => {
+    const historicals = miniLoggerReader.getAllHistoricals(category);
+    const lines = miniLoggerReader.mergeHistoricals(historicals);
+    const str = lines.join('\n');
+    event.reply('copy-clipboard', str);
+    //ipcRenderer.send('assistant-message', `Logs copied to clipboard`);
+    event.reply('assistant-message', `Logs copied to clipboard`);
 });
 
 // APP EVENTS

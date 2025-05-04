@@ -100,6 +100,10 @@ ipcRenderer.on('assistant-message', (event, ...args) => assistant.sendMessage(ar
 ipcRenderer.on('assistant-private-key', (event, ...args) => assistant.showPrivateKey(args[0], true)); // show as words
 ipcRenderer.on('window-to-front', (event, ...args) => appsManager.setFrontWindow(args[0]));
 ipcRenderer.on('app-settings', (event, ...args) => settingsManager.fillSettingsMenu(args[0]));
+ipcRenderer.on('copy-clipboard', (event, ...args) => {
+	navigator.clipboard.writeText(args[0]).then(() => { console.log('Text copied to clipboard!') })
+	.catch(err => { console.error('Failed to copy text to clipboard:', err) });
+});
 //#endregion
 
 const infoManager = new InfoManager();

@@ -388,10 +388,11 @@ export class BlockExplorerWidget {
                 console.log('address span clicked', address);
 
                 this.navigationTarget.address = address;
-                if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(address) === 'request sent') return;
+                sendWsWhenReady({ type: 'get_address_exhaustive_data', data: address });
+                //if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(address) === 'request sent') return;
 
                 // display address infos
-                this.navigateUntilTarget(true);
+                //this.navigateUntilTarget(true);
             },
             'cbe-anchorSpan': (event) => {
                 const anchor = event.target.textContent;
@@ -495,11 +496,12 @@ export class BlockExplorerWidget {
                     console.log('address conform:', inputText);
 
                     this.navigationTarget.address = inputText;
-                    if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(inputText) === 'request sent') 
-                        return;
+                    sendWsWhenReady({ type: 'get_address_exhaustive_data', data: address });
+                    //if (this.getAddressExhaustiveDataFromMemoryOrSendRequest(inputText) === 'request sent') 
+                        //return;
     
                     // display address infos
-                    this.navigateUntilTarget(true);
+                    //this.navigateUntilTarget(true);
                 } catch (error) {
                     
                 }
@@ -548,14 +550,11 @@ export class BlockExplorerWidget {
         const { blockReference, txId, outputIndex, address } = this.navigationTarget;
         this.navigationTarget = { blockReference: null, txId: null, outputIndex: null, address: null };
         
-        if (address) {
-            console.info('navigateUntilTarget =>', address);
-        } else if (blockReference === null) {
-            console.info('navigateUntilTarget => blockReference === null');
-            return; 
-        } else {
-            console.info('navigateUntilTarget =>', isNaN(blockReference) ? blockReference : blockReference, txId, outputIndex);
-        }
+        if (!address && blockReference === null)
+            { console.info('navigateUntilTarget => blockReference === null'); return }
+
+        if (address) console.info('navigateUntilTarget =>', address);
+        else console.info('navigateUntilTarget =>', isNaN(blockReference) ? blockReference : blockReference, txId, outputIndex);
         
         const rebuildModal = txId || outputIndex || address;
         if (rebuildModal && this.cbeHTML.modalContainer()) { //TODO: to test

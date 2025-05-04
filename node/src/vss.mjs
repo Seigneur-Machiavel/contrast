@@ -1,3 +1,4 @@
+import { BLOCKCHAIN_SETTINGS } from "../../utils/blockchain-settings.mjs";
 import { HashFunctions } from "./conCrypto.mjs";
 import { UTXO } from "./transaction.mjs";
 
@@ -62,7 +63,7 @@ export class spectrumFunctions {
 export class Vss {
     /** Validator Selection Spectrum (VSS)
      * - Can search key by number (will be converted to string).
-     * @example { '100': { address: 'WCHMD65Q7qR2uH9XF5dJ', anchor: '0:bdadb7ab:0' } }
+     * @example { '1_000_000': { address: 'WCHMD65Q7qR2uH9XF5dJ', anchor: '0:bdadb7ab:0' } }
      * @type {Spectrum} */
     spectrum = {};
     /** @type {StakeReference[]} */
@@ -82,7 +83,7 @@ export class Vss {
         let upperBound = spectrumFunctions.getHighestUpperBound(this.spectrum);
         for (const utxo of utxos) {
             const updatedUpperBond = upperBound + utxo.amount;
-            if (updatedUpperBond > this.maxSupply) { return false; }
+            if (updatedUpperBond > this.maxSupply) return false;
             upperBound = updatedUpperBond;
         }
         return true;
@@ -96,7 +97,7 @@ export class Vss {
             const amount = utxo.amount;
             
             const updatedUpperBond = upperBound + amount;
-            if (updatedUpperBond > this.maxSupply) { throw new Error('VSS: Max supply reached.'); }
+            if (updatedUpperBond > this.maxSupply) throw new Error('VSS: Max supply reached.');
             this.spectrum[updatedUpperBond] = StakeReference(address, anchor, amount);
     
             upperBound = updatedUpperBond;
@@ -122,6 +123,7 @@ export class Vss {
             const winningNumber = await spectrumFunctions.hashToIntWithRejection(blockHash, i, maxRange);
             const stakeReference = spectrumFunctions.getStakeReferenceFromIndex(this.spectrum, winningNumber);
             if (!stakeReference) { console.error(`[VSS] Stake not found for winning number: ${winningNumber}`); continue; }
+            if (stakeReference.address < BLOCKCHAIN_SETTINGS.minStakeAmount) continue; // if stakeReference is less than minStakeAmount, skip it
 
             // if stakeReference already in roundLegitimacies, try again
             if (roundLegitimacies[stakeReference.address] !== undefined) continue;

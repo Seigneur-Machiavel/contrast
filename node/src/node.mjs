@@ -727,7 +727,7 @@ export class Node {
 
             balance += utxo.amount;
             UTXOs.push(utxo);
-
+            
             if (utxo.rule === "sigOrSlash") continue;
             spendableBalance += utxo.amount;
         }
