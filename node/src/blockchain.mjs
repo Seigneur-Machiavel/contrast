@@ -1,4 +1,4 @@
-import { BlockchainStorage, AddressesTxsRefsStorage_V2 } from '../../utils/storage-manager.mjs';
+import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage-manager.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block-classes.mjs';
 import { BlockMiningData } from './block-classes.mjs';
@@ -21,7 +21,7 @@ export class Blockchain {
     miniLogger = new MiniLogger('blockchain');
     cache = new BlocksCache(this.miniLogger);
     blockStorage = new BlockchainStorage();
-    addressesTxsRefsStorage = new AddressesTxsRefsStorage_V2();
+    addressesTxsRefsStorage = new AddressesTxsRefsStorage();
 
     /** @param {string} nodeId - The ID of the node. */
     constructor(nodeId) {
@@ -118,18 +118,22 @@ export class Blockchain {
         }
     }
     /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
-    async persistAddressesTransactionsReferencesToDisk_V2(memPool, indexStart, indexEnd, breathing = true) {
+    async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd, breathing = true) {
+        let startIndex = JSON.parse(JSON.stringify(indexStart)); // deep copy to avoid mutation
         let existingSnapHeight = this.addressesTxsRefsStorage.snapHeight;
-        if (existingSnapHeight === -1) existingSnapHeight = 0;
-        if (existingSnapHeight !== indexStart) {
+        ///if (existingSnapHeight === -1) existingSnapHeight = 0;
+
+        // if the snapHeight is the same as the indexStart, we need to start from the next block
+        if (existingSnapHeight === startIndex) startIndex += 1;
+        if (existingSnapHeight +1 !== startIndex) {
             this.miniLogger.log(`Addresses transactions references snapHeight mismatch: ${existingSnapHeight} != ${indexStart}`, (m) => { console.error(m); });
             return;
         }
         
         const startTime = performance.now();
         let totalGTROA_time = 0;
-        indexStart = Math.max(0, indexStart);
-        if (indexStart > indexEnd) return;
+        startIndex = Math.max(0, startIndex);
+        if (startIndex > indexEnd) return;
 
         const addressesTxsRefsSnapHeight = this.addressesTxsRefsStorage.snapHeight;
         if (addressesTxsRefsSnapHeight >= indexEnd) {
@@ -141,7 +145,7 @@ export class Blockchain {
 
         /** @type {Object<string, string[]>} */
         const actualizedAddrsTxsRefs = {};
-        for (let i = indexStart; i <= indexEnd; i++) {
+        for (let i = startIndex; i <= indexEnd; i++) {
             const finalizedBlock = this.getBlock(i);
             if (!finalizedBlock) { console.error(`Block not found #${i}`); continue; }
 
@@ -185,7 +189,7 @@ export class Blockchain {
             totalDuplicates += duplicate;
             duplicateCountTime += (performance.now() - duplicateStart);
 
-            savePromises.push(this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs, indexStart));
+            savePromises.push(this.addressesTxsRefsStorage.setTxsReferencesOfAddress(address, cleanedTxsRefs, startIndex));
             if (breathing) await breather.breathe();
         }
 
@@ -193,7 +197,7 @@ export class Blockchain {
         this.addressesTxsRefsStorage.save(indexEnd);
         const saveTime = performance.now() - saveStart;
         
-        const logText = `AddressesTxsRefs persisted from #${indexStart} to #${indexEnd}(included) [${breather.breath} breaths] -> Duplicates: ${totalDuplicates}/${totalRefs}(${duplicateCountTime.toFixed(2)}ms) - TotalTime: ${(performance.now() - startTime).toFixed(2)}ms - GTROA: ${totalGTROA_time.toFixed(2)}ms - SaveTime: ${saveTime.toFixed(2)}ms`;
+        const logText = `AddressesTxsRefs persisted from #${startIndex} to #${indexEnd}(included) [${breather.breath} breaths] -> Duplicates: ${totalDuplicates}/${totalRefs}(${duplicateCountTime.toFixed(2)}ms) - TotalTime: ${(performance.now() - startTime).toFixed(2)}ms - GTROA: ${totalGTROA_time.toFixed(2)}ms - SaveTime: ${saveTime.toFixed(2)}ms`;
         this.miniLogger.log(logText, (m) => { console.info(m); });
     }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */

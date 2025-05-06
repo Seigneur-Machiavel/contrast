@@ -20,7 +20,6 @@ export class OpStack {
     terminated = false;
     paused = false;
     executingTask = null;
-    healthInfo = { lastDigestTime: 0, lastSyncTime: 0, lastReorgCheckTime: 0 }
 
     /** @param {Node} node */
     constructor(node) { this.node = node }
@@ -45,7 +44,6 @@ export class OpStack {
         this.#rndSyncCheck();
         while (true) {
             if (this.terminated) break;
-
             if (this.tasks.length === 0 || this.paused) {
                 await new Promise(resolve => setTimeout(resolve, delayMS));
                 if (this.node.miner) this.node.miner.canProceedMining = true;
@@ -102,24 +100,19 @@ export class OpStack {
                     this.miniLogger.log(`[OpStack] pushTransactions: ${success.length} success, ${failed.length} failure`, (m) => console.info(m));
                     break;
                 case 'digestPowProposal':
-                    if (content.Txs[1].inputs[0] === undefined) { this.miniLogger.log(`[OpStack] Invalid block validator`, (m) => console.error(m)); return; }
-                    let result;
-                    try { result = await this.node.digestFinalizedBlock(content, options, byteLength) }
-                    catch (error) {
+                    if (content.Txs[1].inputs[0] === undefined) // validator sign check, avoid malicious spam
+                        { this.miniLogger.log(`[OpStack] Invalid block validator`, (m) => console.error(m)); return; }
+                    
+                    try {
+                        const digestResult = await this.node.digestFinalizedBlock(content, options, byteLength)
+                        this.node.reorganizator.pruneCache();
+                        if (typeof digestResult === 'number') this.pushFirst('createBlockCandidateAndBroadcast', digestResult);
+                    } catch (error) {
                         this.isReorging = false;
                         this.node.blockchainStats.state = 'idle';
                         await this.#digestPowProposalErrorHandler(error, content, task);
-                        return;
                     }
                     
-                    this.node.reorganizator.pruneCache();
-                    if (typeof result === 'number') this.pushFirst('createBlockCandidateAndBroadcast', result);
-
-                    // If many blocks are self validated, we are probably in a fork
-                    const blockValidatorAddress = content.Txs[1].inputs[0].split(':')[0];
-                    if (this.node.account.address === blockValidatorAddress) return;
-                    
-                    this.healthInfo.lastDigestTime = Date.now();
                     break;
                 case 'syncWithPeers':
                     if (this.node.miner) { this.node.miner.canProceedMining = false; }
@@ -137,7 +130,6 @@ export class OpStack {
                             this.node.syncAndReady = true;
                             this.node.syncHandler.syncFailureCount = 0;
                             this.miniLogger.log(`[OPSTACK-${this.node.id.slice(0, 6)}] syncWithPeers finished at #${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.warn(m));
-                            this.healthInfo.lastSyncTime = Date.now();
                             this.pushFirst('createBlockCandidateAndBroadcast', 0);
                             break;
                         case 'Checkpoint downloaded':
@@ -155,7 +147,6 @@ export class OpStack {
                             this.terminate();
                             break;
                         default:
-                            this.healthInfo.lastReorgCheckTime = Date.now();
                             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('syncWithPeers failed');
                             if (reorgTasks) this.securelyPushFirst(reorgTasks);
                             else this.pushFirst('syncWithPeers', null);
@@ -179,7 +170,6 @@ export class OpStack {
                     break;
                 case 'reorg_end':
                     this.isReorging = false;
-                    this.healthInfo.lastReorgCheckTime = Date.now();
                     const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('reorg_end');
                     if (!reorgTasks) {
                         this.miniLogger.log(`[OpStack] Reorg ended, no legitimate branch > ${this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
@@ -197,15 +187,14 @@ export class OpStack {
     }
     /** @param {Error} error @param {BlockData} block @param {object} task */
     async #digestPowProposalErrorHandler(error, block, task) {
-        if (error.message.includes('Anchor not found')) {
-            this.miniLogger.log(`**CRITICAL ERROR** Validation of the finalized doesn't spot missing anchor!`, (m) => console.error(m)); }
-        if (error.message.includes('invalid prevHash')) {
-            this.miniLogger.log(`**SOFT FORK** Finalized block prevHash doesn't match the last block hash!`, (m) => console.error(m)); }
+        if (error.message.includes('Anchor not found'))
+            this.miniLogger.log(`**CRITICAL ERROR** Validation of the finalized doesn't spot missing anchor!`, (m) => console.error(m));
+        if (error.message.includes('invalid prevHash'))
+            this.miniLogger.log(`**SOFT FORK** Finalized block prevHash doesn't match the last block hash!`, (m) => console.error(m));
 
         // reorg management
-        if (error.message.includes('!store!')) { this.node.reorganizator.storeFinalizedBlockInCache(block); }
-        if (error.message.includes('!reorg!')) {
-            this.healthInfo.lastReorgCheckTime = Date.now();
+        if (error.message.includes('!store!')) this.node.reorganizator.storeFinalizedBlockInCache(block);
+        if (error.message.includes('!reorg!') && !this.isReorging) {
             const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('digestPowProposal: !reorg!');
             if (reorgTasks) this.securelyPushFirst(reorgTasks);
         }
@@ -232,7 +221,7 @@ export class OpStack {
         }
         
         const ignoreList = ['!store!', '!reorg!', '!applyOffense!', '!applyMinorOffense!', '!banBlock!', '!ignore!'];
-        if (ignoreList.some((v) => error.message.includes(v))) { return; }
+        if (ignoreList.some((v) => error.message.includes(v))) return;
         
         this.miniLogger.log(error, (m) => console.error(m));
     }

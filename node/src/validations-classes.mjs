@@ -414,7 +414,7 @@ export class BlockValidation {
         if (typeof block.prevHash !== 'string') { throw new Error('Invalid prevHash'); }
         if (typeof lastBlockHash !== 'string') { throw new Error('Invalid lastBlockHash'); }
 
-        if (lastBlockHash === block.prevHash) { return; }
+        if (lastBlockHash === block.prevHash) return;
         throw new Error(`!store! !reorg! #${block.index} Rejected -> invalid prevHash: ${block.prevHash.slice(0, 10)} - expected: ${lastBlockHash.slice(0, 10)}`);
     }
     /** @param {BlockData} block @param {BlockData} lastBlock @param {number} currentTime */

@@ -18,7 +18,7 @@ function readSnapshotsHeightsOfDir(dirPath = '') {
 	const snapshotDirs = fs.readdirSync(dirPath);
 	if (snapshotDirs.length === 0) return [];
 	
-	// clean malformed snapshots
+	// remove malformed snapshots
 	for (const snapshotDir of snapshotDirs) {
 		const snapshotPath = path.join(dirPath, snapshotDir);
 		const files = fs.readdirSync(snapshotPath);

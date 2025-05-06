@@ -10,17 +10,16 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 export class Reorganizator {
+    /** @type {Object<string, Object<string, BlockData>>} */
+    finalizedBlocksCache = {};
+    /** @type {Object<string, Object<string, boolean>>} */
+    bannedBlockHashesByHeight = {};
     miniLogger = new MiniLogger('reorganizator');
+    node;
 
     /** @param {Node} node */
-    constructor(node) {
-        this.node = node;
-        
-        /** @type {Object<string, Object<string, BlockData>>} */
-        this.finalizedBlocksCache = {};
-        /** @type {Object<string, Object<string, boolean>>} */
-        this.bannedBlockHashesByHeight = {};
-    }
+    constructor(node) { this.node = node }
+    
     /** @param {BlockData} finalizedBlock */
     #isFinalizedBlockBanned(finalizedBlock) {
         const index = finalizedBlock.index;

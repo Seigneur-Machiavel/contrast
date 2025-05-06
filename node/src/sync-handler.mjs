@@ -209,12 +209,12 @@ export class SyncHandler {
         this.node.blockchainStats.state = "syncing";
     
         const peersStatus = await this.#getAllPeersStatus();
-        if (!peersStatus || peersStatus.length === 0) { return 'No peers available' }
+        if (!peersStatus || peersStatus.length === 0) return 'No peers available'
         
         const consensus = this.#findConsensus(peersStatus);
-        if (!consensus) { return await this.#handleSyncFailure(`Unable to get consensus -> sync failure`); }
+        if (!consensus) return await this.#handleSyncFailure(`Unable to get consensus -> sync failure`);
         this.consensusHeight = Math.max(this.consensusHeight, consensus.height);
-        if (consensus.height === 0 || consensus.height <= myCurrentHeight) { return 'Already at the consensus height'; }
+        if (consensus.height === 0 || consensus.height <= myCurrentHeight) return 'Already at the consensus height';
         
         this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height} (${consensus.checkpointPeers} peers)`, (m) => { console.info(m); });
 
@@ -254,7 +254,7 @@ export class SyncHandler {
 
         return await this.#handleSyncFailure('Unable to sync with any peer');
     }
-    async #getAllPeersStatus() {
+    async #getAllPeersStatus(shuffle = true) {
         const peersToSync = Object.keys(this.p2pNet.peers);
         const msg = { type: 'getStatus' };
         const promises = [];
@@ -272,7 +272,7 @@ export class SyncHandler {
             this.peersHeights[peerIdStr] = currentHeight;
         }
 
-        return peersStatus;
+        return shuffle ? peersStatus.sort(() => Math.random() - 0.5) : peersStatus;
     }
     /** @param {PeerStatus[]} peersStatus */
     #findConsensus(peersStatus) {

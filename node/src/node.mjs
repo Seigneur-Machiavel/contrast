@@ -319,7 +319,7 @@ export class Node {
         // erase the outdated blocks cache and persist the addresses transactions references to disk
         const cacheErasable = this.blockchain.cache.erasableLowerThan(finalizedBlock.index - (eraseUnder - 1));
         if (cacheErasable !== null && cacheErasable.from < cacheErasable.to) {
-            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, cacheErasable.from, cacheErasable.to);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, cacheErasable.from, cacheErasable.to);
             this.updateState(`snapshot - erase cache #${cacheErasable.from} to #${cacheErasable.to}`);
             this.blockchain.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
@@ -359,8 +359,8 @@ export class Node {
         // addrsTxsRefs has been pruned at this height
 
         // IN CASE OF UPGRADE: reset the ATRS to rebuild it entirely
-        if (this.blockchain.addressesTxsRefsStorage.version !== 2)
-            this.blockchain.addressesTxsRefsStorage.reset();
+        if (this.blockchain.addressesTxsRefsStorage.version !== 4)
+            this.blockchain.addressesTxsRefsStorage.reset('version-upgrade');
 
         if (this.blockchain.addressesTxsRefsStorage.snapHeight >= startHeight) return;
 
@@ -370,7 +370,7 @@ export class Node {
         let startHeightOp2 = startHeightOp1;
         for (let i = startHeightOp1; i < lastHeightOp1; i += 1000) {
             this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + 1000}`);
-            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, i, i + 1000);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, i, i + 1000);
             startHeightOp2 = i + 1000;
         }
 
@@ -379,7 +379,7 @@ export class Node {
         let startHeightOp3 = startHeightOp2;
         for (let i = startHeightOp2; i < lastHeightOp2; i += 100) {
             this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + 100}`);
-            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, i, i + 100);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, i, i + 100);
             startHeightOp3 = i + 100;
         }
 
@@ -388,7 +388,7 @@ export class Node {
         const lastHeightOp3 = startHeight;
         for (let i = startHeightOp3; i < lastHeightOp3; i += modulo) {
             this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + modulo}`);
-            await this.blockchain.persistAddressesTransactionsReferencesToDisk_V2(this.memPool, i, i + modulo);
+            await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, i, i + modulo);
         }
     }
 
@@ -516,7 +516,7 @@ export class Node {
         const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
         const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
     
-        if (!isSync) { this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); }); }
+        if (!isSync) this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
 
         timer.startPhase('saveSnapshot');
         await this.#saveSnapshot(finalizedBlock);
@@ -525,7 +525,7 @@ export class Node {
         await this.#saveCheckpoint(finalizedBlock);
         
         this.updateState("idle", "applying finalized block");
-        if (!broadcastNewCandidate) { return; }
+        if (!broadcastNewCandidate) return;
         return Math.max(0, this.delayBeforeSendingCandidate - (Date.now() - waitStart)); // delay before sending a new candidate
     }
 
