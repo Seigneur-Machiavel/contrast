@@ -1,0 +1,92 @@
+# Documentation Contrast
+
+## 1. Présentation générale
+Contrast est une application tout-en-un axée sur la blockchain, la gestion de portefeuilles, le réseau P2P et la sécurité. Elle propose une interface Electron moderne et modulaire, permettant d’intégrer plusieurs applications frontales (wallet, dashboard, assistant, explorer, vault, etc.) et des outils avancés pour les développeurs et utilisateurs.
+
+## 2. Architecture du projet
+### 2.1 Structure des dossiers
+- `apps/` : Contient les applications frontales (wallet, dashboard, explorer, vault, assistant, etc.)
+- `electron-app/` : Code spécifique à l’intégration Electron (fenêtres, gestion des settings, etc.)
+- `libs/` : Librairies tierces ou utilitaires (crypto, compression, visualisation, etc.)
+- `miniLogger/` : Module de logging personnalisé
+- `node/` : Code backend, logique blockchain, workers, P2P, scripts d’exécution
+- `utils/` : Utilitaires divers (cryptographie, stockage, conversions, validation, etc.)
+- `wallet-plugin/` : Extension/Plugin pour la gestion de portefeuilles (scripts, manifest, images)
+- Fichiers racine : scripts de build, configuration, README, documentation, etc.
+
+### 2.2 Principaux modules et dépendances
+- Electron (interface desktop)
+- Node.js (backend, scripts)
+- Libp2p (réseau P2P)
+- Argon2 (cryptographie)
+- Express (API interne)
+- Plotly.js, D3.js (visualisation)
+- Modules internes : gestion des wallets, P2P, sécurité, stockage, etc.
+
+## 3. Installation et prérequis
+- Node.js (version recommandée : >=18)
+- npm ou yarn
+- Système compatible Electron (Windows, Linux, MacOS)
+- Installer les dépendances : `npm install`
+
+## 4. Build et lancement de l'application
+- Pour lancer en mode développement : `npm start` (ouvre l’application Electron)
+- Pour générer un build de production : `npm run build` ou `node build-electron.js`
+- Certains scripts batch (.bat) facilitent le build ou le nettoyage du projet.
+
+## 5. Fonctionnalités principales
+### 5.1 Application Wallet
+- Gestion multi-comptes, génération d’adresses, sécurité avancée (Argon2, multi-sig, etc.)
+- Historique des transactions, envoi/réception, gestion des clés privées
+- Plugin navigateur natif (wallet-plugin)
+
+### 5.2 Dashboard
+- Vue d’ensemble du réseau, statistiques, gestion des nœuds
+- Monitoring des performances
+
+### 5.3 Explorer
+- Consultation de la blockchain, recherche de blocs/transactions
+- Visualisation graphique des données on-chain
+
+### 5.4 Vault
+- Stockage sécurisé d’informations sensibles
+- Gestion de jeux ou d’éléments personnalisés (ex : ScribeQuest)
+
+### 5.5 Assistant
+- Outils d’aide, tutoriels, automatisation de tâches courantes
+
+## 6. Fonctionnement du réseau P2P
+- Basé sur libp2p, supporte bootstrap, relay, gossipsub, etc.
+- Gestion dynamique des pairs, réputation, synchronisation de l’heure
+- Protocoles sécurisés (Noise, DCUTR, etc.)
+
+## 7. Gestion des portefeuilles et sécurité
+- Chiffrement fort (Argon2, CryptoLight)
+- Support multi-signature, différents niveaux de sécurité d’adresse
+- Stockage local sécurisé, gestion des permissions
+
+## 8. Développement et extension (ajout de modules/apps)
+- Ajouter une app dans `apps/` et la déclarer dans `apps-config.js`
+- Utiliser les utilitaires internes pour intégrer des fonctionnalités blockchain, réseau ou UI
+- Architecture modulaire facilitant l’extension et la personnalisation
+
+## 9. Scripts et automatisations
+- Scripts de build (`build-electron.bat`, `build-electron.js`)
+- Nettoyage et génération de clés (`clear-storage.bat`, `generate-privKey.mjs`, etc.)
+- Tests automatisés dans `node/tests/`
+
+## 10. Tests et validation
+- Tests unitaires et d’intégration dans `node/tests/`
+- Scripts de stress-test (`stresstest(dev).bat`)
+- Logs détaillés via `miniLogger`
+
+## 11. Fichiers de configuration importants
+- `package.json` : dépendances, scripts npm
+- `apps/apps-config.js` : configuration des applications frontales
+- `dev-app-update.yml` : configuration des mises à jour Electron
+- `wallet-plugin/manifest.json` : configuration du plugin wallet
+
+## 12. FAQ et dépannage
+- Problèmes de build : vérifier Node.js, dépendances, droits admin
+- Problèmes réseau : vérifier la configuration P2P, ports ouverts
+- Pour toute contribution, consulter le README.md et cette documentation
