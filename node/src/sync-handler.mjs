@@ -245,7 +245,6 @@ export class SyncHandler {
 
             const synchronized = await this.#getMissingBlocks(peerIdStr, currentHeight);
             if (!synchronized) continue;
-
             if (synchronized === 'Checkpoint deployed') return synchronized;
             
             this.miniLogger.log(`Successfully synced blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
@@ -336,6 +335,10 @@ export class SyncHandler {
             this.miniLogger.log(`Failed to process checkpoint archive`, (m) => { console.error(m); });
             return false;
         }
+
+        // migrate blocks to active checkpoint for faster sync
+        this.miniLogger.log(`Migrating blocks to active checkpoint`, (m) => { console.info(m); });
+        await this.node.checkpointSystem.migrateBlocksToActiveCheckpoint();
 
         return true;
     }

@@ -162,6 +162,11 @@ export class Node {
             persistedHeight = await this.loadSnapshot(startHeight);
         }
 
+        // rebuild addresses transactions references from the known blocks before connecting to p2p network
+        //? can't do that because dashboard isn't shown in app
+        //if (!activeCheckpoint && persistedHeight)
+            //await this.reBuildAddrsTxsRefs(persistedHeight);
+
         this.updateState("Initializing P2P network");
         const uniqueHash = await this.account.getUniqueHash(64);
         await this.p2pNetwork.start(uniqueHash, this.isRelayCandidate);
@@ -185,10 +190,10 @@ export class Node {
         //if (this.roles.includes('miner')) this.miner.startWithWorker();
         if (!activeCheckpoint) this.opStack.pushFirst('createBlockCandidateAndBroadcast', null);
         if (this.roles.includes('miner')) this.opStack.pushFirst('startMiner', null); // delayed
-        this.opStack.pushFirst('syncWithPeers', null);
+        //this.opStack.pushFirst('syncWithPeers', null);
 
-        if (!activeCheckpoint && persistedHeight)
-            this.opStack.pushFirst('reBuildAddrsTxsRefs', persistedHeight);
+        if (!activeCheckpoint && persistedHeight) this.opStack.pushFirst('reBuildAddrsTxsRefs', persistedHeight);
+        this.opStack.pushFirst('syncWithPeers', null); // sync first, then rebuild addrsTxsRefs if needed
 
         this.opStack.startStackLoop();
     }
@@ -301,7 +306,8 @@ export class Node {
         await this.snapshotSystem.rollBackTo(snapshotIndex, this.utxoCache, this.vss, this.memPool);
 
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m) => { console.info(m); });
-        if (snapshotIndex < 1) { this.blockchain.reset(); this.checkpointSystem.resetCheckpoints() } // reset (:not: active) Checkpoints.
+        if (snapshotIndex < 1)
+            { this.blockchain.reset(); this.checkpointSystem.resetCheckpoints() } // reset (:not: active) Checkpoints.
 
         this.blockchain.lastBlock = this.blockchain.getBlock(snapshotIndex);
 
@@ -357,6 +363,7 @@ export class Node {
     async reBuildAddrsTxsRefs(startHeight) {
         // startHeight correspond to the persistedHeight,
         // addrsTxsRefs has been pruned at this height
+        const startTime = performance.now();
 
         // IN CASE OF UPGRADE: reset the ATRS to rebuild it entirely
         if (this.blockchain.addressesTxsRefsStorage.version !== 4)
@@ -390,6 +397,9 @@ export class Node {
             this.updateState(`rebuilding addrsTxsRefs #${i} to #${i + modulo}`);
             await this.blockchain.persistAddressesTransactionsReferencesToDisk(this.memPool, i, i + modulo);
         }
+
+        const elapsed = performance.now() - startTime;
+        return elapsed;
     }
 
     // FINALIZED BLOCK HANDLING ----------------------------------------------------------
@@ -509,14 +519,12 @@ export class Node {
         if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
         timer.endPhase('block-storage');
     
-        this.miniLogger.log(`${statePrefix} #${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
-        if (this.logValidationTime){ timer.displayResults();}
-    
+        //this.miniLogger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length} | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
+        if (this.logValidationTime) timer.displayResults();
         const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);
         const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
         const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
-    
-        if (!isSync) this.miniLogger.log(`#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
+        this.miniLogger.log(`${statePrefix}#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s | digest: ${timer.getTotalTime()}s`, (m) => { console.info(m); });
 
         timer.startPhase('saveSnapshot');
         await this.#saveSnapshot(finalizedBlock);

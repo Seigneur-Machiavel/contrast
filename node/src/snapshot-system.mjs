@@ -15,7 +15,10 @@ import { Breather } from '../../utils/breather.mjs';
 
 /** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
 function readSnapshotsHeightsOfDir(dirPath = '') {
-	const snapshotDirs = fs.readdirSync(dirPath);
+	const snapshotDirs = fs.readdirSync(dirPath).filter((file) => {
+		const filePath = path.join(dirPath, file);
+		return fs.statSync(filePath).isDirectory() && !isNaN(Number(file));
+	});
 	if (snapshotDirs.length === 0) return [];
 	
 	// remove malformed snapshots
@@ -303,6 +306,50 @@ export class CheckpointSystem {
 		}
 
 		return true; // need to sync missing blocks
+	}
+	async migrateBlocksToActiveCheckpoint(stopAt = -1100) {
+		if (this.activeCheckpointHeight !== -1) return false; // checkpoint not active or not "init state"
+	
+		const blocksFoldersSorted = BlockchainStorage.getListOfFoldersInBlocksDirectory();
+		for (const folderName of blocksFoldersSorted) {
+			const folderPath = path.join(PATH.BLOCKS, folderName);
+			if (!fs.existsSync(folderPath)) break;
+			
+			const files = fs.readdirSync(folderPath);
+			if (!files.length || files.length <= 0) break;
+
+			let lastBlockIndex = -1;
+			let lastBlockHash = '';
+			for (let j = 0; j < files.length; j++) {
+				const fileName = files[j].split('.')[0];
+				const index = parseInt(fileName.split('-')[0], 10);
+				if (index >= this.activeCheckpointLastSnapshotHeight + stopAt) {
+					fs.rmSync(path.join(folderPath, files[j]), { force: true });
+					continue; // remove the block file, not needed
+				}
+				
+				lastBlockIndex = index;
+				lastBlockHash = fileName.split('-')[1];
+			}
+
+			if (lastBlockIndex === -1) break; // no more blocks to migrate
+
+			// MOVE THE FOLDER TO THE ACTIVE CHECKPOINT
+			const infoFolderPath = path.join(PATH.BLOCKS_INFO, folderName);
+			if (!fs.existsSync(infoFolderPath)) break; // no more blocks to migrate, missing info folder
+			if (!fs.existsSync(path.join(this.activeCheckpointPath, 'blocks'))) fs.mkdirSync(path.join(this.activeCheckpointPath, 'blocks'), { recursive: true });
+			if (!fs.existsSync(path.join(this.activeCheckpointPath, 'blocks-info'))) fs.mkdirSync(path.join(this.activeCheckpointPath, 'blocks-info'), { recursive: true });
+			fs.renameSync(folderPath, path.join(this.activeCheckpointPath, 'blocks', folderName));
+			fs.renameSync(infoFolderPath, path.join(this.activeCheckpointPath, 'blocks-info', folderName)); // move info folder
+
+			console.info(`Checkpoint migration: moved folder ${folderName} to active checkpoint`);
+			this.activeCheckpointHeight = lastBlockIndex;
+			this.activeCheckpointHash = lastBlockHash;
+		}
+
+		// ENSURE ALL BLOCKS FOLDERS DELETION
+		for (const folderName of fs.readdirSync(PATH.BLOCKS)) fs.rmSync(path.join(PATH.BLOCKS, folderName), { recursive: true, force: true });
+		for (const folderName of fs.readdirSync(PATH.BLOCKS_INFO)) fs.rmSync(path.join(PATH.BLOCKS_INFO, folderName), { recursive: true, force: true });
 	}
 	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
 	#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo) {

@@ -82,7 +82,8 @@ export class OpStack {
 
             switch (task.type) {
                 case 'reBuildAddrsTxsRefs':
-                    await this.node.reBuildAddrsTxsRefs(content);
+                    const elapsedTime = await this.node.reBuildAddrsTxsRefs(content);
+                    if (elapsedTime > 20_000) this.pushFirst('syncWithPeers', null); // if it took too long, sync with peers
                     break;
                 case 'pushTransaction':
                     try { await this.node.memPool.pushTransaction(this.node.utxoCache, content) }
@@ -107,11 +108,7 @@ export class OpStack {
                         const digestResult = await this.node.digestFinalizedBlock(content, options, byteLength)
                         this.node.reorganizator.pruneCache();
                         if (typeof digestResult === 'number') this.pushFirst('createBlockCandidateAndBroadcast', digestResult);
-                    } catch (error) {
-                        this.isReorging = false;
-                        this.node.blockchainStats.state = 'idle';
-                        await this.#digestPowProposalErrorHandler(error, content, task);
-                    }
+                    } catch (error) { await this.#digestPowProposalErrorHandler(error, content, task) }
                     
                     break;
                 case 'syncWithPeers':
@@ -171,14 +168,12 @@ export class OpStack {
                 case 'reorg_end':
                     this.isReorging = false;
                     const reorgTasks = await this.node.reorganizator.reorgIfMostLegitimateChain('reorg_end');
-                    if (!reorgTasks) {
-                        this.miniLogger.log(`[OpStack] Reorg ended, no legitimate branch > ${this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
-                        this.pushFirst('createBlockCandidateAndBroadcast', 0);
-                        break;
-                    }
+                    if (reorgTasks) this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
+                    else this.miniLogger.log(`[OpStack] Reorg ended, no legitimate branch > ${this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
+                    
+                    if (reorgTasks) this.securelyPushFirst(reorgTasks);
+                    else this.pushFirst('createBlockCandidateAndBroadcast', 0);
 
-                    this.miniLogger.log(`[OpStack] Reorg initiated by digestPowProposal, lastBlockData.index: ${this.node.blockchain.lastBlock === null ? 0 : this.node.blockchain.lastBlock.index}`, (m) => console.info(m));
-                    this.securelyPushFirst(reorgTasks);
                     break;
                 default:
                     this.miniLogger.log(`[OpStack] Unknown task type: ${task.type}`, (m) => console.error(m));
@@ -187,10 +182,23 @@ export class OpStack {
     }
     /** @param {Error} error @param {BlockData} block @param {object} task */
     async #digestPowProposalErrorHandler(error, block, task) {
+        this.node.blockchainStats.state = 'idle';
         if (error.message.includes('Anchor not found'))
             this.miniLogger.log(`**CRITICAL ERROR** Validation of the finalized doesn't spot missing anchor!`, (m) => console.error(m));
         if (error.message.includes('invalid prevHash'))
             this.miniLogger.log(`**SOFT FORK** Finalized block prevHash doesn't match the last block hash!`, (m) => console.error(m));
+
+        // ban/offenses management
+        if (error.message.includes('!banBlock!'))
+            this.node.reorganizator.banFinalizedBlock(block); // avoid using the block in future reorgs
+        
+        if (error.message.includes('!applyMinorOffense!'))
+            if (task.data.from !== undefined)
+                this.node.p2pNetwork.reputationManager.applyOffense({peerId : task.data.from},ReputationManager.OFFENSE_TYPES.MINOR_PROTOCOL_VIOLATIONS);
+        
+        if (error.message.includes('!applyOffense!'))
+            if (task.data.from !== undefined)
+                this.node.p2pNetwork.reputationManager.applyOffense({peerId : task.data.from}, ReputationManager.OFFENSE_TYPES.INVALID_BLOCK_SUBMISSION);
 
         // reorg management
         if (error.message.includes('!store!')) this.node.reorganizator.storeFinalizedBlockInCache(block);
@@ -199,27 +207,6 @@ export class OpStack {
             if (reorgTasks) this.securelyPushFirst(reorgTasks);
         }
 
-        // ban/offenses management
-        if (error.message.includes('!banBlock!')) {
-            this.miniLogger.log(`[OpStack] Finalized block #${block.index} has been banned, reason: ${error.message}`, (m) => console.warn(m));
-            this.node.reorganizator.banFinalizedBlock(block); // avoid using the block in future reorgs
-        }
-        if (error.message.includes('!applyMinorOffense!')) {
-            if (task.data.from === undefined) return;
-            this.node.p2pNetwork.reputationManager.applyOffense(
-                {peerId : task.data.from},
-                ReputationManager.OFFENSE_TYPES.MINOR_PROTOCOL_VIOLATIONS
-            );
-        }
-        if (error.message.includes('!applyOffense!')) {
-            if (task.data.from === undefined) return;
-            this.node.p2pNetwork.reputationManager.applyOffense(
-                {peerId : task.data.from},
-                ReputationManager.OFFENSE_TYPES.INVALID_BLOCK_SUBMISSION
-            );
-            return;
-        }
-        
         const ignoreList = ['!store!', '!reorg!', '!applyOffense!', '!applyMinorOffense!', '!banBlock!', '!ignore!'];
         if (ignoreList.some((v) => error.message.includes(v))) return;
         

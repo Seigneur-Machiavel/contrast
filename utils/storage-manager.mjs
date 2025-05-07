@@ -298,7 +298,8 @@ export class CheckpointsStorage {
  * @property {number} totalTxsRefs - The total number of transactions referenced (excluding temp refs)
  */
 export class AddressesTxsRefsStorage {
-    version = 3;
+    codeVersion = 4;
+    version = 0;
     loaded = false;
     configPath = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
     batchSize = 1000; // number of transactions references per file
@@ -339,7 +340,7 @@ export class AddressesTxsRefsStorage {
 
         this.snapHeight = indexEnd;
         const config = {
-            version: this.version || 2,
+            version: this.codeVersion,
             snapHeight: this.snapHeight,
             architecture: this.architecture,
             involedAddressesOverHeights: this.involedAddressesOverHeights
