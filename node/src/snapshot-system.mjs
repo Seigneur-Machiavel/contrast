@@ -22,6 +22,7 @@ function readSnapshotsHeightsOfDir(dirPath = '') {
 	if (snapshotDirs.length === 0) return [];
 	
 	// remove malformed snapshots
+	const snapshotsHeights = [];
 	for (const snapshotDir of snapshotDirs) {
 		const snapshotPath = path.join(dirPath, snapshotDir);
 		const files = fs.readdirSync(snapshotPath);
@@ -29,15 +30,14 @@ function readSnapshotsHeightsOfDir(dirPath = '') {
 		if (!files.includes('memPool.bin')) missingFiles.push('memPool.bin');
 		if (!files.includes('utxoCache.bin')) missingFiles.push('utxoCache.bin');
 		if (!files.includes('vss.bin')) missingFiles.push('vss.bin');
-		if (missingFiles.length === 0) continue;
-
-		console.error(`Erasing malformed snapshot #${snapshotDir} | missing files: ${missingFiles.join(', ')}`);
-		fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) console.error(err); });
+		if (missingFiles.length === 0) snapshotsHeights.push(Number(snapshotDir));
+		else {
+			console.error(`Erasing malformed snapshot #${snapshotDir} | missing files: ${missingFiles.join(', ')}`);
+			fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) console.error(err.stack); });
+		}
 	}
 
 	// read heights and sort them in ascending order
-	const snapshotsHeights = [];
-	for (const snapshotDir of snapshotDirs) snapshotsHeights.push(Number(snapshotDir));
 	return snapshotsHeights.sort((a, b) => a - b);
 }
 

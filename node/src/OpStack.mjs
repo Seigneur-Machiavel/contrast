@@ -164,6 +164,7 @@ export class OpStack {
                     break;
                 case 'reorg_start':
                     this.isReorging = true;
+                    this.miniLogger.log(`[OpStack] Reorg started`, (m) => console.info(m));
                     break;
                 case 'reorg_end':
                     this.isReorging = false;
@@ -178,15 +179,17 @@ export class OpStack {
                 default:
                     this.miniLogger.log(`[OpStack] Unknown task type: ${task.type}`, (m) => console.error(m));
             }
-        } catch (error) { this.miniLogger.log(error, (m) => console.error(m)); }
+        } catch (error) { this.miniLogger.log(error.stack, (m) => console.error(m)); }
     }
     /** @param {Error} error @param {BlockData} block @param {object} task */
     async #digestPowProposalErrorHandler(error, block, task) {
         this.node.blockchainStats.state = 'idle';
         if (error.message.includes('Anchor not found'))
             this.miniLogger.log(`**CRITICAL ERROR** Validation of the finalized doesn't spot missing anchor!`, (m) => console.error(m));
-        if (error.message.includes('invalid prevHash'))
-            this.miniLogger.log(`**SOFT FORK** Finalized block prevHash doesn't match the last block hash!`, (m) => console.error(m));
+        if (error.message.includes('invalid prevHash type!'))
+            this.miniLogger.log(`**SOFT FORK** Finalized block prevHash isn't a valid string!`, (m) => console.error(m));
+        if (error.message.includes('Invalid lastBlockHash type!'))
+            this.miniLogger.log(`**SOFT FORK** Finalized block lastBlockHash isn't a valid string!`, (m) => console.error(m));
 
         // ban/offenses management
         if (error.message.includes('!banBlock!'))
