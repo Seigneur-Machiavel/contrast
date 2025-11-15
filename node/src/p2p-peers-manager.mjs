@@ -7,12 +7,8 @@ import { multiaddr } from '@multiformats/multiaddr';
  */
 
 class PeerFloodCounter {
-    maxEventsPerMinute = {
-        CONNECT: 5,
-    }
-    eventsTimestamps = {
-        CONNECT: [],
-    };
+    maxEventsPerMinute = { CONNECT: 5 }
+    eventsTimestamps = { CONNECT: [] };
 
     constructor() {}
     /** @param {'CONNECT' | 'RESERVATION'} type @param {number} timestamp */
@@ -48,7 +44,6 @@ export class PeersManager {
     timeSynchronizer;
     /** @type {Object<string, Peer>} */
     store = {}; // by peerIdStr
-
     /** @type {string | undefined} */
     idStr; // my peerIdStr
 

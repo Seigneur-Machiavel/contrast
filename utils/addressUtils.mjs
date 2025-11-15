@@ -55,7 +55,6 @@ export const addressUtils = {
 
         const hex = argon2hash.hex;
         const addressBase58 = convert.hex.toBase58(hex).substring(0, 20);
-
         return addressBase58;
     },
     /** ==> First verification, low computation cost.
@@ -65,7 +64,7 @@ export const addressUtils = {
      */
     conformityCheck: (addressBase58) => {
         if (typeof addressBase58 !== 'string') { throw new Error('Invalid address type !== string'); }
-        if (addressBase58.length !== 20) { 
+        if (addressBase58.length !== 20) {
             throw new Error('Invalid address length !== 20'); }
 
         const firstChar = addressBase58.substring(0, 1);

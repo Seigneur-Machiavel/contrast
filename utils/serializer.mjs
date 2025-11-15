@@ -269,8 +269,6 @@ export const serializer = {
                 if (elementsLength.dataBytes === 0) return serializedTxView;
 
                 throw new Error('Data serialization not implemented yet');
-                serializedTxView.set(tx.data, cursor); // max 65535 bytes
-                return serializedTxView;
             } catch (error) {
                 console.error('Error while serializing the transaction:', error);
                 throw new Error('Failed to serialize the transaction');
