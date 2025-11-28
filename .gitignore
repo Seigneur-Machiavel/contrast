@@ -3,16 +3,6 @@ not_published
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
-node/application.log
-node/front/dash-copy
-
-wallet-plugin/builds
-wallet-plugin/dist(do-not-modify)
-wallet-plugin/mjiipclahahbedeiifgpfoagmncdcnoj.crx
-
 dist
 win-unpacked
-npm_install_log.txt
-contrast-win32-x64
 test-setup
-dev-app-update.yml
