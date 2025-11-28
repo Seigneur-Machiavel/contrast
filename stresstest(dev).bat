@@ -1,1 +1,0 @@
-node node/run.mjs -na stresstest
