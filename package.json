@@ -14,15 +14,16 @@
     "auto-launch": "^5.0.6",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "hive-p2p": "^1.0.71",
     "node-machine-id": "^1.1.12",
     "ws": "^8.18.0"
   },
   "devDependencies": {
     "electron": "^33.2.1",
-	"electron-log": "^5.2.4",
-    "electron-updater": "^6.3.9",
     "electron-builder": "^25.1.8",
-    "electron-packager": "^17.1.2"
+    "electron-log": "^5.2.4",
+    "electron-packager": "^17.1.2",
+    "electron-updater": "^6.3.9"
   },
   "files": [
     "!path_to_exclude/**/*"
