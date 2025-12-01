@@ -9,4 +9,10 @@ const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
 const privateKey = args.includes('-pk') ? nextArg('-pk') : null;
 const password = args.includes('-pw') ? nextArg('-pw') : 'fingerPrint';
 
+import { Node } from './src/node.mjs';
+//import { Wallet } from './src/wallet.mjs';
+
+//const wallet = new Wallet();
+//await wallet.loadAccounts();
+
 console.log('Starting node...');

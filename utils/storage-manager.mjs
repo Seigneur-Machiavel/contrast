@@ -2,16 +2,10 @@
 // As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
 
 import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
-import { FastConverter } from "./converters.mjs";
 import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 import { Breather } from './breather.mjs';
 
-/*import AdmZip from 'adm-zip';
-import * as crypto from 'crypto';
-const fs = await import('fs');
-const path = await import('path');
-const url = await import('url');*/ // -> DEPRECATED
 if (false) {
     const fs = require('fs');
     const path = require('path');
@@ -22,7 +16,7 @@ if (false) {
 
 // -> Imports compatibility for Node.js, Electron and browser
 
-let archiver, AdmZip, crypto, fs, path, url;
+let fs, path, url, crypto, AdmZip;
 (async () => {
     try { fs = await import('fs'); } catch (error) { fs = window.fs; }
     try { path = await import('path'); } catch (error) { path = window.path; }
@@ -33,6 +27,7 @@ let archiver, AdmZip, crypto, fs, path, url;
 })();
 
 /**
+* @typedef {import("hive-p2p").Converter} Converter
 * @typedef {import("../node/src/block-classes.mjs").BlockInfo} BlockInfo
 * @typedef {import("../node/src/node.mjs").Node} Node
 * @typedef {import("../node/src/transaction.mjs").Transaction} Transaction
@@ -47,7 +42,8 @@ let isProductionEnv = false;
 async function targetStorageFolder() {
     let storagePath = '';
 
-    while (!url) { await new Promise(resolve => setTimeout(resolve, 10)); }
+    while (!url) await new Promise(resolve => setTimeout(resolve, 10));
+
     const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked'); // path to the storage-manager.mjs file
     if (!filePath.includes('app.asar')) {
         const rootFolder = path.dirname(path.dirname(filePath));
@@ -511,7 +507,7 @@ export class AddressesTxsRefsStorage {
 
 export class BlockchainStorage {
     lastBlockIndex = -1;
-    fastConverter = new FastConverter();
+	/** @type {Converter | undefined} */ converter;
     batchFolders = BlockchainStorage.getListOfFoldersInBlocksDirectory(PATH.BLOCKS);
     /** @type {Object<number, string>} */
     hashByIndex = {"-1": "0000000000000000000000000000000000000000000000000000000000000000"};
@@ -519,13 +515,20 @@ export class BlockchainStorage {
     indexByHash = {"0000000000000000000000000000000000000000000000000000000000000000": 0};
 
     constructor() { this.#init(); }
+	
     static getListOfFoldersInBlocksDirectory(blocksPath = PATH.BLOCKS) {
         const blocksFolders = fs.readdirSync(blocksPath).filter(fileName => fs.lstatSync(path.join(blocksPath, fileName)).isDirectory());
         // named as 0-999, 1000-1999, 2000-2999, etc... => sorting by the first number
         const blocksFoldersSorted = blocksFolders.sort((a, b) => parseInt(a.split('-')[0], 10) - parseInt(b.split('-')[0], 10));
         return blocksFoldersSorted;
     }
-    #init() {
+    async #init() {
+		try {
+			this.converter = await import('hive-p2p').then(module => new module.Converter());
+		} catch (error) {
+			if (window && window.hiveP2P && window.hiveP2P.Converter) this.converter = new window.hiveP2P.Converter();
+		}
+
         let currentIndex = -1;
         for (let i = 0; i < this.batchFolders.length; i++) {
             const batchFolderName = this.batchFolders[i];
@@ -662,8 +665,8 @@ export class BlockchainStorage {
     /** @param {Uint8Array} serializedBlock @param {string} txRef - The reference of the transaction to retrieve */
     #findTxPointerInSerializedBlock(serializedBlock, txRef = '41:5fbcae93') {
         const targetTxId = txRef.split(':')[1];
-        const targetUint8Array = this.fastConverter.hexToUint8Array(targetTxId);
-        const nbOfTxs = this.fastConverter.uint82BytesToNumber(serializedBlock.slice(0, 2));
+        const targetUint8Array = this.converter.hexToBytes(targetTxId);
+        const nbOfTxs = this.converter.bytes2ToNumber(serializedBlock.slice(0, 2));
         const pointersStart = 2 + 4 + 8 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4;
         const pointersEnd = (pointersStart + nbOfTxs * 8) - 1;
         const pointersBuffer = serializedBlock.slice(pointersStart, pointersEnd + 1);
@@ -672,18 +675,18 @@ export class BlockchainStorage {
             if (!pointersBuffer.slice(i, i + 4).every((v, i) => v === targetUint8Array[i])) continue;
 
             const index = i / 8;
-            const offsetStart = this.fastConverter.uint84BytesToNumber(pointersBuffer.slice(i + 4, i + 8));
+            const offsetStart = this.converter.bytes4ToNumber(pointersBuffer.slice(i + 4, i + 8));
             i += 8;
             if (i >= pointersBuffer.length) return { index, start: offsetStart, end: serializedBlock.length };
             
-            const offsetEnd = this.fastConverter.uint84BytesToNumber(pointersBuffer.slice(i, i + 4));
+            const offsetEnd = this.converter.bytes4ToNumber(pointersBuffer.slice(i, i + 4));
             return { index, start: offsetStart, end: offsetEnd };
         }
 
         return null;
     }
     #extractSerializedBlockTimestamp(serializedBlock) {
-        return this.fastConverter.uint86BytesToNumber(serializedBlock.slice(62, 68));
+        return this.converter.bytes8ToNumber(serializedBlock.slice(62, 70));
     }
     /** @param {Uint8Array} serializedBlock @param {number} index @param {number} start @param {number} end */
     #readTxInSerializedBlockUsingPointer(serializedBlock, index = 0, start = 0, end = 1) {

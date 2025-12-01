@@ -3,9 +3,16 @@
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Debug Contrast Node",
+			"name": "Run Node",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/run.mjs"
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Run 2 Nodes",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/run_2_nodes.mjs"
 		},
         {
             "type": "node",
