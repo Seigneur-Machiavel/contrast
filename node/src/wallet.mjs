@@ -14,17 +14,7 @@ import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
 * @property {string} seedModifierHex
 */
 
-const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
-async function localStorage_v1Lib() {
-    if (isNode) {
-        const l = await import("../../utils/storage-manager.mjs");
-        return l;
-    }
-    return { Storage: null };
-};
-const { Storage } = await localStorage_v1Lib();
-
-export class AddressTypeInfo {
+export class AddressTypeInfo { // TYPEDEF
     name = '';
     description = '';
     zeroBits = 0;
@@ -76,91 +66,32 @@ export class Wallet {
     #masterHex = '';
 	converter = new Converter();
     miniLogger = new MiniLogger('wallet');
+    nbOfWorkers = 4; // default: 4
 
     /** @type {AccountDerivationWorker[]} */
     workers = [];
-    nbOfWorkers = 4;
     /** @type {Object<string, Account[]>} */
     accounts = { W: [], C: [], P: [], U: [] }; // max accounts per type = 65 536
     /** @type {Object<string, generatedAccount[]>} */
     accountsGenerated = { W: [], C: [], P: [], U: [] };
 
-    constructor(masterHex) { this.#masterHex = masterHex; } // 30 bytes - 60 chars
+	/** @param {string} masterHex - hex string of the master seed */
+    constructor(masterHex) { this.#masterHex = masterHex; }
 
-    async #encryptAccountsGenerated() {
-        const encryptedAccounts = { W: [], C: [], P: [], U: [] };
-		const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
-        const key = await crypto.subtle.importKey(
-            "raw",
-            Buffer.from(masterHexUint8),
-            { name: "AES-GCM" },
-            false, // extractable
-            ["encrypt", "decrypt"]
-        );
-        for (const prefix in this.accountsGenerated)
-            for (const account of this.accountsGenerated[prefix]) {
-		        const iv = new Uint8Array(12);
-        		crypto.getRandomValues(iv);
-                const encryptedAccount = { address: account.address, seedModifierHex: '', iv: this.converter.bytesToHex(iv) };
-                const seedModifierEncrypted = await crypto.subtle.encrypt(
-                    { name: "AES-GCM", iv },
-                    key,
-                    Buffer.from(this.converter.hexToBytes(account.seedModifierHex))
-                );
-                encryptedAccount.seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierEncrypted));
-                encryptedAccounts[prefix].push(encryptedAccount);
-            }
-
-        return encryptedAccounts;
-    }
-    async #decryptAccountsGenerated(encryptedAccounts) {
-        const decryptedAccounts = { W: [], C: [], P: [], U: [] };
-        const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
-        const key = await crypto.subtle.importKey(
-            "raw",
-            Buffer.from(masterHexUint8),
-            { name: "AES-GCM" },
-            false, // extractable
-            ["encrypt", "decrypt"]
-        );
-        for (const prefix in encryptedAccounts)
-            for (const account of encryptedAccounts[prefix]) {
-				const iv = this.converter.hexToBytes(account.iv);
-                const decryptedAccount = { address: account.address, seedModifierHex: '' };
-                const seedModifierDecrypted = await crypto.subtle.decrypt(
-                    { name: "AES-GCM", iv },
-                    key,
-                    Buffer.from(this.converter.hexToBytes(account.seedModifierHex))
-                );
-                decryptedAccount.seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierDecrypted));
-                decryptedAccounts[prefix].push(decryptedAccount);
-            }
-
-        return decryptedAccounts;
-    }
-    async saveAccounts() {
-        const hashId = HashFunctions.xxHash32(this.#masterHex);
-        const secureFilePath = `accounts/${hashId}_accounts`;
-        const encryptedAccounts = await this.#encryptAccountsGenerated();
-        Storage.saveJSON(secureFilePath, encryptedAccounts);
-		return true;
-    }
-    async loadAccounts() {
-        const hashId = HashFunctions.xxHash32(this.#masterHex);
-        const secureFilePath = `accounts/${hashId}_accounts`;
-        const accountsGeneratedEncrypted = Storage.loadJSON(secureFilePath);
+	// API
+	/** @param {import("../../utils/storage.mjs").ContrastStorage} contrastStorage */
+    async loadAccounts(contrastStorage) {
+        const accountsGeneratedEncrypted = contrastStorage.loadJSON(`accounts-${contrastStorage.localIdentifier}`);
         if (!accountsGeneratedEncrypted) return false;
 		
 		this.accountsGenerated = await this.#decryptAccountsGenerated(accountsGeneratedEncrypted);
-		return true;
+		
+		// Derive all loaded accounts (fast as they are saved)
+		for (const prefix in this.accountsGenerated)
+			if (!this.accountsGenerated[prefix].length) continue;
+			else await this.deriveAccounts(this.accountsGenerated[prefix].length, prefix);
     }
-    /** Post load fnc() -> to be called after loadAccounts() -> derive all generated accounts */
-    /** @param {string} [prefixFilter] */
-    async deriveGeneratedAccounts(prefixFilter) {
-        for (const prefix in this.accountsGenerated)
-            if (prefixFilter && prefix !== prefixFilter) continue;
-            else await this.deriveAccounts(this.accountsGenerated[prefix].length, prefix);
-    }
+	/** @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: "C" */
     async deriveAccounts(nbOfAccounts = 1, addressPrefix = "C") {
         //this.accounts[addressPrefix] = [];  // no reseting accounts anymore
         const startTime = performance.now();
@@ -196,7 +127,11 @@ export class Wallet {
 
                 await new Promise(r => setTimeout(r, 10)); // avoid spamming the CPU/workers
                 derivationResult = await this.#tryDerivationUntilValidAccountUsingWorkers(i, addressPrefix);
-            }
+				
+				// DESTROY WORKERS AFTER USE (to free resources) - not necessary anymore.
+				//for (const worker of this.workers) await worker.terminateAsync();
+				//this.workers = [];
+			}
 
             if (!derivationResult) {
                 const derivedAccounts = this.accounts[addressPrefix].slice(nbOfExistingAccounts).length;
@@ -229,6 +164,13 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
 
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
     }
+	/** @param {import("../../utils/storage.mjs").ContrastStorage} contrastStorage */
+    async saveAccounts(contrastStorage) {
+        const encryptedAccounts = await this.#encryptAccountsGenerated();
+        contrastStorage.saveJSON(`accounts-${contrastStorage.localIdentifier}`, encryptedAccounts);
+    }
+
+	// INTERNALS
     async #tryDerivationUntilValidAccountUsingWorkers(accountIndex = 0, desiredPrefix = "C") {
         /** @type {AddressTypeInfo} */
         const addressTypeInfo = addressUtils.glossary[desiredPrefix];
@@ -257,8 +199,8 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
         });
 		
         // abort the running workers
-        for (const worker of this.workers) { worker.abortOperation(); }
-        for (const promise of Object.values(promises)) { await promise; }
+        for (const worker of this.workers) worker.abortOperation();
+        for (const promise of Object.values(promises)) await promise;
         
         let iterations = 0;
         for (const promise of Object.values(promises)) {
@@ -317,5 +259,56 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
         addressUtils.conformityCheck(addressBase58);
         await addressUtils.securityCheck(addressBase58, pubKeyHex);
         return addressBase58;
+    }
+	async #encryptAccountsGenerated() {
+        const encryptedAccounts = { W: [], C: [], P: [], U: [] };
+		const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
+        const key = await crypto.subtle.importKey(
+            "raw",
+            Buffer.from(masterHexUint8),
+            { name: "AES-GCM" },
+            false, // extractable
+            ["encrypt", "decrypt"]
+        );
+        for (const prefix in this.accountsGenerated)
+            for (const account of this.accountsGenerated[prefix]) {
+		        const iv = new Uint8Array(12);
+        		crypto.getRandomValues(iv);
+                const encryptedAccount = { address: account.address, seedModifierHex: '', iv: this.converter.bytesToHex(iv) };
+                const seedModifierEncrypted = await crypto.subtle.encrypt(
+                    { name: "AES-GCM", iv },
+                    key,
+                    Buffer.from(this.converter.hexToBytes(account.seedModifierHex))
+                );
+                encryptedAccount.seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierEncrypted));
+                encryptedAccounts[prefix].push(encryptedAccount);
+            }
+
+        return encryptedAccounts;
+    }
+    async #decryptAccountsGenerated(encryptedAccounts) {
+        const decryptedAccounts = { W: [], C: [], P: [], U: [] };
+        const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
+        const key = await crypto.subtle.importKey(
+            "raw",
+            Buffer.from(masterHexUint8),
+            { name: "AES-GCM" },
+            false, // extractable
+            ["encrypt", "decrypt"]
+        );
+        for (const prefix in encryptedAccounts)
+            for (const account of encryptedAccounts[prefix]) {
+				const iv = this.converter.hexToBytes(account.iv);
+                const decryptedAccount = { address: account.address, seedModifierHex: '' };
+                const seedModifierDecrypted = await crypto.subtle.decrypt(
+                    { name: "AES-GCM", iv },
+                    key,
+                    Buffer.from(this.converter.hexToBytes(account.seedModifierHex))
+                );
+                decryptedAccount.seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierDecrypted));
+                decryptedAccounts[prefix].push(decryptedAccount);
+            }
+
+        return decryptedAccounts;
     }
 }

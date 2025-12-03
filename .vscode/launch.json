@@ -5,14 +5,16 @@
 			"request": "launch",
 			"name": "Run Node",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/run.mjs"
+			"program": "${workspaceFolder}/node/run.mjs",
+			"args": ["--max-old-space-size=16384"]
 		},
 		{
 			"type": "node",
 			"request": "launch",
 			"name": "Run 2 Nodes",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/run_2_nodes.mjs"
+			"program": "${workspaceFolder}/node/tests/run_2_nodes.mjs",
+			"args": ["--max-old-space-size=16384"]
 		},
         {
             "type": "node",

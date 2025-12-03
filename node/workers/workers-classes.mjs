@@ -191,19 +191,20 @@ export class AccountDerivationWorker {
         //newWorker('./account-worker-nodejs.mjs') :
         //newWorker(undefined, accountWorkerCode || window?.accountWorkerCode);
         this.worker = typeof accountWorkerCode === 'undefined' ? newWorker('./account-worker-nodejs.mjs') : newWorker(undefined, accountWorkerCode);
-    }
+		if (typeof accountWorkerCode !== 'undefined') return;
+
+		this.worker.on('exit', (code) => console.log(`DerivationWorker ${this.id} stopped with exit code ${code}`));
+        this.worker.on('close', () => console.log(`DerivationWorker ${this.id} closed`));
+	}
     async derivationUntilValidAccount(seedModifierStart, maxIterations, masterHex, desiredPrefix) {
         this.state = 'working';
 
         if (typeof accountWorkerCode === 'undefined') this.worker.removeAllListeners();
         else this.worker.onmessage = null;
 
-        //this.promise = new Promise((resolve, reject) => {
         const promise = new Promise((resolve, reject) => {
             this.state = 'working';
             if (typeof accountWorkerCode === 'undefined') {
-                this.worker.on('exit', (code) => { console.log(`DerivationWorker ${this.id} stopped with exit code ${code}`); });
-                this.worker.on('close', () => { console.log('DerivationWorker ${this.id} closed'); });
                 this.worker.on('message', (message) => {
                     if (message.id !== this.id) { return; }
                     if (message.error) { return reject({ isValid: message.isValid, error: message.error }); }
@@ -268,10 +269,7 @@ export class AccountDerivationWorker {
                 if (message.error) { return reject(message.error); }
                 resolve();
             });
-            this.worker.on('exit', (code) => {
-                console.log(`DerivationWorker ${this.id} stopped with exit code ${code}`);
-                resolve();
-            });
+            this.worker.on('exit', (code) => resolve());
         });
     }
 }

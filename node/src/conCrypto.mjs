@@ -4,7 +4,8 @@ import { xxHash32, ed25519, Converter, Argon2Unified } from 'hive-p2p';
 const argon2 = new Argon2Unified();
 const converter = new Converter();
 
-/** This function hashes a password using Argon2
+/** DEPRECATED
+ * This function hashes a password using Argon2
  * @param {string} pass - Password to hash
  * @param {string} salt - Salt to use for the hash
  * @param {number} time - Time cost in iterations
@@ -12,14 +13,17 @@ const converter = new Converter();
  * @param {number} parallelism - Number of threads to use
  * @param {number} type - 0: Argon2d, 1: Argon2i, 2: Argon2id
  * @param {number} hashLen - Length of the hash in bytes */
-export const argon2Hash = async (pass, salt, time = 1, mem = 2**20, parallelism = 1, type = 2, hashLen = 32) => {
+export const argon2HashOLD = async (pass, salt, time = 1, mem = 2**20, parallelism = 1, type = 2, hashLen = 32) => {
 	const hashResult = await argon2.hash(pass, salt, mem, time, parallelism, type, hashLen);
     if (!hashResult) return false;
 	else return hashResult;
 };
 
+export const argon2Hash = argon2.hash;
+
 export class HashFunctions {
-    static Argon2 = argon2Hash;
+    //static Argon2 = argon2Hash;
+	static Argon2 = argon2.hash;
     static xxHash32 = (input, minLength = 8) => {
         const hashNumber = xxHash32(input);
         const hashHex = hashNumber.toString(16);

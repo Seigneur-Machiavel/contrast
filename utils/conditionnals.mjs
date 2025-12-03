@@ -10,7 +10,6 @@ export const conditionnals = {
         const target = '0'.repeat(zeros);
         return string.startsWith(target);
     },
-
     /** Check if the string as binary is superior or equal to the target
      * @param {string} string
      * @param {number} minValue */

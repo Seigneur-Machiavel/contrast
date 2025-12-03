@@ -3,28 +3,25 @@ const base58Alphabet = { '1': 0, '2': 1, '3': 2, '4': 3, '5': 4, '6': 5, '7': 6,
 export const typeValidation = {
     /** @param {string} base58 - Base58 string to validate @returns {string|false} */
     base58(base58) {
-        for (let i = 0; i < base58.length; i++) {
-            if (base58Alphabet[base58[i]] === undefined) { return false; }
-        }
+        for (let i = 0; i < base58.length; i++)
+            if (base58Alphabet[base58[i]] === undefined) return false;
         return base58;
     },
     /** @param {string} hex - Hex string to validate @returns {string|false} */
     hex(hex) {
-        if (!hex) { return false; }
-        if (typeof hex !== 'string') { return false; }
-        if (hex.length === 0) { return false; }
-        if (hex.length % 2 !== 0) { return false; }
+        if (!hex) return false;
+        if (typeof hex !== 'string') return false;
+        if (hex.length === 0) return false;
+        if (hex.length % 2 !== 0) return false;
 
-        for (let i = 0; i < hex.length; i++) {
-            const char = hex[i];
-            if (isNaN(parseInt(char, 16))) { return false; }
-        }
+        for (let i = 0; i < hex.length; i++)
+            if (isNaN(parseInt(hex[i], 16))) return false;
 
         return hex;
     },
     /** @param {string} base64 - Base64 string to validate @returns {string|false} */
     uint8Array(uint8Array) {
-        if (uint8Array instanceof Uint8Array === false) { return false; }
+        if (uint8Array instanceof Uint8Array === false) return false;
         return uint8Array;
     },
     /** @param {number} number - Number to validate */
@@ -33,44 +30,44 @@ export const typeValidation = {
     },
     /** @param {string} anchor - "height:TxID:vout" - ex: "8:7c5aec61:0" */
     isConformAnchor(anchor) {
-        if (typeof anchor !== 'string') { return false; }
+        if (typeof anchor !== 'string') return false;
 
         const splitted = anchor.split(':');
-        if (splitted.length !== 3) { return false; }
+        if (splitted.length !== 3) return false;
 
         // height
         const height = parseInt(splitted[0], 10);
-        if (isNaN(height) || typeof height !== 'number') { return false; }
-        if (height < 0 || height % 1 !== 0) { return false; }
+        if (isNaN(height) || typeof height !== 'number') return false;
+        if (height < 0 || height % 1 !== 0) return false;
 
         // TxID
-        if (typeof splitted[1] !== 'string') { return false; }
-        if (splitted[1].length !== 8) { return false; }
-        if (typeValidation.hex(splitted[1]) === false) { return false; }
+        if (typeof splitted[1] !== 'string') return false;
+        if (splitted[1].length !== 8) return false;
+        if (typeValidation.hex(splitted[1]) === false) return false;
 
         // vout
         const vout = parseInt(splitted[2], 10);
-        if (isNaN(vout) || typeof vout !== 'number') { return false; }
-        if (vout < 0 || vout % 1 !== 0) { return false; }
+        if (isNaN(vout) || typeof vout !== 'number') return false;
+        if (vout < 0 || vout % 1 !== 0) return false;
 
         return true;
     },
     /** @param {string} txReference - "height:TxID" - ex: "8:7c5aec61" */
     isConformTxReference(txReference) {
-        if (typeof txReference !== 'string') { return false; }
+        if (typeof txReference !== 'string') return false;
 
         const splitted = txReference.split(':');
-        if (splitted.length !== 2) { return false; }
+        if (splitted.length !== 2) return false;
 
         // height
         const height = parseInt(splitted[0], 10);
-        if (isNaN(height) || typeof height !== 'number') { return false; }
-        if (height < 0 || height % 1 !== 0) { return false; }
+        if (isNaN(height) || typeof height !== 'number') return false;
+        if (height < 0 || height % 1 !== 0) return false;
 
         // TxID
-        if (typeof splitted[1] !== 'string') { return false; }
-        if (splitted[1].length !== 8) { return false; }
-        if (typeValidation.hex(splitted[1]) === false) { return false; }
+        if (typeof splitted[1] !== 'string') return false;
+        if (splitted[1].length !== 8) return false;
+        if (typeValidation.hex(splitted[1]) === false) return false;
 
         return true;
     }

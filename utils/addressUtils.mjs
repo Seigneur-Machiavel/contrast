@@ -2,7 +2,7 @@ import { xxHash32, Converter } from 'hive-p2p';
 import { conditionnals } from './conditionnals.mjs';
 
 /**
-* @typedef {import("../node/src/conCrypto.mjs").argon2Hash} HashFunctions
+* @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash
 */
 
 const converter = new Converter();
@@ -21,13 +21,13 @@ export const addressUtils = {
     },
 
     /** This function uses an Argon2 hash function to perform a hashing operation.
-     * @param {HashFunctions} argon2HashFunction
+     * @param {argon2Hash} argon2HashFunction
      * @param {string} pubKeyHex */
     deriveAddress: async (argon2HashFunction, pubKeyHex) => {
         const hex128 = pubKeyHex.substring(32, 64);
         const salt = pubKeyHex.substring(0, 32); // use first part as salt because entropy is lower
 
-        const argon2hash = await argon2HashFunction(hex128, salt, 1, addressUtils.params.argon2DerivationMemory, 1, 2, addressUtils.params.addressDerivationBytes);
+        const argon2hash = await argon2HashFunction(hex128, salt, addressUtils.params.argon2DerivationMemory, 1, 1, 2, addressUtils.params.addressDerivationBytes);
         if (!argon2hash) { console.error('Failed to hash the SHA-512 pubKeyHex'); return false; }
 
         const hex = argon2hash.hex;
@@ -52,7 +52,7 @@ export const addressUtils = {
      * @param {string} addressBase58 - Address to validate
      * @param {string} pubKeyHex - Public key to derive the address from */
     securityCheck: async (addressBase58, pubKeyHex = '') => {
-        if (pubKeyHex.length !== 64) { throw new Error('Invalid public key length !== 64'); }
+        if (pubKeyHex.length !== 64) throw new Error('Invalid public key length !== 64');
 
         const firstChar = addressBase58.substring(0, 1);
         const addressTypeInfo = addressUtils.glossary[firstChar];
@@ -71,12 +71,12 @@ export const addressUtils = {
             mixedAddPubKeyHashHex += hashNumber.toString(16).padStart(8, '0');
         }
 
-        if (mixedAddPubKeyHashHex.length !== 64) { throw new Error('Failed to hash the address and the public key'); }
+        if (mixedAddPubKeyHashHex.length !== 64) throw new Error('Failed to hash the address and the public key');
         
-        const bitsArray = convert.hex.toBits(mixedAddPubKeyHashHex);
-        if (!bitsArray) throw new Error('Failed to convert the public key to bits');
+		const bitsString = Converter.hexToBits(mixedAddPubKeyHashHex, 'string');
+        if (!bitsString) throw new Error('Failed to convert the public key to bits');
 
-        const condition = conditionnals.binaryStringStartsWithZeros(bitsArray.join(''), addressTypeInfo.zeroBits);
+        const condition = conditionnals.binaryStringStartsWithZeros(bitsString, addressTypeInfo.zeroBits);
         if (!condition) throw new Error(`Address does not meet the security level ${addressTypeInfo.zeroBits} requirements`);
         return 'Address meets the security level requirements';
     },
@@ -91,7 +91,9 @@ export const addressUtils = {
 
         return addressBase58 === derivedAddressBase58;
     },
-
+	/** Format an address with a separator for better readability
+	* @param {string} addressBase58 - Address to format
+	* @param {string} separator - Separator to use (default: '.') */
     formatAddress: (addressBase58, separator = ('.')) => {
         if (typeof addressBase58 !== 'string') { return false; }
         if (typeof separator !== 'string') { return false; }

@@ -3,6 +3,7 @@ import { typeValidation } from './type-validation.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from './blockchain-settings.mjs';
 
 /**
+* @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash
 * @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
 */
 
@@ -76,20 +77,13 @@ export const mining = {
         //console.log(`Bet time: ${betTime}ms`);
         return betTime;
     },
-    /**
-     * This function uses an Argon2 hash function to perform a hashing operation.
-     * The Argon2 hash function must follow the following signature:
-     * - argon2HashFunction(pass, salt, time, mem, parallelism, type, hashLen)
-     *
-     *@param {function(string, string, number=, number=, number=, number=, number=): Promise<false | { encoded: string, hash: Uint8Array, hex: string, bitsArray: number[] }>} argon2HashFunction
-     *@param {string} blockSignature - Block signature to hash
-     *@param {string} nonce - Nonce to hash
-    */
+    /** This function uses an Argon2 hash function to perform a hashing operation.
+     * @param {argon2Hash} argon2HashFunction
+     * @param {string} blockSignature - Block signature to hash
+     * @param {string} nonce - Nonce to hash */
     hashBlockSignature: async (argon2HashFunction, blockSignature = '', nonce = '') => {
         const { time, mem, parallelism, type, hashLen } = MINING_PARAMS.argon2;
-        const newBlockHash = await argon2HashFunction(blockSignature, nonce, time, mem, parallelism, type, hashLen);
-        if (!newBlockHash) { return false; }
-
+        const newBlockHash = await argon2HashFunction(blockSignature, nonce, mem, time, parallelism, type, hashLen);
         return newBlockHash;
     },
     /** @param {BlockData} blockData */

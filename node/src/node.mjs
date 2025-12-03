@@ -26,11 +26,15 @@ export class ContrastNode {
 	verb;
 
 	/** Node instance should be created with "createContrastNode" method, not using "new" constructor.
-	 * @param {import('hive-p2p').Node} p2pNode - Configuration options for the node. */
-	constructor(p2pNode, verb = 2) { this.p2pNode = p2pNode; this.verb = verb }
+	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance. */
+	constructor(p2pNode, verb = 2) {
+		this.p2pNode = p2pNode;
+		this.verb = verb;
+	}
 
 	// GETTERS
 	get time() { return this.p2pNode.time; }
+	get neighborsCount() { return this.p2pNode.peerStore.neighborsList.length; }
 
 	// API
 	async start() {
@@ -47,6 +51,9 @@ export class ContrastNode {
 		if (this.verb >= 1) console.log(`Restarting Contrast node...`);
 		await this.stop();
 		await this.start();
+	}
+	setWallet() { // associat a wallet with this node (for miner and validator functions)
+		// To be implemented
 	}
 
 	// INTERNALS

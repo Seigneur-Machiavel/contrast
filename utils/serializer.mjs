@@ -1,8 +1,4 @@
-if (false) {
-    const MessagePack = require('../libs/msgpack.min.js').default;
-}
-
-import { FastConverter } from './converters.mjs';
+import { Converter } from 'hive-p2p';
 import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
 import { Transaction } from '../node/src/transaction.mjs';
 
@@ -10,11 +6,11 @@ import { Transaction } from '../node/src/transaction.mjs';
 * @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
 * @typedef {import("../node/src/utxoCache.mjs").UtxoCache} UtxoCache
 *
-* @typedef { Object } NodeSetting
-* @property { string } privateKey
-* @property { string } validatorRewardAddress
-* @property { string } minerAddress
-* @property { number } minerThreads
+* @typedef {Object} NodeSetting
+* @property {string} privateKey
+* @property {string} validatorRewardAddress
+* @property {string} minerAddress
+* @property {number} minerThreads
 * 
 * @typedef {Object} CheckpointInfo
 * @property {number} height
@@ -27,16 +23,8 @@ import { Transaction } from '../node/src/transaction.mjs';
 */
 
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
-async function msgPackLib() {
-    if (isNode) {
-        const m = await import('../libs/msgpack.min.js');
-        return m.default;
-    }
-    //return MessagePack;
-    return window.msgpack;
-};
-const msgpack = await msgPackLib();
-const fastConverter = new FastConverter();
+const msgpack = isNode ? (await import('../libs/msgpack.min.js')).default : window.msgpack;
+const converter = new Converter();
 
 class BinaryWriter {
 	cursor = 0;

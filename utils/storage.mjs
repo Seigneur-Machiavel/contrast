@@ -1,35 +1,27 @@
 // A primitive way to store the blockchain data and wallet data etc...
 // As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
 
+import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
 import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 import { Breather } from './breather.mjs';
 
-if (false) {
-    const fs = require('fs');
-    const path = require('path');
-    const url = require('url');
-    const crypto = require('crypto');
-    const AdmZip = require('adm-zip');
-}
-
 // -> Imports compatibility for Node.js, Electron and browser
-
-let fs, path, url, crypto, AdmZip;
-(async () => {
-    try { fs = await import('fs'); } catch (error) { fs = window.fs; }
-    try { path = await import('path'); } catch (error) { path = window.path; }
-    try { url = await import('url'); } catch (error) { url = window.url; }
-    try { crypto = await import('crypto'); } catch (error) { crypto = window.crypto; }
-    try { AdmZip = await import('adm-zip').then(module => module.default); }
-    catch (error) { try { AdmZip = window.AdmZip; } catch (error) {} };
-})();
+const isNode = typeof window === 'undefined';
+/** @type {typeof import('fs')} */
+const fs = isNode ? await import('fs') : window.fs;
+/** @type {typeof import('path')} */
+const path = isNode ? await import('path') : window.path;
+const url = isNode ? await import('url') : window.url;
+const crypto = isNode ? await import('crypto') : window.crypto;
+/** @type {typeof import('adm-zip')} */
+const AdmZip = isNode ? await import('adm-zip').then(module => module.default) : window.AdmZip;
 
 /**
 * @typedef {import("hive-p2p").Converter} Converter
-* @typedef {import("../node/src/block-classes.mjs").BlockInfo} BlockInfo
 * @typedef {import("../node/src/node.mjs").Node} Node
+* @typedef {import("../node/src/block-classes.mjs").BlockInfo} BlockInfo
 * @typedef {import("../node/src/transaction.mjs").Transaction} Transaction
 */
 
@@ -37,151 +29,134 @@ let fs, path, url, crypto, AdmZip;
 /** @type {MiniLogger} */
 const storageMiniLogger = new MiniLogger('storage');
 const BLOCK_PER_DIRECTORY = 1000;
-let isProductionEnv = false;
 
-async function targetStorageFolder() {
-    let storagePath = '';
+/** THE COMMON CLASS TO HANDLE THE STORAGE PATHS */
+class StorageRoot {
+	/** The local identifier used as subFolder */	localIdentifier;
+	/** Is running in electron environment */		  isElectronEnv;
+	/** Path to this file @type {string} */				   filePath;
+	/** Paths used for storage */							   PATH;
 
-    while (!url) await new Promise(resolve => setTimeout(resolve, 10));
+	/** @param {string|null} masterHex - master hex string to generate local identifier */
+	constructor(masterHex = null) {
+		this.localIdentifier = masterHex ? this.#getLocalIdentifier(masterHex) : null;
+		this.filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked'); // path to the storage-manager.mjs file
+		this.isElectronEnv = this.filePath.includes('app.asar');
 
-    const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked'); // path to the storage-manager.mjs file
-    if (!filePath.includes('app.asar')) {
-        const rootFolder = path.dirname(path.dirname(filePath));
-        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
-    } else {
-        isProductionEnv = true; 
-        const rootFolder = path.dirname(path.dirname(path.dirname(path.dirname(filePath))));
-        storagePath = path.join(path.dirname(rootFolder), 'contrast-storage');
-        console.log('-----------------------------');
-        console.log('-----------------------------');
-        console.log(storagePath);
-        console.log('-----------------------------');
-        console.log('-----------------------------');
-    }
+		const rootFolder = !this.isElectronEnv ? path.dirname(path.dirname(this.filePath))
+			: path.dirname(path.dirname(path.dirname(path.dirname(this.filePath))))
+	
+		const basePath = !this.localIdentifier ? path.join(path.dirname(rootFolder), 'contrast-storage')
+			: path.join(path.dirname(rootFolder), 'contrast-storage', this.localIdentifier);
+	
+		this.PATH = {
+			/** path to the storage-manager.mjs file */
+			BASE_FILE: this.filePath,
+			/** path to the storage folder (out of the root directory) */
+			STORAGE: basePath,
+			TRASH: path.join(basePath, 'trash'),
+			TXS_REFS: path.join(basePath, 'addresses-txs-refs'),
+			BLOCKS: path.join(basePath, 'blocks'),
+			JSON_BLOCKS: path.join(basePath, 'json-blocks'),
+			BLOCKS_INFO: path.join(basePath, 'blocks-info'),
+			SNAPSHOTS: path.join(basePath, 'snapshots'),
+			CHECKPOINTS: path.join(basePath, 'checkpoints'),
+			TEST_STORAGE: path.join(basePath, 'test')
+		};
 
-    return { filePath, storagePath };
-}
-export function copyFolderRecursiveSync(src, dest) {
-    const exists = fs.existsSync(src);
-    const stats = exists && fs.statSync(src);
-    const isDirectory = exists && stats.isDirectory();
-
-    if (exists && isDirectory) {
-        if (!fs.existsSync(dest)) { fs.mkdirSync(dest); }
-        fs.readdirSync(src).forEach(function(childItemName) {
-            copyFolderRecursiveSync(path.join(src, childItemName), path.join(dest, childItemName));
-        });
-    } else {
-        fs.copyFileSync(src, dest);
-    }
-}
-
-const basePath = await targetStorageFolder();
-// CLEANUP v0.0.4
-const oldStoragePath1 = path.join(path.dirname(path.dirname(url.fileURLToPath(import.meta.url))), 'node', 'storage');
-if (fs.existsSync(oldStoragePath1)) { fs.rmSync(oldStoragePath1, { recursive: true }); }
-if (fs.existsSync(path.join(basePath.storagePath, 'nodeSetting.json'))) fs.rmSync(path.join(basePath.storagePath, 'nodeSetting.json'));
-if (fs.existsSync(path.join(basePath.storagePath, 'nodesSettings.json'))) fs.rmSync(path.join(basePath.storagePath, 'nodesSettings.json'));
-if (fs.existsSync(path.join(basePath.storagePath, 'nodeSettings.json'))) fs.rmSync(path.join(basePath.storagePath, 'nodeSettings.json'));
-
-export const PATH = {
-    BASE_FILE: basePath.filePath, // path to the storage-manager.mjs file
-    STORAGE: basePath.storagePath, // path to the storage folder (out of the root directory)
-    TRASH: path.join(basePath.storagePath, 'trash'),
-    TXS_REFS: path.join(basePath.storagePath, 'addresses-txs-refs'),
-    BLOCKS: path.join(basePath.storagePath, 'blocks'),
-    JSON_BLOCKS: path.join(basePath.storagePath, 'json-blocks'),
-    BLOCKS_INFO: path.join(basePath.storagePath, 'blocks-info'),
-    SNAPSHOTS: path.join(basePath.storagePath, 'snapshots'),
-    CHECKPOINTS: path.join(basePath.storagePath, 'checkpoints'),
-    TEST_STORAGE: path.join(basePath.storagePath, 'test'),
-    //APPS_STORAGE: path.join(basePath.storagePath, 'apps'),
-}
-if (isProductionEnv) { delete PATH.TEST_STORAGE; delete PATH.JSON_BLOCKS; }
-// create the storage folder if it doesn't exist, and any other subfolder
-for (const dirPath of Object.values(PATH)) { if (!fs.existsSync(dirPath)) { fs.mkdirSync(dirPath); } }
-
-export class Storage {
-    /** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
-    static saveBinary(fileName, serializedData, directoryPath) {
-        try {
-            const directoryPath__ = directoryPath || PATH.STORAGE;
-            if (!fs.existsSync(directoryPath__)) { fs.mkdirSync(directoryPath__); }
-            
-            const filePath = path.join(directoryPath__, `${fileName}.bin`);
-            fs.writeFileSync(filePath, serializedData);
-            return true;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
-    }
-    /** @param {string} fileName @param {string} directoryPath */
-    static loadBinary(fileName, directoryPath) {
-        const directoryPath__ = directoryPath || PATH.STORAGE;
-        const filePath = path.join(directoryPath__, `${fileName}.bin`);
-        try { return fs.readFileSync(filePath) } // work as Uint8Array
-        catch (error) {
-            if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
-            else storageMiniLogger.log(error.stack, (m) => { console.error(m); });
-        }
-        return false;
-    }
-    static isFileExist(fileNameWithExtension = 'toto.bin', directoryPath) {
-        const directoryPath__ = directoryPath || PATH.STORAGE;
-        const filePath = path.join(directoryPath__, fileNameWithExtension);
-        return fs.existsSync(filePath);
-    }
-    /** Save data to a JSON file @param {string} fileName - The name of the file */
-    static saveJSON(fileName, data) {
-        try {
-            const filePath = path.join(PATH.STORAGE, `${fileName}.json`);
-            const subFolder = path.dirname(filePath);
-            if (!fs.existsSync(subFolder)) fs.mkdirSync(subFolder);
-            fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false }
-    }
-    /** Load data from a JSON file @param {string} fileName - The name of the file */
-    static loadJSON(fileName) {
-        try { return JSON.parse(fs.readFileSync( path.join(PATH.STORAGE, `${fileName}.json`) )) }
-        catch (error) { return false }
-    }
-    static deleteFile(fileNameWithExtension = 'toto.bin', directoryPath = PATH.STORAGE) {
-        const filePath = path.join(directoryPath, fileNameWithExtension);
-        if (fs.existsSync(filePath)) fs.rmSync(filePath);
-    }
-    static dumpTrashFolder() {
-        if (fs.existsSync(PATH.TRASH)) fs.rmSync(PATH.TRASH, { recursive: true });
-        fs.mkdirSync(PATH.TRASH);
-    }
-}
-export class StorageAsync {
-    // savebin and loadbin only
-    /** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
-    static async saveBinary(fileName, serializedData, directoryPath) {
-        try {
-            const directoryPath__ = directoryPath || PATH.STORAGE;
-            if (!fs.existsSync(directoryPath__)) { fs.mkdirSync(directoryPath__); }
-
-            const filePath = path.join(directoryPath__, `${fileName}.bin`);
-            await fs.promises.writeFile(filePath, serializedData);
-            return true;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
-
-        return false;
-    }
-    /** @param {string} fileName @param {string} directoryPath */
-    static async loadBinary(fileName, directoryPath) {
-        const directoryPath__ = directoryPath || PATH.STORAGE;
-        const filePath = path.join(directoryPath__, `${fileName}.bin`);
-        try {
-            const buffer = await fs.promises.readFile(filePath);
-            return buffer;
-        } catch (error) {
-            if (error.code !== 'ENOENT') storageMiniLogger.log(error.stack, (m) => { console.error(m); });
-            else storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
-        }
-        return false;
-    }
+		// create the contrast-storage folder if it doesn't exist, and any of subfolder
+		if (this.isElectronEnv) { delete this.PATH.TEST_STORAGE; delete this.PATH.JSON_BLOCKS; }
+		if (!fs.existsSync(path.join(path.dirname(rootFolder), 'contrast-storage')))
+			fs.mkdirSync(path.join(path.dirname(rootFolder), 'contrast-storage'));
+		for (const dirPath of Object.values(this.PATH))
+			if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath);
+	}
+	#getLocalIdentifier(masterHex = 'ff') {
+		const separatorParts = 'local-identifier-separator'.split('');
+		const keyParts = masterHex.split('');
+		const input = [];
+		for (let i = 0; i < keyParts.length; i++) {
+			input.push(keyParts[i]);
+			input.push(separatorParts[i % separatorParts.length]);
+		}
+		return HashFunctions.xxHash32(input.join(''));
+	}
 }
 
+/** The main Storage */
+export class ContrastStorage extends StorageRoot {
+	constructor(masterHex = null) { super(masterHex); }
+
+	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
+	saveBinary(fileName, serializedData, directoryPath) {
+		try {
+			const d = directoryPath || this.PATH.STORAGE;
+			if (!fs.existsSync(d)) fs.mkdirSync(d);
+
+			fs.writeFileSync(path.join(d, `${fileName}.bin`), serializedData);
+		} catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
+		return true;
+	}
+	/** @param {string} fileName @param {string} directoryPath @returns {Uint8Array|boolean} */
+	loadBinary(fileName, directoryPath) {
+		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
+		try { return fs.readFileSync(filePath) } // work as Uint8Array
+		catch (error) {
+			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
+			else storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+		}
+		return false;
+	}
+	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
+	async saveBinaryAsync(fileName, serializedData, directoryPath) {
+		try {
+			const d = directoryPath || this.PATH.STORAGE;
+			if (!fs.existsSync(d)) fs.mkdirSync(d);
+			await fs.promises.writeFile(path.join(d, `${fileName}.bin`), serializedData);
+		} catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
+	}
+	/** @param {string} fileName @param {string} directoryPath @returns {Promise<Uint8Array|boolean>} */
+	async loadBinaryAsync(fileName, directoryPath) {
+		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
+		try {
+			const buffer = await fs.promises.readFile(filePath);
+			return buffer;
+		} catch (error) {
+			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
+			else storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+		}
+		return false;
+	}
+	isFileExist(fileNameWithExtension = 'toto.bin', directoryPath) {
+		const filePath = path.join(directoryPath || this.PATH.STORAGE, fileNameWithExtension);
+		return fs.existsSync(filePath);
+	}
+	/** @param {string} fileName - The name of the file @param {any} data - The data to save */
+	saveJSON(fileName, data) {
+		try {
+			const filePath = path.join(this.PATH.STORAGE, `${fileName}.json`);
+			if (!fs.existsSync(path.dirname(filePath))) fs.mkdirSync(path.dirname(filePath));
+			fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+		} catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false }
+	}
+	/** @param {string} fileName - The name of the file @returns {any|boolean} */
+	loadJSON(fileName) {
+		try { return JSON.parse(fs.readFileSync(path.join(this.PATH.STORAGE, `${fileName}.json`))) }
+		catch (error) { return false }
+	}
+	/** @param {string} fileNameWithExtension - ex: 'toto.bin' @param {string} [directoryPath] - default is this.PATH.STORAGE */
+	deleteFile(fileNameWithExtension = 'toto.bin', directoryPath = this.PATH.STORAGE) {
+		const filePath = path.join(directoryPath, fileNameWithExtension);
+		if (fs.existsSync(filePath)) fs.rmSync(filePath);
+	}
+	dumpTrashFolder() {
+		if (fs.existsSync(this.PATH.TRASH)) fs.rmSync(this.PATH.TRASH, { recursive: true });
+		fs.mkdirSync(this.PATH.TRASH);
+	}
+}
+
+// IGNORE THESES CLASSES, WE ARE REFACTORING FROM STATIC LOGICS TO INSTANCED LOGICS
+// ALL OF THE FOLLOWING CLASSES WILL BE MODIFIED LATER OVER THE REFACTORING PROCESS
 export class CheckpointsStorage {
     static maxSnapshotsInCheckpoints = 3; // number of snapshots to keep in checkpoints
     static hashOfSnapshotFolder(folderPath) {
@@ -207,7 +182,6 @@ export class CheckpointsStorage {
      * @param {number[]} neededSnapHeights */
     static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights, neededSnapHeights) {
         try {
-            /** @type {AdmZip} */
             const zip = new AdmZip();
             const breather = new Breather();
             const fromSnapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
@@ -253,7 +227,6 @@ export class CheckpointsStorage {
             if (fs.existsSync(destPath)) fs.rmSync(destPath, { recursive: true });
             fs.mkdirSync(destPath, { recursive: true });
 
-            /** @type {AdmZip} */
             const zip = new AdmZip(buffer);
             zip.extractAllTo(destPath, true);
 
@@ -291,8 +264,7 @@ export class CheckpointsStorage {
 /** Transactions references are stored in binary format, folder architecture is optimized for fast access
  * @typedef {Object} addTxsRefsInfo
  * @property {number} highestIndex - The highest index of the transactions referenced (including temp refs)
- * @property {number} totalTxsRefs - The total number of transactions referenced (excluding temp refs)
- */
+ * @property {number} totalTxsRefs - The total number of transactions referenced (excluding temp refs) */
 export class AddressesTxsRefsStorage {
     codeVersion = 4;
     version = 0;
@@ -614,7 +586,7 @@ export class BlockchainStorage {
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
 
-        if (isProductionEnv) return; // Avoid saving heavy JSON format in production
+        if (isElectronEnv) return; // Avoid saving heavy JSON format in production
         if (saveJSON || blockData.index < 200) { this.#saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
     }
     /** @param {BlockInfo} blockInfo */
