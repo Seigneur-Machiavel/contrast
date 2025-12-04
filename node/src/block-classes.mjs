@@ -5,7 +5,7 @@ import { TxValidation } from './validations-classes.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 
 /**
-* @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
+* @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
  */
 
 /**

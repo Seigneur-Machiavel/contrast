@@ -91,11 +91,14 @@ export class Wallet {
 			if (!this.accountsGenerated[prefix].length) continue;
 			else await this.deriveAccounts(this.accountsGenerated[prefix].length, prefix);
     }
-	/** @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: "C" */
-    async deriveAccounts(nbOfAccounts = 1, addressPrefix = "C") {
-        //this.accounts[addressPrefix] = [];  // no reseting accounts anymore
+	/** Derive accounts from master seed corresponding to the desired address prefix. (If storage is provide: load and save accounts)
+	 * @param {number} [nbOfAccounts] - default: 1
+	 * @param {string} [addressPrefix] - default: "C"
+	 * @param {import("../../utils/storage.mjs").ContrastStorage} [contrastStorage] */
+    async deriveAccounts(nbOfAccounts = 1, addressPrefix = "C", contrastStorage) {
+		if (contrastStorage) await this.loadAccounts(contrastStorage);
+
         const startTime = performance.now();
-        //const nbOfExistingAccounts = this.accounts[addressPrefix].length;
         const nbOfExistingAccounts = this.accountsGenerated[addressPrefix].length;
         const accountToGenerate = nbOfAccounts - nbOfExistingAccounts < 0 ? 0 : nbOfAccounts - nbOfExistingAccounts;
         this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix} | nbWorkers: ${this.nbOfWorkers}`, (m) => { console.info(m); });
@@ -161,6 +164,7 @@ export class Wallet {
         const avgIterations = derivedAccounts.length > 0 ? Math.round(iterationsPerAccount / derivedAccounts.length) : 0;
         this.miniLogger.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
 avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, (m) => { console.info(m); });
+		if (contrastStorage) await this.saveAccounts(contrastStorage);
 
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
     }

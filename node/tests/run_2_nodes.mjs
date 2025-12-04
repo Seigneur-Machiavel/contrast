@@ -12,18 +12,16 @@ const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
 import HiveP2P from "hive-p2p";
 import { Wallet } from '../src/wallet.mjs';
 import { createContrastNode } from '../src/node.mjs';
-const isNode = typeof window === 'undefined';
-const { ContrastStorage } = isNode ? await import("../../utils/storage.mjs") : { ContrastStorage: null };
+import { ContrastStorage } from '../../utils/storage.mjs';
 
 // BOOTSTRAP NODE
 const bootstrapSeed = '0000000000000000000000000000000000000000000000000000000000000000';
 const bootstrapStorage = new ContrastStorage(bootstrapSeed);
 const bootstrapWallet = new Wallet(bootstrapSeed);
-await bootstrapWallet.loadAccounts(bootstrapStorage);
-await bootstrapWallet.deriveAccounts(2, 'C');
-await bootstrapWallet.saveAccounts(bootstrapStorage);
+await bootstrapWallet.deriveAccounts(2, 'C', bootstrapStorage);
+
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
-const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, domain, port: nodePort });
+const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
 bootstrapNode.p2pNode.onPeerConnect(() => console.log('Peer connected to bootstrap node'));
 await bootstrapNode.start();
 
@@ -35,12 +33,10 @@ const clientSeeds = [
 async function createClientNode(seed) {
 	const clientStorage = new ContrastStorage(seed);
 	const clientWallet = new Wallet(seed);
-	await clientWallet.loadAccounts(clientStorage);
-	await clientWallet.deriveAccounts(2, 'C');
-	await clientWallet.saveAccounts(clientStorage);
+	await clientWallet.deriveAccounts(2, 'C', clientStorage);
 
 	const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
-	return await createContrastNode({ cryptoCodex: clientCodex, bootstraps });
+	return await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps });
 }
 
 const clientNodes = [];

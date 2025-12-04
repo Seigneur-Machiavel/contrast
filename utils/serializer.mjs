@@ -4,7 +4,7 @@ import { Transaction } from '../node/src/transaction.mjs';
 
 /**
 * @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
-* @typedef {import("../node/src/utxoCache.mjs").UtxoCache} UtxoCache
+* @typedef {import("../node/src/utxo-cache.mjs").UtxoCache} UtxoCache
 *
 * @typedef {Object} NodeSetting
 * @property {string} privateKey

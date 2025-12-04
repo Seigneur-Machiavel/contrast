@@ -128,6 +128,7 @@ export const mining = {
         if (result.message === 'na') { result.conform = true; result.message = 'lucky'; }
         return result;
     },
+	/** @param {number} avgDiffWithLegitimacy @param {number} avgTimeGap @param {number} [targetBlockTime] */
     estimateGlobalHashrate: (avgDiffWithLegitimacy, avgTimeGap, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
         if (typeof avgDiffWithLegitimacy !== 'number') return 1;
         if (avgDiffWithLegitimacy < 1) return 1;

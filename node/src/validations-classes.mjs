@@ -11,8 +11,8 @@ import { addressUtils } from '../../utils/addressUtils.mjs';
 
 /**
  * @typedef {import("./vss.mjs").Vss} Vss
- * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
- * @typedef {import("./memPool.mjs").MemPool} MemPool
+ * @typedef {import("./mempool.mjs").MemPool} MemPool
+ * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
  * @typedef {import("./block-classes.mjs").BlockData} BlockData
  * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker
  */
@@ -186,8 +186,7 @@ export class TxValidation {
                 continue;
             }
             
-            const argon2Fnc = useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
-            const derivedAddressBase58 = await addressUtils.deriveAddress(argon2Fnc, pubKeyHex);
+            const derivedAddressBase58 = await addressUtils.deriveAddress(HashFunctions.Argon2, pubKeyHex);
             if (!derivedAddressBase58) throw new Error('Invalid derived address');
 
             await addressUtils.securityCheck(derivedAddressBase58, pubKeyHex);

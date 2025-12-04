@@ -40,18 +40,18 @@ class StorageRoot {
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
 	constructor(masterHex = null) {
 		this.localIdentifier = masterHex ? this.#getLocalIdentifier(masterHex) : null;
-		this.filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked'); // path to the storage-manager.mjs file
-		this.isElectronEnv = this.filePath.includes('app.asar');
+		const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
+		this.isElectronEnv = filePath.includes('app.asar');
 
-		const rootFolder = !this.isElectronEnv ? path.dirname(path.dirname(this.filePath))
-			: path.dirname(path.dirname(path.dirname(path.dirname(this.filePath))))
+		const rootFolder = !this.isElectronEnv ? path.dirname(path.dirname(filePath))
+			: path.dirname(path.dirname(path.dirname(path.dirname(filePath))))
 	
 		const basePath = !this.localIdentifier ? path.join(path.dirname(rootFolder), 'contrast-storage')
 			: path.join(path.dirname(rootFolder), 'contrast-storage', this.localIdentifier);
 	
 		this.PATH = {
-			/** path to the storage-manager.mjs file */
-			BASE_FILE: this.filePath,
+			/** path to the storage.mjs file */
+			BASE_FILE: filePath,
 			/** path to the storage folder (out of the root directory) */
 			STORAGE: basePath,
 			TRASH: path.join(basePath, 'trash'),
@@ -269,19 +269,27 @@ export class AddressesTxsRefsStorage {
     codeVersion = 4;
     version = 0;
     loaded = false;
-    configPath = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
+    configPath;
+	txsRefsPath;
     batchSize = 1000; // number of transactions references per file
     snapHeight = -1;
+	
     /** @type {Object<string, Object<string, Object<string, addTxsRefsInfo>>} */
     architecture = {}; // lvl0: { lvl1: { address: addTxsRefsInfo } }
     /** @type {Object<number, Object<string, boolean>>} */
     involedAddressesOverHeights = {}; // { height: {addresses: true} } useful for pruning
     maxInvoledHeights = 10; // max number of heights to keep in memory useful when loading snapshots
-    constructor() { this.#load(); }
+    
+	/** @param {import('./storage.mjs').ContrastStorage} storage */
+	constructor(storage) {
+		this.configPath = path.join(storage.PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
+		this.txsRefsPath = storage.PATH.TXS_REFS;
+		this.#load();
+	}
 
     #load() {
         if (!fs.existsSync(this.configPath)) {
-            storageMiniLogger.log(`no config file found: ${this.configPath}`, (m) => { console.error(m); });
+            storageMiniLogger.log(`no config file found: ${this.configPath}`, (m) => console.error(m));
             return;
         }
 
@@ -293,9 +301,9 @@ export class AddressesTxsRefsStorage {
             this.architecture = config.architecture || {};
             this.involedAddressesOverHeights = config.involedAddressesOverHeights || {};
 
-            storageMiniLogger.log('[AddressesTxsRefsStorage] => config loaded', (m) => { console.log(m); });
+            storageMiniLogger.log('[AddressesTxsRefsStorage] => config loaded', (m) => console.log(m));
             this.loaded = true;
-        } catch (error) { storageMiniLogger.log(error, (m) => { console.error(m); }); }
+        } catch (error) { storageMiniLogger.log(error, (m) => console.error(m)); }
     }
     #pruneInvoledAddressesOverHeights() {
         // SORT BY DESCENDING HEIGHTS -> KEEP ONLY THE UPPER HEIGHTS
@@ -319,13 +327,13 @@ export class AddressesTxsRefsStorage {
         const lvl0 = address.slice(0, 2);
         if (this.architecture[lvl0] === undefined) {
             this.architecture[lvl0] = {};
-            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0))) { fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0)); }
+            if (!fs.existsSync(path.join(this.txsRefsPath, lvl0))) fs.mkdirSync(path.join(this.txsRefsPath, lvl0));
         }
 
         const lvl1 = address.slice(2, 3);
         if (this.architecture[lvl0][lvl1] === undefined) {
             this.architecture[lvl0][lvl1] = {};
-            if (!fs.existsSync(path.join(PATH.TXS_REFS, lvl0, lvl1))) { fs.mkdirSync(path.join(PATH.TXS_REFS, lvl0, lvl1)); }
+            if (!fs.existsSync(path.join(this.txsRefsPath, lvl0, lvl1))) fs.mkdirSync(path.join(this.txsRefsPath, lvl0, lvl1));
         }
 
         return { lvl0, lvl1 };
@@ -333,7 +341,7 @@ export class AddressesTxsRefsStorage {
     #clearArchitectureIfFolderMissing(lvl0, lvl1, address) {
         if (!this.architecture[lvl0][lvl1][address]) return;
 
-        const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
         if (!fs.existsSync(dirPath)) { // Clean the architecture if the folder is missing
             delete this.architecture[lvl0][lvl1][address];
             if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
@@ -349,7 +357,7 @@ export class AddressesTxsRefsStorage {
         if (!this.architecture[lvl0][lvl1][address]) return [];
         if (this.#clearArchitectureIfFolderMissing(lvl0, lvl1, address)) return [];
         
-        const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
         const existingBatch = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsRefs / this.batchSize);
         const fileName = batchNegativeIndex === 0 ? 'temp.bin' : `${existingBatch + batchNegativeIndex}.bin`;
         const filePath = path.join(dirPath, fileName);
@@ -365,7 +373,7 @@ export class AddressesTxsRefsStorage {
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         this.architecture[lvl0][lvl1][address].totalTxsRefs += batch.length;
 
-        const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
         if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
         // 0-100: 0, 100-200: 1, 200-300: 2, etc...
@@ -376,7 +384,7 @@ export class AddressesTxsRefsStorage {
     async #saveTempTxsRefs(address = '', txsRefs = [], highestIndex = -1) {
         const serialized = serializer.serialize.txsReferencesArray(txsRefs);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
         if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
 
         const filePath = path.join(dirPath, `temp.bin`);
@@ -416,7 +424,7 @@ export class AddressesTxsRefsStorage {
         if (!this.architecture[lvl0][lvl1][address]) return false;
         if (this.#clearArchitectureIfFolderMissing(lvl0, lvl1, address)) return false;
 
-        const dirPath = path.join(PATH.TXS_REFS, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
         const numberOfFiles = fs.readdirSync(dirPath).length;
         if (numberOfFiles === 0) return false; // no files to prune, should not happen because empty folders are deleted
 
@@ -466,10 +474,10 @@ export class AddressesTxsRefsStorage {
         storageMiniLogger.log(`Pruned all transactions references upper than ${height}`, (m) => { console.log(m); });
     }
     reset(reason = 'na') {
-        if (fs.existsSync(PATH.TXS_REFS)) fs.rmSync(PATH.TXS_REFS, { recursive: true });
+        if (fs.existsSync(this.txsRefsPath)) fs.rmSync(this.txsRefsPath, { recursive: true });
         if (fs.existsSync(this.configPath)) fs.rmSync(this.configPath);
         
-        fs.mkdirSync(PATH.TXS_REFS);
+        fs.mkdirSync(this.txsRefsPath);
         this.snapHeight = -1;
         this.architecture = {};
         this.involedAddressesOverHeights = {};
@@ -478,33 +486,37 @@ export class AddressesTxsRefsStorage {
 }
 
 export class BlockchainStorage {
+	/** @type {Converter | undefined} */
+	converter;
+	storage;
+	batchFolders;
     lastBlockIndex = -1;
-	/** @type {Converter | undefined} */ converter;
-    batchFolders = BlockchainStorage.getListOfFoldersInBlocksDirectory(PATH.BLOCKS);
-    /** @type {Object<number, string>} */
+    /** @type {Object<string, string>} */
     hashByIndex = {"-1": "0000000000000000000000000000000000000000000000000000000000000000"};
     /** @type {Object<string, number>} */
     indexByHash = {"0000000000000000000000000000000000000000000000000000000000000000": 0};
 
-    constructor() { this.#init(); }
+	/** @param {import('./storage.mjs').ContrastStorage} storage */
+    constructor(storage) {
+		this.storage = storage;
+		this.batchFolders = BlockchainStorage.getListOfFoldersInBlocksDirectory(this.storage.PATH.BLOCKS);
+		this.#init();
+	}
 	
-    static getListOfFoldersInBlocksDirectory(blocksPath = PATH.BLOCKS) {
+    static getListOfFoldersInBlocksDirectory(blocksPath) {
         const blocksFolders = fs.readdirSync(blocksPath).filter(fileName => fs.lstatSync(path.join(blocksPath, fileName)).isDirectory());
         // named as 0-999, 1000-1999, 2000-2999, etc... => sorting by the first number
         const blocksFoldersSorted = blocksFolders.sort((a, b) => parseInt(a.split('-')[0], 10) - parseInt(b.split('-')[0], 10));
         return blocksFoldersSorted;
     }
     async #init() {
-		try {
-			this.converter = await import('hive-p2p').then(module => new module.Converter());
-		} catch (error) {
-			if (window && window.hiveP2P && window.hiveP2P.Converter) this.converter = new window.hiveP2P.Converter();
-		}
+		try { this.converter = await import('hive-p2p').then(module => new module.Converter()); }
+		catch (error) { if (window && window.hiveP2P && window.hiveP2P.Converter) this.converter = new window.hiveP2P.Converter(); }
 
         let currentIndex = -1;
         for (let i = 0; i < this.batchFolders.length; i++) {
             const batchFolderName = this.batchFolders[i];
-            const files = fs.readdirSync(path.join(PATH.BLOCKS, batchFolderName));
+            const files = fs.readdirSync(path.join(this.storage.PATH.BLOCKS, batchFolderName));
             for (let j = 0; j < files.length; j++) {
                 const fileName = files[j].split('.')[0];
                 const blockIndex = parseInt(fileName.split('-')[0], 10);
@@ -529,7 +541,7 @@ export class BlockchainStorage {
     }
     #blockFilePathFromIndexAndHash(blockIndex = 0, blockHash = '') {
         const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockIndex).name;
-        const batchFolderPath = path.join(PATH.BLOCKS, batchFolderName);
+        const batchFolderPath = path.join(this.storage.PATH.BLOCKS, batchFolderName);
         const blockFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
         return blockFilePath;
     }
@@ -539,7 +551,7 @@ export class BlockchainStorage {
             /** @type {Uint8Array} */
             const binary = serializer.serialize.block_finalized(blockData);
             const batchFolder = BlockchainStorage.batchFolderFromBlockIndex(blockData.index);
-            const batchFolderPath = path.join(PATH.BLOCKS, batchFolder.name);
+            const batchFolderPath = path.join(this.storage.PATH.BLOCKS, batchFolder.name);
             if (this.batchFolders[batchFolder.index] !== batchFolder.name) {
                 fs.mkdirSync(batchFolderPath);
                 this.batchFolders.push(batchFolder.name);
@@ -580,19 +592,19 @@ export class BlockchainStorage {
 
         const existingBlockHash = this.hashByIndex[blockData.index];
         //if (existingBlockHash) { throw new Error(`Block #${blockData.index} already exists with hash ${existingBlockHash}`); }
-        if (existingBlockHash) { this.removeBlock(blockData.index); }
+        if (existingBlockHash) this.removeBlock(blockData.index);
 
         this.#saveBlockBinary(blockData);
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
 
         if (isElectronEnv) return; // Avoid saving heavy JSON format in production
-        if (saveJSON || blockData.index < 200) { this.#saveBlockDataJSON(blockData, PATH.JSON_BLOCKS); }
+        if (saveJSON || blockData.index < 200) this.#saveBlockDataJSON(blockData, this.storage.PATH.JSON_BLOCKS);
     }
     /** @param {BlockInfo} blockInfo */
     addBlockInfo(blockInfo) {
         const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockInfo.header.index).name;
-        const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
+        const batchFolderPath = path.join(this.storage.PATH.BLOCKS_INFO, batchFolderName);
         if (!fs.existsSync(batchFolderPath)) { fs.mkdirSync(batchFolderPath); }
 
         const binary = serializer.serialize.rawData(blockInfo);
@@ -616,11 +628,11 @@ export class BlockchainStorage {
     }
     getBlockInfoByIndex(blockIndex = 0, deserialize = true) {
         const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockIndex).name;
-        const batchFolderPath = path.join(PATH.BLOCKS_INFO, batchFolderName);
+        const batchFolderPath = path.join(this.storage.PATH.BLOCKS_INFO, batchFolderName);
         const blockHash = this.hashByIndex[blockIndex];
+		const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
 
         try {
-            const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
             const buffer = fs.readFileSync(blockInfoFilePath);
             if (!deserialize) return new Uint8Array(buffer);
 
@@ -700,8 +712,8 @@ export class BlockchainStorage {
         }
     }
     reset() {
-        if (fs.existsSync(PATH.BLOCKS)) { fs.rmSync(PATH.BLOCKS, { recursive: true }); }
-        fs.mkdirSync(PATH.BLOCKS);
+        if (fs.existsSync(this.storage.PATH.BLOCKS)) fs.rmSync(this.storage.PATH.BLOCKS, { recursive: true });
+        fs.mkdirSync(this.storage.PATH.BLOCKS);
         this.batchFolders = [];
         this.hashByIndex = { "-1": "0000000000000000000000000000000000000000000000000000000000000000" };
         this.indexByHash = { "0000000000000000000000000000000000000000000000000000000000000000": -1 };
