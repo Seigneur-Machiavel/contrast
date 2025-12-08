@@ -30,7 +30,7 @@ async function mineBlock(signatureHex, nonce) {
     try {
         const blockHash = await mining.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
         if (!blockHash) throw new Error('Invalid block hash');
-        return { bitsArrayAsString: blockHash.bitsArray.join('') };
+        return { bitsArrayAsString: blockHash.bitsString };
     } catch (err) { throw err; }
 }
 class hashrateCalculator {
@@ -64,7 +64,6 @@ class hashrateCalculator {
 }
 function verify(HashBitsAsString = 'toto', finalDiff = 0) {
     const { zeros, adjust } = mining.decomposeDifficulty(finalDiff);
-
     const condition1 = conditionnals.binaryStringStartsWithZeros(HashBitsAsString, zeros);
     if (!condition1) return false;
 

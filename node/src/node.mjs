@@ -1,18 +1,24 @@
 import HiveP2P from "hive-p2p";
 import { Miner } from './miner.mjs';
 import { Vss } from './vss.mjs';
-//import { MemPool } from './mempool.mjs';
+import { MemPool } from './mempool.mjs';
+import { BlockUtils } from './block.mjs';
+import { UtxoCache } from './utxo-cache.mjs';
 import { Blockchain } from './blockchain.mjs';
-//import { UtxoCache } from './utxo-cache.mjs';
+import { MESSAGE } from '../../types/messages.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { BlockData, BlockUtils } from './block-classes.mjs';
-//import { BlockValidation } from './validations-classes.mjs';
-//import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { BlockValidation } from './block-validation.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
 //import { SnapshotSystem, CheckpointSystem } from './snapshot-system.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 /**
+* @typedef {import("./wallet.mjs").Account} Account
+* @typedef {import("./wallet.mjs").Wallet} Wallet
+* @typedef {import("../../types/block.mjs").BlockData} BlockData
+* 
 * @typedef {Object} NodeOptions
 * @property {import('hive-p2p').CryptoCodex} cryptoCodex - A hiveP2P CryptoCodex instance (works as Identity).
 * @property {import('../../utils/storage.mjs').ContrastStorage} storage - ContrastStorage instance for node data persistence.
@@ -34,8 +40,13 @@ export async function createContrastNode(options = {}) {
 	return new ContrastNode(p2pNode, options.storage, verb);
 }
 
+
 export class ContrastNode {
+	syncAndReady = false;
+	miniLogger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
+	/** @type {{ validator: string | null, miner: string | null }} */
+	rewardAddresses = { validator: null, miner: null };
 	/** @type {Object<string, import("./websocketCallback.mjs").WebSocketCallBack>} */
     wsCallbacks = {};
 	mainStorage;
@@ -44,21 +55,28 @@ export class ContrastNode {
 	verb;
 
 	// CORE COMPONENTS ------------------------------------------------------------------
-	vss = new Vss(BLOCKCHAIN_SETTINGS.maxSupply);
+	/** @type {Account} */		account;
+	vss = new Vss();
+	memPool = new MemPool();
 	miner = new Miner(this);
 	workers = {
 		nbOfValidationWorkers: 4,
 		/** @type {ValidationWorker[]} */		validations: [],
 	};
+	timeouts = { createAndShareBlockCandidate: null };
 
 	/** Node instance should be created with "createContrastNode" method, not using "new" constructor.
 	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance.
 	 * @param {import('../../utils/storage.mjs').ContrastStorage} storage - ContrastStorage instance for node data persistence. */
 	constructor(p2pNode, storage, verb = 2) {
 		this.blockchain = new Blockchain(storage);
+		this.utxoCache = new UtxoCache(this.blockchain);
 		this.mainStorage = storage;
 		this.p2pNode = p2pNode;
 		this.verb = verb;
+		
+		this.miner.startWithWorker();
+		this.p2pNode.onPeerConnect(() => console.log('Peer connected to Contrast node'));
 	}
 
 	// GETTERS --------------------------------------------------------------------------
@@ -66,16 +84,29 @@ export class ContrastNode {
 	get neighborsCount() { return this.p2pNode.peerStore.neighborsList.length; }
 
 	// API ------------------------------------------------------------------------------
-	async start() {
-		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++)
-			this.workers.validations.push(new ValidationWorker(i));
+	/** Update the node state and notify websocket clients. @param {string} newState @param {string} [onlyFrom] Updates only if current state matches */
+	updateState(newState, onlyFrom) {
+        const state = this.info.state;
+        if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) return;
+        this.info.state = newState;
+		this.wsCallbacks.onStateUpdate?.execute(newState);
+    }
+	/** Starts the Contrast node operations @param {Wallet} [wallet] */
+	async start(wallet) {
+		//console.log(`${this.p2pNode.time} - ${Date.now()}`); // control the clock
+		if (wallet) this.associateWallet(wallet);
+		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
 		// TODO: PRUNE CHECKPOINTS AND LOAD SNAPSHOT
 
-		this.updateState("Starting HiveP2P node");
-		if (!this.p2pNode.started) await this.p2pNode.start();
+		if (!this.p2pNode.started) { // START P2P NODE IF NOT
+			this.updateState("Starting HiveP2P node");
+			await this.p2pNode.start();
+		}
 
-		//console.log(`${this.p2pNode.time} - ${Date.now()}`); // control the clock
-		
+		// TODO: SYNC BLOCKCHAIN FROM NETWORK
+
+		await this.createAndShareMyBlockCandidate();
+
 	}
 	async stop() {
 		if (this.verb >= 1) console.log(`Stopping Contrast node...`);
@@ -85,48 +116,80 @@ export class ContrastNode {
 		await this.stop();
 		await this.start();
 	}
-	/** Update the node state and notify websocket clients. @param {string} newState @param {string} [onlyFrom] Updates only if current state matches */
-	updateState(newState, onlyFrom) {
-        const state = this.info.state;
-        if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) return;
-        this.info.state = newState;
-		this.wsCallbacks.onStateUpdate?.execute(newState);
-    }
-	setWallet() { // associat a wallet with this node (for miner and validator functions)
-		// To be implemented
+	/** Associate a wallet with this node (for miner and validator functions) @param {Wallet} wallet */
+	associateWallet(wallet) { 
+		this.account = wallet.accounts.C[0];
+		this.rewardAddresses.validator = wallet.accounts.C[0].address;
+		this.rewardAddresses.miner = wallet.accounts.C[1].address;
 	}
+	async createAndShareMyBlockCandidate() {
+		this.updateState("creating block candidate");
+		const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
+		const updated = this.miner.updateBestCandidate(myCandidate);
+		if (!updated) { this.updateState("idle", "creating block candidate"); return false; }
 
-	// INTERNALS ------------------------------------------------------------------------
-	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock) */
-    async #createBlockCandidate() {
-        const posTimestamp = this.blockchain.lastBlock ? this.blockchain.lastBlock.timestamp + 1 : this.time;
-        if (!this.blockchain.lastBlock) return BlockData(0, 0, BLOCKCHAIN_SETTINGS.blockReward, MINING_PARAMS.initialDifficulty, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
+		this.p2pNode.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
+		this.updateState("idle", "creating block candidate");
+		const callback = this.wsCallbacks.onBroadcastNewCandidate;
+        if (callback) callback.execute(BlockUtils.getBlockHeader(myCandidate));
+	}
+	/** Digest and apply a finalized block to the blockchain.
+     * @param {BlockData} finalizedBlock
+     * @param {Object} [options] - Configuration options for the blockchain.
+     * @param {boolean} [options.broadcastNewCandidate] - default: true
+     * @param {boolean} [options.isSync] - default: false
+     * @param {boolean} [options.persistToDisk] - default: true */
+    async digestFinalizedBlock(finalizedBlock, options = {}) {
+        const statePrefix = options.isSync ? '(syncing) ' : '';
+        this.updateState(`${statePrefix}finalized block #${finalizedBlock.index}`);
+    
+        // SUPPLEMENTARY TEST (INITIAL === DESERIALIZE)
+        const serializedBlock = serializer.serialize.block(finalizedBlock);
+        const deserializedBlock = serializer.deserialize.block(serializedBlock);
+        const blockSignature = await BlockUtils.getBlockSignature(finalizedBlock);
+        const deserializedSignature = await BlockUtils.getBlockSignature(deserializedBlock);
+        if (blockSignature !== deserializedSignature) {
+            console.error('blockSignature !== deserializedSignature');
+            console.error(finalizedBlock);
+            console.error(deserializedBlock);
+            throw new Error('Invalid block signature');
+		}
+
+        const { broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
+        //if (!finalizedBlock || (this.syncHandler.isSyncing && !isSync)) 
+            //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
+		if (!finalizedBlock) throw new Error('Invalid block candidate');
+        let hashConfInfo = false;
+        let validationResult;
+        let totalFees;
+        this.updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
+        validationResult = await BlockValidation.validateBlockProposal(this, finalizedBlock);
+        hashConfInfo = validationResult.hashConfInfo;
+        if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
+
+        this.updateState(`${statePrefix}applying finalized block #${finalizedBlock.index}`);
+        this.memPool.addNewKnownPubKeysAddresses(validationResult.allDiscoveredPubKeysAddresses);
         
-		const prevHash = this.blockchain.lastBlock.hash;
-		const myLegitimacy = await this.vss.getAddressLegitimacy(this.account.address, prevHash);
-		this.info.lastLegitimacy = myLegitimacy;
+        const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
+		this.blockchain.applyBlock(this.utxoCache, this.vss, finalizedBlock);
+        this.memPool.removeFinalizedBlocksTransactions(finalizedBlock);
+        if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
+    
+        //this.miniLogger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length}`, (m) => console.info(m));
+        const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);
+        const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
+        const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
+        this.miniLogger.log(`${statePrefix}#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m) => console.info(m));
 
-		// THIS PART SHOULD BE SEPARATED
-		/*let maxLegitimacyToBroadcast = this.vss.maxLegitimacyToBroadcast;
-		if (this.roles.includes('miner') && this.miner.bestCandidateIndex() === this.blockchain.lastBlock.index + 1)
-			maxLegitimacyToBroadcast = Math.min(maxLegitimacyToBroadcast, this.miner.bestCandidateLegitimacy());
-		
-		if (myLegitimacy > maxLegitimacyToBroadcast) return null;*/
-		// END OF PART THAT SHOULD BE SEPARATED
-
-		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty();
-		this.info.averageBlockTime = averageBlockTime;
-		const coinBaseReward = mining.calculateNextCoinbaseReward(this.blockchain.lastBlock);
-		const Txs = this.memPool.getMostLucrativeTransactionsBatch(this.utxoCache);
-		return BlockData(this.blockchain.lastBlock.index + 1, this.blockchain.lastBlock.supply + this.blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, Txs, posTimestamp);
+		// TODO: SAVE SNAPSHOT & CHECKPOINT
+        //await this.#saveSnapshot(finalizedBlock);
+        //await this.#saveCheckpoint(finalizedBlock);
+        
+        this.updateState("idle", "applying finalized block");
+        if (!broadcastNewCandidate || isSync) return;
+		const d = Math.round(BLOCKCHAIN_SETTINGS.targetBlockTime / 12);
+		this.timeouts.createAndShareBlockCandidate = setTimeout(() => this.createAndShareMyBlockCandidate(), d);
     }
-	/** Adds POS reward transaction to the block candidate and signs it @param {BlockData} blockCandidate */
-	async #signBlockCandidate(blockCandidate) {
-		const { powReward, posReward } = BlockUtils.calculateBlockReward(this.utxoCache, blockCandidate);
-		const posFeeTx = await Transaction_Builder.createPosReward(posReward, blockCandidate, this.validatorRewardAddress, this.account.address);
-		const signedPosFeeTx = await this.account.signTransaction(posFeeTx);
-		blockCandidate.Txs.unshift(signedPosFeeTx);
-		blockCandidate.powReward = powReward; // Reward for the miner
-		return blockCandidate;
-	}
+	// INTERNALS ------------------------------------------------------------------------
+
 }

@@ -1,20 +1,20 @@
-import { TxValidation } from './validations-classes.mjs';
-import { Transaction_Builder, Transaction } from './transaction.mjs';
+import { TxValidation } from './tx-validation.mjs';
+import { Transaction_Builder } from './transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { UtxoCache } from './utxo-cache.mjs';
 import { TransactionPriorityQueue } from './memPool-tx-queue.mjs';
 
 /**
- * @typedef {import('./block-classes.mjs').BlockData} BlockData
+ * @typedef {import('../../types/block.mjs').BlockData} BlockData
  * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack
- * @typedef {import("./transaction.mjs").UTXO} UTXO
+ * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
+ * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  */
 
 export class MemPool { 
     // maxPubKeysToRemember = 1_000_000; // ~45MB -> unused!
     knownPubKeysAddresses = {}; // used to avoid excessive address ownership confirmation
-    useDevArgon2 = false;
     /** @type {TransactionPriorityQueue} */
     transactionQueue = new TransactionPriorityQueue();
     /** @type {Object<string, Transaction>} */
@@ -27,7 +27,7 @@ export class MemPool {
     /** @param {Transaction} transaction @param {Transaction} collidingTx */
     #addMempoolTransaction(transaction, collidingTx = false) {
          // IMPORTANT : AT THIS STAGE WE HAVE ENSURED THAT THE TRANSACTION IS CONFORM
-        if (collidingTx) { this.#removeMempoolTransaction(collidingTx); }
+        if (collidingTx) this.#removeMempoolTransaction(collidingTx);
         
         // Add transaction to the priority queue
         this.transactionQueue.add(transaction);
@@ -93,11 +93,7 @@ export class MemPool {
         const serialized = serializer.serialize.transaction(transaction);
         const byteLength = serialized.byteLength;
         
-        try { await TxValidation.controlTransactionHash(transaction); }
-        catch (error) { throw new Error(`Transaction hash not valid - ${error.message}`); }
-        
-        try { TxValidation.isConformTransaction(involvedUTXOs, transaction, false, utxoCache.nodeVersion); } 
-        catch (error) { throw new Error(`Transaction not conform - ${error.message}`); }
+        TxValidation.isConformTransaction(involvedUTXOs, transaction, false);
 
         const identicalIDTransaction = this.transactionsByID[transaction.id];
         if (identicalIDTransaction) throw new Error(`Transaction already in mempool: ${transaction.id}`);
@@ -115,9 +111,8 @@ export class MemPool {
 
         TxValidation.controlTransactionOutputsRulesConditions(transaction);
 
-        const impliedKnownPubkeysAddresses = await TxValidation.controlAllWitnessesSignatures(this, transaction);
-
-        await TxValidation.addressOwnershipConfirmation(involvedUTXOs, transaction, impliedKnownPubkeysAddresses, this.useDevArgon2);
+        const impliedKnownPubkeysAddresses = TxValidation.controlAllWitnessesSignatures(this, transaction);
+        await TxValidation.addressOwnershipConfirmation(involvedUTXOs, transaction, impliedKnownPubkeysAddresses);
         timings.second = Date.now() - timings.start;
 
         this.#addMempoolTransaction(transaction, collidingTx);

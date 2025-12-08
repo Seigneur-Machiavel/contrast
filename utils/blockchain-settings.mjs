@@ -1,6 +1,6 @@
 export const BLOCKCHAIN_SETTINGS = {
     // BLOCK
-    targetBlockTime: 120_000, // 120_000, // 2 min
+    targetBlockTime: 10_000, // 120_000, // 2 min
     maxBlockSize: 200_000, // ~100KB
     maxTransactionSize: 100_000, // ~100KB
     
@@ -33,7 +33,7 @@ export const MINING_PARAMS = {
         hashLen: 32,
     },
     nonceLength: 4,
-    initialDifficulty: 27,
+    initialDifficulty: 1, // 27
     blocksBeforeAdjustment: 30, // ~120sec * 30 = ~3600 sec = ~1 hour
     thresholdPerDiffIncrement: 3.2, // meaning 3.2% threshold for 1 diff point
     maxDiffIncrementPerAdjustment: 32, // 32 diff points = 200% of diff

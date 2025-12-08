@@ -2,7 +2,9 @@ if (false) { const { BrowserWindow } = require('electron'); } // For definition
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 
 /**
- * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
+ * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
+ * @typedef {import("../../types/block.mjs").BlockData} BlockData
+ * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  */
 
 //const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
@@ -28,7 +30,13 @@ export class ValidationWorker {
         this.worker.on('exit', (code) => { console.log(`ValidationWorker ${this.id} stopped with exit code ${code}`); });
         this.worker.on('close', () => { console.log(`ValidationWorker ${this.id} closed`); });
     }
-    addressOwnershipConfirmation(involvedUTXOs, transactions, impliedKnownPubkeysAddresses, useDevArgon2) {
+	/** ==> Sixth validation, high computation cost.
+     * 
+     * - control the inputAddresses/witnessesPubKeys correspondence
+     * @param {Object<string, UTXO>} involvedUTXOs
+     * @param {Transaction[]} transactions
+     * @param {Object<string, string>} impliedKnownPubkeysAddresses */
+    addressOwnershipConfirmation(involvedUTXOs, transactions, impliedKnownPubkeysAddresses = {}) {
         /** @type {Promise<{ discoveredPubKeysAddresses: {}, isValid: boolean }>} */
         const promise = new Promise((resolve, reject) => {
             this.worker.postMessage({
@@ -36,8 +44,7 @@ export class ValidationWorker {
                 type: 'addressOwnershipConfirmation',
                 involvedUTXOs,
                 transactions,
-                impliedKnownPubkeysAddresses,
-                useDevArgon2,
+                impliedKnownPubkeysAddresses
             });
             this.worker.on('message', (message) => {
                 if (message.id !== this.id) { return; }

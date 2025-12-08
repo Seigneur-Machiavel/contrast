@@ -51,15 +51,16 @@ export class AsymetricFunctions {
     }
     /** Sign a message using Ed25519
      * @param {string} messageHex - Message to sign
-     * @param {string} privKeyHex - necessary to sign the message
-     * @param {string} pubKeyHex - (optional) can't confirm validity if not provided */
-    static signMessage(messageHex, privKeyHex, pubKeyHex = undefined) {
+     * @param {string} privKeyHex - necessary to sign the message */
+    static signMessage(messageHex, privKeyHex) {
         const result = { isValid: false, signatureHex: '', error: '' };
         if (typeof messageHex !== 'string') { result.error = 'Invalid message type'; return result; }
         if (typeof privKeyHex !== 'string') { result.error = 'Invalid privKeyHex type'; return result; }
         if (privKeyHex.length !== 64) { result.error = 'Hash must be 32 bytes long (hex: 64 chars)'; return result; }
 
-        const signature = ed25519.sign(messageHex, privKeyHex);
+		const messageBytes = converter.stringToBytes(messageHex);
+		const privBytes = converter.hexToBytes(privKeyHex);
+        const signature = ed25519.sign(messageBytes, privBytes);
         if (!signature) { result.error = 'Failed to sign the message'; return result; }
         
 		result.signatureHex = converter.bytesToHex(signature);
@@ -68,6 +69,9 @@ export class AsymetricFunctions {
     }
     /** @param {string} signature @param {string} messageHex @param {string} pubKeyHex @returns {boolean} */
     static verifySignature(signature, messageHex, pubKeyHex) {
-        return ed25519.verify(signature, messageHex, pubKeyHex);
+		const signatureBytes = converter.hexToBytes(signature);
+        const messageBytes = converter.stringToBytes(messageHex);
+		const pubKeyBytes = converter.hexToBytes(pubKeyHex);
+		return ed25519.verify(signatureBytes, messageBytes, pubKeyBytes);
     }
 };

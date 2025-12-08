@@ -1,7 +1,7 @@
 /**
 * @typedef {import("./node.mjs").Node} Node
-* @typedef {import("./block-classes.mjs").BlockData} BlockData
-* @typedef {import("./block-classes.mjs").BlockInfo} BlockInfo
+* @typedef {import("../../types/block.mjs").BlockData} BlockData
+* @typedef {import("../../types/block.mjs").BlockInfo} BlockInfo
 */
 
 /** @typedef {Object} WebSocketCallBack

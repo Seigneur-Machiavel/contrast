@@ -1,136 +1,17 @@
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
+import { BlockData, BlockInfo, BlockHeader } from '../../types/block.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from './conCrypto.mjs';
-import { Transaction_Builder, Transaction } from './transaction.mjs';
-import { TxValidation } from './validations-classes.mjs';
+import { Transaction_Builder } from './transaction.mjs';
+import { TxValidation } from './tx-validation.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 
 /**
+* @typedef {import("./node.mjs").ContrastNode} ContrastNode
 * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
- */
-
-/**
- * @typedef {Object} BlockHeader
- * @property {number} index - The block height
- * @property {number} supply - The total supply before the coinbase reward
- * @property {number} coinBase - The coinbase reward
- * @property {number} difficulty - The difficulty of the block
- * @property {number} legitimacy - The legitimacy of the validator who created the block candidate
- * @property {string} prevHash - The hash of the previous block
- * @property {number} posTimestamp - The timestamp of the block creation
- * @property {number | undefined} timestamp - The timestamp of the block
- * @property {string | undefined} hash - The hash of the block
- * @property {number | undefined} nonce - The nonce of the block
- */
-/**
- * @param {number} index - The block height
- * @param {number} supply - The total supply before the coinbase reward
- * @param {number} coinBase - The coinbase reward
- * @param {number} difficulty - The difficulty of the block
- * @param {number} legitimacy - The legitimacy of the validator who created the block candidate
- * @param {string} prevHash - The hash of the previous block
- * @param {number} posTimestamp - The timestamp of the block creation
- * @param {number | undefined} timestamp - The timestamp of the block
- * @param {string | undefined} hash - The hash of the block
- * @param {number | undefined} nonce - The nonce of the block
- * @returns {BlockHeader}
- */
-export const BlockHeader = (index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce) => {
-    return {
-        index, supply, coinBase, difficulty, legitimacy, prevHash,
-        posTimestamp, timestamp, hash, nonce
-    };
-};
-
-/**
- * @typedef {Object} BlockInfo
- * @property {BlockHeader} header
- * @property {number} totalFees
- * @property {number} lowerFeePerByte
- * @property {number} higherFeePerByte
- * @property {number} blockBytes
- * @property {number} nbOfTxs
- */
-/**
- * @param {BlockHeader} header
- * @param {number} totalFees
- * @param {number} lowerFeePerByte
- * @param {number} higherFeePerByte
- * @param {number} blockBytes
- * @param {number} nbOfTxs
- * @returns {BlockInfo}
- */
-export const BlockInfo = (header, totalFees, lowerFeePerByte, higherFeePerByte, blockBytes, nbOfTxs) => {
-    header,
-    totalFees,
-    lowerFeePerByte,
-    higherFeePerByte,
-    blockBytes, 
-    nbOfTxs
-};
-
-/**
-* @typedef {Object} BlockMiningData
-* @property {number} index - The block height
-* @property {number} difficulty - The difficulty of the block
-* @property {number} timestamp - The timestamp of the block
-* @property {number} posTimestamp - The timestamp of the block's creation
+* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 */
-/**
-* @param {number} index - The block height
-* @param {number} difficulty - The difficulty of the block
-* @param {number} timestamp - The timestamp of the block
-* @param {number} posTimestamp - The timestamp of the block's creation
-* @returns {BlockMiningData}
- */
-export const BlockMiningData = (index, difficulty, timestamp, posTimestamp) => {
-    return { index, difficulty, timestamp, posTimestamp };
-}
 
-/**
-* @typedef {Object} BlockData
-* @property {number} index - The index of the block
-* @property {number} supply - The total supply before the coinbase reward
-* @property {number} coinBase - The coinbase reward
-* @property {number} difficulty - The difficulty of the block
-* @property {number} legitimacy - The legitimacy of the validator who created the block candidate
-* @property {string} prevHash - The hash of the previous block
-* @property {Transaction[]} Txs - The transactions in the block
-* @property {number} posTimestamp - The timestamp of the block creation
-* @property {number | undefined} timestamp - The timestamp of the block
-* @property {string | undefined} hash - The hash of the block
-* @property {number | undefined} nonce - The nonce of the block
-* @property {number | undefined} powReward - The reward for the proof of work (only in candidate)
-
-* @property {string | undefined} minerAddress - The address of the miner (only from API)
-* @property {string | undefined} validatorAddress - The address of the validator (only from API)
-* @property {number | undefined} posReward - The reward for the proof of stake (only from API)
-* @property {number | undefined} totalFees - The total fees of the block (only from API)
-* @property {number | undefined} lowerFeePerByte - The lower fee per byte of the block (only from API)
-* @property {number | undefined} higherFeePerByte - The higher fee per byte of the block (only from API)
-* @property {number | undefined} nbOfTxs - The number of transactions in the block (only from API)
-* @property {number | undefined} blockBytes - The size of the block in bytes (only from API)
-*/
-/**
- * @param {number} index - The index of the block
- * @param {number} supply - The total supply before the coinbase reward
- * @param {number} coinBase - The coinbase reward
- * @param {number} difficulty - The difficulty of the block
- * @param {number} legitimacy - The legitimacy of the validator who created the block candidate
- * @param {string} prevHash - The hash of the previous block
- * @param {Transaction[]} Txs - The transactions in the block
- * @param {number | undefined} posTimestamp - The timestamp of the block creation
- * @param {number | undefined} timestamp - The timestamp of the block
- * @param {string | undefined} hash - The hash of the block
- * @param {number | undefined} nonce - The nonce of the block
- * @returns {BlockData}
- */
-export const BlockData = (index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce) => {
-    return {
-        index, supply, coinBase, difficulty, legitimacy, prevHash, Txs,
-        posTimestamp, // Proof of stake dependent
-        timestamp, hash, nonce // Proof of work dependent
-    };
-}
 export class BlockUtils {
     /** @param {BlockData} blockData @param {boolean} excludeCoinbaseAndPos */
     static async getBlockTxsHash(blockData, excludeCoinbaseAndPos = false) {
@@ -168,7 +49,7 @@ export class BlockUtils {
         const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
         if (!blockHash) throw new Error('Invalid block hash');
 
-        return { hex: blockHash.hex, bitsArrayAsString: blockHash.bitsArray.join('') };
+        return { hex: blockHash.hex, bitsArrayAsString: blockHash.bitsString };
     }
     /** @param {BlockData} blockData @param {Transaction} coinbaseTx */
     static setCoinbaseTransaction(blockData, coinbaseTx) {
@@ -211,6 +92,16 @@ export class BlockUtils {
 
         return { powReward, posReward, totalFees };
     }
+	/** @param {ContrastNode} node */
+	static calculateAverageBlockTimeAndDifficulty(node) {
+        const lastBlock = node.blockchain.lastBlock;
+        if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
+        
+        const olderBlock = node.blockchain.getBlock(Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
+        const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
+        const newDifficulty = mining.difficultyAdjustment(lastBlock, averageBlockTime);
+        return { averageBlockTime, newDifficulty };
+    }
     /** @param {BlockData} blockData */
     static dataAsJSON(blockData) {
         return JSON.stringify(blockData);
@@ -222,7 +113,7 @@ export class BlockUtils {
 
         const parsed = JSON.parse(blockDataJSON);
         const { index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce } = parsed;
-        return BlockData(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce);
+        return new BlockData(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce);
     }
     /** @param {BlockData} blockData */
     static cloneBlockData(blockData) {
@@ -238,7 +129,7 @@ export class BlockUtils {
     /** @param {BlockData} blockData */
     static getBlockHeader(blockData) {
         const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = blockData;
-        return BlockHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
+        return new BlockHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
     }
     /** @param {UtxoCache} utxoCache @param {BlockData} blockData */
     static getFinalizedBlockInfo(utxoCache, blockData, totalFees) {
@@ -248,7 +139,7 @@ export class BlockUtils {
             totalFees: totalFees || this.#calculateTxsTotalFees(utxoCache, blockData.Txs),
             lowerFeePerByte: 0,
             higherFeePerByte: 0,
-            blockBytes: serializer.serialize.block_finalized(blockData).length,
+            blockBytes: serializer.serialize.block(blockData).length,
             nbOfTxs: blockData.Txs.length
         };
         
@@ -259,18 +150,18 @@ export class BlockUtils {
             const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(firstTx);
             if (!involvedUTXOs) throw new Error('At least one UTXO not found in utxoCache');
 
-            const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
-            const firstTxWeight = Transaction_Builder.getTxWeight(firstTx, specialTx);
-            blockInfo.higherFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, firstTx) / firstTxWeight);
+            //const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
+            //const firstTxWeight = Transaction_Builder.getTxWeight(firstTx, specialTx);
+            //blockInfo.higherFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, firstTx) / firstTxWeight);
         }
         
         if (lastTx) {
             const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(lastTx);
             if (!involvedUTXOs) throw new Error('At least one UTXO not found in utxoCache');
 
-            const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
-            const lastTxWeight = Transaction_Builder.getTxWeight(lastTx, specialTx);
-            blockInfo.lowerFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, lastTx) / lastTxWeight);
+        	//const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
+            //const lastTxWeight = Transaction_Builder.getTxWeight(lastTx, specialTx);
+            //blockInfo.lowerFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, lastTx) / lastTxWeight);
         }
 
         return blockInfo;
@@ -312,4 +203,48 @@ export class BlockUtils {
 
         return txRefsRelatedToAddress;
     }
+	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
+	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
+	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
+		const { blockchain, memPool, utxoCache, vss, account, miner, time } = node;
+		const posTimestamp = blockchain.lastBlock ? blockchain.lastBlock.timestamp + 1 : time;
+		if (!blockchain.lastBlock) return new BlockData(0, 0, blockReward, initDiff, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
+		
+		const prevHash = blockchain.lastBlock.hash;
+		const myLegitimacy = await vss.getAddressLegitimacy(account.address, prevHash);
+		node.info.lastLegitimacy = myLegitimacy;
+
+		// THIS PART SHOULD BE SEPARATED
+		let maxLegitimacyToBroadcast = vss.maxLegitimacyToBroadcast;
+		/*if (roles.includes('miner') && miner.bestCandidateIndex() === blockchain.lastBlock.index + 1)
+			maxLegitimacyToBroadcast = Math.min(maxLegitimacyToBroadcast, miner.bestCandidateLegitimacy());
+		
+		if (myLegitimacy > maxLegitimacyToBroadcast) return null;*/
+		// END OF PART THAT SHOULD BE SEPARATED
+
+		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
+		node.info.averageBlockTime = averageBlockTime;
+		const coinBaseReward = mining.calculateNextCoinbaseReward(blockchain.lastBlock);
+		const Txs = memPool.getMostLucrativeTransactionsBatch(utxoCache);
+		return new BlockData(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, Txs, posTimestamp);
+	}
+	/** Adds POS reward transaction to the block candidate and signs it
+	 * @param {ContrastNode} node @param {BlockData} blockCandidate */
+	static async signBlockCandidate(node, blockCandidate) {
+		const { utxoCache, rewardAddresses, account } = node;
+		if (!rewardAddresses.validator || !account.address) return null;
+
+		const { powReward, posReward } = BlockUtils.calculateBlockReward(utxoCache, blockCandidate);
+		const posFeeTx = await Transaction_Builder.createPosReward(posReward, blockCandidate, rewardAddresses.validator, account.address);
+		const signedPosFeeTx = account.signTransaction(posFeeTx);
+		blockCandidate.Txs.unshift(signedPosFeeTx);
+		blockCandidate.powReward = powReward; // Reward for the miner
+		return blockCandidate;
+	}
+	/** @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
+	static async createAndSignBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
+		const blockCandidate = await this.createBlockCandidate(node, blockReward, initDiff);
+		if (!blockCandidate) return null;
+		return await this.signBlockCandidate(node, blockCandidate);
+	}
 }

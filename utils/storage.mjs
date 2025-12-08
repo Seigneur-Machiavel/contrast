@@ -2,10 +2,14 @@
 // As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
 
 import { HashFunctions } from '../node/src/conCrypto.mjs';
-import { BlockData, BlockUtils } from "../node/src/block-classes.mjs";
+import { BlockUtils } from "../node/src/block.mjs";
 import { serializer } from './serializer.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 import { Breather } from './breather.mjs';
+
+/**
+ * @typedef {import("../types/block.mjs").BlockData} BlockData
+ */
 
 // -> Imports compatibility for Node.js, Electron and browser
 const isNode = typeof window === 'undefined';
@@ -21,8 +25,8 @@ const AdmZip = isNode ? await import('adm-zip').then(module => module.default) :
 /**
 * @typedef {import("hive-p2p").Converter} Converter
 * @typedef {import("../node/src/node.mjs").Node} Node
-* @typedef {import("../node/src/block-classes.mjs").BlockInfo} BlockInfo
-* @typedef {import("../node/src/transaction.mjs").Transaction} Transaction
+* @typedef {import("../node/src/block.mjs").BlockInfo} BlockInfo
+* @typedef {import("../types/transaction.mjs").Transaction} Transaction
 */
 
 // GLOBALS VARS
@@ -35,6 +39,7 @@ class StorageRoot {
 	/** The local identifier used as subFolder */	localIdentifier;
 	/** Is running in electron environment */		  isElectronEnv;
 	/** Path to this file @type {string} */				   filePath;
+	/** Root folder path @type {string} */				 rootFolder;
 	/** Paths used for storage */							   PATH;
 
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
@@ -43,11 +48,11 @@ class StorageRoot {
 		const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
 		this.isElectronEnv = filePath.includes('app.asar');
 
-		const rootFolder = !this.isElectronEnv ? path.dirname(path.dirname(filePath))
+		this.rootFolder = !this.isElectronEnv ? path.dirname(path.dirname(filePath))
 			: path.dirname(path.dirname(path.dirname(path.dirname(filePath))))
 	
-		const basePath = !this.localIdentifier ? path.join(path.dirname(rootFolder), 'contrast-storage')
-			: path.join(path.dirname(rootFolder), 'contrast-storage', this.localIdentifier);
+		const basePath = !this.localIdentifier ? path.join(path.dirname(this.rootFolder), 'contrast-storage')
+			: path.join(path.dirname(this.rootFolder), 'contrast-storage', this.localIdentifier);
 	
 		this.PATH = {
 			/** path to the storage.mjs file */
@@ -63,11 +68,13 @@ class StorageRoot {
 			CHECKPOINTS: path.join(basePath, 'checkpoints'),
 			TEST_STORAGE: path.join(basePath, 'test')
 		};
-
+		this.#init();
+	}
+	#init() {
 		// create the contrast-storage folder if it doesn't exist, and any of subfolder
 		if (this.isElectronEnv) { delete this.PATH.TEST_STORAGE; delete this.PATH.JSON_BLOCKS; }
-		if (!fs.existsSync(path.join(path.dirname(rootFolder), 'contrast-storage')))
-			fs.mkdirSync(path.join(path.dirname(rootFolder), 'contrast-storage'));
+		if (!fs.existsSync(path.join(path.dirname(this.rootFolder), 'contrast-storage')))
+			fs.mkdirSync(path.join(path.dirname(this.rootFolder), 'contrast-storage'));
 		for (const dirPath of Object.values(this.PATH))
 			if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath);
 	}
@@ -80,6 +87,32 @@ class StorageRoot {
 			input.push(separatorParts[i % separatorParts.length]);
 		}
 		return HashFunctions.xxHash32(input.join(''));
+	}
+	clear(passHash = true, nodeSettings = true) {
+		const dirPaths = [
+			this.PATH.BLOCKS,
+			this.PATH.BLOCKS_INFO,
+			this.PATH.JSON_BLOCKS,
+			this.PATH.TRASH,
+			this.PATH.SNAPSHOTS,
+			this.PATH.TXS_REFS,
+			this.PATH.CHECKPOINTS,
+			path.join(this.PATH.STORAGE, 'ACTIVE_CHECKPOINT'),
+			this.PATH.TEST_STORAGE
+		];
+		const filePaths = [ path.join(this.PATH.STORAGE, 'AddressesTxsRefsStorage_config.json') ];
+		if (passHash) filePaths.push(path.join(this.PATH.STORAGE, 'passHash.bin'));
+		if (nodeSettings) filePaths.push(path.join(this.PATH.STORAGE, 'nodeSetting.bin'));
+
+		for (const dirPath of dirPaths)
+			if (!fs.existsSync(dirPath)) continue;
+			else { fs.rmSync(dirPath, { recursive: true }); console.log(`${dirPath} removed.`) }
+
+		for (const filePath of filePaths)
+			if (!fs.existsSync(filePath)) continue;
+			else { fs.unlinkSync(filePath); console.log(`${filePath} removed.`) }
+
+		this.#init();
 	}
 }
 
@@ -549,7 +582,7 @@ export class BlockchainStorage {
     #saveBlockBinary(blockData) {
         try {
             /** @type {Uint8Array} */
-            const binary = serializer.serialize.block_finalized(blockData);
+            const binary = serializer.serialize.block(blockData);
             const batchFolder = BlockchainStorage.batchFolderFromBlockIndex(blockData.index);
             const batchFolderPath = path.join(this.storage.PATH.BLOCKS, batchFolder.name);
             if (this.batchFolders[batchFolder.index] !== batchFolder.name) {
@@ -572,10 +605,7 @@ export class BlockchainStorage {
         /** @type {Uint8Array} */
         const serialized = fs.readFileSync(blockFilePath);
         if (!deserialize) return serialized;
-
-        /** @type {BlockData} */
-        const blockData = serializer.deserialize.block_finalized(serialized);
-        return blockData;
+        return serializer.deserialize.block(serialized);
     }
     #loadBlockDataJSON(blockIndex = 0, dirPath = '') {
         const blockFileName = `${blockIndex.toString()}.json`;
@@ -598,7 +628,7 @@ export class BlockchainStorage {
         this.hashByIndex[blockData.index] = blockData.hash;
         this.indexByHash[blockData.hash] = blockData.index;
 
-        if (isElectronEnv) return; // Avoid saving heavy JSON format in production
+        if (this.isElectronEnv) return; // Avoid saving heavy JSON format in production
         if (saveJSON || blockData.index < 200) this.#saveBlockDataJSON(blockData, this.storage.PATH.JSON_BLOCKS);
     }
     /** @param {BlockInfo} blockInfo */
@@ -646,28 +676,21 @@ export class BlockchainStorage {
         }
     }
 
-    /** @param {Uint8Array} serializedBlock @param {string} txRef - The reference of the transaction to retrieve */
-    #findTxPointerInSerializedBlock(serializedBlock, txRef = '41:5fbcae93') {
-        const targetTxId = txRef.split(':')[1];
-        const targetUint8Array = this.converter.hexToBytes(targetTxId);
-        const nbOfTxs = this.converter.bytes2ToNumber(serializedBlock.slice(0, 2));
-        const pointersStart = 2 + 4 + 8 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4;
-        const pointersEnd = (pointersStart + nbOfTxs * 8) - 1;
-        const pointersBuffer = serializedBlock.slice(pointersStart, pointersEnd + 1);
-        
-        for (let i = 0; i < pointersBuffer.length; i += 8) {
-            if (!pointersBuffer.slice(i, i + 4).every((v, i) => v === targetUint8Array[i])) continue;
+    /** @param {Uint8Array} serializedBlock @param {number} txIndex - The reference of the transaction to retrieve */
+    #findTxPointerInSerializedBlock(serializedBlock, txIndex) {
+		const nbOfTxs = this.converter.bytes2ToNumber(serializedBlock.slice(0, 2));
+		if (txIndex >= nbOfTxs) return null;
 
-            const index = i / 8;
-            const offsetStart = this.converter.bytes4ToNumber(pointersBuffer.slice(i + 4, i + 8));
-            i += 8;
-            if (i >= pointersBuffer.length) return { index, start: offsetStart, end: serializedBlock.length };
-            
-            const offsetEnd = this.converter.bytes4ToNumber(pointersBuffer.slice(i, i + 4));
-            return { index, start: offsetStart, end: offsetEnd };
-        }
+        const pointerStart = serializer.lengths.blockFinalizedHeader + (txIndex * 4);
+		const pointerBuffer = serializedBlock.slice(pointerStart, pointerStart + 4);
+		const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);
 
-        return null;
+		const nextPointerStart = pointerStart + 4;
+		const offsetEnd = txIndex + 1 < nbOfTxs
+			? this.converter.bytes4ToNumber(serializedBlock.slice(nextPointerStart, nextPointerStart + 4))
+			: serializedBlock.length;
+
+		return { index: 0, start: offsetStart, end: offsetEnd };
     }
     #extractSerializedBlockTimestamp(serializedBlock) {
         return this.converter.bytes8ToNumber(serializedBlock.slice(62, 70));
@@ -675,20 +698,18 @@ export class BlockchainStorage {
     /** @param {Uint8Array} serializedBlock @param {number} index @param {number} start @param {number} end */
     #readTxInSerializedBlockUsingPointer(serializedBlock, index = 0, start = 0, end = 1) {
         const txBuffer = serializedBlock.slice(start, end);
-        /** @type {Transaction} */
-        const tx = index < 2
-            ? serializer.deserialize.specialTransaction(txBuffer)
-            : serializer.deserialize.transaction(txBuffer);
-        
-        return tx;
+		const specialMode = { 0: 'miner', 1: 'validator' }; // finalized block only
+		return serializer.deserialize.transaction(txBuffer, specialMode[index]);
     }
-    retreiveTx(txRef = '41:5fbcae93', includeTimestamp) {
-        const blockIndex = parseInt(txRef.split(':')[0], 10);
+    retreiveTx(txRef = '41:50', includeTimestamp) {
+		const s = txRef.split(':');
+        const blockIndex = parseInt(s[0], 10);
+		const txIndex = parseInt(s[1], 10);
         const serializedBlock = this.retreiveBlock(blockIndex, false);
         if (!serializedBlock) return null;
 
         const timestamp = includeTimestamp ? this.#extractSerializedBlockTimestamp(serializedBlock) : undefined;
-        const txOffset = this.#findTxPointerInSerializedBlock(serializedBlock, txRef);
+        const txOffset = this.#findTxPointerInSerializedBlock(serializedBlock, txIndex);
         if (!txOffset) return null;
 
         const { index, start, end } = txOffset;

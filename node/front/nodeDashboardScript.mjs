@@ -3,7 +3,7 @@ import { convert } from '../../utils/converters.mjs';
 //import { BlockExplorerWidget } from './explorerScript.mjs';
 
 /**
- * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
+ * @typedef {import("../src/block.mjs").BlockData} BlockData
  * @typedef {import("./transaction.mjs").Transaction} Transaction
  * @typedef {import("../src/vss.mjs").StakeReference} StakeReference
  */
@@ -584,7 +584,7 @@ document.addEventListener('click', async (event) => {
             
             console.log('UTXOs', validatorUTXOs);
             const senderAccount = { address: validatorAddress, UTXOs: validatorUTXOs };
-            const transaction = await Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amountToStake);
+            const transaction = Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amountToStake);
 
             ws.send(JSON.stringify({ type: 'new_unsigned_transaction', data: transaction }));
             eHTML.stakeInput.input.value = '';

@@ -1,24 +1,21 @@
 import { parentPort } from 'worker_threads';
 import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from '../src/conCrypto.mjs';
-import { BlockUtils } from '../src/block-classes.mjs';
+import { BlockUtils } from '../src/block.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 
 /**
- * @typedef {import("../src/block-classes.mjs").BlockData} BlockData
+ * @typedef {import("../../types/block.mjs").BlockData} BlockData
  */
 
-/** @param {BlockData} blockCandidate @param {string} signatureHex @param {string} nonce @param {boolean} useDevArgon2 */
-async function mineBlock(blockCandidate, signatureHex, nonce, useDevArgon2) {
+/** @param {BlockData} blockCandidate @param {string} signatureHex @param {string} nonce */
+async function mineBlock(blockCandidate, signatureHex, nonce) {
 	try {
-		//console.log('useDevArgon2', useDevArgon2);
-		const argon2Fnc = useDevArgon2 ? HashFunctions.devArgon2 : HashFunctions.Argon2;
-
-		const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
+		const blockHash = await mining.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
 		if (!blockHash) throw new Error('Invalid block hash');
 
 		blockCandidate.hash = blockHash.hex;
-		return { finalizedBlock: blockCandidate, bitsArrayAsString: blockHash.bitsArray.join('') };
+		return { finalizedBlock: blockCandidate, bitsArrayAsString: blockHash.bitsString };
 	} catch (err) { throw err; }
 }
 class hashrateCalculator {
@@ -60,7 +57,7 @@ class hashrateCalculator {
 async function mineBlockUntilValid() {
 	const hashRateCalculator = new hashrateCalculator(parentPort);
 	while (true) {
-		if (minerVars.exiting) { return { error: 'Exiting' }; }
+		if (minerVars.exiting) return { error: 'Exiting' };
 		if (minerVars.paused) { await new Promise((resolve) => setTimeout(resolve, 100)); continue; }
 
 		// IF PAUSED MORE THAN A MINUTE AGO, WE NEED TO WAIT AN UPDATE OF BLOCK CANDIDATE
@@ -75,7 +72,7 @@ async function mineBlockUntilValid() {
 		try {
 			const startTime = performance.now();
 			const { signatureHex, nonce, clonedCandidate } = await prepareBlockCandidateBeforeMining();
-			const mined = await mineBlock(clonedCandidate, signatureHex, nonce, false);
+			const mined = await mineBlock(clonedCandidate, signatureHex, nonce);
 			if (!mined) throw new Error('Invalid block hash');
 	
 			minerVars.hashCount++;
@@ -147,8 +144,7 @@ parentPort.on('message', async (task) => {
 			minerVars.rewardAddress = task.rewardAddress;
 			minerVars.bet = task.bet;
 			minerVars.timeOffset = task.timeOffset;
-
-			console.info('miner-worker-nodejs -> updateInfo');
+			//console.info('miner-worker-nodejs -> updateInfo');
 			return;
         case 'newCandidate':
 			minerVars.highestBlockHeight = task.blockCandidate.index;

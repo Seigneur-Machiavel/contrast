@@ -1,15 +1,17 @@
-import { Transaction, UTXO, Transaction_Builder } from './transaction.mjs';
+import { Transaction_Builder } from './transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { serializer } from '../../utils/serializer.mjs';
+import { UTXO } from '../../types/transaction.mjs';
 
 /**
 * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
-* @typedef {import("./block-classes.mjs").BlockData} BlockData
 * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack
+* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
+* @typedef {import("../../types/block.mjs").BlockData} BlockData
 */
 
 export class UtxoCache { // Used to store, addresses's UTXOs and balance.
-    constructor(nodeId, nodeVersion, blockchain) {
+    constructor(blockchain) {
         this.logPerformance = false;
         this.totalSupply = 0;
         this.totalOfBalances = 0;
@@ -24,9 +26,6 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         /** @type {Object<string, WebSocketCallBack>} */
         this.wsCallbacks = {}; // not used yet
 
-        this.nodeId = nodeId;
-        this.nodeVersion = nodeVersion;
-
         /** @type {Blockchain} */
         this.blockchain = blockchain;
         /** @type {Object<string, Uint8Array>} */
@@ -40,13 +39,10 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     preDigestFinalizedBlock(blockData) {
         const blockIndex = blockData.index;
         const Txs = blockData.Txs;
-        if (!Array.isArray(Txs)) { throw new Error('Txs is not an array'); }
+        if (!Array.isArray(Txs)) throw new Error('Txs is not an array');
 
         //console.log(`Digesting block ${blockIndex} with ${Txs.length} transactions`);
-        const newStakesOutputs = [];
-        const consumedUtxoAnchors = [];
-        const newUtxos = [];
-
+		const [ newStakesOutputs, newUtxos, consumedUtxoAnchors ] = [ [], [], [] ];
         for (let i = 0; i < Txs.length; i++) {
             const transaction = Txs[i];
             const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(blockIndex, transaction);
@@ -92,7 +88,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             if (!miniUtxoSerialized) { missingAnchors.push(anchor); continue; } // is spent or unexistant - treated later
 
             const { amount, rule, address } = serializer.deserialize.miniUTXO(miniUtxoSerialized);
-            utxosObj[anchor] = UTXO(anchor, amount, rule, address); // unspent
+            utxosObj[anchor] = new UTXO(anchor, amount, rule, address); // unspent
         }
 
         // UTXO SPENT OR UNEXISTANT
@@ -105,7 +101,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             const output = relatedTx.tx.outputs[outputIndex];
             if (!output) { utxosObj[anchor] = undefined; continue; } // doesn't exist
 
-            utxosObj[anchor] = UTXO(anchor, output.amount, output.rule, output.address, true); // spent
+            utxosObj[anchor] = new UTXO(anchor, output.amount, output.rule, output.address, true); // spent
         }
 
         return utxosObj;
@@ -115,7 +111,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const miniUtxoSerialized = this.unspentMiniUtxos[anchor];
         if (miniUtxoSerialized) {
             const { amount, rule, address } = serializer.deserialize.miniUTXO(miniUtxoSerialized);
-            return UTXO(anchor, amount, rule, address); // unspent
+            return new UTXO(anchor, amount, rule, address); // unspent
         }
 
         const height = anchor.split(':')[0];
@@ -129,7 +125,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         if (!output) { return undefined; } // doesn't exist
 
         /** @type {UTXO} */
-        return UTXO(anchor, output.amount, output.rule, output.address, true); // spent
+        return new UTXO(anchor, output.amount, output.rule, output.address, true); // spent
     }
     /** @param {Transaction} transaction */
     extractInvolvedUTXOsOfTx(transaction) { // BETTER RE USABILITY
@@ -225,8 +221,8 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         for (let i = 0; i < transaction.outputs.length; i++) {
             const { address, amount, rule } = transaction.outputs[i];
             const anchor = `${blockIndex}:${transaction.id}:${i}`
-            const utxo = UTXO(anchor, amount, rule, address); // unspent
-            if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) { continue; }
+            const utxo = new UTXO(anchor, amount, rule, address); // unspent
+            if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) continue;
 
             if (rule === "sigOrSlash") newStakesOutputsFromTx.push(utxo); // used to fill VSS stakes (for now we only create new range)
 

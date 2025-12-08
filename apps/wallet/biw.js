@@ -462,7 +462,7 @@ class BoardInternalWallet {
                         amount = this.#inputElementValueToAmount(this.eHTML.send.amount);
                         receiverAddress = this.eHTML.send.toAddress.value;
 
-                        const createdSignedTx = await window.Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress, feePerByte);
+                        const createdSignedTx = window.Transaction_Builder.createAndSignTransfer(senderAccount, amount, receiverAddress, feePerByte);
                         if (!createdSignedTx.signedTx) {
                             console.error('Transaction creation failed', createdSignedTx.error);
                             this.textInfo(this.eHTML.send.textInfo, createdSignedTx.error.message.replace(' | ', '\n'), 7000, true);
@@ -488,8 +488,8 @@ class BoardInternalWallet {
                             const stakeOnAddress = this.eHTML.stake.toAddress.value;
                             window.addressUtils.conformityCheck(stakeOnAddress);
 
-                            const createdTx = await window.Transaction_Builder.createStakingVss(senderAccount, stakeOnAddress, amount, feePerByte);
-                            const signedTx = await senderAccount.signTransaction(createdTx);
+                            const createdTx = window.Transaction_Builder.createStakingVss(senderAccount, stakeOnAddress, amount, feePerByte);
+                            const signedTx = senderAccount.signTransaction(createdTx);
                             console.log('transaction:', signedTx);
                             this.fetcher.send({ type: 'broadcast_transaction', data: { transaction: signedTx, senderAddress: senderAccount.address } });
                         } catch (error) {

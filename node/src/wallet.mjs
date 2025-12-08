@@ -4,11 +4,11 @@ import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { ProgressLogger } from '../../utils/progress-logger.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
 import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
+import { Transaction_Builder } from './transaction.mjs';
 
 /**
-* @typedef {import("./transaction.mjs").Transaction} Transaction
-* @typedef {import("./transaction.mjs").UTXO} UTXO
-*
+* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
+* @typedef {import("../../types/transaction.mjs").UTXO} UTXO
 * @typedef {Object} generatedAccount
 * @property {string} address
 * @property {string} seedModifierHex
@@ -42,7 +42,8 @@ export class Account {
         if (typeof this.#privKey !== 'string') throw new Error('Invalid private key');
 		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
 
-        const { signatureHex } = AsymetricFunctions.signMessage(transaction.id, this.#privKey, this.#pubKey);
+		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
+        const { signatureHex } = AsymetricFunctions.signMessage(toSign, this.#privKey, this.#pubKey);
         if (transaction.witnesses.includes(`${signatureHex}:${this.#pubKey}`)) throw new Error('Signature already included');
         transaction.witnesses.push(`${signatureHex}:${this.#pubKey}`);
         return transaction;
@@ -255,8 +256,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
 		throw new Error('Failed to generate key pair');
     }
     async #deriveAccount(pubKeyHex, desiredPrefix = "C") {
-        const argon2Fnc = HashFunctions.Argon2;
-        const addressBase58 = await addressUtils.deriveAddress(argon2Fnc, pubKeyHex);
+        const addressBase58 = await addressUtils.deriveAddress(HashFunctions.Argon2, pubKeyHex);
         if (!addressBase58) throw new Error('Failed to derive address');
         if (addressBase58.substring(0, 1) !== desiredPrefix) return false;
 

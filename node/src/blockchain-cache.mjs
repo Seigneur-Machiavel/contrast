@@ -2,8 +2,12 @@ import { mining } from '../../utils/mining-functions.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
+/**
+ * @typedef {import("../../types/block.mjs").BlockData} BlockData
+ */
+
 export class BlocksCache {
-    /** @type {Map<string, import("./block-classes.mjs").BlockData>} */
+    /** @type {Map<string, BlockData>} */
     blocksByHash = new Map();
     /** @type {Map<number, string>} */
     blocksHashByHeight = new Map();
@@ -20,7 +24,7 @@ export class BlocksCache {
         if (this.blocksHashByHeight.size === 0) return -1;
         return Math.min(...this.blocksHashByHeight.keys());
     }
-    /** @param {import("./block-classes.mjs").BlockData} block */
+    /** @param {BlockData} block */
     addBlock(block) {
         this.blocksByHash.set(block.hash, block);
         this.blocksHashByHeight.set(block.index, block.hash);

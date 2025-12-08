@@ -1,10 +1,10 @@
+import { IS_VALID } from '../types/validation.mjs';
 import { conditionnals } from './conditionnals.mjs';
-import { typeValidation } from './type-validation.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from './blockchain-settings.mjs';
 
 /**
 * @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash
-* @typedef {import("../node/src/block-classes.mjs").BlockData} BlockData
+* @typedef {import("../types/block.mjs").BlockData} BlockData
 */
 
 export const mining = {
@@ -91,12 +91,11 @@ export const mining = {
         const { difficulty, legitimacy, posTimestamp, timestamp } = blockData;
         const powTimestamp = timestamp || posTimestamp + targetBlockTime;
 
-        if (!typeValidation.numberIsPositiveInteger(posTimestamp)) throw new Error('Invalid posTimestamp');
-        if (!typeValidation.numberIsPositiveInteger(powTimestamp)) throw new Error('Invalid timestamp');
+        if (!IS_VALID.POSITIVE_INTEGER(posTimestamp)) throw new Error('Invalid posTimestamp');
+        if (!IS_VALID.POSITIVE_INTEGER(powTimestamp)) throw new Error('Invalid timestamp');
 
         const differenceRatio = (powTimestamp - posTimestamp) / targetBlockTime;
         const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
-        
         const legitimacyAdjustment = legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
         const finalDifficulty = Math.max(difficulty + timeDiffAdjustment + legitimacyAdjustment, 1); // cap at 1 minimum
 

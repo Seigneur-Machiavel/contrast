@@ -1,12 +1,14 @@
 import { BlocksCache } from './blockchain-cache.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { BlockUtils, BlockMiningData, BlockData } from './block-classes.mjs';
+import { BlockUtils } from './block.mjs';
 import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.mjs';
 
 /**
 * @typedef {import("./vss.mjs").Vss} Vss
 * @typedef {import("./mempool.mjs").MemPool} MemPool
 * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
+* @typedef {import("../../types/block.mjs").BlockData} BlockData
+* @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData
 * @typedef {import("./snapshot-system.mjs").SnapshotSystem} SnapshotSystem */
 
 /** Represents the blockchain and manages its operations. */
@@ -14,7 +16,7 @@ export class Blockchain {
     miniLogger = new MiniLogger('blockchain');
     cache = new BlocksCache(this.miniLogger);
 
-	/** @type {BlockData|null} */		lastBlock = null;
+	/** @type {BlockData | null} */		lastBlock = null;
 	/** @type {BlockMiningData[]} */	blockMiningData = []; // .csv mining datas research
 
 	/** @param {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
@@ -69,21 +71,16 @@ export class Blockchain {
      * @throws {Error} If the block is invalid or cannot be added. */
     addConfirmedBlock(utxoCache, block, persistToDisk = true, saveBlockInfo = true, totalFees) {
         //this.miniLogger.log(`Adding new block: #${block.index}, blockHash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
-        try {
-            const blockInfo = saveBlockInfo ? BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
-            if (persistToDisk) this.blockStorage.addBlock(block);
-            if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
-            this.blockStorage.getBlockInfoByIndex(block.index);
-            this.cache.addBlock(block);
-            this.lastBlock = block;
-            this.currentHeight = block.index;
+		const blockInfo = saveBlockInfo ? BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
+		if (persistToDisk) this.blockStorage.addBlock(block);
+		if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
+		this.blockStorage.getBlockInfoByIndex(block.index);
+		this.cache.addBlock(block);
+		this.lastBlock = block;
+		this.currentHeight = block.index;
 
-            //this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
-            return blockInfo;
-        } catch (error) {
-            this.miniLogger.log(`Failed to add block: blockHash=${block.hash.slice(0, 20)}..., error=${error}`, (m) => { console.error(m); });
-            throw error;
-        }
+		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
+		return blockInfo;
     }
     /** Applies the changes from added blocks to the UTXO cache and VSS.
     * @param {UtxoCache} utxoCache - The UTXO cache to update.
@@ -92,18 +89,11 @@ export class Blockchain {
     * @param {boolean} [storeAddAddressAnchors=false] - Whether to store added address anchors. */
     applyBlock(utxoCache, vss, block) {
         const blockDataCloneToDigest = BlockUtils.cloneBlockData(block); // clone to avoid modification
-        try {
-            const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = utxoCache.preDigestFinalizedBlock(blockDataCloneToDigest);
-            if (!vss.newStakesCanBeAdded(newStakesOutputs)) throw new Error('VSS: Max supply reached.');
-
-            // here we are sure that the block can be applied
-            utxoCache.digestFinalizedBlock(blockDataCloneToDigest, newUtxos, consumedUtxoAnchors);
-            vss.newStakes(newStakesOutputs);
-            this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
-        } catch (error) {
-            this.miniLogger.log(`Failed to apply block: blockHash=${block.hash}, error=${error}`, (m) => { console.error(m); });
-            throw error;
-        }
+		const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = utxoCache.preDigestFinalizedBlock(blockDataCloneToDigest);
+		if (!vss.newStakes(newStakesOutputs, 'control')) throw new Error('VSS: Max supply reached during applyBlock().');
+		utxoCache.digestFinalizedBlock(blockDataCloneToDigest, newUtxos, consumedUtxoAnchors);
+		vss.newStakes(newStakesOutputs, 'persist');
+		this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
     }
     /** @param {MemPool} memPool @param {number} indexStart @param {number} indexEnd */
     async persistAddressesTransactionsReferencesToDisk(memPool, indexStart, indexEnd) {
@@ -244,31 +234,20 @@ export class Blockchain {
      * @param {number} fromHeight - The starting height of the range.
      * @param {number} [toHeight=999_999_999] - The ending height of the range.
      * @param {boolean} [deserialize=true] - Whether to deserialize the blocks. */
-    async getRangeOfBlocksByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
+    async getRangeOfBlocksByHeight(fromHeight, toHeight = 999_999_999, deserialize = true, includesInfo = false) {
         if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') throw new Error('Invalid block range: not numbers');
         if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
 
-        const blocksData = [];
+        const blocks = [];
+		const blocksInfo = [];
         for (let i = fromHeight; i <= toHeight; i++) {
             const blockData = this.getBlock(i, deserialize);
             if (!blockData) break;
-            blocksData.push(blockData);
+            blocks.push(blockData);
+			if (includesInfo) blocksInfo.push(this.blockStorage.getBlockInfoByIndex(i, deserialize));
 			await new Promise(resolve => setImmediate(resolve)); // breathing
         }
-        return blocksData;
-    }
-    async getRangeOfBlocksInfoByHeight(fromHeight, toHeight = 999_999_999, deserialize = true) {
-        if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') throw new Error('Invalid block range: not numbers');
-        if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
-
-        const blocksInfo = [];
-        for (let i = fromHeight; i <= toHeight; i++) {
-            const blockInfo = this.blockStorage.getBlockInfoByIndex(i, deserialize);
-            if (!blockInfo) break;
-            blocksInfo.push(blockInfo);
-            await new Promise(resolve => setImmediate(resolve)); // breathing
-        }
-        return blocksInfo;
+        return { blocks, blocksInfo };
     }
     /** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
     getBlock(heightOrHash, deserialize = true) {

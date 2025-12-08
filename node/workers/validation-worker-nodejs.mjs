@@ -1,5 +1,5 @@
 import { parentPort } from 'worker_threads';
-import { TxValidation } from '../src/validations-classes.mjs';
+import { TxValidation } from '../src/tx-validation.mjs';
 
 // WORKER SIDE
 let workerId = undefined;
@@ -14,18 +14,16 @@ parentPort.on('message', async (task) => {
                 const allDiscoveredPubKeysAddresses = {};
                 const transactions = task.transactions
                 for (const tx of transactions) {
-                    if (exiting) { break; }
+                    if (exiting) break;
                     const discoveredPubKeysAddresses = await TxValidation.addressOwnershipConfirmation(
                         task.involvedUTXOs,
                         tx,
                         task.impliedKnownPubkeysAddresses,
-                        task.useDevArgon2,
                         false // specialTx
                     );
 
-                    for (let [pubKeyHex, address] of Object.entries(discoveredPubKeysAddresses)) {
-                        allDiscoveredPubKeysAddresses[pubKeyHex] = address;
-                    }
+					for (const pubKeyHex in discoveredPubKeysAddresses)
+						allDiscoveredPubKeysAddresses[pubKeyHex] = discoveredPubKeysAddresses[pubKeyHex];
                 }
                 
                 response.discoveredPubKeysAddresses = allDiscoveredPubKeysAddresses;
