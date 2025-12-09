@@ -8,7 +8,7 @@ const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const observerPort = args.includes('-op') ? parseInt(nextArg('-op')) : 27270;
 const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
-const clearOnStart = true;
+const clearOnStart = false;
 
 import HiveP2P from "hive-p2p";
 import { Wallet } from '../src/wallet.mjs';

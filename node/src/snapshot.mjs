@@ -3,13 +3,13 @@ import path from 'path';
 import { serializer } from '../../utils/serializer.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-const snapshotLogger = new MiniLogger('SnapshotSystem');
+const miniLogger = new MiniLogger('SnapshotSystem');
 
 /**
-* @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
-* @typedef {import("./mempool.mjs").MemPool} MemPool
-* @typedef {import("./vss.mjs").Vss} Vss */
-
+ * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
+ * @typedef {import("./mempool.mjs").MemPool} MemPool
+ * @typedef {import("./vss.mjs").Vss} Vss */
+ 
 /** Get the heights of the snapshots that are saved in the snapshot folder - sorted in ascending order */
 export function readSnapshotsHeightsOfDir(dirPath = '') {
 	const snapshotDirs = fs.readdirSync(dirPath).filter((file) => {
@@ -29,8 +29,8 @@ export function readSnapshotsHeightsOfDir(dirPath = '') {
 		if (!files.includes('vss.bin')) missingFiles.push('vss.bin');
 		if (missingFiles.length === 0) snapshotsHeights.push(Number(snapshotDir));
 		else {
-			snapshotLogger.log(`Erasing malformed snapshot #${snapshotDir} | missing files: ${missingFiles.join(', ')}`, (m, c) => console.error(m, c));
-			fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) snapshotLogger.log(err.stack, (m, c) => console.error(m, c)); });
+			miniLogger.log(`Erasing malformed snapshot #${snapshotDir} | missing files: ${missingFiles.join(', ')}`, (m, c) => console.error(m, c));
+			fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) miniLogger.log(err.stack, (m, c) => console.error(m, c)); });
 		}
 	}
 
@@ -40,6 +40,7 @@ export function readSnapshotsHeightsOfDir(dirPath = '') {
 
 export class SnapshotSystem {
 	storage;
+	miniLogger = miniLogger;
 	loadedSnapshotHeight = 0;
 	snapshotHeightModulo = 5;
 	snapshotToConserve = 10;
@@ -88,9 +89,9 @@ export class SnapshotSystem {
 
 		// LOAD UTXO CACHE
 		const utxoCacheDataSerialized = await this.storage.loadBinaryAsync('utxoCache', heightPath);
-		utxoCache.totalOfBalances = this.fastConverter.uint86BytesToNumber(utxoCacheDataSerialized.subarray(0, 6));
-		utxoCache.totalSupply = this.fastConverter.uint86BytesToNumber(utxoCacheDataSerialized.subarray(6, 12));
-		utxoCache.unspentMiniUtxos = serializer.deserialize.miniUTXOsObj(utxoCacheDataSerialized.subarray(12));
+		utxoCache.totalOfBalances = serializer.converter.bytes8ToNumber(utxoCacheDataSerialized.subarray(0, 8));
+		utxoCache.totalSupply = serializer.converter.bytes8ToNumber(utxoCacheDataSerialized.subarray(8, 16));
+		utxoCache.unspentMiniUtxos = serializer.deserialize.miniUTXOsObj(utxoCacheDataSerialized.subarray(16));
 		utxoCache.buildAddressesAnchorsFromUnspentMiniUtxos();
 		this.loadedSnapshotHeight = height;
 		return true;
@@ -100,7 +101,7 @@ export class SnapshotSystem {
 		const [targetPath, trashTargetPath] = [path.join(this.storage.PATH.SNAPSHOTS, `${height}`), path.join(this.storage.PATH.TRASH, `${height}`)];
 		if (fs.existsSync(trashTargetPath)) fs.rmSync(trashTargetPath, { recursive: true, force: true });
 		fs.renameSync(targetPath, trashTargetPath);
-		snapshotLogger.log(`Snapshot #${height} moved to trash`, (m, c) => console.info(m, c));
+		miniLogger.log(`Snapshot #${height} moved to trash`, (m, c) => console.info(m, c));
 	}
 	/** Move all snapshots with a height higher than the given one to trash @param {number} height */
 	moveSnapshotsHigherThanHeightToTrash(height) {
@@ -116,14 +117,15 @@ export class SnapshotSystem {
 	restoreLoadedSnapshot(overwrite = false) {
 		if (this.loadedSnapshotHeight === 0) return false;
 
-		const [targetPath, trashTargetPath] = [path.join(this.storage.PATH.SNAPSHOTS, `${this.loadedSnapshotHeight}`), path.join(this.storage.PATH.TRASH, `${this.loadedSnapshotHeight}`)];
+		const targetPath = path.join(this.storage.PATH.SNAPSHOTS, `${this.loadedSnapshotHeight}`);
+		const trashTargetPath = path.join(this.storage.PATH.TRASH, `${this.loadedSnapshotHeight}`);
 		if (!fs.existsSync(trashTargetPath)) return false; // trash snapshot not found
 		if (fs.existsSync(targetPath)) {
 			if (!overwrite) return false;
-			fs.rmSync(targetPath, { recursive: true, force: true }, (err) => { if (err) { snapshotLogger.log(err, (m, c) => console.error(m, c)); } });
+			fs.rmSync(targetPath, { recursive: true, force: true }, (err) => { if (err) miniLogger.log(err, (m, c) => console.error(m, c)); });
 		}
 
 		fs.renameSync(trashTargetPath, targetPath);
-		snapshotLogger.log(`Snapshot #${this.loadedSnapshotHeight} restored from trash`, (m, c) => console.info(m, c));
+		miniLogger.log(`Snapshot #${this.loadedSnapshotHeight} restored from trash`, (m, c) => console.info(m, c));
 	}
 }

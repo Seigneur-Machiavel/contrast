@@ -1,15 +1,26 @@
-import { readSnapshotsHeightsOfDir } from './snapshot.mjs';
+import fs from 'fs';
+import path from 'path';
 import { BlockUtils } from './block.mjs';
-import { BlockData } from '../../types/block.mjs';
-//import { Storage, BlockchainStorage, CheckpointsStorage, PATH } from '../../utils/storage-manager.mjs';
+import { readSnapshotsHeightsOfDir } from './snapshot.mjs';
+import { BlockchainStorage, CheckpointsStorage } from '../../utils/storage.mjs';
+
+/**
+ * @typedef {import('../../types/block.mjs').BlockData} BlockData
+ * @typedef {import('../../miniLogger/mini-logger.mjs').MiniLogger} MiniLogger
+ * @typedef {import('../../utils/storage.mjs').ContrastStorage} ContrastStorage
+ * @typedef {import('../../utils/storage.mjs').BlockchainStorage} BlockchainStorage */
 
 export class CheckpointSystem {
+	storage;
+	miniLogger;
+	blockStorage;
+
 	/** @type {boolean | number} */
 	activeCheckpointHeight = false;
 	/** @type {boolean | number} */
 	activeCheckpointLastSnapshotHeight = false;
 	activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // fake hash
-	activeCheckpointPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
+	activeCheckpointPath = './ACTIVE_CHECKPOINT';
 
 	minGapTryCheckpoint = 720; // 24h
 	checkpointHeightModulo = 25;
@@ -17,17 +28,28 @@ export class CheckpointSystem {
 	lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	rndControlDiceFaces = 27; // 1 in 27 chance to verify the block hash
 
+	/** @param {ContrastStorage} storage @param {BlockchainStorage} BlockchainStorage @param {MiniLogger} miniLogger Usually the SnapshotSystem's miniLogger */
+	constructor(storage, BlockchainStorage, miniLogger) {
+		this.storage = storage;
+		this.miniLogger = miniLogger;
+		this.blockStorage = BlockchainStorage;
+		this.activeCheckpointPath = path.join(this.storage.PATH.STORAGE, 'ACTIVE_CHECKPOINT');
+	}
+
 	// MY CHECKPOINTS
 	#getCheckpointsInfos() {
 		/** @type {{ heights: number[], hashes: { [height: number]: string } }} */
 		const result = { heights: [], hashes: {} };
-		const dirs = fs.readdirSync(PATH.CHECKPOINTS);
+		const dirs = fs.readdirSync(this.storage.PATH.CHECKPOINTS);
 		if (dirs.length === 0) return result;
 
 		for (const dirName of dirs) {
 			const height = Number(dirName);
-			const files = fs.readdirSync(path.join(PATH.CHECKPOINTS, dirName));
-			if (files.length !== 1) { console.error(`---! Checkpoint #${height} is corrupted !---`); continue; }
+			const files = fs.readdirSync(path.join(this.storage.PATH.CHECKPOINTS, dirName));
+			if (files.length !== 1) {
+				this.miniLogger.log(`---! Checkpoint #${height} is corrupted !---`, (m, c) => console.error(m, c));
+				continue;
+			}
 
 			result.heights.push(height);
 			result.hashes[height] = files[0].split('.')[0];
@@ -36,6 +58,7 @@ export class CheckpointSystem {
 		result.heights.sort((a, b) => a - b);
 		return result;
 	}
+	/** CAUTION: This will permanently delete checkpoint data, will preserve 3 highest checkpoints */
 	pruneCheckpointsLowerThanHeight(height = 0) { // dangerous to prune checkpoints, use with caution
 		const result = { erased: [], preserved: [] };
 		const descendingHeights = this.#getCheckpointsInfos().heights.reverse();
@@ -43,22 +66,24 @@ export class CheckpointSystem {
 			const maxCheckpointsReached = result.preserved.length >= this.checkpointToConserve;
 			if (h > height && !maxCheckpointsReached) { result.preserved.push(h); continue; }
 
-			fs.rmSync(path.join(PATH.CHECKPOINTS, h.toString()), { recursive: true, force: true });
+			fs.rmSync(path.join(this.storage.PATH.CHECKPOINTS, h.toString()), { recursive: true, force: true });
 			result.erased.push(h);
 		}
 
 		if (result.erased.length === 0) return; // no need to log
-		console.info(`Checkpoints pruned | erased: ${result.erased.join(', ')} | preserved: ${result.preserved.join(', ')}`);
+		this.miniLogger.log(`Checkpoints pruned | erased: ${result.erased.join(', ')} | preserved: ${result.preserved.join(', ')}`, (m, c) => console.info(m, c));
 	}
 	async newCheckpoint(height = 1000, snapshotHeightModulo, fromPath, overwrite = false) {
 		// We prefer to not overwrite existing checkpoints, but it's possible to force it
 		//! The danger is to overwrite a valid checkpoint with a corrupted one:
 		//! The "addresses-txs-refs" as been removed from checkpoints
-		const heightPath = path.join(PATH.CHECKPOINTS, height.toString());
-		if (fs.existsSync(heightPath)) { console.error(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`); return false; }
-		if (fs.existsSync(heightPath) && !overwrite) { return false; }
+		const heightPath = path.join(this.storage.PATH.CHECKPOINTS, height.toString());
+		if (fs.existsSync(heightPath) && !overwrite) {
+			this.miniLogger.log(`---! Checkpoint #${height} already exists (overwrite: ${overwrite}) !---`, (m, c) => console.error(m, c));
+			if (!overwrite) return false;
+		}
 
-		const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
+		const snapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : this.storage.PATH.SNAPSHOTS;
 		const snapshotsHeights = readSnapshotsHeightsOfDir(snapshotsPath);
 		const neededSnapHeights = [
 			height,
@@ -66,7 +91,10 @@ export class CheckpointSystem {
 			height - (snapshotHeightModulo * 2)
 		];
 		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath, snapshotsHeights, neededSnapHeights); // save new checkpoint archive (.zip)
-		if (typeof hash !== 'string') { console.error(`---! Checkpoint #${height} failed !---`); return false; }
+		if (typeof hash !== 'string') {
+			this.miniLogger.log(`---! Checkpoint #${height} failed !---`, (m, c) => console.error(m, c));
+			return false;
+		}
 
 		this.lastCheckpointInfo = { height, hash };
 		return true;
@@ -76,8 +104,8 @@ export class CheckpointSystem {
 		for (const height of Object.keys(checkpointsHashes)) {
 			if (checkpointsHashes[height] !== archiveHash) continue;
 
-			try { return fs.readFileSync( path.join(PATH.CHECKPOINTS, height, `${archiveHash}.zip`) ) }
-			catch (error) { console.error(error.stack); return false }
+			try { return fs.readFileSync( path.join(this.storage.PATH.CHECKPOINTS, height, `${archiveHash}.zip`) ) }
+			catch (error) { this.miniLogger.log(error.stack, (m, c) => console.error(m, c)); return false }
 		}
 	}
 	/** Read one time only if necessary, this.lastCheckpointInfo filled by: newCheckpoint () */
@@ -102,7 +130,7 @@ export class CheckpointSystem {
 
 		const checkpointSnapshotsPath = path.join(this.activeCheckpointPath, 'snapshots');
 		if (!fs.existsSync(checkpointSnapshotsPath)) {
-			console.error('Active checkpoint corrupted: snapshots folder missing');
+			this.miniLogger.log('Active checkpoint corrupted: snapshots folder missing', (m, c) => console.error(m, c));
 			fs.rmSync(this.activeCheckpointPath, { recursive: true, force: true });
 			return false;
 		}
@@ -140,7 +168,7 @@ export class CheckpointSystem {
 	
 		const blocksFoldersSorted = BlockchainStorage.getListOfFoldersInBlocksDirectory();
 		for (const folderName of blocksFoldersSorted) {
-			const folderPath = path.join(PATH.BLOCKS, folderName);
+			const folderPath = path.join(this.storage.PATH.BLOCKS, folderName);
 			if (!fs.existsSync(folderPath)) break;
 			
 			const files = fs.readdirSync(folderPath);
@@ -163,21 +191,21 @@ export class CheckpointSystem {
 			if (lastBlockIndex === -1) break; // no more blocks to migrate
 
 			// MOVE THE FOLDER TO THE ACTIVE CHECKPOINT
-			const infoFolderPath = path.join(PATH.BLOCKS_INFO, folderName);
+			const infoFolderPath = path.join(this.storage.PATH.BLOCKS_INFO, folderName);
 			if (!fs.existsSync(infoFolderPath)) break; // no more blocks to migrate, missing info folder
 			if (!fs.existsSync(path.join(this.activeCheckpointPath, 'blocks'))) fs.mkdirSync(path.join(this.activeCheckpointPath, 'blocks'), { recursive: true });
 			if (!fs.existsSync(path.join(this.activeCheckpointPath, 'blocks-info'))) fs.mkdirSync(path.join(this.activeCheckpointPath, 'blocks-info'), { recursive: true });
 			fs.renameSync(folderPath, path.join(this.activeCheckpointPath, 'blocks', folderName));
 			fs.renameSync(infoFolderPath, path.join(this.activeCheckpointPath, 'blocks-info', folderName)); // move info folder
 
-			console.info(`Checkpoint migration: moved folder ${folderName} to active checkpoint`);
+			this.miniLogger.log(`Checkpoint migration: moved folder ${folderName} to active checkpoint`, (m, c) => console.info(m, c));
 			this.activeCheckpointHeight = lastBlockIndex;
 			this.activeCheckpointHash = lastBlockHash;
 		}
 
 		// ENSURE ALL BLOCKS FOLDERS DELETION
-		for (const folderName of fs.readdirSync(PATH.BLOCKS)) fs.rmSync(path.join(PATH.BLOCKS, folderName), { recursive: true, force: true });
-		for (const folderName of fs.readdirSync(PATH.BLOCKS_INFO)) fs.rmSync(path.join(PATH.BLOCKS_INFO, folderName), { recursive: true, force: true });
+		for (const folderName of fs.readdirSync(this.storage.PATH.BLOCKS)) fs.rmSync(path.join(this.storage.PATH.BLOCKS, folderName), { recursive: true, force: true });
+		for (const folderName of fs.readdirSync(this.storage.PATH.BLOCKS_INFO)) fs.rmSync(path.join(this.storage.PATH.BLOCKS_INFO, folderName), { recursive: true, force: true });
 	}
 	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
 	#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo) {
@@ -192,8 +220,8 @@ export class CheckpointSystem {
 		if (!fs.existsSync(batchFolderPath)) fs.mkdirSync(batchFolderPath, { recursive: true });
 		if (!fs.existsSync(infoBatchFolderPath)) fs.mkdirSync(infoBatchFolderPath, { recursive: true });
 
-		if (!Storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) throw new Error('(Checkpoint fill) Block file save failed');
-		if (!Storage.saveBinary(blockFileName, serializedBlockInfo, infoBatchFolderPath)) throw new Error('(Checkpoint fill) Block info file save failed');
+		if (!this.storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) throw new Error('(Checkpoint fill) Block file save failed');
+		if (!this.storage.saveBinary(blockFileName, serializedBlockInfo, infoBatchFolderPath)) throw new Error('(Checkpoint fill) Block info file save failed');
 	}
 	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
 	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock, serializedBlockInfo) {
@@ -210,7 +238,7 @@ export class CheckpointSystem {
 
 		// Hash verification, argon2 based, cost CPU time (~500ms)
 		if (this.#randomDiceRoll(this.rndControlDiceFaces)) {
-			console.info(`Checkpoint fill: verifying block hash ${finalizedBlock.index}...`);
+			this.miniLogger.log(`Checkpoint fill: verifying block hash ${finalizedBlock.index}...`, (m, c) => console.info(m, c));
 			const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
         	if (finalizedBlock.hash !== hex) throw new Error(`(Checkpoint fill) Block hash mismatch: ${finalizedBlock.hash} !== ${hex}`);
 		}
@@ -227,18 +255,18 @@ export class CheckpointSystem {
 
 		if (saveZipArchive) await this.newCheckpoint(this.activeCheckpointHeight, snapshotHeightModulo, this.activeCheckpointPath);
 
-		const txsRefsConfigDest = path.join(PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
+		const txsRefsConfigDest = path.join(this.storage.PATH.STORAGE, 'AddressesTxsRefsStorage_config.json')
 		if (fs.existsSync(txsRefsConfigDest)) fs.rmSync(txsRefsConfigDest, { force: true });
-		if (fs.existsSync(PATH.BLOCKS)) fs.rmSync(PATH.BLOCKS, { recursive: true, force: true });
-		if (fs.existsSync(PATH.SNAPSHOTS)) fs.rmSync(PATH.SNAPSHOTS, { recursive: true, force: true });
-		if (fs.existsSync(PATH.TXS_REFS)) fs.rmSync(PATH.TXS_REFS, { recursive: true, force: true });
-		if (fs.existsSync(PATH.TRASH)) fs.rmSync(PATH.TRASH, { recursive: true, force: true });
-		if (fs.existsSync(PATH.BLOCKS_INFO)) fs.rmSync(PATH.BLOCKS_INFO, { recursive: true, force: true });
+		if (fs.existsSync(this.storage.PATH.BLOCKS)) fs.rmSync(this.storage.PATH.BLOCKS, { recursive: true, force: true });
+		if (fs.existsSync(this.storage.PATH.SNAPSHOTS)) fs.rmSync(this.storage.PATH.SNAPSHOTS, { recursive: true, force: true });
+		if (fs.existsSync(this.storage.PATH.TXS_REFS)) fs.rmSync(this.storage.PATH.TXS_REFS, { recursive: true, force: true });
+		if (fs.existsSync(this.storage.PATH.TRASH)) fs.rmSync(this.storage.PATH.TRASH, { recursive: true, force: true });
+		if (fs.existsSync(this.storage.PATH.BLOCKS_INFO)) fs.rmSync(this.storage.PATH.BLOCKS_INFO, { recursive: true, force: true });
 
-		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks'), PATH.BLOCKS);
-		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks-info'), PATH.BLOCKS_INFO);
-		fs.renameSync(path.join(this.activeCheckpointPath, 'snapshots'), PATH.SNAPSHOTS);
-		//! fs.renameSync(path.join(this.activeCheckpointPath, 'addresses-txs-refs'), PATH.TXS_REFS);
+		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks'), this.storage.PATH.BLOCKS);
+		fs.renameSync(path.join(this.activeCheckpointPath, 'blocks-info'), this.storage.PATH.BLOCKS_INFO);
+		fs.renameSync(path.join(this.activeCheckpointPath, 'snapshots'), this.storage.PATH.SNAPSHOTS);
+		//! fs.renameSync(path.join(this.activeCheckpointPath, 'addresses-txs-refs'), this.storage.PATH.TXS_REFS);
 		//! fs.renameSync(path.join(this.activeCheckpointPath, 'AddressesTxsRefsStorage_config.json'), txsRefsConfigDest);
 		fs.rmSync(this.activeCheckpointPath, { recursive: true, force: true });
 
@@ -247,7 +275,7 @@ export class CheckpointSystem {
 		this.activeCheckpointHash = '0000000000000000000000000000000000000000000000000000000000000000'; // hash of block -1
 	}
 	resetCheckpoints() {
-		CheckpointsStorage.reset();
+		CheckpointsStorage.reset(this.storage.PATH.CHECKPOINTS);
 		this.lastCheckpointInfo = { height: 0, hash: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' };
 	}
 	resetActiveCheckpoint() {

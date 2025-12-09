@@ -7,34 +7,30 @@ import { UTXO } from '../../types/transaction.mjs';
 /**
 * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
 * @typedef {import("../../types/block.mjs").BlockData} BlockData
-* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 * @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
+* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 * @typedef {import("../../types/transaction.mjs").TxReference} TxReference
-* @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack
-*/
+* @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack */
 
 export class UtxoCache { // Used to store, addresses's UTXOs and balance.
+	blockchain;
+	/** @type {Object<string, number>} Used only in front context - { address: balance } */
+	balances = {};
+	totalSupply = 0;
+	totalOfBalances = 0;
+	biggestsHoldersToConserve = 10;
+
 	/** @param {Blockchain} blockchain */
     constructor(blockchain) {
-        this.totalSupply = 0;
-        this.totalOfBalances = 0;
-
-        // BALANCES VALUES ARE ONLY USED IN FRONT CONTEXT, DISPLAYED IN THE UI
-        /** @type {Object<string, number>} */
-        this.balances = {}; // { address: balance }
-        this.biggestsHoldersToConserve = 10;
         /** @type {Array<{ address: string, balance: number }>} */
         this.biggestsHoldersBalances = [];
-
         /** @type {Object<string, WebSocketCallBack>} */
         this.wsCallbacks = {}; // not used yet
-
-        /** @type {Blockchain} */
+        /** @type {Object<string, Uint8Array>} - { anchor: miniUtxoSerialized } */
+        this.unspentMiniUtxos = {};
+        /** @type {Object<string, Uint8Array>} - { address: anchorArraySerialized } */
+        this.addressesAnchors = {};
         this.blockchain = blockchain;
-        /** @type {Object<string, Uint8Array>} */
-        this.unspentMiniUtxos = {}; // { anchor: miniUtxoSerialized }
-        /** @type {Object<string, Uint8Array>} */
-        this.addressesAnchors = {}; // { address: anchorArraySerialized }
     }
 
     // ----- PUBLIC METHODS -----
@@ -45,9 +41,9 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         if (!Array.isArray(Txs)) throw new Error('Txs is not an array');
 
         //console.log(`Digesting block ${blockIndex} with ${Txs.length} transactions`);
-		/** @type {UTXO[]} */ const newStakesOutputs = [];
-		/** @type {UTXO[]} */ const newUtxos = [];
-		/** @type {TxAnchor[]} */ const consumedUtxoAnchors = [];
+		/** @type {UTXO[]} */ 		const newStakesOutputs = [];
+		/** @type {UTXO[]} */ 		const newUtxos = [];
+		/** @type {TxAnchor[]} */ 	const consumedUtxoAnchors = [];
         for (let i = 0; i < Txs.length; i++) {
             const transaction = Txs[i];
 			const txReference = `${blockIndex}:${i}`;
@@ -96,12 +92,11 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
         // UTXO SPENT OR UNEXISTANT
         for (const anchor in missingAnchors) {
-            const [height, txId, outputIndex] = anchor.split(':');
-            const txRef = `${height}:${txId}`;
+			const { height, txIndex, vout } = serializer.parseAnchor(anchor);
+            const txRef = `${height}:${txIndex}`;
             const relatedTx = this.blockchain.getTransactionByReference(txRef);
-            const output = relatedTx?.tx.outputs[parseInt(outputIndex, 10)];
+            const output = relatedTx?.tx.outputs[vout];
 			if (!relatedTx || !output) continue;
-
             utxosObj[anchor] = new UTXO(anchor, output.amount, output.rule, output.address, true); // spent
         }
 
@@ -115,32 +110,25 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             return new UTXO(anchor, amount, rule, address); // unspent
         }
 
-        const height = anchor.split(':')[0];
-        const txID = anchor.split(':')[1];
-        const reference = `${height}:${txID}`;
+		const { height, txIndex, vout } = serializer.parseAnchor(anchor);
+        const reference = `${height}:${txIndex}`;
         const relatedTx = this.blockchain.getTransactionByReference(reference);
-        if (!relatedTx) { return undefined; } // doesn't exist
+        if (!relatedTx) return; // doesn't exist
 
-        const outputIndex = Number(anchor.split(':')[2]);
-        const output = relatedTx.tx.outputs[outputIndex];
-        if (!output) { return undefined; } // doesn't exist
-
-        /** @type {UTXO} */
-        return new UTXO(anchor, output.amount, output.rule, output.address, true); // spent
+        const output = relatedTx.tx.outputs[vout];
+        if (output) return new UTXO(anchor, output.amount, output.rule, output.address, true); // spent
     }
     /** @param {Transaction} transaction */
     extractInvolvedUTXOsOfTx(transaction) { // BETTER RE USABILITY
-        if (transaction instanceof Array) { throw new Error('Transaction is an array: should be a single transaction'); }
+        if (transaction instanceof Array) throw new Error('Transaction is an array: should be a single transaction');
 
         const involvedAnchors = [];
-        for (const input of transaction.inputs) { involvedAnchors.push(input); }
-
-        const involvedUTXOs = this.getUTXOs(involvedAnchors);
-        return involvedUTXOs;
+        for (const input of transaction.inputs) involvedAnchors.push(input);
+        return this.getUTXOs(involvedAnchors);
     }
     /** @param {Transaction[]} transactions */
     extractInvolvedUTXOsOfTxs(transactions) { // BETTER RE USABILITY
-        if (!Array.isArray(transactions)) { throw new Error('Transactions is not an array'); }
+        if (!Array.isArray(transactions)) throw new Error('Transactions is not an array');
 
         try {
             let repeatedAnchorsCount = 0;
@@ -159,9 +147,8 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
                 }
             }
             
-            if (repeatedAnchorsCount > 0) { console.warn(`Repeated anchors: ${repeatedAnchorsCount}`); }
-            const involvedUTXOs = this.getUTXOs(involvedAnchors);
-            return involvedUTXOs;  
+            if (repeatedAnchorsCount > 0) console.warn(`Repeated anchors: ${repeatedAnchorsCount}`);
+            return this.getUTXOs(involvedAnchors);
         } catch (error) { return false; }
     }
     /** Re build the addressesAnchors from the unspentMiniUtxos after loading or snapshot loading */
@@ -198,12 +185,10 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
             for (let i = 0; i < this.biggestsHoldersToConserve; i++) {
                 if (balance <= this.biggestsHoldersBalances[i].balance) continue;
-                // insert
                 const partA = this.biggestsHoldersBalances.slice(0, i);
                 const partB = this.biggestsHoldersBalances.slice(i);
                 this.biggestsHoldersBalances = [...partA, { address, balance }, ...partB];
                 this.biggestsHoldersBalances.pop();
-
                 break;
             }
         }
@@ -214,8 +199,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const anchors = serializer.deserialize.anchorsObjFromArray(serializedAnchors);
         return anchors;
     }
-    /** Sort the new UTXOs and Stakes Outputs from a transaction
-     * @param {TxReference} txReference @param {Transaction} transaction */
+    /** Sort the new UTXOs and Stakes Outputs from a transaction @param {TxReference} txReference @param {Transaction} transaction */
     #digestTransactionOutputs(txReference, transaction) {
         const newUtxosFromTx = [];
         const newStakesOutputsFromTx = [];
@@ -244,7 +228,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             newAnchorsByAddress[utxo.address].push(utxo.anchor);
         }
         
-        for (const address of Object.keys(newAnchorsByAddress)) {
+		for (const address in newAnchorsByAddress) {
             const addressAnchors = this.#getAddressAnchorsObj(address);
             for (const anchor of newAnchorsByAddress[address]) {
                 if (addressAnchors[anchor]) throw new Error('Anchor already exists');
@@ -271,7 +255,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             consumedUtxosByAddress[utxo.address].push(utxo.anchor);
         }
 
-        for (const address of Object.keys(consumedUtxosByAddress)) {
+		for (const address in consumedUtxosByAddress) {
             const addressAnchors = this.#getAddressAnchorsObj(address);
             for (const anchor of consumedUtxosByAddress[address]) {
                 if (!addressAnchors[anchor]) { throw new Error('Anchor not found'); }
@@ -280,7 +264,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
             if (Object.keys(addressAnchors).length === 0) { delete this.addressesAnchors[address]; continue; }
             this.addressesAnchors[address] = serializer.serialize.anchorsObjToArray(addressAnchors);
-            if (this.wsCallbacks.onBalanceUpdated) { this.wsCallbacks.onBalanceUpdated.execute('balance_updated', address); }
+            if (this.wsCallbacks.onBalanceUpdated) this.wsCallbacks.onBalanceUpdated.execute('balance_updated', address);
         }
     }
 }

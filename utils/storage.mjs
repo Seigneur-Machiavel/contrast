@@ -1,11 +1,11 @@
 // A primitive way to store the blockchain data and wallet data etc...
 // As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
-
-import { HashFunctions } from '../node/src/conCrypto.mjs';
-import { BlockUtils } from "../node/src/block.mjs";
-import { serializer } from './serializer.mjs';
-import { MiniLogger } from '../miniLogger/mini-logger.mjs';
+import HiveP2P from "hive-p2p";
 import { Breather } from './breather.mjs';
+import { serializer } from './serializer.mjs';
+import { BlockUtils } from "../node/src/block.mjs";
+import { HashFunctions } from '../node/src/conCrypto.mjs';
+import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /**
  * @typedef {import("../types/block.mjs").BlockData} BlockData
@@ -289,8 +289,9 @@ export class CheckpointsStorage {
             return true;
         } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false }
     }
-    static reset() {
-        if (fs.existsSync(PATH.CHECKPOINTS)) fs.rmSync(PATH.CHECKPOINTS, { recursive: true });
+	/** @param {string} checkpointsPath */
+    static reset(checkpointsPath) {
+        if (fs.existsSync(checkpointsPath)) fs.rmSync(checkpointsPath, { recursive: true });
     }
 }
 
@@ -504,7 +505,7 @@ export class AddressesTxsRefsStorage {
         }
 
         this.snapHeight = Math.min(this.snapHeight, height);
-        storageMiniLogger.log(`Pruned all transactions references upper than ${height}`, (m, c) => console.info(m, c));
+        storageMiniLogger.log(`Pruned all transactions references upper than #${height}`, (m, c) => console.info(m, c));
     }
     reset(reason = 'na') {
         if (fs.existsSync(this.txsRefsPath)) fs.rmSync(this.txsRefsPath, { recursive: true });
@@ -519,8 +520,7 @@ export class AddressesTxsRefsStorage {
 }
 
 export class BlockchainStorage {
-	/** @type {Converter | undefined} */
-	converter;
+	converter = new HiveP2P.Converter();
 	storage;
 	batchFolders;
     lastBlockIndex = -1;
@@ -535,16 +535,16 @@ export class BlockchainStorage {
 		this.batchFolders = BlockchainStorage.getListOfFoldersInBlocksDirectory(this.storage.PATH.BLOCKS);
 		this.#init();
 	}
-	
+	/** @param {string} blocksPath */
     static getListOfFoldersInBlocksDirectory(blocksPath) {
         const blocksFolders = fs.readdirSync(blocksPath).filter(fileName => fs.lstatSync(path.join(blocksPath, fileName)).isDirectory());
         // named as 0-999, 1000-1999, 2000-2999, etc... => sorting by the first number
         const blocksFoldersSorted = blocksFolders.sort((a, b) => parseInt(a.split('-')[0], 10) - parseInt(b.split('-')[0], 10));
         return blocksFoldersSorted;
     }
-    async #init() {
-		try { this.converter = await import('hive-p2p').then(module => new module.Converter()); }
-		catch (error) { if (window && window.hiveP2P && window.hiveP2P.Converter) this.converter = new window.hiveP2P.Converter(); }
+    #init() {
+		if (!this.converter && window?.hiveP2P?.Converter) // front logic
+			this.converter = new window.hiveP2P.Converter();
 
         let currentIndex = -1;
         for (let i = 0; i < this.batchFolders.length; i++) {

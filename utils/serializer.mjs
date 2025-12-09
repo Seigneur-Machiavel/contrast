@@ -93,6 +93,7 @@ const lengths = {
  * - functions do not check the input data.
  * - Make sure to validate the data before using these functions. */
 export const serializer = {
+	converter,
 	lengths,
 	/** Routing of mode for transaction serialization
 	 * - In candidate blocks, the first tx is always the validator tx
@@ -104,13 +105,13 @@ export const serializer = {
 	},
 	/** @param {TxReference} txRef ex: blockHeight:txIndex */
 	parseTxReference(txRef) {
-		const [height, txIdx] = txRef.split(':').map(n => parseInt(n, 10));
-		return { height, txIdx };
+		const [height, txIndex] = txRef.split(':').map(n => parseInt(n, 10));
+		return { height, txIndex };
 	},
 	/** @param {TxAnchor} anchor ex: blockHeight:txIndex:vout */
 	parseAnchor(anchor) {
-		const [height, txIdx, vout] = anchor.split(':').map(n => parseInt(n, 10));
-		return { height, txIdx, vout };
+		const [height, txIndex, vout] = anchor.split(':').map(n => parseInt(n, 10));
+		return { height, txIndex, vout };
 	},
 
     serialize: {
@@ -123,9 +124,9 @@ export const serializer = {
         /** @param {TxAnchor} anchor ex: blockHeight:txIndex:vout */
         anchor(anchor) {
 			const w = new BinaryWriter(lengths.anchor);
-			const { height, txIdx, vout } = serializer.parseAnchor(anchor);
+			const { height, txIndex, vout } = serializer.parseAnchor(anchor);
 			w.writeBytes(converter.numberTo4Bytes(height));
-			w.writeBytes(converter.numberTo2Bytes(txIdx));
+			w.writeBytes(converter.numberTo2Bytes(txIndex));
 			w.writeBytes(converter.numberTo2Bytes(vout));
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Anchor serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
@@ -134,9 +135,9 @@ export const serializer = {
         anchorsArray(anchors) {
 			const w = new BinaryWriter(lengths.anchor * anchors.length);
             for (let j = 0; j < anchors.length; j++) { // -> anchor ex: "3:2:0"
-				const { height, txIdx, vout } = serializer.parseAnchor(anchors[j]);
+				const { height, txIndex, vout } = serializer.parseAnchor(anchors[j]);
 				w.writeBytes(converter.numberTo4Bytes(height));
-				w.writeBytes(converter.numberTo2Bytes(txIdx));
+				w.writeBytes(converter.numberTo2Bytes(txIndex));
 				w.writeBytes(converter.numberTo2Bytes(vout))
             };
 			if (w.isWritingComplete) return w.getBytes();
@@ -178,9 +179,9 @@ export const serializer = {
 
 			const w = new BinaryWriter(totalBytes);
 			for (const anchor in utxos) {
-				const { height, txIdx, vout } = serializer.parseAnchor(anchor);
+				const { height, txIndex, vout } = serializer.parseAnchor(anchor);
 				w.writeBytes(converter.numberTo4Bytes(height));
-				w.writeBytes(converter.numberTo2Bytes(txIdx));
+				w.writeBytes(converter.numberTo2Bytes(txIndex));
 				w.writeBytes(converter.numberTo2Bytes(vout));
 				w.writeBytes(utxos[anchor]);
 			}
@@ -191,9 +192,9 @@ export const serializer = {
         txsReferencesArray(txsRef) {
 			const w = new BinaryWriter(txsRef.length * lengths.txReference);
             for (let j = 0; j < txsRef.length; j++) {
-				const { height, txIdx } = serializer.parseTxReference(txsRef[j]);
+				const { height, txIndex } = serializer.parseTxReference(txsRef[j]);
 				w.writeBytes(converter.numberTo4Bytes(height));
-				w.writeBytes(converter.numberTo2Bytes(txIdx))
+				w.writeBytes(converter.numberTo2Bytes(txIndex))
             };
             if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Txs references array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);

@@ -1,6 +1,6 @@
 import HiveP2P from "hive-p2p";
-import { Miner } from './miner.mjs';
 import { Vss } from './vss.mjs';
+import { Miner } from './miner.mjs';
 import { MemPool } from './mempool.mjs';
 import { BlockUtils } from './block.mjs';
 import { UtxoCache } from './utxo-cache.mjs';
@@ -11,7 +11,6 @@ import { MESSAGE } from '../../types/messages.mjs';
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
-//import { CheckpointSystem } from './snapshot.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 /**
@@ -92,11 +91,21 @@ export class ContrastNode {
 		this.wsCallbacks.onStateUpdate?.execute(newState);
     }
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
-	async start(wallet) {
+	async start(wallet, startFromScratch = false) {
 		this.logger.log(`Starting Contrast node...`, (m, c) => console.log(m, c)); // control the clock
 		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
-		// TODO: PRUNE CHECKPOINTS AND LOAD SNAPSHOT
+		// PRUNE CHECKPOINTS AND LOAD SNAPSHOT
+		const activeCheckpoint = this.blockchain.checkpointSystem.checkForActiveCheckpoint();
+        let persistedHeight;
+        if (!activeCheckpoint && !startFromScratch) {
+            this.blockchain.checkpointSystem.pruneCheckpointsLowerThanHeight(); //? will preserve 3 highest checkpoints
+            this.mainStorage.dumpTrashFolder();
+            this.updateState("Loading blockchain");
+
+            const startHeight = await this.blockchain.load();
+            persistedHeight = await this.blockchain.loadSnapshot(this, startHeight);
+        }
 
 		if (!this.p2pNode.started) { // START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
@@ -167,7 +176,7 @@ export class ContrastNode {
 
 		// TODO: SAVE SNAPSHOT & CHECKPOINT
         await this.blockchain.saveSnapshot(this, finalizedBlock);
-        //await this.#saveCheckpoint(finalizedBlock);
+        await this.blockchain.saveCheckpoint(this, finalizedBlock);
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate || isSync) return;

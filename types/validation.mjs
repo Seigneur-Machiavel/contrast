@@ -39,10 +39,10 @@ export class IS_VALID {
 		if (isNaN(height) || typeof height !== 'number') return false;
 		if (height < 0 || height % 1 !== 0) return false;
 
-		// TxID
-		if (typeof splitted[1] !== 'string') return false;
-		if (splitted[1].length !== 8) return false;
-		if (this.HEX(splitted[1]) === false) return false;
+		// txIndex
+		const txIndex = parseInt(splitted[1], 10);
+		if (isNaN(txIndex) || typeof txIndex !== 'number') return false;
+		if (txIndex < 0 || txIndex % 1 !== 0) return false;
 
 		// vout
 		const vout = parseInt(splitted[2], 10);
@@ -64,9 +64,9 @@ export class IS_VALID {
 		if (height < 0 || height % 1 !== 0) return false;
 
 		// TxID
-		if (typeof splitted[1] !== 'string') return false;
-		if (splitted[1].length !== 8) return false;
-		if (this.HEX(splitted[1]) === false) return false;
+		const txIndex = parseInt(splitted[1], 10);
+		if (isNaN(txIndex) || typeof txIndex !== 'number') return false;
+		if (txIndex < 0 || txIndex % 1 !== 0) return false;
 
 		return true;
 	}

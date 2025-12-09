@@ -3,11 +3,13 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block.mjs';
 import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.mjs';
 import { SnapshotSystem } from './snapshot.mjs';
+import { CheckpointSystem } from './checkpoint.mjs';
 
 /**
 * @typedef {import("./vss.mjs").Vss} Vss
 * @typedef {import("./mempool.mjs").MemPool} MemPool
 * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
+* @typedef {import("./node.mjs").ContrastNode} ContrastNode
 * @typedef {import("../../types/block.mjs").BlockData} BlockData
 * @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData */
 
@@ -17,6 +19,7 @@ export class Blockchain {
     cache = new BlocksCache(this.miniLogger);
 	blockStorage;
 	snapshotSystem;
+	checkpointSystem;
 	addressesTxsRefsStorage;
 
 	/** @type {BlockData | null} */		lastBlock = null;
@@ -27,23 +30,23 @@ export class Blockchain {
 		if (!storage) return;
 		this.blockStorage = new BlockchainStorage(storage);
 		this.snapshotSystem = new SnapshotSystem(storage);
+		this.checkpointSystem = new CheckpointSystem(storage, this.blockStorage, this.snapshotSystem.miniLogger);
 		this.addressesTxsRefsStorage = new AddressesTxsRefsStorage(storage);
 		this.currentHeight = this.blockStorage.lastBlockIndex;
 	}
 
-    /** @param {SnapshotSystem} snapshotSystem */
-    async load(snapshotSystem) {
+    async load() {
         // Ensure consistency between the blockchain and the snapshot system
-        snapshotSystem.moveSnapshotsHigherThanHeightToTrash(this.currentHeight);
+        this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(this.currentHeight);
 
-        const snapshotsHeights = snapshotSystem.mySnapshotsHeights();
+        const snapshotsHeights = this.snapshotSystem.mySnapshotsHeights();
         const olderSnapshotHeight = snapshotsHeights[0] ? snapshotsHeights[0] : 0;
         const youngerSnapshotHeight = snapshotsHeights[snapshotsHeights.length - 1];
         const startHeight = isNaN(youngerSnapshotHeight) ? -1 : youngerSnapshotHeight;
 
         // Cache the blocks from the last snapshot +1 to the last block
         // cacheStart : 0, 11, 21, etc... (depending on the modulo)
-        const snapModulo = snapshotSystem.snapshotHeightModulo;
+        const snapModulo = this.snapshotSystem.snapshotHeightModulo;
         const cacheStart = olderSnapshotHeight > snapModulo ? olderSnapshotHeight - (snapModulo-1) : 0;
         this.#loadBlocksFromStorageToCache(cacheStart, startHeight);
         this.currentHeight = startHeight;
@@ -291,7 +294,7 @@ export class Blockchain {
 
         return null;
     }
-	/** @param {import('./node.mjs').ContrastNode} node */
+	/** @param {ContrastNode} node */
 	async loadSnapshot(node, snapshotIndex = 0, eraseHigher = true) {
         const snapHeights = this.snapshotSystem.mySnapshotsHeights();
         const olderSnapHeight = snapHeights[0];
@@ -314,7 +317,7 @@ export class Blockchain {
         if (eraseHigher) this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
         return persistedHeight;
     }
-	/** @param {import('./node.mjs').ContrastNode} node @param {BlockData} finalizedBlock */
+	/** @param {ContrastNode} node @param {BlockData} finalizedBlock */
     async saveSnapshot(node, finalizedBlock) {
         if (finalizedBlock.index === 0) return;
         if (finalizedBlock.index % this.snapshotSystem.snapshotHeightModulo !== 0) return;
@@ -336,6 +339,26 @@ export class Blockchain {
             this.snapshotSystem.loadedSnapshotHeight = 0;
 
         this.snapshotSystem.restoreLoadedSnapshot();
+    }
+	/** @param {ContrastNode} node @param {BlockData} finalizedBlock */
+    async saveCheckpoint(node, finalizedBlock, pruning = true) {
+        if (finalizedBlock.index < 100) return;
+
+        const startTime = performance.now();
+        const snapshotGap = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve; // 5 * 10 = 50
+        // trigger example: #1050 - (5 * 10) % 100 === 0;
+        const trigger = (finalizedBlock.index - snapshotGap) % this.checkpointSystem.checkpointHeightModulo === 0;
+        if (!trigger) return;
+
+        // oldest example: #1050 - (5 * 10) = 1000
+        //const oldestSnapHeight = finalizedBlock.index - snapshotGap;
+        const checkpointHeight = finalizedBlock.index - this.checkpointSystem.checkpointHeightModulo;
+        node.updateState(`creating checkpoint #${checkpointHeight}`);
+        const result = await this.checkpointSystem.newCheckpoint(checkpointHeight, this.snapshotSystem.snapshotHeightModulo);
+        const logText = result ? 'SAVED Checkpoint:' : 'FAILED to SAVE checkpoint:';
+        this.miniLogger.log(`${logText} ${checkpointHeight} in ${(performance.now() - startTime).toFixed(2)}ms`, (m, c) => console.info(m, c));
+    
+        if (pruning) this.checkpointSystem.pruneCheckpointsLowerThanHeight();
     }
     reset() {
         this.blockStorage.reset();
