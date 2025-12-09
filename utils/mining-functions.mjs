@@ -1,6 +1,8 @@
 import { IS_VALID } from '../types/validation.mjs';
 import { conditionnals } from './conditionnals.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from './blockchain-settings.mjs';
+import { MiniLogger } from '../miniLogger/mini-logger.mjs';
+const logger = new MiniLogger('mining-functions');
 
 /**
 * @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash
@@ -13,19 +15,19 @@ export const mining = {
         const blockIndex = lastBlock.index;
         const difficulty = lastBlock.difficulty;
 
-        if (typeof difficulty !== 'number') { console.error('Invalid difficulty'); return 1; }
-        if (difficulty < 1) { console.error('Invalid difficulty < 1'); return 1; }
+		if (typeof difficulty !== 'number') { logger.error('Invalid difficulty', (m, c) => console.error(m, c)); return 1; }
+		if (difficulty < 1) { logger.error('Invalid difficulty < 1', (m, c) => console.error(m, c)); return 1; }
 
-        if (typeof blockIndex !== 'number') { console.error('Invalid blockIndex'); return difficulty; }
-        if (blockIndex === 0) return difficulty;
+        if (typeof blockIndex !== 'number') { logger.error('Invalid blockIndex', (m, c) => console.error(m, c)); return difficulty; }
+		if (blockIndex === 0) return difficulty;
         if (blockIndex % MINING_PARAMS.blocksBeforeAdjustment !== 0) return difficulty;
 
         const deviation = 1 - (averageBlockTimeMS / targetBlockTime);
         const deviationPercentage = deviation * 100; // over zero = too fast / under zero = too slow
 
         if (logs) {
-            console.log(`BlockIndex: ${blockIndex} | Average block time: ${Math.round(averageBlockTimeMS)}ms (target: ${targetBlockTime}ms)`);
-            console.log(`Deviation: ${deviation.toFixed(4)} | Deviation percentage: ${deviationPercentage.toFixed(2)}%`);
+            logger.log(`BlockIndex: ${blockIndex} | Average block time: ${Math.round(averageBlockTimeMS)}ms (target: ${targetBlockTime}ms)`, (m, c) => console.info(m, c));
+            logger.log(`Deviation: ${deviation.toFixed(4)} | Deviation percentage: ${deviationPercentage.toFixed(2)}%`, (m, c) => console.info(m, c));
         }
 
         const diffAdjustment = Math.floor(Math.abs(deviationPercentage) / MINING_PARAMS.thresholdPerDiffIncrement);
@@ -35,7 +37,7 @@ export const mining = {
 
         if (logs) {
             const state = diffIncrement === 0 ? 'maintained' : diffIncrement > 0 ? 'increased' : 'decreased';
-            console.log(`Difficulty ${state} ${state !== 'maintained' ? "by: " + diffIncrement + " => " : ""}${state === 'maintained' ? 'at' : 'to'}: ${newDifficulty}`);
+            logger.log(`Difficulty ${state} ${state !== 'maintained' ? "by: " + diffIncrement + " => " : ""}${state === 'maintained' ? 'at' : 'to'}: ${newDifficulty}`, (m, c) => console.info(m, c));
         }
 
         return newDifficulty;
@@ -74,7 +76,7 @@ export const mining = {
     betPowTime: (min = .7, max = .9, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
         const random = Math.random() * (max - min) + min; // random number between min and max
         const betTime = Math.round(targetBlockTime * random); // multiply by targetBlockTime to get the bet time in ms
-        //console.log(`Bet time: ${betTime}ms`);
+        //logger.log(`Bet time: ${betTime}ms`, (m, c) => console.info(m, c));
         return betTime;
     },
     /** This function uses an Argon2 hash function to perform a hashing operation.

@@ -29,8 +29,8 @@ export function readSnapshotsHeightsOfDir(dirPath = '') {
 		if (!files.includes('vss.bin')) missingFiles.push('vss.bin');
 		if (missingFiles.length === 0) snapshotsHeights.push(Number(snapshotDir));
 		else {
-			snapshotLogger.error(`Erasing malformed snapshot #${snapshotDir} | missing files: ${missingFiles.join(', ')}`, (m, c) => console.error(m, c));
-			fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) snapshotLogger.error(err.stack, (m, c) => console.error(m, c)); });
+			snapshotLogger.log(`Erasing malformed snapshot #${snapshotDir} | missing files: ${missingFiles.join(', ')}`, (m, c) => console.error(m, c));
+			fs.rmSync(snapshotPath, { recursive: true, force: true }, (err) => { if (err) snapshotLogger.log(err.stack, (m, c) => console.error(m, c)); });
 		}
 	}
 
@@ -100,7 +100,7 @@ export class SnapshotSystem {
 		const [targetPath, trashTargetPath] = [path.join(this.storage.PATH.SNAPSHOTS, `${height}`), path.join(this.storage.PATH.TRASH, `${height}`)];
 		if (fs.existsSync(trashTargetPath)) fs.rmSync(trashTargetPath, { recursive: true, force: true });
 		fs.renameSync(targetPath, trashTargetPath);
-		snapshotLogger.info(`Snapshot #${height} moved to trash`, (m, c) => console.info(m, c));
+		snapshotLogger.log(`Snapshot #${height} moved to trash`, (m, c) => console.info(m, c));
 	}
 	/** Move all snapshots with a height higher than the given one to trash @param {number} height */
 	moveSnapshotsHigherThanHeightToTrash(height) {
@@ -120,10 +120,10 @@ export class SnapshotSystem {
 		if (!fs.existsSync(trashTargetPath)) return false; // trash snapshot not found
 		if (fs.existsSync(targetPath)) {
 			if (!overwrite) return false;
-			fs.rmSync(targetPath, { recursive: true, force: true }, (err) => { if (err) { snapshotLogger.error(err, (m, c) => console.error(m, c)); } });
+			fs.rmSync(targetPath, { recursive: true, force: true }, (err) => { if (err) { snapshotLogger.log(err, (m, c) => console.error(m, c)); } });
 		}
 
 		fs.renameSync(trashTargetPath, targetPath);
-		snapshotLogger.info(`Snapshot #${this.loadedSnapshotHeight} restored from trash`, (m, c) => console.info(m, c));
+		snapshotLogger.log(`Snapshot #${this.loadedSnapshotHeight} restored from trash`, (m, c) => console.info(m, c));
 	}
 }

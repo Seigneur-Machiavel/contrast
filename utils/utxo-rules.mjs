@@ -1,3 +1,4 @@
+/** @type {Record<string, UTXORule>} */
 export const UTXO_RULES_GLOSSARY = {
     sig: { code: 0, description: 'Simple signature verification' },
     sigOrSlash: { code: 1, description: "Open right to slash the UTXO if validator's fraud proof is provided", withdrawLockBlocks: 144 },
@@ -7,6 +8,8 @@ export const UTXO_RULES_GLOSSARY = {
     lightHousePause: { code: 6, description: 'LightHouse pause' },
     lightHouseResume: { code: 7, description: 'LightHouse resume' },
 };
+
+/** @type {Record<number, string>} */
 export const UTXO_RULESNAME_FROM_CODE = {
     0: 'sig',
     1: 'sigOrSlash',

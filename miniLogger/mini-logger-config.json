@@ -4,6 +4,8 @@
     "activeCategories": {
         "global": true,
         "main": true,
+		"miner": true,
+		"mining-functions": true,
         "shortcuts": true,
         "chat": true,
         "P2PNetwork": true,
@@ -19,7 +21,9 @@
     },
 	"colors": {
 		"blockchain": "color: cyan",
-		"node": "color: cyan; font-weight: bold",
+		"miner": "color: darkseagreen",
+		"mining-functions": "color: darkseagreen",
+		"node": "color: deepskyblue; font-weight: bold",
 		"SnapshotSystem": "color: white",
 		"storage": "color: white",
 		"validation": "color: green",

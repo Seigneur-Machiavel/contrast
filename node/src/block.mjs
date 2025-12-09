@@ -14,15 +14,17 @@ import { serializer } from '../../utils/serializer.mjs';
 
 export class BlockUtils {
     /** @param {BlockData} blockData @param {boolean} excludeCoinbaseAndPos */
-    static async getBlockTxsHash(blockData, excludeCoinbaseAndPos = false) {
-        const txsIDStrArray = blockData.Txs.map(tx => tx.id).filter(id => id);
+    static async #getBlockTxsHash(blockData, excludeCoinbaseAndPos = false) {
+		const txsSignables = [];
+		for (const tx of blockData.Txs)
+			txsSignables.push(Transaction_Builder.getTransactionSignableString(tx));
 
         let firstTxIsCoinbase = blockData.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(blockData.Txs[0]) : false;
-        if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsIDStrArray.shift();
+        if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
         firstTxIsCoinbase = blockData.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(blockData.Txs[0]) : false;
-        if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsIDStrArray.shift();
+        if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
 
-        const txsIDStr = txsIDStrArray.join('');
+        const txsIDStr = txsSignables.join('');
         return await HashFunctions.SHA256(txsIDStr);
     };
     /** Get the block signature used for mining
@@ -30,9 +32,8 @@ export class BlockUtils {
      * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp
      * @returns {Promise<string>} signature Hex */
     static async getBlockSignature(blockData, isPosHash = false) {
-        const txsHash = await this.getBlockTxsHash(blockData, isPosHash);
+        const txsHash = await this.#getBlockTxsHash(blockData, isPosHash);
         const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = blockData;
-        
         let signatureStr = `${index}${supply}${coinBase}${difficulty}${legitimacy}${prevHash}${posTimestamp}${txsHash}`;
         if (!isPosHash) signatureStr += blockData.timestamp;
 
@@ -170,7 +171,8 @@ export class BlockUtils {
     static getFinalizedBlockTransactionsReferencesSortedByAddress(blockData, blockPubKeysAddresses) {
         /** @type {Object<string, string[]>} */
         const txRefsRelatedToAddress = {};
-        for (const Tx of blockData.Txs) {
+		for (let i = 0; i < blockData.Txs.length; i++) {
+			const Tx = blockData.Txs[i];
             const addressesRelatedToTx = {};
             for (const witness of Tx.witnesses) {
                 const pubKey = witness.split(':')[1];
@@ -185,7 +187,7 @@ export class BlockUtils {
             
             for (const address of Object.keys(addressesRelatedToTx)) {
                 if (!txRefsRelatedToAddress[address]) txRefsRelatedToAddress[address] = [];
-                txRefsRelatedToAddress[address].push(`${blockData.index}:${Tx.id}`);
+                txRefsRelatedToAddress[address].push(`${blockData.index}:${i}`);
             }
         }
 

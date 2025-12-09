@@ -701,7 +701,8 @@ export class BlockchainStorage {
 		const specialMode = { 0: 'miner', 1: 'validator' }; // finalized block only
 		return serializer.deserialize.transaction(txBuffer, specialMode[index]);
     }
-    retreiveTx(txRef = '41:50', includeTimestamp) {
+	/** @param {import('../types/transaction.mjs').TxReference} txRef */
+    retreiveTx(txRef = '41:50', includeTimestamp = false) {
 		const s = txRef.split(':');
         const blockIndex = parseInt(s[0], 10);
 		const txIndex = parseInt(s[1], 10);

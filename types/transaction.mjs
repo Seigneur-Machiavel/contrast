@@ -1,25 +1,24 @@
-/** @type {string} - The path to the UTXO, ex: blockHeight:txIndex:vout */
-export const TxInput = String;
-
-/** @type {string} - The path to the transaction, ex: blockHeight:txIndex */
-export const TxReference = String;
+/**
+ * @typedef {string} TxAnchor - The path to the UTXO, ex: blockHeight:txIndex:vout
+ * @typedef {string} TxReference - The path to the transaction, ex: blockHeight:txIndex
+ */
 
 export class TxOutput {
 	/** @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - output only */
 	constructor(amount, rule, address) {
+		this.address = address;
 		this.amount = amount;
 		this.rule = rule;
-		this.address = address;
 	}
 }
 
 export class UTXO {
-	/** @param {string} anchor - the path to the UTXO blockHeight:txIndex:vout @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - the address of the recipient @param {boolean} [spent] - if the UTXO has been spent, default: false */
+	/** @param {TxAnchor} anchor - the path to the UTXO blockHeight:txIndex:vout @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - the address of the recipient @param {boolean} [spent] - if the UTXO has been spent, default: false */
 	constructor(anchor, amount, rule, address, spent = false) {
-		this.anchor = anchor;
-		this.amount = amount;
-		this.rule =  rule;
 		this.address = address;
+		this.amount = amount;
+		this.anchor = anchor;
+		this.rule =  rule;
 		this.spent = spent;
 	}
 
@@ -68,7 +67,7 @@ export class UTXO {
 }
 
 export class Transaction {
-	/** @param {TxInput[]} inputs @param {TxOutput[]} outputs @param {string[]} [witnesses] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {number} [version] @param {Uint8Array | undefined} [data] Arbitrary data attached to the transaction */
+	/** @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {string[]} [witnesses] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {number} [version] @param {Uint8Array | undefined} [data] Arbitrary data attached to the transaction */
 	constructor(inputs, outputs, witnesses = [], feePerByte, byteWeight, version = TRANSACTION.VERSION, data) {
 		this.inputs = inputs;
 		this.outputs = outputs;
@@ -87,7 +86,7 @@ export class Transaction {
 }
 
 export class TransactionWithDetails extends Transaction {
-	/** @param {TxInput[]} inputs @param {TxOutput[]} outputs @param {number} balanceChange @param {number} inAmount @param {number} outAmount @param {number} fee @param {string} txReference @param {string[]} [witnesses] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {number} [version] */
+	/** @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {number} balanceChange @param {number} inAmount @param {number} outAmount @param {number} fee @param {string} txReference @param {string[]} [witnesses] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {number} [version] */
 	constructor(inputs, outputs, balanceChange, inAmount, outAmount, fee, txReference, witnesses = [], feePerByte, byteWeight, version = TRANSACTION.VERSION) {
 		super(inputs, outputs, witnesses, feePerByte, byteWeight, version);
 		this.balanceChange = balanceChange;

@@ -30,6 +30,12 @@ const MiniLoggerConfig = () => {
 		colors: { }
 	};
 }
+async function loadedImports() {
+	for (let i = 0; i < 10; i++) {
+		if (fs && path && basePath) return true;
+		await new Promise(resolve => setTimeout(resolve, 100));
+	}
+}
 
 /** @returns {MiniLoggerConfig} */
 export function loadDefaultConfig() {
@@ -89,6 +95,7 @@ export class MiniLogger {
     }
     async #init() {
         if (!isNode) return;
+		if (!(await loadedImports())) return;
 
         this.filePath = path.join(basePath, 'history', `${this.category}-history.json`);
         this.history = this.#loadAndConcatHistory();
@@ -102,10 +109,10 @@ export class MiniLogger {
 
         // nodejs onclose -> save history
         //! Possible EventEmitter memory leak detected. 11 exit listeners ...
-        process.on('exit', () => {
+        /*process.on('exit', () => {
             this.exiting = true;
             fs.writeFileSync(this.filePath, JSON.stringify(this.history));
-        });
+        });*/
     }
     #loadAndConcatHistory() {
         if (!fs.existsSync(path.join(basePath, 'history'))) { fs.mkdirSync(path.join(basePath, 'history')); };

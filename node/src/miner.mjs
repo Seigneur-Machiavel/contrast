@@ -3,6 +3,7 @@ import { BLOCK_FINALIZED_MSG } from '../../types/messages.mjs';
 import { MinerWorker } from '../workers/workers-classes.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
@@ -13,10 +14,11 @@ import { CURRENCY } from '../../utils/currency.mjs';
 export class Miner {
 	node;
 	address;
-	terminated = false;
 	version = 1;
 	nbOfWorkers = 1;
+	terminated = false;
 	useBetTimestamp = true;
+	logger = new MiniLogger('miner');
 	addressOfCandidatesBroadcasted = [];
 	
 	/** @type {Object<string, WebSocketCallBack>} */	wsCallbacks = {};
@@ -49,12 +51,12 @@ export class Miner {
         const posReward = blockCandidate.Txs[0].outputs[0].amount;
         const powReward = blockCandidate.powReward;
         if (!posReward || !powReward) {
-			if (this.node.verb > 2) console.info(`[MINER] Invalid block candidate (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`);
+			if (this.node.verb > 2) this.logger.log(`Invalid block candidate (#${blockCandidate.index} | v:${posAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`, (m, c) => console.info(m, c));
 			return;
 		}
         
 		if (Math.abs(posReward - powReward) > 1) {
-			if (this.node.verb > 2) console.info(`[MINER] Invalid block candidate (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`);
+			if (this.node.verb > 2) this.logger.log(`[MINER] Invalid block candidate (#${blockCandidate.index} | v:${posAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`, (m, c) => console.info(m, c));
 			return;
 		}
 
@@ -84,9 +86,9 @@ export class Miner {
         // preserve the current best candidate, but update considered as true to encourage re-bradcasting
         if (reasonChange === 'none') return true;
 
-        if (this.node.verb > 2) console.info(`[MINER] Best block candidate changed${reasonChange}:
+        if (this.node.verb > 2) this.logger.log(`[MINER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
-to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (my block)' : ''}`);
+to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (my block)' : ''}`, (m, c) => console.info(m, c));
         
         // if block is different than the highest block index, then reset the addressOfCandidatesBroadcasted
         if (blockCandidate.index !== this.bestCandidateIndex()) this.addressOfCandidatesBroadcasted = [];
@@ -114,14 +116,14 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
     async broadcastFinalizedBlock(finalizedBlock) {
         // Avoid sending the block pow if a higher block candidate is available to be mined
         if (this.bestCandidateIndex() > finalizedBlock.index) {
-            if (this.node.verb > 2) console.info(`[MINER] Block finalized is not the highest block candidate: #${finalizedBlock.index} < #${this.bestCandidateIndex()}`);
+            if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized is not the highest block candidate: #${finalizedBlock.index} < #${this.bestCandidateIndex()}`, (m, c) => console.info(m, c));
             return;
         }
         
         const validatorAddress = finalizedBlock.Txs[1].inputs[0].split(':')[0];
 		const minerAddress = finalizedBlock.Txs[0].outputs[0].address;
         if (this.addressOfCandidatesBroadcasted.includes(validatorAddress)) {
-        	if (this.node.verb > 2) console.info(`[MINER] Block finalized already sent (Height: ${finalizedBlock.index})`);
+        	if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized already sent (Height: ${finalizedBlock.index})`, (m, c) => console.info(m, c));
             return;
         }
 
@@ -129,7 +131,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         const isNewHeight = finalizedBlock.index > this.powBroadcastState.foundHeight;
         const maxTryReached = this.powBroadcastState.sentTryCount >= this.powBroadcastState.maxTryCount;
         if (maxTryReached && !isNewHeight) {
-			if (this.node.verb > 1) console.warn(`[MINER] Max try reached for block (Height: ${finalizedBlock.index})`);
+			if (this.node.verb > 1) this.logger.log(`[MINER] Max try reached for block (Height: ${finalizedBlock.index})`, (m, c) => console.warn(m, c));
 			return;
 		}
         
@@ -138,9 +140,9 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
         this.powBroadcastState.sentTryCount++;
 
         const [validatorId, minerId] = [validatorAddress.slice(0, 6), minerAddress.slice(0, 6)];
-        if (this.node.verb > 2) console.info(`[MINER] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
-(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`);
-        if (this.node.verb > 2) console.info(`[MINER] -POW- #${finalizedBlock.index} | V:${validatorId} | M:${minerId} | ${finalizedBlock.difficulty} | ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`);        
+        if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
+(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`, (m, c) => console.info(m, c));
+        if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${finalizedBlock.index} | V:${validatorId} | M:${minerId} | ${finalizedBlock.difficulty} | ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`, (m, c) => console.info(m, c));        
 
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
         this.node.p2pNode.broadcast(new BLOCK_FINALIZED_MSG(finalizedBlock));
@@ -185,8 +187,8 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
 			const blockCandidate = this.bestCandidate;
             if (!rewardAddress || !blockCandidate) continue;
             if (blockCandidate.index !== this.bestCandidateIndex()) {
-                if (this.node.verb > 2) console.info(`[MINER] Block candidate is not the highest block candidate`);
-                continue;
+                if (this.node.verb > 2) this.logger.log(`[MINER] Block candidate is not the highest block candidate: #${blockCandidate.index} < #${this.bestCandidateIndex()}`, (m, c) => console.info(m, c));
+				continue;
             }
 
             this.#togglePausedWorkers();
@@ -214,7 +216,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
                 if (worker.isWorking) continue;
                 if (worker.result !== null) {
                     const finalizedBlock = worker.getResultAndClear();
-                    if (this.node.verb > 2) console.info(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`);
+                    if (this.node.verb > 2) this.logger.log(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`, (m, c) => console.info(m, c));
                     await this.broadcastFinalizedBlock(finalizedBlock);
                 }
 
@@ -226,12 +228,12 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
             const timeSpent = endTimestamp - timings.start;
             if (timeSpent < 1000) continue;
 
-            if (this.node.verb > 1) console.info(`[MINER] Abnormal time spent: ${timeSpent}ms
+            if (this.node.verb > 1) this.logger.log(`[MINER] Abnormal time spent: ${timeSpent}ms
             - workersUpdate: ${timings.workersUpdate - timings.start}ms
-            - updateInfo: ${timings.updateInfo - timings.workersUpdate}ms`);
+            - updateInfo: ${timings.updateInfo - timings.workersUpdate}ms`, (m, c) => console.info(m, c));
         }
 
-        if (this.node.verb > 1) console.info(`[MINER] Stopped`);
+        if (this.node.verb > 1) this.logger.log(`[MINER] Stopped`, (m, c) => console.info(m, c));
     }
     async terminateAsync() {
         const promises = [];

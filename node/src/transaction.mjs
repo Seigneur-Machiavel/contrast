@@ -1,15 +1,14 @@
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import { IS_VALID } from '../../types/validation.mjs';
-import { conditionnals } from '../../utils/conditionnals.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 import { BlockUtils } from './block.mjs';
+import { IS_VALID } from '../../types/validation.mjs';
+import { serializer } from '../../utils/serializer.mjs';
+import { conditionnals } from '../../utils/conditionnals.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { Transaction, TxOutput, UTXO } from '../../types/transaction.mjs';
 
 /**
  * @typedef {import('./wallet.mjs').Account} Account
  * @typedef {import('../../types/block.mjs').BlockData} BlockData
  **/
-
 
 export class Transaction_Builder {
     /** @param {UTXO[]} utxos */
@@ -75,7 +74,7 @@ export class Transaction_Builder {
         if (changeOutput) { outputs.push(changeOutput); }
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
-		return TRANSACTION.Transaction.fromUTXOs(utxos, outputs);
+		return Transaction.fromUTXOs(utxos, outputs);
     }
     /** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount
@@ -100,7 +99,7 @@ export class Transaction_Builder {
         if (changeOutput) { outputs.push(changeOutput); }
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
-        return TRANSACTION.Transaction.fromUTXOs(utxos, outputs);
+        return Transaction.fromUTXOs(utxos, outputs);
 		
     }
     static #estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, feeSupplement) {
@@ -185,10 +184,9 @@ export class Transaction_Builder {
     }
     /** @param {Transaction} transaction */
     static isMinerOrValidatorTx(transaction) {
-        if (transaction.inputs.length !== 1) { return false; }
-        if (transaction.inputs[0].length === 8) { return 'miner'; } // nonce length is 8
-        if (transaction.inputs[0].length === 20 + 1 + 64) { return 'validator'; } // address length 20 + : + posHash length is 64
-
+        if (transaction.inputs.length !== 1) return false;
+        if (transaction.inputs[0].length === 8) return 'miner'; // nonce length is 8
+        if (transaction.inputs[0].length === 20 + 1 + 64) return 'validator'; // address length 20 + : + posHash length is 64
         return false;
     }
     /** @param {Transaction} transaction */

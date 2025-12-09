@@ -1,3 +1,4 @@
+// @ts-check
 import { Transaction_Builder } from './transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { serializer } from '../../utils/serializer.mjs';
@@ -5,14 +6,16 @@ import { UTXO } from '../../types/transaction.mjs';
 
 /**
 * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
-* @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack
-* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 * @typedef {import("../../types/block.mjs").BlockData} BlockData
+* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
+* @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
+* @typedef {import("../../types/transaction.mjs").TxReference} TxReference
+* @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack
 */
 
 export class UtxoCache { // Used to store, addresses's UTXOs and balance.
+	/** @param {Blockchain} blockchain */
     constructor(blockchain) {
-        this.logPerformance = false;
         this.totalSupply = 0;
         this.totalOfBalances = 0;
 
@@ -20,7 +23,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         /** @type {Object<string, number>} */
         this.balances = {}; // { address: balance }
         this.biggestsHoldersToConserve = 10;
-        /** @type {array<{ address: string, balance: number }>} */
+        /** @type {Array<{ address: string, balance: number }>} */
         this.biggestsHoldersBalances = [];
 
         /** @type {Object<string, WebSocketCallBack>} */
@@ -42,24 +45,24 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         if (!Array.isArray(Txs)) throw new Error('Txs is not an array');
 
         //console.log(`Digesting block ${blockIndex} with ${Txs.length} transactions`);
-		const [ newStakesOutputs, newUtxos, consumedUtxoAnchors ] = [ [], [], [] ];
+		/** @type {UTXO[]} */ const newStakesOutputs = [];
+		/** @type {UTXO[]} */ const newUtxos = [];
+		/** @type {TxAnchor[]} */ const consumedUtxoAnchors = [];
         for (let i = 0; i < Txs.length; i++) {
             const transaction = Txs[i];
-            const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(blockIndex, transaction);
+			const txReference = `${blockIndex}:${i}`;
+            const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(txReference, transaction);
             newStakesOutputs.push(...newStakesOutputsFromTx);
             newUtxos.push(...newUtxosFromTx);
 
-            if (Transaction_Builder.isMinerOrValidatorTx(transaction, i)) { continue; }
+            if (Transaction_Builder.isMinerOrValidatorTx(transaction)) continue;
             consumedUtxoAnchors.push(...transaction.inputs);
         }
 
         return { newStakesOutputs, newUtxos, consumedUtxoAnchors };
     }
     /** Add the new UTXOs and Remove the consumed UTXOs
-     * @param {BlockData} blockData
-     * @param {UTXO[]} newUtxos
-     * @param {UTXO[]} consumedUtxoAnchors
-     */
+     * @param {BlockData} blockData @param {UTXO[]} newUtxos @param {TxAnchor[]} consumedUtxoAnchors */
     digestFinalizedBlock(blockData, newUtxos, consumedUtxoAnchors) {
         const supplyFromBlock = blockData.supply;
         const coinBase = blockData.coinBase;
@@ -78,7 +81,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     }
     /** @param {string[]} anchors */
     getUTXOs(anchors) {
-        if (anchors.length === 0) { return {}; }
+        if (anchors.length === 0) return {};
 
         /** @type {Object<string, UTXO>} */
         const utxosObj = {};
@@ -96,17 +99,15 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             const [height, txId, outputIndex] = anchor.split(':');
             const txRef = `${height}:${txId}`;
             const relatedTx = this.blockchain.getTransactionByReference(txRef);
-            if (!relatedTx) { utxosObj[anchor] = undefined; continue; } // doesn't exist
-
-            const output = relatedTx.tx.outputs[outputIndex];
-            if (!output) { utxosObj[anchor] = undefined; continue; } // doesn't exist
+            const output = relatedTx?.tx.outputs[parseInt(outputIndex, 10)];
+			if (!relatedTx || !output) continue;
 
             utxosObj[anchor] = new UTXO(anchor, output.amount, output.rule, output.address, true); // spent
         }
 
         return utxosObj;
     }
-    /** @param {string} anchor */
+    /** @param {TxAnchor} anchor */
     getUTXO(anchor) {
         const miniUtxoSerialized = this.unspentMiniUtxos[anchor];
         if (miniUtxoSerialized) {
@@ -143,12 +144,13 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
         try {
             let repeatedAnchorsCount = 0;
+			/** @type {Object<string, boolean>} */
             const control = {};
             const involvedAnchors = [];
             for (let i = 0; i < transactions.length; i++) {
                 const transaction = transactions[i];
                 const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(transaction) : false;
-                if (specialTx) { continue; } // no anchor
+                if (specialTx) continue; // no anchor
                 
                 for (const input of transaction.inputs) {
                     if (control[input]) { repeatedAnchorsCount++; continue; }
@@ -167,6 +169,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         this.addressesAnchors = {};
         this.balances = {};
 
+		/** @type {Object<string, Object<string, boolean>>} */
         const addressesAnchors = {};
         const start = performance.now();
         const anchors = Object.keys(this.unspentMiniUtxos);
@@ -208,24 +211,20 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     /** @param {string} address */
     #getAddressAnchorsObj(address) {
         const serializedAnchors = this.addressesAnchors[address];
-        if (!serializedAnchors) { return []; }
-
         const anchors = serializer.deserialize.anchorsObjFromArray(serializedAnchors);
         return anchors;
     }
     /** Sort the new UTXOs and Stakes Outputs from a transaction
-     * @param {number} blockIndex @param {Transaction} transaction */
-    #digestTransactionOutputs(blockIndex, transaction) {
+     * @param {TxReference} txReference @param {Transaction} transaction */
+    #digestTransactionOutputs(txReference, transaction) {
         const newUtxosFromTx = [];
         const newStakesOutputsFromTx = [];
         for (let i = 0; i < transaction.outputs.length; i++) {
             const { address, amount, rule } = transaction.outputs[i];
-            const anchor = `${blockIndex}:${transaction.id}:${i}`
+            const anchor = `${txReference}:${i}`
             const utxo = new UTXO(anchor, amount, rule, address); // unspent
-            if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) continue;
-
+            if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) continue; // dust
             if (rule === "sigOrSlash") newStakesOutputsFromTx.push(utxo); // used to fill VSS stakes (for now we only create new range)
-
             newUtxosFromTx.push(utxo);
         }
 
@@ -233,15 +232,13 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     }
     /** Fill the UTXOs and addressesAnchors with the new UTXOs @param {UTXO[]} newUtxos */
     #digestNewUtxos(newUtxos) {
-        if (this.logPerformance) { performance.mark('digestNewUtxos-setUTXOs start'); }
+		/** @type {Object<string, string[]>} */
         const newAnchorsByAddress = {};
         for (const utxo of newUtxos) {
             const serializedMiniUtxo = serializer.serialize.miniUTXO(utxo);
             this.unspentMiniUtxos[utxo.anchor] = serializedMiniUtxo;
             this.totalOfBalances += utxo.amount;
-
-            if (this.balancesInitalized)
-                this.balances[utxo.address] = (this.balances[utxo.address] || 0) + utxo.amount;
+            this.balances[utxo.address] = (this.balances[utxo.address] || 0) + utxo.amount;
 
             if (!newAnchorsByAddress[utxo.address]) { newAnchorsByAddress[utxo.address] = []; }
             newAnchorsByAddress[utxo.address].push(utxo.anchor);
@@ -250,35 +247,27 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         for (const address of Object.keys(newAnchorsByAddress)) {
             const addressAnchors = this.#getAddressAnchorsObj(address);
             for (const anchor of newAnchorsByAddress[address]) {
-                if (addressAnchors[anchor]) { throw new Error('Anchor already exists'); }
+                if (addressAnchors[anchor]) throw new Error('Anchor already exists');
                 addressAnchors[anchor] = true;
             }
             this.addressesAnchors[address] = serializer.serialize.anchorsObjToArray(addressAnchors);
             if (this.wsCallbacks.onBalanceUpdated) { this.wsCallbacks.onBalanceUpdated.execute('balance_updated', address); }
         }
-
-        if (this.logPerformance) { performance.mark('digestNewUtxos-setUTXOs end'); }
-        
-        if (!this.logPerformance) { return; }
-        
-        /*console.log(`#${this.blockchain.currentHeight} - New UTXOs: ${newUtxos.length}`);
-        performance.measure('digestNewUtxos-setUTXOs', 'digestNewUtxos-setUTXOs start', 'digestNewUtxos-setUTXOs end');*/
     }
-    /** Remove the UTXOs from utxoCache @param {string[]} consumedAnchors */
+    /** Remove the UTXOs from utxoCache @param {TxAnchor[]} consumedAnchors */
     #digestConsumedUtxos(consumedAnchors) {
+		/** @type {Object<string, TxAnchor[]>} */
         const consumedUtxosByAddress = {};
         for (const anchor of consumedAnchors) {
             const utxo = this.getUTXO(anchor); // fast access: cached miniUTXOs
-            if (!utxo) { throw new Error('UTXO not found'); }
-            if (utxo.spent) { throw new Error('UTXO already spent'); }
+            if (!utxo) throw new Error('UTXO not found');
+            if (utxo.spent) throw new Error('UTXO already spent');
             
             delete this.unspentMiniUtxos[anchor];
             this.totalOfBalances -= utxo.amount;
+            this.balances[utxo.address] = (this.balances[utxo.address] || 0) - utxo.amount;
 
-            if (this.balancesInitalized)
-                this.balances[utxo.address] = (this.balances[utxo.address] || 0) - utxo.amount;
-
-            if (!consumedUtxosByAddress[utxo.address]) { consumedUtxosByAddress[utxo.address] = []; }
+            if (!consumedUtxosByAddress[utxo.address]) consumedUtxosByAddress[utxo.address] = [];
             consumedUtxosByAddress[utxo.address].push(utxo.anchor);
         }
 

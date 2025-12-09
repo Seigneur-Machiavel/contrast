@@ -276,13 +276,13 @@ export class Blockchain {
         this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m, c) => console.info(m, c));
         return null;
     }
-    /** @param {string} txReference - The transaction reference in the format "height:txId" */
-    getTransactionByReference(txReference, includeTimestamp) {
+    /** Retrieve a transaction by its reference from cache(first) or disk(fallback). @param {string} txReference - The transaction reference in the format "height:txIndex" */
+    getTransactionByReference(txReference, includeTimestamp = false) {
         const [height, txId] = txReference.split(':');
         const index = parseInt(height, 10);
         if (this.cache.blocksHashByHeight.has(index)) { // Try from cache first
             const block = this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(index));
-            const tx = block.Txs.find(tx => tx.id === txId);
+			const tx = block.Txs[parseInt(txId, 10)];
             return tx ? { tx, timestamp: block.timestamp } : null;
         }
 
@@ -291,7 +291,7 @@ export class Blockchain {
 
         return null;
     }
-	/** @param {import('./node.mjs').ContrastNode} node @param {number} [snapshotIndex] @param {boolean} [eraseHigher] */
+	/** @param {import('./node.mjs').ContrastNode} node */
 	async loadSnapshot(node, snapshotIndex = 0, eraseHigher = true) {
         const snapHeights = this.snapshotSystem.mySnapshotsHeights();
         const olderSnapHeight = snapHeights[0];

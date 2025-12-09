@@ -34,7 +34,7 @@ export class BlockValidation {
         if (Number.isInteger(block.index) === false) throw new Error('Invalid block index');
     }
 	/** @param {BlockData} finalizedBlock */
-	static async validateBlockSignature(finalizedBlock) {
+	static async #validateBlockSignature(finalizedBlock) {
 		const serializedBlock = serializer.serialize.block(finalizedBlock);
 		const deserializedBlock = serializer.deserialize.block(serializedBlock);
 		const blockSignature = await BlockUtils.getBlockSignature(finalizedBlock);
@@ -106,7 +106,6 @@ export class BlockValidation {
         const allDiscoveredPubKeysAddresses = {};
         const nbOfWorkers = workers.length;
         const minTxsToUseWorkers = 15;
-
         const singleThreadStart = Date.now();
         if (nbOfWorkers === 0 || blockData.Txs.length <= minTxsToUseWorkers) {
             for (let i = 0; i < blockData.Txs.length; i++) {
@@ -115,7 +114,7 @@ export class BlockValidation {
                 if (i < 2) { specialTx = Transaction_Builder.isMinerOrValidatorTx(tx) } // coinbase Tx / validator Tx
 
                 const { fee, success, discoveredPubKeysAddresses } = await TxValidation.fullTransactionValidation(involvedUTXOs, memPool, tx, specialTx);
-                if (!success) throw new Error(`Invalid transaction: ${tx.id} - ${TxValidation}`);
+                if (!success) throw new Error(`Invalid transaction: ${blockData.index}:${i}`);
 
 				for (const pubKeyHex in discoveredPubKeysAddresses)
 					allDiscoveredPubKeysAddresses[pubKeyHex] = discoveredPubKeysAddresses[pubKeyHex];
@@ -135,7 +134,7 @@ export class BlockValidation {
             if (i < 2) { specialTx = Transaction_Builder.isMinerOrValidatorTx(tx) } // coinbase Tx / validator Tx
 
             const r = await TxValidation.partialTransactionValidation(involvedUTXOs, memPool, tx, specialTx);
-			if (!r.success) throw new Error(`Invalid transaction: ${tx.id}`);
+			if (!r.success) throw new Error(`Invalid transaction: ${blockData.index}:${i}`);
 			
 			for (const pubKeyHex in r.impliedKnownPubkeysAddresses)
 				allImpliedKnownPubkeysAddresses[pubKeyHex] = r.impliedKnownPubkeysAddresses[pubKeyHex];
@@ -152,7 +151,7 @@ export class BlockValidation {
             if (i < 2) { specialTx = Transaction_Builder.isMinerOrValidatorTx(tx) } // coinbase Tx / validator Tx
 
 			const r = await TxValidation.fullTransactionValidation(involvedUTXOs, memPool, tx, specialTx);
-            if (!r.success) throw new Error(`Invalid transaction: ${tx.id}`);
+            if (!r.success) throw new Error(`Invalid transaction: ${blockData.index}:${i}`);
 
 			for (const pubKeyHex in r.discoveredPubKeysAddresses)
 				allDiscoveredPubKeysAddresses[pubKeyHex] = r.discoveredPubKeysAddresses[pubKeyHex];
@@ -229,7 +228,7 @@ export class BlockValidation {
         try { this.checkBlockIndexIsNumber(finalizedBlock); }
         catch (error) { validationMiniLogger.log(`#${finalizedBlock.index} -> ${error.message} Miner: ${minerId} | Validator: ${validatorId}`, (m, c) => console.info(m, c)); throw error; }
 
-		await this.validateBlockSignature(finalizedBlock);
+		await this.#validateBlockSignature(finalizedBlock);
 
         const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
         if (finalizedBlock.hash !== hex) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (not corresponding): ${finalizedBlock.hash} - expected: ${hex}`);
