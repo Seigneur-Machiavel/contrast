@@ -127,7 +127,7 @@ export class ContrastStorage extends StorageRoot {
 			if (!fs.existsSync(d)) fs.mkdirSync(d);
 
 			fs.writeFileSync(path.join(d, `${fileName}.bin`), serializedData);
-		} catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
+		} catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 		return true;
 	}
 	/** @param {string} fileName @param {string} directoryPath @returns {Uint8Array|boolean} */
@@ -135,8 +135,8 @@ export class ContrastStorage extends StorageRoot {
 		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
 		try { return fs.readFileSync(filePath) } // work as Uint8Array
 		catch (error) {
-			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
-			else storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m, c) => console.info(m, c));
+			else storageMiniLogger.log(error.stack, (m, c) => console.info(m, c));
 		}
 		return false;
 	}
@@ -146,7 +146,7 @@ export class ContrastStorage extends StorageRoot {
 			const d = directoryPath || this.PATH.STORAGE;
 			if (!fs.existsSync(d)) fs.mkdirSync(d);
 			await fs.promises.writeFile(path.join(d, `${fileName}.bin`), serializedData);
-		} catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
+		} catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 	}
 	/** @param {string} fileName @param {string} directoryPath @returns {Promise<Uint8Array|boolean>} */
 	async loadBinaryAsync(fileName, directoryPath) {
@@ -155,8 +155,8 @@ export class ContrastStorage extends StorageRoot {
 			const buffer = await fs.promises.readFile(filePath);
 			return buffer;
 		} catch (error) {
-			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m) => { console.error(m); });
-			else storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m, c) => console.info(m, c));
+			else storageMiniLogger.log(error.stack, (m, c) => console.info(m, c));
 		}
 		return false;
 	}
@@ -170,7 +170,7 @@ export class ContrastStorage extends StorageRoot {
 			const filePath = path.join(this.PATH.STORAGE, `${fileName}.json`);
 			if (!fs.existsSync(path.dirname(filePath))) fs.mkdirSync(path.dirname(filePath));
 			fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-		} catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false }
+		} catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false }
 	}
 	/** @param {string} fileName - The name of the file @returns {any|boolean} */
 	loadJSON(fileName) {
@@ -245,7 +245,7 @@ export class CheckpointsStorage {
             if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
             fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
             return hash;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false; }
+        } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
     }
     /** @param {Buffer} buffer @param {string} hashToVerify */
     static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify) {
@@ -253,8 +253,8 @@ export class CheckpointsStorage {
             const buffer = Buffer.from(checkpointBuffer);
             const hash_V1 = crypto.createHash('sha256').update(buffer).digest('hex');
             const isValidHash_V1 = hash_V1 === hashToVerify;
-            if (!isValidHash_V1) storageMiniLogger.log('<> Hash V1 mismatch! <>', (m) => { console.error(m); });
-            //if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
+            if (!isValidHash_V1) storageMiniLogger.log('<> Hash V1 mismatch! <>', (m, c) => console.info(m, c));
+            //if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m, c) => console.info(m, c)); return false; }
     
             const destPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
             if (fs.existsSync(destPath)) fs.rmSync(destPath, { recursive: true });
@@ -280,14 +280,14 @@ export class CheckpointsStorage {
     
                 const buffer = Buffer.concat(snapshotsHashes);
                 const hash_V2 = crypto.createHash('sha256').update(buffer).digest('hex');
-                if (hash_V2 !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m) => { console.error(m); }); return false; }
+                if (hash_V2 !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m, c) => console.info(m, c)); return false; }
                 isValidHash_V2 = hash_V2 === hashToVerify;
-            } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
+            } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); }
 
-            if (!isValidHash_V2) storageMiniLogger.log('<> Hash V2 mismatch! <>', (m) => { console.error(m); });
-            if (!isValidHash_V1 && !isValidHash_V2) storageMiniLogger.log('--- Checkpoint is corrupted! ---', (m) => { console.error(m); });
+            if (!isValidHash_V2) storageMiniLogger.log('<> Hash V2 mismatch! <>', (m, c) => console.info(m, c));
+            if (!isValidHash_V1 && !isValidHash_V2) storageMiniLogger.log('--- Checkpoint is corrupted! ---', (m, c) => console.info(m, c));
             return true;
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); return false }
+        } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false }
     }
     static reset() {
         if (fs.existsSync(PATH.CHECKPOINTS)) fs.rmSync(PATH.CHECKPOINTS, { recursive: true });
@@ -322,7 +322,7 @@ export class AddressesTxsRefsStorage {
 
     #load() {
         if (!fs.existsSync(this.configPath)) {
-            storageMiniLogger.log(`no config file found: ${this.configPath}`, (m) => console.error(m));
+            storageMiniLogger.log(`no config file found: ${this.configPath}`, (m, c) => console.error(m, c));
             return;
         }
 
@@ -334,9 +334,9 @@ export class AddressesTxsRefsStorage {
             this.architecture = config.architecture || {};
             this.involedAddressesOverHeights = config.involedAddressesOverHeights || {};
 
-            storageMiniLogger.log('[AddressesTxsRefsStorage] => config loaded', (m) => console.log(m));
+            storageMiniLogger.log('[AddressesTxsRefsStorage] => config loaded', (m, c) => console.log(m, c));
             this.loaded = true;
-        } catch (error) { storageMiniLogger.log(error, (m) => console.error(m)); }
+        } catch (error) { storageMiniLogger.log(error, (m, c) => console.error(m, c)); }
     }
     #pruneInvoledAddressesOverHeights() {
         // SORT BY DESCENDING HEIGHTS -> KEEP ONLY THE UPPER HEIGHTS
@@ -504,7 +504,7 @@ export class AddressesTxsRefsStorage {
         }
 
         this.snapHeight = Math.min(this.snapHeight, height);
-        storageMiniLogger.log(`Pruned all transactions references upper than ${height}`, (m) => { console.log(m); });
+        storageMiniLogger.log(`Pruned all transactions references upper than ${height}`, (m, c) => console.info(m, c));
     }
     reset(reason = 'na') {
         if (fs.existsSync(this.txsRefsPath)) fs.rmSync(this.txsRefsPath, { recursive: true });
@@ -514,7 +514,7 @@ export class AddressesTxsRefsStorage {
         this.snapHeight = -1;
         this.architecture = {};
         this.involedAddressesOverHeights = {};
-        storageMiniLogger.log(`AddressesTxsRefsStorage reset: ${reason}`, (m) => { console.log(m); });
+        storageMiniLogger.log(`AddressesTxsRefsStorage reset: ${reason}`, (m, c) => console.info(m, c));
     }
 }
 
@@ -555,7 +555,7 @@ export class BlockchainStorage {
                 const blockIndex = parseInt(fileName.split('-')[0], 10);
                 const blockHash = fileName.split('-')[1];
                 if (currentIndex >= blockIndex) {
-                    storageMiniLogger.log(`---! Duplicate block index !--- #${blockIndex}`, (m) => { console.error(m); });
+                    storageMiniLogger.log(`---! Duplicate block index !--- #${blockIndex}`, (m, c) => console.info(m, c));
                     throw new Error(`Duplicate block index #${blockIndex}`);
                 }
 
@@ -565,7 +565,7 @@ export class BlockchainStorage {
             }
         }
 
-        storageMiniLogger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m) => { console.log(m); });
+        storageMiniLogger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m, c) => console.info(m, c));
     }
     static batchFolderFromBlockIndex(blockIndex = 0) {
         const index = Math.floor(blockIndex / BLOCK_PER_DIRECTORY);
@@ -592,7 +592,7 @@ export class BlockchainStorage {
 
             const filePath = path.join(batchFolderPath, `${blockData.index.toString()}-${blockData.hash}.bin`);
             fs.writeFileSync(filePath, binary);
-        } catch (error) { storageMiniLogger.log(error.stack, (m) => { console.error(m); }); }
+        } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); }
     }
     /** @param {BlockData} blockData @param {string} dirPath */
     #saveBlockDataJSON(blockData, dirPath) {
@@ -670,8 +670,8 @@ export class BlockchainStorage {
             const blockInfo = serializer.deserialize.rawData(buffer);
             return blockInfo;
         } catch (error) {
-            storageMiniLogger.log(`BlockInfo not found ${blockIndex.toString()}-${blockHash}.bin`, (m) => { console.error(m); });
-            storageMiniLogger.log(error.stack, (m) => { console.error(m); });
+            storageMiniLogger.log(`BlockInfo not found ${blockIndex.toString()}-${blockHash}.bin`, (m, c) => console.info(m, c));
+            storageMiniLogger.log(error.stack, (m, c) => console.info(m, c));
             return null;
         }
     }

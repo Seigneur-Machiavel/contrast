@@ -110,12 +110,13 @@ export const mining = {
 
     /** @param {string} HashBitsAsString @param {BlockData} blockData */
     verifyBlockHashConformToDifficulty: (HashBitsAsString = '', blockData) => {
-        if (typeof HashBitsAsString !== 'string') { return false; } //throw new Error('Invalid HashBitsAsString'); }
-
-        const { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty } = mining.getBlockFinalDifficulty(blockData);
+		const { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty } = mining.getBlockFinalDifficulty(blockData);
         const { zeros, adjust } = mining.decomposeDifficulty(finalDifficulty);
-
         const result = { conform: false, message: 'na', difficulty, timeDiffAdjustment, legitimacy, finalDifficulty, zeros, adjust };
+		if (typeof HashBitsAsString !== 'string') {
+			result.message = 'invalid HashBitsAsString';
+			return result;
+		}
 
         const condition1 = conditionnals.binaryStringStartsWithZeros(HashBitsAsString, zeros);
         if (!condition1) result.message = `unlucky--(condition 1)=> hash does not start with ${zeros} zeros | finalDifficulty: ${finalDifficulty} | HashBitsAsString: ${HashBitsAsString}`;

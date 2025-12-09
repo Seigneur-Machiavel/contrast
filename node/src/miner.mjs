@@ -45,12 +45,18 @@ export class Miner {
 		if (!blockCandidate) return false;
 		
         const posAddress = blockCandidate.Txs[0].inputs[0].split(':')[0];
-        const isMyBlock = posAddress === this.node.id;
-        // check if powReward is coherent
+        const isMyBlock = posAddress === this.node.account.address;
         const posReward = blockCandidate.Txs[0].outputs[0].amount;
         const powReward = blockCandidate.powReward;
-        if (!posReward || !powReward) { console.info(`[MINER] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`); return; }
-        if (Math.abs(posReward - powReward) > 1) { console.info(`[MINER] Invalid block candidate pushed (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`); return; }
+        if (!posReward || !powReward) {
+			if (this.node.verb > 2) console.info(`[MINER] Invalid block candidate (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`);
+			return;
+		}
+        
+		if (Math.abs(posReward - powReward) > 1) {
+			if (this.node.verb > 2) console.info(`[MINER] Invalid block candidate (#${blockCandidate.index} | v:${validatorAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`);
+			return;
+		}
 
         const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
         if (blockCandidate.prevHash !== prevHash) return false;
@@ -78,7 +84,7 @@ export class Miner {
         // preserve the current best candidate, but update considered as true to encourage re-bradcasting
         if (reasonChange === 'none') return true;
 
-        console.info(`[MINER] Best block candidate changed${reasonChange}:
+        if (this.node.verb > 2) console.info(`[MINER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
 to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (my block)' : ''}`);
         
@@ -108,30 +114,33 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
     async broadcastFinalizedBlock(finalizedBlock) {
         // Avoid sending the block pow if a higher block candidate is available to be mined
         if (this.bestCandidateIndex() > finalizedBlock.index) {
-            console.info(`[MINER] Block finalized is not the highest block candidate: #${finalizedBlock.index} < #${this.bestCandidateIndex()}`);
+            if (this.node.verb > 2) console.info(`[MINER] Block finalized is not the highest block candidate: #${finalizedBlock.index} < #${this.bestCandidateIndex()}`);
             return;
         }
         
         const validatorAddress = finalizedBlock.Txs[1].inputs[0].split(':')[0];
 		const minerAddress = finalizedBlock.Txs[0].outputs[0].address;
         if (this.addressOfCandidatesBroadcasted.includes(validatorAddress)) {
-            console.info(`[MINER] Block finalized already sent (Height: ${finalizedBlock.index})`);
+        	if (this.node.verb > 2) console.info(`[MINER] Block finalized already sent (Height: ${finalizedBlock.index})`);
             return;
         }
 
         // Avoid sending the same block multiple times
         const isNewHeight = finalizedBlock.index > this.powBroadcastState.foundHeight;
         const maxTryReached = this.powBroadcastState.sentTryCount >= this.powBroadcastState.maxTryCount;
-        if (maxTryReached && !isNewHeight) { console.warn(`[MINER] Max try reached for block (Height: ${finalizedBlock.index})`); return; }
+        if (maxTryReached && !isNewHeight) {
+			if (this.node.verb > 1) console.warn(`[MINER] Max try reached for block (Height: ${finalizedBlock.index})`);
+			return;
+		}
         
         if (isNewHeight) this.powBroadcastState.sentTryCount = 0;
         this.powBroadcastState.foundHeight = finalizedBlock.index;
         this.powBroadcastState.sentTryCount++;
 
         const [validatorId, minerId] = [validatorAddress.slice(0, 6), minerAddress.slice(0, 6)];
-        //console.info(`[MINER] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
-//(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`);
-        console.info(`[MINER] -POW- #${finalizedBlock.index} | V:${validatorId} | M:${minerId} | ${finalizedBlock.difficulty} | ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`);        
+        if (this.node.verb > 2) console.info(`[MINER] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
+(Height: ${finalizedBlock.index}) | Diff = ${finalizedBlock.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`);
+        if (this.node.verb > 2) console.info(`[MINER] -POW- #${finalizedBlock.index} | V:${validatorId} | M:${minerId} | ${finalizedBlock.difficulty} | ${CURRENCY.formatNumberAsCurrency(finalizedBlock.coinBase)}`);        
 
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
         this.node.p2pNode.broadcast(new BLOCK_FINALIZED_MSG(finalizedBlock));
@@ -176,7 +185,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
 			const blockCandidate = this.bestCandidate;
             if (!rewardAddress || !blockCandidate) continue;
             if (blockCandidate.index !== this.bestCandidateIndex()) {
-                console.info(`[MINER] Block candidate is not the highest block candidate`);
+                if (this.node.verb > 2) console.info(`[MINER] Block candidate is not the highest block candidate`);
                 continue;
             }
 
@@ -205,7 +214,7 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
                 if (worker.isWorking) continue;
                 if (worker.result !== null) {
                     const finalizedBlock = worker.getResultAndClear();
-                    console.info(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`);
+                    if (this.node.verb > 2) console.info(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`);
                     await this.broadcastFinalizedBlock(finalizedBlock);
                 }
 
@@ -217,12 +226,12 @@ to #${blockCandidate.index} (leg: ${blockCandidate.legitimacy})${isMyBlock ? ' (
             const timeSpent = endTimestamp - timings.start;
             if (timeSpent < 1000) continue;
 
-            console.info(`[MINER] Abnormal time spent: ${timeSpent}ms
+            if (this.node.verb > 1) console.info(`[MINER] Abnormal time spent: ${timeSpent}ms
             - workersUpdate: ${timings.workersUpdate - timings.start}ms
             - updateInfo: ${timings.updateInfo - timings.workersUpdate}ms`);
         }
 
-        console.info(`[MINER] Stopped`);
+        if (this.node.verb > 1) console.info(`[MINER] Stopped`);
     }
     async terminateAsync() {
         const promises = [];

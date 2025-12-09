@@ -200,7 +200,7 @@ export class TxValidation {
             
             if (!addressToVerify) throw new Error('addressToVerify not found');
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                validationMiniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
+                validationMiniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m, c) => console.info(m, c));
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }
@@ -239,7 +239,7 @@ export class TxValidation {
             
             if (!addressToVerify) throw new Error('addressToVerify not found');
             if (!transactionWitnessesAddresses.includes(addressToVerify)) {
-                validationMiniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m) => { console.log(m); });
+                validationMiniLogger.log(`UTXO address: ${addressUtils.formatAddress(addressToVerify)}`, (m, c) => console.info(m, c));
                 throw new Error(`Witness missing for address: ${addressToVerify}, witnesses: ${transactionWitnessesAddresses.join(', ')}`);
             }
         }

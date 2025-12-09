@@ -1,3 +1,5 @@
+// ELECTRON VERSION OF THE MINI LOGGER
+
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
@@ -5,10 +7,6 @@ let basePath = __dirname;
 if (app.isPackaged) { basePath = path.join(app.getAppPath().replace('app.asar', 'app.asar.unpacked'), "miniLogger"); }
 
 const HistoricalLog = (type = 'log', message = 'toto') => {
-    /*
-    const date = new Date();
-    return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
-    */
     return {
         time: Date.now(),
         type: type,
@@ -20,13 +18,13 @@ const HistoricalLog = (type = 'log', message = 'toto') => {
  * @typedef MiniLoggerConfig
  * @property {number} maxHistory
  * @property {boolean} allActive
- * @property {{ [key: string]: boolean }} activeCategories
- */
+ * @property {{ [key: string]: boolean }} activeCategories */
 const MiniLoggerConfig = () => {
     return {
         maxHistory: 100,
         allActive: false,
-        activeCategories: { global: true }
+        activeCategories: { global: true },
+		colors: { }
     }
 }
 
@@ -48,7 +46,8 @@ function loadMergedConfig() {
     const config = {
         maxHistory: customConfig.maxHistory === undefined ? defaultConfig.maxHistory : customConfig.maxHistory,
         allActive: customConfig.allActive === undefined ? defaultConfig.allActive : customConfig.allActive,
-        activeCategories: defaultConfig.activeCategories
+        activeCategories: defaultConfig.activeCategories,
+		colors: defaultConfig.colors
     };
 
     for (const key in defaultConfig.activeCategories) {
@@ -56,11 +55,19 @@ function loadMergedConfig() {
         if (customConfig.activeCategories[key] === undefined) continue;
         config.activeCategories[key] = customConfig.activeCategories[key];
     }
+	for (const key in defaultConfig.colors) {
+		if (customConfig.colors === undefined) break;
+		if (customConfig.colors[key] === undefined) continue;
+		config.colors[key] = customConfig.colors[key];
+	}
 
     return config;
 }
 
 class MiniLogger {
+	color;
+	shouldLog;
+
     /** @param {MiniLoggerConfig} miniLoggerConfig */
     constructor(category = 'global', miniLoggerConfig) {
         this.category = category;
@@ -69,7 +76,8 @@ class MiniLogger {
         /** @type {MiniLoggerConfig} */
         this.miniLoggerConfig = miniLoggerConfig || loadMergedConfig();
         this.shouldLog = this.#isCategoryActive();
-        if (!fs.existsSync(path.join(basePath, 'history'))) { fs.mkdirSync(path.join(basePath, 'history')); }
+		this.color = this.miniLoggerConfig.colors[this.category];
+        if (!fs.existsSync(path.join(basePath, 'history'))) fs.mkdirSync(path.join(basePath, 'history'));
     }
 
     #isCategoryActive() {
@@ -99,16 +107,12 @@ class MiniLogger {
 
         this.#saveHistory();
     }
-    log(message, callback = (m) => { console.log(m); }) {
+	log(message, callback = (m, c) => console.log(m, c)) {
         const type = callback.toString().split('console.')[1].split('(')[0].trim();
         this.#saveLog(type, message);
-
-        if (this.shouldLog && typeof callback === 'function') { callback(message); }
+        if (this.shouldLog && typeof callback === 'function') callback(`%c${message}`, this.color);
     }
 }
 
-if (typeof module !== 'undefined') {
-    module.exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };
-} else {
-    exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };
-}
+if (typeof module !== 'undefined') module.exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };
+else exports = { MiniLogger, loadMergedConfig, loadDefaultConfig };

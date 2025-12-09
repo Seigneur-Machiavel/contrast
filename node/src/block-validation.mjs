@@ -3,6 +3,7 @@ import { mining } from '../../utils/mining-functions.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { BlockUtils } from './block.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 
 /**
  * @typedef {import("./mempool.mjs").MemPool} MemPool
@@ -32,6 +33,14 @@ export class BlockValidation {
         if (typeof block.index !== 'number') throw new Error('Invalid block index');
         if (Number.isInteger(block.index) === false) throw new Error('Invalid block index');
     }
+	/** @param {BlockData} finalizedBlock */
+	static async validateBlockSignature(finalizedBlock) {
+		const serializedBlock = serializer.serialize.block(finalizedBlock);
+		const deserializedBlock = serializer.deserialize.block(serializedBlock);
+		const blockSignature = await BlockUtils.getBlockSignature(finalizedBlock);
+		const deserializedSignature = await BlockUtils.getBlockSignature(deserializedBlock);
+		if (blockSignature !== deserializedSignature) throw new Error('Block signature mismatch');
+	}
     /** @param {BlockData} block @param {number} currentHeight */
     static validateBlockIndex(block, currentHeight = -1) {
         if (block.index > currentHeight + 9) throw new Error(`!ignore! Rejected: #${block.index} > #${currentHeight + 9}(+9)`);
@@ -111,7 +120,7 @@ export class BlockValidation {
 				for (const pubKeyHex in discoveredPubKeysAddresses)
 					allDiscoveredPubKeysAddresses[pubKeyHex] = discoveredPubKeysAddresses[pubKeyHex];
             }
-            validationMiniLogger.log(`Single thread ${blockData.Txs.length} txs validated in ${Date.now() - singleThreadStart} ms`, (m) => { console.log(m); });
+            validationMiniLogger.log(`Single thread ${blockData.Txs.length} txs validated in ${Date.now() - singleThreadStart} ms`, (m, c) => console.info(m, c));
             return allDiscoveredPubKeysAddresses;
         }
 
@@ -166,7 +175,7 @@ export class BlockValidation {
         }
 
         if (remainingTxs === 0) {
-            validationMiniLogger.log(`Multi thread ${blockData.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
+            validationMiniLogger.log(`Multi thread ${blockData.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m, c) => console.info(m, c));
             return allDiscoveredPubKeysAddresses;
         }
 
@@ -211,14 +220,16 @@ export class BlockValidation {
 				allDiscoveredPubKeysAddresses[pubKeyHex] = resolved.discoveredPubKeysAddresses[pubKeyHex];
         }
 
-        validationMiniLogger.log(`Multi thread ${blockData.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m) => { console.log(m); });
+        validationMiniLogger.log(`Multi thread ${blockData.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m, c) => console.info(m, c));
         return allDiscoveredPubKeysAddresses;
     }
 
 	/** @param {ContrastNode} node @param {BlockData} finalizedBlock */
     static async validateBlockProposal(node, finalizedBlock) {
         try { this.checkBlockIndexIsNumber(finalizedBlock); }
-        catch (error) { validationMiniLogger.log(`#${finalizedBlock.index} -> ${error.message} Miner: ${minerId} | Validator: ${validatorId}`, (m) => { console.error(m); }); throw error; }
+        catch (error) { validationMiniLogger.log(`#${finalizedBlock.index} -> ${error.message} Miner: ${minerId} | Validator: ${validatorId}`, (m, c) => console.info(m, c)); throw error; }
+
+		await this.validateBlockSignature(finalizedBlock);
 
         const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(finalizedBlock);
         if (finalizedBlock.hash !== hex) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (not corresponding): ${finalizedBlock.hash} - expected: ${hex}`);
@@ -227,13 +238,15 @@ export class BlockValidation {
         const lastBlockHash = node.blockchain.lastBlock ? node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
         this.validateBlockPrevHash(finalizedBlock, lastBlockHash);
         this.validateTimestamps(finalizedBlock, node.blockchain.lastBlock, node.time);
-        
         await this.validateLegitimacy(finalizedBlock, node.vss);
 
         const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node);
-        if (finalizedBlock.difficulty !== newDifficulty) throw new Error(`!banBlock! !applyOffense! Invalid difficulty: ${finalizedBlock.difficulty} - expected: ${newDifficulty}`);
-        const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
-        if (!hashConfInfo.conform) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (difficulty): ${finalizedBlock.hash} -> ${hashConfInfo.message}`);
+        if (finalizedBlock.difficulty !== newDifficulty)
+			throw new Error(`!banBlock! !applyOffense! Invalid difficulty: ${finalizedBlock.difficulty} - expected: ${newDifficulty}`);
+        
+		const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, finalizedBlock);
+        if (!hashConfInfo.conform)
+			throw new Error(`!banBlock! !applyOffense! Invalid pow hash (difficulty): ${finalizedBlock.hash} -> ${hashConfInfo.message}`);
 
         const expectedCoinBase = mining.calculateNextCoinbaseReward(node.blockchain.lastBlock || finalizedBlock);
         if (finalizedBlock.coinBase !== expectedCoinBase) throw new Error(`!banBlock! !applyOffense! Invalid #${finalizedBlock.index} coinbase: ${finalizedBlock.coinBase} - expected: ${expectedCoinBase}`);

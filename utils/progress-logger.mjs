@@ -8,7 +8,7 @@ export class ProgressLogger {
         this.stepTime = Date.now();
     }
 
-    logProgress(current, logCallBack = (m) => { console.log(m); }) {
+    logProgress(current, logCallBack = (m, c) => console.info(m, c)) {
         //const progress = current === this.total - 1 ? 100 : (current / this.total) * 100;
         const progress = current === this.total ? 100 : (current / this.total) * 100;
         const currentStep = Math.floor(progress / this.stepSizePercent);

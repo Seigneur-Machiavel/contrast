@@ -68,7 +68,7 @@ export class SyncHandler {
         node.p2pNetwork.p2pNode.handle(PROTOCOLS.SYNC, this.#handleIncomingStream);
         this.node = node;
         this.p2pNet = node.p2pNetwork;
-        this.miniLogger.log('SyncHandler setup', (m) => console.info(m));
+        this.miniLogger.log('SyncHandler setup', (m, c) => console.info(m, c));
     }
 
     #handleIncomingStream = async (lstream) => {
@@ -78,7 +78,7 @@ export class SyncHandler {
         if (!stream) return;
         
         const peerIdStr = lstream.connection.remotePeer.toString();
-        //this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+        //this.miniLogger.log(`INCOMING STREAM (${lstream.connection.id}-${stream.id}) from ${readableId(peerIdStr)}`, (m, c) => console.info(m, c));
         
         let readResultCopy;
         try {
@@ -91,7 +91,7 @@ export class SyncHandler {
             /** @type {SyncRequest} */
             const msg = serializer.deserialize.rawData(readResult.data);
             if (!msg || typeof msg.type !== 'string') { throw new Error('(#handleIncomingStream) Invalid message format'); }
-            this.miniLogger.log(`Received message (${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''}) [bytesStart: ${msg.bytesStart}] from ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Received message (${msg.type}${msg.type === 'getBlocks' ? `: ${msg.startIndex}-${msg.endIndex}` : ''}) [bytesStart: ${msg.bytesStart}] from ${readableId(peerIdStr)}`, (m, c) => console.info(m, c));
             
             /** @type {SyncStatus} */
             const mySyncStatus = {
@@ -122,11 +122,11 @@ export class SyncHandler {
             let logComplement = '';
             if (msg.type === 'getBlocks') logComplement = `: ${msg.startIndex}-${msg.endIndex}`;
             if (msg.type === 'getCheckpoint') logComplement = `: ${msg.checkpointHash.slice(0,10)}`;
-            this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (${msg.type}${logComplement}} | ${serializedResponse.length} bytes)`, (m) => { console.info(m); });
+            this.miniLogger.log(`Sent response to ${readableId(peerIdStr)} (${msg.type}${logComplement}} | ${serializedResponse.length} bytes)`, (m, c) => console.info(m, c));
         } catch (err) {
             if (err.code !== 'ABORT_ERR') {
-                this.miniLogger.log(`nbChunks: ${readResultCopy?.nbChunks} | bytes: ${readResultCopy?.data.byteLength}`, (m) => { console.error(m); });
-                this.miniLogger.log(err, (m) => { console.error(m); });
+                this.miniLogger.log(`nbChunks: ${readResultCopy?.nbChunks} | bytes: ${readResultCopy?.data.byteLength}`, (m, c) => console.info(m, c));
+                this.miniLogger.log(err, (m, c) => console.info(m, c));
             }
         }
     }
@@ -164,7 +164,7 @@ export class SyncHandler {
 
                 if (!dataBytes.expected) { // initializing the data
                     if (syncResponse.dataLength > STREAM.MAX_STREAM_BYTES) {
-                        this.miniLogger.log(`(sendSyncRequest) Received data is too big (${syncResponse.dataLength} bytes)`, (m) => { console.error(m); });
+                        this.miniLogger.log(`(sendSyncRequest) Received data is too big (${syncResponse.dataLength} bytes)`, (m, c) => console.info(m, c));
                         return false;
                     }
                     dataBytes.expected = syncResponse.dataLength;
@@ -183,8 +183,8 @@ export class SyncHandler {
             } catch (err) {
                 if (msg.type === 'getBlocks') { this.node.updateState(`Downloading blocks #${msg.startIndex}-${msg.endIndex}, ${dataBytes.percentage}%...`); }
                 if (msg.type === 'getCheckpoint') { this.node.updateState(`Downloading checkpoint ${msg.checkpointHash.slice(0,10)}, ${dataBytes.percentage}%...`); }
-                this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired (+${dataBytes.lastNbChunks} chunks) ${dataBytes.percentage}%`, (m) => { console.info(m); });
-                if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m) => { console.error(m); }); }
+                this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired (+${dataBytes.lastNbChunks} chunks) ${dataBytes.percentage}%`, (m, c) => console.info(m, c));
+                if (err.code !== 'ABORT_ERR') { this.miniLogger.log(err, (m, c) => console.info(m, c)); }
                 failures.successive++; failures.total++;
                 if (failures.successive >= maxSuccessiveFailures) { return false; }
             }
@@ -193,14 +193,14 @@ export class SyncHandler {
             await new Promise((resolve) => setTimeout(resolve, 2000)); // then try again
         }
 
-        if (msg.type !== 'getStatus') { this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired after ${failures.total} failures`, (m) => { console.info(m); }); }
+        if (msg.type !== 'getStatus') { this.miniLogger.log(`(${msg.type}) ${dataBytes.acquired}/${dataBytes.expected} Bytes acquired after ${failures.total} failures`, (m, c) => console.info(m, c)); }
         return syncRes;
     }
     async syncWithPeers() {
         if (this.syncDisabled) { return 'Already at the consensus height'; }
 
         const myCurrentHeight = this.node.blockchain.currentHeight;
-        this.miniLogger.log(`syncWithPeers started at #${myCurrentHeight}`, (m) => { console.info(m); });
+        this.miniLogger.log(`syncWithPeers started at #${myCurrentHeight}`, (m, c) => console.info(m, c));
         this.node.blockchainStats.state = "syncing";
     
         const peersStatus = await this.#getAllPeersStatus();
@@ -211,7 +211,7 @@ export class SyncHandler {
         this.consensusHeight = Math.max(this.consensusHeight, consensus.height);
         if (consensus.height === 0 || consensus.height <= myCurrentHeight) return 'Already at the consensus height';
         
-        this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height} (${consensus.checkpointPeers} peers)`, (m) => { console.info(m); });
+        this.miniLogger.log(`consensusCheckpoint #${consensus.checkpointInfo.height} (${consensus.checkpointPeers} peers)`, (m, c) => console.info(m, c));
 
         // try to sync by checkpoint at first
         const activeCheckpoint = this.node.checkpointSystem.activeCheckpointHeight !== false;
@@ -223,17 +223,17 @@ export class SyncHandler {
                 if (checkpointInfo.height !== consensus.checkpointInfo.height) continue;
                 if (checkpointInfo.hash !== consensus.checkpointInfo.hash) continue; //? enabled
 
-                this.miniLogger.log(`Attempting to sync checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+                this.miniLogger.log(`Attempting to sync checkpoint with peer ${readableId(peerIdStr)}`, (m, c) => console.info(m, c));
                 const success = await this.#getCheckpoint(peerIdStr, consensus.checkpointInfo.hash); //? enabled
                 if (!success) continue;
                 
-                this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+                this.miniLogger.log(`Successfully synced checkpoint with peer ${readableId(peerIdStr)}`, (m, c) => console.info(m, c));
                 return 'Checkpoint downloaded';
             }
         }
 
         // sync the blocks
-        this.miniLogger.log(`consensusHeight #${consensus.height}, current #${myCurrentHeight} -> getblocks from ${peersStatus.length} peers`, (m) => { console.info(m); });
+        this.miniLogger.log(`consensusHeight #${consensus.height}, current #${myCurrentHeight} -> getblocks from ${peersStatus.length} peers`, (m, c) => console.info(m, c));
         for (const peerStatus of peersStatus) {
             const { peerIdStr, currentHeight, latestBlockHash } = peerStatus;
             if (latestBlockHash !== consensus.blockHash) continue; // Skip peers with different hash than consensus
@@ -242,7 +242,7 @@ export class SyncHandler {
             if (!synchronized) continue;
             if (synchronized === 'Checkpoint deployed') return synchronized;
             
-            this.miniLogger.log(`Successfully synced blocks with peer ${readableId(peerIdStr)}`, (m) => { console.info(m); });
+            this.miniLogger.log(`Successfully synced blocks with peer ${readableId(peerIdStr)}`, (m, c) => console.info(m, c));
             return 'Verifying consensus';
         }
 
@@ -295,7 +295,7 @@ export class SyncHandler {
         const checkpointConsensus = { peers: 0, checkpointInfo: { height: 0, hash: '' } };
         const checkpointConsensuses = {};
         for (const peerStatus of peersStatus) {
-            //this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} checkpointInfo #${peerStatus.checkpointInfo}`, (m) => { console.info(m); });
+            //this.miniLogger.log(`Peer ${readableId(peerStatus.peerIdStr)} checkpointInfo #${peerStatus.checkpointInfo}`, (m, c) => console.info(m, c));
             if (!peerStatus.checkpointInfo) continue;
             const { height, hash } = peerStatus.checkpointInfo;
             if (height === 0) continue;
@@ -320,19 +320,19 @@ export class SyncHandler {
         const message = { type: 'getCheckpoint', checkpointHash };
         const response = await this.#sendSyncRequest(peerIdStr, message);
         if (!response || response.data.byteLength === 0) {
-            this.miniLogger.log(`Failed to get/read checkpoint archive`, (m) => { console.error(m); });
+            this.miniLogger.log(`Failed to get/read checkpoint archive`, (m, c) => console.info(m, c));
             return false;
         }
 
         CheckpointsStorage.unarchiveCheckpointBuffer(response.data, checkpointHash);
         const checkpointDetected = this.node.checkpointSystem.checkForActiveCheckpoint();
         if (!checkpointDetected) {
-            this.miniLogger.log(`Failed to process checkpoint archive`, (m) => { console.error(m); });
+            this.miniLogger.log(`Failed to process checkpoint archive`, (m, c) => console.info(m, c));
             return false;
         }
 
         // migrate blocks to active checkpoint for faster sync
-        this.miniLogger.log(`Migrating blocks to active checkpoint`, (m) => { console.info(m); });
+        this.miniLogger.log(`Migrating blocks to active checkpoint`, (m, c) => console.info(m, c));
         await this.node.checkpointSystem.migrateBlocksToActiveCheckpoint();
 
         return true;
@@ -344,7 +344,7 @@ export class SyncHandler {
         const checkpointMode = activeCheckpointHeight !== false && activeCheckpointTargetHeight !== false;
 
         this.node.blockchainStats.state = `syncing with peer ${readableId(peerIdStr)}${checkpointMode ? " (checkpointMode)" : ""}`;
-        this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}${checkpointMode ? " (checkpointMode)" : ""}`, (m) => { console.info(m); });
+        this.miniLogger.log(`Synchronizing with peer ${readableId(peerIdStr)}${checkpointMode ? " (checkpointMode)" : ""}`, (m, c) => console.info(m, c));
 
         let peerHeight = peerCurrentHeight;
         let desiredBlock = (checkpointMode ? activeCheckpointHeight : this.node.blockchain.currentHeight) + 1;
@@ -381,19 +381,19 @@ export class SyncHandler {
                     syncResPromise = this.#sendSyncRequest(peerIdStr, anticipatedMsg, 1);
 
                 if (!syncRes || syncRes.data.byteLength === 0) {
-                    this.miniLogger.log(`'getBlocks ${desiredBlock}-${endIndex}' request failed`, (m) => { console.error(m); });
+                    this.miniLogger.log(`'getBlocks ${desiredBlock}-${endIndex}' request failed`, (m, c) => console.info(m, c));
                     break;
                 }
                 
                 /** @type {GetBlocksAnwser} */
                 const getBlocksAnwser = serializer.deserialize.rawData(syncRes.data);
-                if (!getBlocksAnwser) { this.miniLogger.log(`Failed to get serialized blocks`, (m) => { console.error(m); }); break; }
+                if (!getBlocksAnwser) { this.miniLogger.log(`Failed to get serialized blocks`, (m, c) => console.info(m, c)); break; }
                 
                 const serializedBlocks = getBlocksAnwser.blocks;
                 const serializedBlocksInfo = getBlocksAnwser.blocksInfo;
                 
-                if (!Array.isArray(serializedBlocks)) { this.miniLogger.log(`Invalid serialized blocks format`, (m) => { console.error(m); }); break; }
-                if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks received`, (m) => { console.error(m); }); break; }
+                if (!Array.isArray(serializedBlocks)) { this.miniLogger.log(`Invalid serialized blocks format`, (m, c) => console.info(m, c)); break; }
+                if (serializedBlocks.length === 0) { this.miniLogger.log(`No blocks received`, (m, c) => console.info(m, c)); break; }
 
                 for (let i = 0; i < serializedBlocks.length; i++) {
                     const serializedBlock = serializedBlocks[i];
@@ -401,7 +401,7 @@ export class SyncHandler {
                     const block = serializer.deserialize.block_finalized(serializedBlock);
                     if (checkpointMode) {
                         this.node.updateState(`Fills checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`);
-                        this.miniLogger.log(`Fills checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`, (m) => { console.info(m); });
+                        this.miniLogger.log(`Fills checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`, (m, c) => console.info(m, c));
                         const serializedBlockInfo = serializedBlocksInfo[i];
                         const actionRequested = await this.node.checkpointSystem.fillActiveCheckpointWithBlock(block, serializedBlock, serializedBlockInfo); // throws if failure
                         if (actionRequested === 'restart') {
@@ -426,8 +426,8 @@ export class SyncHandler {
                 await breather.breathe();
             }
         } catch (error) {
-            this.miniLogger.log(`#getMissingBlocks() error occurred`, (m) => { console.error(m); });
-            this.miniLogger.log(error, (m) => { console.error(m); });
+            this.miniLogger.log(`#getMissingBlocks() error occurred`, (m, c) => console.info(m, c));
+            this.miniLogger.log(error, (m, c) => console.info(m, c));
         }
 
         return peerHeight === this.node.blockchain.currentHeight;
@@ -439,7 +439,7 @@ export class SyncHandler {
         // METHOD 2: restart the node
         // if syncFailureCount is a multiple of 25, restart the node
         if (this.syncFailureCount % this.syncFailureModulos.restart === 0) {
-            this.miniLogger.log(`(M2)--> Restarting the node after ${this.syncFailureCount} sync failures`, (m) => { console.error(m); });
+            this.miniLogger.log(`(M2)--> Restarting the node after ${this.syncFailureCount} sync failures`, (m, c) => console.info(m, c));
             this.node.restartRequested = 'syncFailure (this.syncFailureCount % 25)';
             return message;
         }
@@ -450,7 +450,7 @@ export class SyncHandler {
         if (this.syncFailureCount % this.syncFailureModulos.loadSnapshot === 0 && snapshotsHeights.length > 0) {
             const modulo = (this.syncFailureCount / this.syncFailureModulos.loadSnapshot) % snapshotsHeights.length;
             const previousSnapHeight = snapshotsHeights[snapshotsHeights.length - 1 - modulo];
-            this.miniLogger.log(`(M1)--> Trying to sync from snapshot #${previousSnapHeight}`, (m) => { console.info(m); });
+            this.miniLogger.log(`(M1)--> Trying to sync from snapshot #${previousSnapHeight}`, (m, c) => console.info(m, c));
             await this.node.loadSnapshot(previousSnapHeight, false); // non-destructive
         }
 
@@ -459,7 +459,7 @@ export class SyncHandler {
         // 10 failures -> try to sync from (n-2) snapshots
         // 15 failures -> try to sync from (n-3) snapshots
         // 20 failures -> restart the node (n-1) snapshot loaded and placed in trash
-        //this.miniLogger.log('Sync failure occurred, restarting sync process', (m) => { console.error(m); });
+        //this.miniLogger.log('Sync failure occurred, restarting sync process', (m, c) => console.info(m, c));
         return message;
     }
 }

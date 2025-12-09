@@ -102,7 +102,7 @@ export class Wallet {
         const startTime = performance.now();
         const nbOfExistingAccounts = this.accountsGenerated[addressPrefix].length;
         const accountToGenerate = nbOfAccounts - nbOfExistingAccounts < 0 ? 0 : nbOfAccounts - nbOfExistingAccounts;
-        this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix} | nbWorkers: ${this.nbOfWorkers}`, (m) => { console.info(m); });
+        this.miniLogger.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix} | nbWorkers: ${this.nbOfWorkers}`, (m, c) => console.info(m, c));
         //console.log(`[WALLET] deriving ${accountToGenerate} accounts with prefix: ${addressPrefix}`);
 
         const progressLogger = new ProgressLogger(accountToGenerate, '[WALLET] deriving accounts');
@@ -139,23 +139,23 @@ export class Wallet {
 
             if (!derivationResult) {
                 const derivedAccounts = this.accounts[addressPrefix].slice(nbOfExistingAccounts).length;
-                this.miniLogger.log(`Failed to derive account (derived: ${derivedAccounts})`, (m) => { console.error(m); });
+                this.miniLogger.log(`Failed to derive account (derived: ${derivedAccounts})`, (m, c) => console.info(m, c));
                 //console.log(`Failed to derive account (derived: ${derivedAccounts})`);
                 return {};
             }
 
             const account = derivationResult.account;
             const iterations = derivationResult.iterations;
-            if (!account) { this.miniLogger.log('deriveAccounts interrupted!', (m) => { console.error(m); }); return {}; }
+            if (!account) { this.miniLogger.log('deriveAccounts interrupted!', (m, c) => console.info(m, c)); return {}; }
             //if (!account) { console.log('deriveAccounts interrupted!'); return {}; }
 
             iterationsPerAccount += iterations;
             this.accounts[addressPrefix].push(account);
-            progressLogger.logProgress(this.accounts[addressPrefix].length - nbOfExistingAccounts, (m) => { console.log(m); });
+            progressLogger.logProgress(this.accounts[addressPrefix].length - nbOfExistingAccounts, (m, c) => console.info(m, c));
         }
 
         if (this.accounts[addressPrefix].length !== nbOfAccounts) {
-            this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m) => { console.error(m); });
+            this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m, c) => console.info(m, c));
             //console.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`);
             return {};
         }
@@ -164,7 +164,7 @@ export class Wallet {
         const derivedAccounts = this.accounts[addressPrefix].slice(nbOfExistingAccounts);
         const avgIterations = derivedAccounts.length > 0 ? Math.round(iterationsPerAccount / derivedAccounts.length) : 0;
         this.miniLogger.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
-avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, (m) => { console.info(m); });
+avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, (m, c) => console.info(m, c));
 		if (contrastStorage) await this.saveAccounts(contrastStorage);
 
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
@@ -243,7 +243,7 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
                 }
             } catch (error) {
                 const errorSkippingLog = ['Address does not meet the security level'];
-                if (!errorSkippingLog.includes(error.message.slice(0, 40))) this.miniLogger.log(error.stack, (m) => { console.error(m); });
+                if (!errorSkippingLog.includes(error.message.slice(0, 40))) this.miniLogger.log(error.stack, (m, c) => console.info(m, c));
             }
         }
 

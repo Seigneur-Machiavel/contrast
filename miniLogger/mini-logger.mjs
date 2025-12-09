@@ -1,15 +1,12 @@
-const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
+// NODEJS VERSION OF THE MINI LOGGER
 
+const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
 let fs;
 let path;
 let __dirname;
 let basePath = __dirname;
 (async () => {
     if (!isNode) return;
-
-    //path = await import('path');
-    //fs = await import('fs');
-    //const url = await import('url');
     try { path = await import('path'); } catch (error) { path = window.path; }
     try { fs = await import('fs'); } catch (error) { fs = window.fs; }
     let url;
@@ -19,7 +16,6 @@ let basePath = __dirname;
     const __filename = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
     const parentFolder = path.dirname(__filename);
     basePath = path.join(path.dirname(parentFolder), 'miniLogger');
-    //basePath = parentFolder;
 })();
 /**
  * @typedef MiniLoggerConfig
@@ -27,16 +23,16 @@ let basePath = __dirname;
  * @property {boolean} allActive
  * @property {{ [key: string]: boolean }} activeCategories */
 const MiniLoggerConfig = () => {
-    return { maxHistory: 100, allActive: false, activeCategories: { global: true } };
-}
-async function loadedImports() {
-    while (!fs || !path || !basePath) await new Promise(resolve => setTimeout(resolve, 100));
+    return {
+		maxHistory: 100,
+		allActive: false,
+		activeCategories: { global: true },
+		colors: { }
+	};
 }
 
 /** @returns {MiniLoggerConfig} */
-export async function loadDefaultConfig() {
-    await loadedImports();
-
+export function loadDefaultConfig() {
     const defaultConfigPath = path.join(basePath, 'mini-logger-config.json');
     if (!fs.existsSync(defaultConfigPath)) return MiniLoggerConfig();
 
@@ -44,10 +40,8 @@ export async function loadDefaultConfig() {
     return defaultConfig;
 }
 /** @returns {MiniLoggerConfig} */
-export async function loadMergedConfig() {
-    await loadedImports();
-
-    const defaultConfig = await loadDefaultConfig();
+export function loadMergedConfig() {
+    const defaultConfig = loadDefaultConfig();
     const customConfigPath = path.join(basePath, 'mini-logger-config-custom.json');
     if (!fs.existsSync(customConfigPath)) return defaultConfig;
 
@@ -55,7 +49,8 @@ export async function loadMergedConfig() {
     const config = {
         maxHistory: customConfig.maxHistory === undefined ? defaultConfig.maxHistory : customConfig.maxHistory,
         allActive: customConfig.allActive === undefined ? defaultConfig.allActive : customConfig.allActive,
-        activeCategories: defaultConfig.activeCategories
+        activeCategories: defaultConfig.activeCategories,
+		colors: defaultConfig.colors
     };
 
     for (const key in defaultConfig.activeCategories) {
@@ -63,6 +58,11 @@ export async function loadMergedConfig() {
         if (customConfig.activeCategories[key] === undefined) continue;
         config.activeCategories[key] = customConfig.activeCategories[key];
     }
+	for (const key in defaultConfig.colors) {
+		if (customConfig.colors === undefined) break;
+		if (customConfig.colors[key] === undefined) continue;
+		config.colors[key] = customConfig.colors[key];
+	}
 
     return config;
 }
@@ -74,42 +74,40 @@ export async function loadMergedConfig() {
 export class MiniLogger {
     /** @type {HistoryEntry[]} */
     history = [];
+	color;
     filePath;
-    saveRequested = false;
     exiting = false;
+	shouldLog = true;
+    saveRequested = false;
 
     /** @param {MiniLoggerConfig} miniLoggerConfig */
     constructor(category = 'global', miniLoggerConfig) {
         this.category = category;
         /** @type {MiniLoggerConfig} */
         this.miniLoggerConfig = miniLoggerConfig || {};
-        this.shouldLog = true;
-
         this.#init();
     }
     async #init() {
         if (!isNode) return;
 
-        await loadedImports();
-
         this.filePath = path.join(basePath, 'history', `${this.category}-history.json`);
-        this.history = await this.#loadAndConcatHistory();
-        this.miniLoggerConfig = await loadMergedConfig();
+        this.history = this.#loadAndConcatHistory();
+        this.miniLoggerConfig = loadMergedConfig();
 
         const allActive = this.miniLoggerConfig.allActive;
         const categoryActive = this.miniLoggerConfig.activeCategories[this.category];
         this.shouldLog = allActive || (categoryActive === undefined ? true : categoryActive);
+		this.color = this.miniLoggerConfig.colors[this.category];
         this.#saveHistoryLoop();
 
-        if (!isNode) return;
         // nodejs onclose -> save history
         //! Possible EventEmitter memory leak detected. 11 exit listeners ...
-        /*process.on('exit', () => {
+        process.on('exit', () => {
             this.exiting = true;
             fs.writeFileSync(this.filePath, JSON.stringify(this.history));
-        });*/
+        });
     }
-    async #loadAndConcatHistory() {
+    #loadAndConcatHistory() {
         if (!fs.existsSync(path.join(basePath, 'history'))) { fs.mkdirSync(path.join(basePath, 'history')); };
         if (!fs.existsSync(this.filePath)) return [];
         
@@ -136,14 +134,13 @@ export class MiniLogger {
         this.history.push({ time: Date.now(), type, message });
 
         const maxHistory = this.miniLoggerConfig.maxHistory || 100;
-        //if (this.history.length > maxHistory) this.history.shift();
         while (this.history.length > maxHistory) this.history.shift();
         this.saveRequested = true;
     }
-    log(message, callback = (m) => { console.log(m); }) {
+    log(message, callback = (m, c) => console.log(m, c)) {
         const type = callback.toString().split('console.')[1].split('(')[0].trim();
         if (isNode) this.#saveLog(type, message);
-        if (this.shouldLog && typeof callback === 'function') callback(message);
+        if (this.shouldLog && typeof callback === 'function') callback(`%c${message}`, this.color);
     }
     getReadableHistory() {
         return this.history.map(entry => {

@@ -79,9 +79,7 @@ async function mineBlockUntilValid() {
 			hashRateCalculator.newHash(performance.now() - startTime);
 			//console.log('hashTime', Math.round(performance.now() - startTime), 'ms');
 			
-			const { conform } = mining.verifyBlockHashConformToDifficulty(mined.bitsArrayAsString, mined.finalizedBlock);
-			if (!conform) continue;
-
+			if (!mining.verifyBlockHashConformToDifficulty(mined.bitsArrayAsString, mined.finalizedBlock).conform) continue;
 			const now = Date.now() + minerVars.timeOffset;
 			const blockReadyIn = Math.max(mined.finalizedBlock.timestamp - now, 0);
 			await new Promise((resolve) => setTimeout(resolve, blockReadyIn));

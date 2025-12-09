@@ -2,19 +2,22 @@ import { BlocksCache } from './blockchain-cache.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockUtils } from './block.mjs';
 import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.mjs';
+import { SnapshotSystem } from './snapshot.mjs';
 
 /**
 * @typedef {import("./vss.mjs").Vss} Vss
 * @typedef {import("./mempool.mjs").MemPool} MemPool
 * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
 * @typedef {import("../../types/block.mjs").BlockData} BlockData
-* @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData
-* @typedef {import("./snapshot-system.mjs").SnapshotSystem} SnapshotSystem */
+* @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData */
 
 /** Represents the blockchain and manages its operations. */
 export class Blockchain {
     miniLogger = new MiniLogger('blockchain');
     cache = new BlocksCache(this.miniLogger);
+	blockStorage;
+	snapshotSystem;
+	addressesTxsRefsStorage;
 
 	/** @type {BlockData | null} */		lastBlock = null;
 	/** @type {BlockMiningData[]} */	blockMiningData = []; // .csv mining datas research
@@ -23,6 +26,7 @@ export class Blockchain {
 	constructor(storage) {
 		if (!storage) return;
 		this.blockStorage = new BlockchainStorage(storage);
+		this.snapshotSystem = new SnapshotSystem(storage);
 		this.addressesTxsRefsStorage = new AddressesTxsRefsStorage(storage);
 		this.currentHeight = this.blockStorage.lastBlockIndex;
 	}
@@ -45,9 +49,7 @@ export class Blockchain {
         this.currentHeight = startHeight;
         this.lastBlock = startHeight < 0 ? null : this.getBlock(startHeight);
 
-        // Cache + db cleanup
-        this.blockStorage.removeBlocksHigherThan(startHeight);
-
+        this.blockStorage.removeBlocksHigherThan(startHeight); // Cache + db cleanup
         if (startHeight === -1) this.reset(); // no snapshot to load => reset the db
         return startHeight;
     }
@@ -60,7 +62,7 @@ export class Blockchain {
 			else break;
         }
 
-        this.miniLogger.log(`Blocks loaded from ${indexStart} to ${indexEnd}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`Blocks loaded from ${indexStart} to ${indexEnd}`, (m, c) => console.debug(m, c));
     }
     /** Adds a new confirmed block to the blockchain.
      * @param {UtxoCache} utxoCache - The UTXO cache to use for the block.
@@ -70,7 +72,7 @@ export class Blockchain {
      * @param {Object<string, string>} [blockPubKeysAddresses] - The block public keys and addresses.
      * @throws {Error} If the block is invalid or cannot be added. */
     addConfirmedBlock(utxoCache, block, persistToDisk = true, saveBlockInfo = true, totalFees) {
-        //this.miniLogger.log(`Adding new block: #${block.index}, blockHash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
+        //this.miniLogger.log(`Adding new block: #${block.index}, blockHash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
 		const blockInfo = saveBlockInfo ? BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
 		if (persistToDisk) this.blockStorage.addBlock(block);
 		if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
@@ -79,7 +81,7 @@ export class Blockchain {
 		this.lastBlock = block;
 		this.currentHeight = block.index;
 
-		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m) => { console.info(m); });
+		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
 		return blockInfo;
     }
     /** Applies the changes from added blocks to the UTXO cache and VSS.
@@ -104,7 +106,7 @@ export class Blockchain {
         // if the snapHeight is the same as the indexStart, we need to start from the next block
         if (existingSnapHeight === startIndex) startIndex += 1;
         if (existingSnapHeight +1 !== startIndex) {
-            this.miniLogger.log(`Addresses transactions references snapHeight mismatch: ${existingSnapHeight} != ${indexStart}`, (m) => { console.error(m); });
+            this.miniLogger.log(`Addresses transactions references snapHeight mismatch: ${existingSnapHeight} != ${indexStart}`, (m, c) => console.info(m, c));
             return;
         }
         
@@ -172,7 +174,7 @@ export class Blockchain {
         const saveTime = performance.now() - saveStart;
         
         const logText = `AddressesTxsRefs persisted from #${startIndex} to #${indexEnd}(included) -> Duplicates: ${totalDuplicates}/${totalRefs}(${duplicateCountTime.toFixed(2)}ms) - TotalTime: ${(performance.now() - startTime).toFixed(2)}ms - GTROA: ${totalGTROA_time.toFixed(2)}ms - SaveTime: ${saveTime.toFixed(2)}ms`;
-        this.miniLogger.log(logText, (m) => console.info(m));
+        this.miniLogger.log(logText, (m, c) => console.info(m, c));
     }
     /** @param {MemPool} memPool @param {string} address @param {number} [from=0] @param {number} [to=this.currentHeight] */
     getTxsReferencesOfAddress(memPool, address, from = 0, to = this.currentHeight) {
@@ -271,7 +273,7 @@ export class Blockchain {
         //console.warn(`[DB] Read cache: ${readCacheTime}ms - [DB] getBlock: ${(performance.now() - startTimestamp).toFixed(5)}ms`);
         if (block) return block;
 
-        this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m) => { console.error(m); });
+        this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m, c) => console.info(m, c));
         return null;
     }
     /** @param {string} txReference - The transaction reference in the format "height:txId" */
@@ -285,13 +287,59 @@ export class Blockchain {
         }
 
         try { return this.blockStorage.retreiveTx(txReference, includeTimestamp); } // Try from disk
-        catch (error) { this.miniLogger.log(`${txReference} => ${error.message}`, (m) => { console.error(m); }); }
+        catch (error) { this.miniLogger.log(`${txReference} => ${error.message}`, (m, c) => console.info(m, c)); }
 
         return null;
+    }
+	/** @param {import('./node.mjs').ContrastNode} node @param {number} [snapshotIndex] @param {boolean} [eraseHigher] */
+	async loadSnapshot(node, snapshotIndex = 0, eraseHigher = true) {
+        const snapHeights = this.snapshotSystem.mySnapshotsHeights();
+        const olderSnapHeight = snapHeights[0];
+        const persistedHeight = olderSnapHeight - this.snapshotSystem.snapshotHeightModulo;
+
+        if (snapshotIndex < 0) return persistedHeight;
+
+        this.miniLogger.log(`Last known snapshot index: ${snapshotIndex}`, (m, c) => console.info(m, c));
+        this.currentHeight = snapshotIndex;
+        this.addressesTxsRefsStorage.pruneAllUpperThan(persistedHeight);
+        // node.blockCandidate = null;
+        await this.snapshotSystem.rollBackTo(snapshotIndex, node.utxoCache, node.vss, node.memPool);
+
+        this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m, c) => console.info(m, c));
+        if (snapshotIndex < 1) { this.reset(); this.checkpointSystem?.resetCheckpoints() } // reset (:not: active) Checkpoints.
+
+        this.lastBlock = this.getBlock(snapshotIndex);
+
+        // place snapshot to trash folder, we can restaure it if needed
+        if (eraseHigher) this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
+        return persistedHeight;
+    }
+	/** @param {import('./node.mjs').ContrastNode} node @param {BlockData} finalizedBlock */
+    async saveSnapshot(node, finalizedBlock) {
+        if (finalizedBlock.index === 0) return;
+        if (finalizedBlock.index % this.snapshotSystem.snapshotHeightModulo !== 0) return;
+		
+        // erase the outdated blocks cache and persist the addresses transactions references to disk
+        const eraseUnder = this.snapshotSystem.snapshotHeightModulo * this.snapshotSystem.snapshotToConserve;
+        const cacheErasable = this.cache.erasableLowerThan(finalizedBlock.index - (eraseUnder - 1));
+        if (cacheErasable !== null && cacheErasable.from < cacheErasable.to) {
+            await this.persistAddressesTransactionsReferencesToDisk(node.memPool, cacheErasable.from, cacheErasable.to);
+            node.updateState(`snapshot - erase cache #${cacheErasable.from} to #${cacheErasable.to}`);
+            this.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
+        }
+
+        await this.snapshotSystem.newSnapshot(node.utxoCache, node.vss, node.memPool, true);
+        this.snapshotSystem.moveSnapshotsLowerThanHeightToTrash(finalizedBlock.index - eraseUnder);
+        // avoid gap between the loaded snapshot and the new one
+        // at this stage we know that the loaded snapshot is consistent with the blockchain
+        if (this.snapshotSystem.loadedSnapshotHeight < finalizedBlock.index - (eraseUnder*2))
+            this.snapshotSystem.loadedSnapshotHeight = 0;
+
+        this.snapshotSystem.restoreLoadedSnapshot();
     }
     reset() {
         this.blockStorage.reset();
         this.addressesTxsRefsStorage.reset();
-        this.miniLogger.log('Database erased', (m) => { console.info(m); });
+        this.miniLogger.log('Database erased', (m, c) => console.info(m, c));
     }
 }

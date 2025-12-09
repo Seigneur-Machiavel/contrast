@@ -6,12 +6,12 @@ import { BlockUtils } from './block.mjs';
 import { UtxoCache } from './utxo-cache.mjs';
 import { Blockchain } from './blockchain.mjs';
 import { MESSAGE } from '../../types/messages.mjs';
-import { serializer } from '../../utils/serializer.mjs';
-import { Transaction_Builder } from './transaction.mjs';
+//import { serializer } from '../../utils/serializer.mjs';
+//import { Transaction_Builder } from './transaction.mjs';
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
-//import { SnapshotSystem, CheckpointSystem } from './snapshot-system.mjs';
+//import { CheckpointSystem } from './snapshot.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 /**
@@ -43,7 +43,7 @@ export async function createContrastNode(options = {}) {
 
 export class ContrastNode {
 	syncAndReady = false;
-	miniLogger = new MiniLogger('node');
+	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
 	/** @type {{ validator: string | null, miner: string | null }} */
 	rewardAddresses = { validator: null, miner: null };
@@ -76,7 +76,7 @@ export class ContrastNode {
 		this.verb = verb;
 		
 		this.miner.startWithWorker();
-		this.p2pNode.onPeerConnect(() => console.log('Peer connected to Contrast node'));
+		this.p2pNode.onPeerConnect(() => this.logger.log('Peer connected to Contrast node', (m, c) => console.log(m, c)));
 	}
 
 	// GETTERS --------------------------------------------------------------------------
@@ -93,7 +93,7 @@ export class ContrastNode {
     }
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
 	async start(wallet) {
-		//console.log(`${this.p2pNode.time} - ${Date.now()}`); // control the clock
+		this.logger.log(`Starting Contrast node...`, (m, c) => console.log(m, c)); // control the clock
 		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
 		// TODO: PRUNE CHECKPOINTS AND LOAD SNAPSHOT
@@ -109,10 +109,10 @@ export class ContrastNode {
 
 	}
 	async stop() {
-		if (this.verb >= 1) console.log(`Stopping Contrast node...`);
+		if (this.verb >= 1) this.logger.log(`Stopping Contrast node...`, (m, c) => console.log(m, c));
 	}
 	async restart() {
-		if (this.verb >= 1) console.log(`Restarting Contrast node...`);
+		if (this.verb >= 1) this.logger.log(`Restarting Contrast node...`, (m, c) => console.log(m, c));
 		await this.stop();
 		await this.start();
 	}
@@ -126,12 +126,11 @@ export class ContrastNode {
 		this.updateState("creating block candidate");
 		const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
 		const updated = this.miner.updateBestCandidate(myCandidate);
-		if (!updated) { this.updateState("idle", "creating block candidate"); return false; }
+		this.updateState("idle", "creating block candidate");
+		if (!updated) return false;
 
 		this.p2pNode.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
-		this.updateState("idle", "creating block candidate");
-		const callback = this.wsCallbacks.onBroadcastNewCandidate;
-        if (callback) callback.execute(BlockUtils.getBlockHeader(myCandidate));
+		this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getBlockHeader(myCandidate));
 	}
 	/** Digest and apply a finalized block to the blockchain.
      * @param {BlockData} finalizedBlock
@@ -142,30 +141,15 @@ export class ContrastNode {
     async digestFinalizedBlock(finalizedBlock, options = {}) {
         const statePrefix = options.isSync ? '(syncing) ' : '';
         this.updateState(`${statePrefix}finalized block #${finalizedBlock.index}`);
-    
-        // SUPPLEMENTARY TEST (INITIAL === DESERIALIZE)
-        const serializedBlock = serializer.serialize.block(finalizedBlock);
-        const deserializedBlock = serializer.deserialize.block(serializedBlock);
-        const blockSignature = await BlockUtils.getBlockSignature(finalizedBlock);
-        const deserializedSignature = await BlockUtils.getBlockSignature(deserializedBlock);
-        if (blockSignature !== deserializedSignature) {
-            console.error('blockSignature !== deserializedSignature');
-            console.error(finalizedBlock);
-            console.error(deserializedBlock);
-            throw new Error('Invalid block signature');
-		}
 
         const { broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
         //if (!finalizedBlock || (this.syncHandler.isSyncing && !isSync)) 
             //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
-		if (!finalizedBlock) throw new Error('Invalid block candidate');
-        let hashConfInfo = false;
-        let validationResult;
         let totalFees;
         this.updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
-        validationResult = await BlockValidation.validateBlockProposal(this, finalizedBlock);
-        hashConfInfo = validationResult.hashConfInfo;
-        if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
+        const validationResult = await BlockValidation.validateBlockProposal(this, finalizedBlock);
+        const hashConfInfo = validationResult.hashConfInfo;
+        if (!(hashConfInfo?.conform)) throw new Error('Failed to validate block');
 
         this.updateState(`${statePrefix}applying finalized block #${finalizedBlock.index}`);
         this.memPool.addNewKnownPubKeysAddresses(validationResult.allDiscoveredPubKeysAddresses);
@@ -175,14 +159,14 @@ export class ContrastNode {
         this.memPool.removeFinalizedBlocksTransactions(finalizedBlock);
         if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
     
-        //this.miniLogger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length}`, (m) => console.info(m));
+        //this.logger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length}`, (m, c) => console.info(m, c));
         const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);
         const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
         const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
-        this.miniLogger.log(`${statePrefix}#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m) => console.info(m));
+        this.logger.log(`${statePrefix}#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
 
 		// TODO: SAVE SNAPSHOT & CHECKPOINT
-        //await this.#saveSnapshot(finalizedBlock);
+        await this.blockchain.saveSnapshot(this, finalizedBlock);
         //await this.#saveCheckpoint(finalizedBlock);
         
         this.updateState("idle", "applying finalized block");

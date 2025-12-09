@@ -15,19 +15,19 @@ function setShortcuts(windows, dev = true) {
 
     // TOGGLE DEVTOOLS
     if (shortcutsKeys.toggleDevTools.enabled) globalShortcut.register(shortcutsKeys.toggleDevTools.key, () => {
-        shortcutsLogger.log(`DevTools shortcut pressed (${shortcutsKeys.toggleDevTools.key})`, (m) => { console.log(m); });
+        shortcutsLogger.log(`DevTools shortcut pressed (${shortcutsKeys.toggleDevTools.key})`, (m, c) => console.info(m, c));
         if (!BrowserWindow.getFocusedWindow()) return;
         BrowserWindow.getFocusedWindow().webContents.toggleDevTools();
     });
     // TOOGLE NODE DASHBOARD
     /*if (shortcutsKeys.nodeDashboard.enabled) globalShortcut.register(shortcutsKeys.nodeDashboard.key, () => {
-        shortcutsLogger.log(`Node dashboard shortcut pressed (${shortcutsKeys.nodeDashboard.key})`, (m) => { console.log(m); });
+        shortcutsLogger.log(`Node dashboard shortcut pressed (${shortcutsKeys.nodeDashboard.key})`, (m, c) => console.info(m, c));
         const nodeDashboardWindowVisible = windows.nodeDashboard.isVisible();
         if (!nodeDashboardWindowVisible) { windows.nodeDashboard.show(); windows.nodeDashboard.reload(); } else { windows.nodeDashboard.hide(); }
     });*/
     // RELOAD
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {
-        shortcutsLogger.log(`Reload shortcut pressed (${shortcutsKeys.reload.key})`, (m) => { console.log(m); });
+        shortcutsLogger.log(`Reload shortcut pressed (${shortcutsKeys.reload.key})`, (m, c) => console.info(m, c));
 
         const focusedWindow = BrowserWindow.getFocusedWindow();
         if (!focusedWindow) return;
@@ -37,12 +37,12 @@ function setShortcuts(windows, dev = true) {
     });
     // TOGGLE LOGGER SETTINGS MENU
     if (shortcutsKeys.toggleLoggerSettingsMenu.enabled) globalShortcut.register(shortcutsKeys.toggleLoggerSettingsMenu.key, () => {
-        shortcutsLogger.log(`Logger settings shortcut pressed (${shortcutsKeys.toggleLoggerSettingsMenu.key})`, (m) => { console.log(m); });
+        shortcutsLogger.log(`Logger settings shortcut pressed (${shortcutsKeys.toggleLoggerSettingsMenu.key})`, (m, c) => console.info(m, c));
         const loggerWindowVisible = windows.logger.isVisible();
         if (!loggerWindowVisible) { windows.logger.show(); windows.logger.reload(); } else { windows.logger.hide(); }
     });
 
-    shortcutsLogger.log('Shortcuts set', (m) => { console.log(m); });
+    shortcutsLogger.log('Shortcuts set', (m, c) => console.info(m, c));
 };
 
 module.exports = setShortcuts;

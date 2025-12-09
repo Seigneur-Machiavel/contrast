@@ -53,7 +53,7 @@ export class BlocksCache {
             erasableUntil = i;
         }
 
-        this.miniLogger.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`, (m, c) => console.debug(m, c));
         return { from: oldestHeight, to: erasableUntil };
     }
     /** Erases the cache from the oldest block to the specified height(included). */
@@ -71,7 +71,7 @@ export class BlocksCache {
             erasedUntil = i;
         }
 
-        this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m) => { console.debug(m); });
+        this.miniLogger.log(`Cache erased from ${fromHeight} to ${erasedUntil}`, (m, c) => console.debug(m, c));
         return { from: fromHeight, to: erasedUntil };
     }
     getAverageBlocksDifficultyAndTimeGap() {

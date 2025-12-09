@@ -1,12 +1,12 @@
 import { Converter } from 'hive-p2p';
 import { BlockData } from '../types/block.mjs';
-import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
 import { Transaction, TxReference } from '../types/transaction.mjs';
+import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
 
 /**
- * @typedef {import("../types/transaction.mjs").UTXO} UTXO
- * @typedef {import("../node/src/utxo-cache.mjs").UtxoCache} UtxoCache
- * @typedef {import("../types/transaction.mjs").Transaction} Transaction
+* @typedef {import("../types/transaction.mjs").UTXO} UTXO
+* @typedef {import("../node/src/utxo-cache.mjs").UtxoCache} UtxoCache
+* @typedef {import("../types/transaction.mjs").Transaction} Transaction
 *
 * @typedef {Object} NodeSetting
 * @property {string} privateKey
@@ -28,7 +28,7 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 const msgpack = isNode ? (await import('../libs/msgpack.min.js')).default : window.msgpack;
 const converter = new Converter();
 
-class BinaryWriter {
+export class BinaryWriter {
 	cursor = 0;
 	buffer;
 	view;
@@ -50,7 +50,7 @@ class BinaryWriter {
 	}
 	getBytes() { return this.view; }
 }
-class BinaryReader {
+export class BinaryReader {
 	cursor = 0
 	view;
 
@@ -88,7 +88,6 @@ const lengths = {
 export const serializer = {
 	lengths,
 
-    //syncResponseMinLen: 76,
     serialize: {
         rawData(rawData) {
             /** @type {Uint8Array} */
@@ -142,7 +141,7 @@ export const serializer = {
         },
 		/** @param {Object <string, Uint8Array>} utxos */
         miniUTXOsObj(utxos) { // Here we minimize garbage.
-			const totalBytes = 0;
+			let totalBytes = 0;
 			for (const a in utxos) totalBytes += lengths.anchor + lengths.miniUTXO;
 
 			const w = new BinaryWriter(totalBytes);
@@ -167,8 +166,8 @@ export const serializer = {
             return bufferView;
         },
 		/** @param {Object<string, string>} pubkeyAddresses ex: { pubKeyHex: addressBase58, ... } */
-        pubkeyAddressesObj(pubkeyAddresses) {
-			const totalBytes = 0;
+        pubkeyAddressesObj(pubkeyAddresses) { // Here we minimize garbage.
+			let totalBytes = 0;
 			for (const p in pubkeyAddresses) totalBytes += lengths.pubKey + lengths.address;
 
 			const w = new BinaryWriter(totalBytes);
@@ -275,6 +274,16 @@ export const serializer = {
 			w.write(converter.addressBase58ToBytes(nodeSetting.minerAddress));
 			w.write([nodeSetting.minerThreads]);
             return w.getBytes();
+        },
+		/** @param {UtxoCache} utxoCache */
+        utxoCacheData(utxoCache) {
+            const totalOfBalancesSerialized = converter.numberTo8Bytes(utxoCache.totalOfBalances);
+            const totalSupplySerialized = converter.numberTo8Bytes(utxoCache.totalSupply);
+            const miniUTXOsSerialized = serializer.serialize.miniUTXOsObj(utxoCache.unspentMiniUtxos);
+			const w = new BinaryWriter(8 + 8 + miniUTXOsSerialized.length);
+			w.multiWrite([totalOfBalancesSerialized, totalSupplySerialized, miniUTXOsSerialized]);
+			if (w.isWritingComplete) return w.getBytes();
+			else throw new Error('UtxoCache data is not fully serialized');
         },
 	},
     deserialize: {
