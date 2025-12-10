@@ -6,7 +6,7 @@ import { UtxoCache } from './utxo-cache.mjs';
 import { TransactionPriorityQueue } from './memPool-tx-queue.mjs';
 
 /**
- * @typedef {import('../../types/block.mjs').BlockData} BlockData
+ * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
  * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
@@ -14,6 +14,7 @@ import { TransactionPriorityQueue } from './memPool-tx-queue.mjs';
 
 export class MemPool { 
     // maxPubKeysToRemember = 1_000_000; // ~45MB -> unused!
+	/** @type {Object<string, string>} */
     knownPubKeysAddresses = {}; // used to avoid excessive address ownership confirmation
     /** @type {TransactionPriorityQueue} */
     transactionQueue = new TransactionPriorityQueue();
@@ -71,7 +72,7 @@ export class MemPool {
         for (let [pubKeyHex, address] of Object.entries(discoveredPubKeysAddresses))
             this.knownPubKeysAddresses[pubKeyHex] = address;
     }
-    /** @param {BlockData[]} blockData */
+    /** @param {BlockFinalized[]} blockData */
     removeFinalizedBlocksTransactions(blockData) {
         const Txs = blockData.Txs;
         if (!Array.isArray(Txs)) throw new Error('Txs is not an array');

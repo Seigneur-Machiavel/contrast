@@ -1,6 +1,7 @@
 /**
 * @typedef {import("./node.mjs").Node} Node
-* @typedef {import("../../types/block.mjs").BlockData} BlockData
+* @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
+* @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * @typedef {import("../../types/block.mjs").BlockInfo} BlockInfo
 */
 
@@ -128,7 +129,7 @@ function sendToClients(message, wsClients) {
 const CALLBACKS_FUNCTIONS = {
     node: {
         /** send the block candidate when the local node broadcast it
-         * @param {BlockData} block
+         * @param {BlockCandidate} block
          * @param {WebSocket[]} wsClients
          * @emits msgSent: { type: 'broadcast_new_candidate', data: block, trigger } */
         onBroadcastNewCandidate: (block, wsClients = [], trigger = '') => {
@@ -147,26 +148,26 @@ const CALLBACKS_FUNCTIONS = {
     },
     miner: {
         /** send the finalized block when local miner broadcast it
-         * @param {BlockData} blockHeader
+         * @param {BlockFinalized} block
          * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'broadcast_finalized_block', data: blockHeader, trigger } */
-        onBroadcastFinalizedBlock: (blockHeader, wsClients = [], trigger = '') => {
-            sendToClients({ type: 'broadcast_finalized_block', data: blockHeader, trigger }, wsClients);
+         * @emits msgSent: { type: 'broadcast_finalized_block', data: block, trigger } */
+        onBroadcastFinalizedBlock: (block, wsClients = [], trigger = '') => {
+            sendToClients({ type: 'broadcast_finalized_block', data: block, trigger }, wsClients);
         },
         /** send the block candidate when the local miner receive it
-         * @param {BlockData} blockData
+         * @param {BlockCandidate} block
          * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'receive_block_candidate', data: blockData, trigger } */
-        onReceiveBlockCandidate: (blockData, wsClients = [], trigger = '') => {
-            sendToClients({ type: 'receive_block_candidate', data: blockData, trigger }, wsClients);
+         * @emits msgSent: { type: 'receive_block_candidate', data: block, trigger } */
+        onReceiveBlockCandidate: (block, wsClients = [], trigger = '') => {
+            sendToClients({ type: 'receive_block_candidate', data: block, trigger }, wsClients);
         },
         /** send the best block candidate when the local miner update it
-         * @param {BlockData} blockData
+         * @param {BlockCandidate} block
          * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'best_block_candidate_changed', data: blockData, trigger }
+         * @emits msgSent: { type: 'best_block_candidate_changed', data: block, trigger }
          */
-        onBestBlockCandidateChange: (blockData, wsClients = [], trigger = '') => {
-            sendToClients({ type: 'best_block_candidate_changed', data: blockData, trigger }, wsClients);
+        onBestBlockCandidateChange: (block, wsClients = [], trigger = '') => {
+            sendToClients({ type: 'best_block_candidate_changed', data: block, trigger }, wsClients);
         },
         /** send the local miner hashRate to the clients
          * @param {number} hashRate - hash rate of the miner

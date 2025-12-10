@@ -1,10 +1,11 @@
 
 /**
- * @typedef {import('../types/block.mjs').BlockData} BlockData
+ * @typedef {import('../types/block.mjs').BlockCandidate} BlockCandidate
+ * @typedef {import('../types/block.mjs').BlockFinalized} BlockFinalized
  */
 
 export class BLOCK_CANDIDATE_MSG {
-	/** @param {BlockData} blockCandidate */
+	/** @param {BlockCandidate} blockCandidate */
 	constructor(blockCandidate) {
 		this.type = 'blockCandidate';
 		this.data = blockCandidate;
@@ -12,7 +13,7 @@ export class BLOCK_CANDIDATE_MSG {
 }
 
 export class BLOCK_FINALIZED_MSG {
-	/** @param {BlockData} finalizedBlock */
+	/** @param {BlockFinalized} finalizedBlock */
 	constructor(finalizedBlock) {
 		this.type = 'new_block_finalized';
 		this.data = finalizedBlock;

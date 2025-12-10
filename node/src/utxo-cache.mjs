@@ -6,7 +6,7 @@ import { UTXO } from '../../types/transaction.mjs';
 
 /**
 * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
-* @typedef {import("../../types/block.mjs").BlockData} BlockData
+* @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 * @typedef {import("../../types/transaction.mjs").TxReference} TxReference
@@ -34,19 +34,17 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     }
 
     // ----- PUBLIC METHODS -----
-    /** Sort new UTXOs and consumed UTXOs of the block @param {BlockData} blockData */
-    preDigestFinalizedBlock(blockData) {
-        const blockIndex = blockData.index;
-        const Txs = blockData.Txs;
-        if (!Array.isArray(Txs)) throw new Error('Txs is not an array');
+    /** Sort new UTXOs and consumed UTXOs of the block @param {BlockFinalized} block */
+    preDigestFinalizedBlock(block) {
+        if (!Array.isArray(block.Txs)) throw new Error('Txs is not an array');
 
         //console.log(`Digesting block ${blockIndex} with ${Txs.length} transactions`);
 		/** @type {UTXO[]} */ 		const newStakesOutputs = [];
 		/** @type {UTXO[]} */ 		const newUtxos = [];
 		/** @type {TxAnchor[]} */ 	const consumedUtxoAnchors = [];
-        for (let i = 0; i < Txs.length; i++) {
-            const transaction = Txs[i];
-			const txReference = `${blockIndex}:${i}`;
+        for (let i = 0; i < block.Txs.length; i++) {
+            const transaction = block.Txs[i];
+			const txReference = `${block.index}:${i}`;
             const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(txReference, transaction);
             newStakesOutputs.push(...newStakesOutputsFromTx);
             newUtxos.push(...newUtxosFromTx);
@@ -57,13 +55,9 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 
         return { newStakesOutputs, newUtxos, consumedUtxoAnchors };
     }
-    /** Add the new UTXOs and Remove the consumed UTXOs
-     * @param {BlockData} blockData @param {UTXO[]} newUtxos @param {TxAnchor[]} consumedUtxoAnchors */
-    digestFinalizedBlock(blockData, newUtxos, consumedUtxoAnchors) {
-        const supplyFromBlock = blockData.supply;
-        const coinBase = blockData.coinBase;
-        this.totalSupply = supplyFromBlock + coinBase;
-
+    /** Add the new UTXOs and Remove the consumed UTXOs @param {BlockFinalized} block @param {UTXO[]} newUtxos @param {TxAnchor[]} consumedUtxoAnchors */
+    digestFinalizedBlock(block, newUtxos, consumedUtxoAnchors) {
+        this.totalSupply = block.supply + block.coinBase;
         this.#digestNewUtxos(newUtxos);
         this.#digestConsumedUtxos(consumedUtxoAnchors);
     }

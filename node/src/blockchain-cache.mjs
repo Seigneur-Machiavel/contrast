@@ -1,13 +1,14 @@
+
 import { mining } from '../../utils/mining-functions.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 /**
- * @typedef {import("../../types/block.mjs").BlockData} BlockData
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  */
 
 export class BlocksCache {
-    /** @type {Map<string, BlockData>} */
+    /** @type {Map<string, BlockFinalized>} */
     blocksByHash = new Map();
     /** @type {Map<number, string>} */
     blocksHashByHeight = new Map();
@@ -24,7 +25,7 @@ export class BlocksCache {
         if (this.blocksHashByHeight.size === 0) return -1;
         return Math.min(...this.blocksHashByHeight.keys());
     }
-    /** @param {BlockData} block */
+    /** @param {BlockFinalized} block */
     addBlock(block) {
         this.blocksByHash.set(block.hash, block);
         this.blocksHashByHeight.set(block.index, block.hash);
@@ -43,15 +44,12 @@ export class BlocksCache {
     }
     /** returns the height of erasable blocks without erasing them. @param {number} height */
     erasableLowerThan(height = 0) {
-        let erasableUntil = null;
-        const oldestHeight = this.oldestBlockHeight();
+		const oldestHeight = this.oldestBlockHeight();
         if (oldestHeight >= height) return null;
-
-        for (let i = oldestHeight; i < height; i++) {
-            const blockHash = this.blocksHashByHeight.get(i);
-            if (!blockHash) continue;
-            erasableUntil = i;
-        }
+		
+        let erasableUntil = oldestHeight;
+        for (let i = oldestHeight; i < height; i++)
+            if (this.blocksHashByHeight.has(i)) erasableUntil = i;
 
         this.miniLogger.log(`Cache erasable from ${oldestHeight} to ${erasableUntil}`, (m, c) => console.debug(m, c));
         return { from: oldestHeight, to: erasableUntil };

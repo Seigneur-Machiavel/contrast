@@ -5,10 +5,10 @@ import { BlockUtils } from '../src/block.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 
 /**
- * @typedef {import("../../types/block.mjs").BlockData} BlockData
+ * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  */
 
-/** @param {BlockData} blockCandidate @param {string} signatureHex @param {string} nonce */
+/** @param {BlockCandidate} blockCandidate @param {string} signatureHex @param {string} nonce */
 async function mineBlock(blockCandidate, signatureHex, nonce) {
 	try {
 		const blockHash = await mining.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
@@ -92,9 +92,9 @@ async function mineBlockUntilValid() {
 }
 async function prepareBlockCandidateBeforeMining() {
 	//let time = performance.now();
-	/** @type {BlockData} */
+	/** @type {BlockCandidate} */
 	const blockCandidate = minerVars.blockCandidate;
-	const clonedCandidate = BlockUtils.cloneBlockData(blockCandidate);
+	const clonedCandidate = BlockUtils.cloneBlockCandidate(blockCandidate);
 	//console.log(`prepareNextBlock: ${performance.now() - time}ms`); time = performance.now();
 
 	const headerNonce = mining.generateRandomNonce().Hex;

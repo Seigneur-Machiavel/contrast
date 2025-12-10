@@ -7,8 +7,7 @@ import { Transaction, TxOutput, UTXO } from '../../types/transaction.mjs';
 
 /**
  * @typedef {import('./wallet.mjs').Account} Account
- * @typedef {import('../../types/block.mjs').BlockData} BlockData
- **/
+ * @typedef {import('../../types/block.mjs').BlockCandidate} BlockCandidate */
 
 export class Transaction_Builder {
     /** @param {UTXO[]} utxos */
@@ -41,11 +40,7 @@ export class Transaction_Builder {
         const outputs = [coinbaseOutput];
 		return new Transaction(inputs, outputs);
     }
-    /**
-     * @param {number} posReward
-     * @param {BlockData} blockCandidate
-     * @param {string} address - who will receive the reward
-     * @param {string} posStakedAddress - who will be slashed if fraud proof is provided */
+    /** @param {number} posReward @param {BlockCandidate} blockCandidate @param {string} address - who will receive the reward @param {string} posStakedAddress - who will be slashed if fraud proof is provided */
     static async createPosReward(posReward, blockCandidate, address, posStakedAddress) {
         if (typeof address !== 'string') throw new Error('Invalid address');
 
@@ -56,10 +51,7 @@ export class Transaction_Builder {
         const outputs = [posOutput];
 		return new Transaction(inputs, outputs);
     }
-    /**
-     * @param {Account} senderAccount
-     * @param {{recipientAddress: string, amount: number}[]} transfers
-     * @param {number} feePerByte // RANDOM IS TEMPORARY */
+    /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte // RANDOM IS TEMPORARY */
     static createTransfer(senderAccount, transfers, feePerByte = Math.round(Math.random() * 10) + 1) {
         const senderAddress = senderAccount.address;
         const UTXOs = senderAccount.UTXOs.filter(utxo => utxo.rule !== 'sigOrSlash');
@@ -77,9 +69,7 @@ export class Transaction_Builder {
 		return Transaction.fromUTXOs(utxos, outputs);
     }
     /** Create a transaction to stake new VSS - fee should be => amount to be staked
-     * @param {Account} senderAccount
-     * @param {string} stakingAddress
-     * @param {number} amount
+     * @param {Account} senderAccount @param {string} stakingAddress @param {number} amount
      * @param {number} feePerByte // RANDOM IS TEMPORARY
      * @param {boolean} useOnlyNecessaryUtxos - if true, the transaction will use only the necessary UTXOs to reach the amount */
     static createStakingVss(senderAccount, stakingAddress, amount, feePerByte = Math.round(Math.random() * 10) + 1) {

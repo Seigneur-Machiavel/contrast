@@ -1,16 +1,19 @@
-import { BlocksCache } from './blockchain-cache.mjs';
-import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+// @ts-check
 import { BlockUtils } from './block.mjs';
-import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.mjs';
 import { SnapshotSystem } from './snapshot.mjs';
 import { CheckpointSystem } from './checkpoint.mjs';
+import { BlocksCache } from './blockchain-cache.mjs';
+import { serializer } from '../../utils/serializer.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.mjs';
 
 /**
 * @typedef {import("./vss.mjs").Vss} Vss
 * @typedef {import("./mempool.mjs").MemPool} MemPool
 * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
 * @typedef {import("./node.mjs").ContrastNode} ContrastNode
-* @typedef {import("../../types/block.mjs").BlockData} BlockData
+* @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
+* @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData */
 
 /** Represents the blockchain and manages its operations. */
@@ -22,12 +25,12 @@ export class Blockchain {
 	checkpointSystem;
 	addressesTxsRefsStorage;
 
-	/** @type {BlockData | null} */		lastBlock = null;
-	/** @type {BlockMiningData[]} */	blockMiningData = []; // .csv mining datas research
+	/** @type {BlockFinalized | null} */	lastBlock = null;
+	/** @type {BlockMiningData[]} */		blockMiningData = []; // .csv mining datas research
 
 	/** @param {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
 	constructor(storage) {
-		if (!storage) return;
+		if (!storage) throw new Error('Blockchain constructor: storage is required.');
 		this.blockStorage = new BlockchainStorage(storage);
 		this.snapshotSystem = new SnapshotSystem(storage);
 		this.checkpointSystem = new CheckpointSystem(storage, this.blockStorage, this.snapshotSystem.miniLogger);
@@ -50,7 +53,7 @@ export class Blockchain {
         const cacheStart = olderSnapshotHeight > snapModulo ? olderSnapshotHeight - (snapModulo-1) : 0;
         this.#loadBlocksFromStorageToCache(cacheStart, startHeight);
         this.currentHeight = startHeight;
-        this.lastBlock = startHeight < 0 ? null : this.getBlock(startHeight);
+        this.lastBlock = startHeight < 0 ? null : this.getBlockFinalized(startHeight);
 
         this.blockStorage.removeBlocksHigherThan(startHeight); // Cache + db cleanup
         if (startHeight === -1) this.reset(); // no snapshot to load => reset the db
@@ -60,7 +63,7 @@ export class Blockchain {
         if (indexStart > indexEnd) return;
 
         for (let i = indexStart; i <= indexEnd; i++) {
-            const block = this.getBlock(i);
+            const block = this.getBlockFinalized(i);
             if (block) this.cache.addBlock(block);
 			else break;
         }
@@ -69,17 +72,15 @@ export class Blockchain {
     }
     /** Adds a new confirmed block to the blockchain.
      * @param {UtxoCache} utxoCache - The UTXO cache to use for the block.
-     * @param {BlockData} block - The block to add.
-     * @param {boolean} [persistToDisk=true] - Whether to persist the block to disk.
-     * @param {boolean} [saveBlockInfo=true] - Whether to save the block info.
-     * @param {Object<string, string>} [blockPubKeysAddresses] - The block public keys and addresses.
-     * @throws {Error} If the block is invalid or cannot be added. */
-    addConfirmedBlock(utxoCache, block, persistToDisk = true, saveBlockInfo = true, totalFees) {
+     * @param {BlockFinalized} block - The block to add.
+     * @param {boolean} [persistToDisk] - Whether to persist the block to disk. Default: true.
+     * @param {boolean} [saveBlockInfo] - Whether to save the block info. Default: true.
+	 * @param {number} [totalFees] - The total fees included in the block. Default: 0 (calculated if not provided). */
+    addConfirmedBlock(utxoCache, block, persistToDisk = true, saveBlockInfo = true, totalFees = 0) {
         //this.miniLogger.log(`Adding new block: #${block.index}, blockHash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
 		const blockInfo = saveBlockInfo ? BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
 		if (persistToDisk) this.blockStorage.addBlock(block);
 		if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
-		this.blockStorage.getBlockInfoByIndex(block.index);
 		this.cache.addBlock(block);
 		this.lastBlock = block;
 		this.currentHeight = block.index;
@@ -90,12 +91,12 @@ export class Blockchain {
     /** Applies the changes from added blocks to the UTXO cache and VSS.
     * @param {UtxoCache} utxoCache - The UTXO cache to update.
     * @param {Vss} vss - The VSS to update.
-    * @param {BlockData} block - The block to apply.
-    * @param {boolean} [storeAddAddressAnchors=false] - Whether to store added address anchors. */
+    * @param {BlockFinalized} block - The block to apply. */
     applyBlock(utxoCache, vss, block) {
-        const blockDataCloneToDigest = BlockUtils.cloneBlockData(block); // clone to avoid modification
+        const blockDataCloneToDigest = BlockUtils.cloneBlockFinalized(block); // clone to avoid modification
 		const { newStakesOutputs, newUtxos, consumedUtxoAnchors } = utxoCache.preDigestFinalizedBlock(blockDataCloneToDigest);
 		if (!vss.newStakes(newStakesOutputs, 'control')) throw new Error('VSS: Max supply reached during applyBlock().');
+		if (!block.timestamp) throw new Error('Block timestamp is missing during applyBlock().');
 		utxoCache.digestFinalizedBlock(blockDataCloneToDigest, newUtxos, consumedUtxoAnchors);
 		vss.newStakes(newStakesOutputs, 'persist');
 		this.blockMiningData.push({ index: block.index, difficulty: block.difficulty, timestamp: block.timestamp, posTimestamp: block.posTimestamp });
@@ -127,7 +128,7 @@ export class Blockchain {
         /** @type {Object<string, string[]>} */
         const actualizedAddrsTxsRefs = {};
         for (let i = startIndex; i <= indexEnd; i++) {
-            const finalizedBlock = this.getBlock(i);
+            const finalizedBlock = this.getBlockFinalized(i);
             if (!finalizedBlock) { console.error(`Block not found #${i}`); continue; }
 
             const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(finalizedBlock, memPool.knownPubKeysAddresses);
@@ -156,8 +157,9 @@ export class Blockchain {
             const actualizedAddressTxsRefs = actualizedAddrsTxsRefs[address];
             const cleanedTxsRefs = [];
 
-            const duplicateStart = performance.now();
+			/** @type {Object<string, boolean>} */
             const txsRefsDupiCounter = {};
+            const duplicateStart = performance.now();
             let duplicate = 0;
 			for (const txRef of actualizedAddressTxsRefs) {
 				if (txsRefsDupiCounter[txRef]) duplicate++;
@@ -192,6 +194,8 @@ export class Blockchain {
             if (!blockHash) break;
 
             const block = this.cache.blocksByHash.get(blockHash);
+			if (!block) continue;
+
             const transactionsReferencesSortedByAddress = BlockUtils.getFinalizedBlockTransactionsReferencesSortedByAddress(block, memPool.knownPubKeysAddresses);
             if (!transactionsReferencesSortedByAddress[address]) continue;
 
@@ -201,7 +205,7 @@ export class Blockchain {
 
         if (txsRefs.length === 0) return txsRefs;
 
-        // remove duplicates
+        /** @type {Object<string, boolean>} */
         const txsRefsDupiCounter = {};
         const txsRefsWithoutDuplicates = [];
         let duplicate = 0;
@@ -215,6 +219,7 @@ export class Blockchain {
         if (duplicate > 0) console.warn(`[DB] ${duplicate} duplicate txs references found for address ${address}`);
 
         // filter to preserve only the txs references in the range
+		/** @type {string[]} */
         let finalTxsRefs = [];
         for (let i = 0; i < txsRefsWithoutDuplicates.length; i++) {
             const txRef = txsRefsWithoutDuplicates[i];
@@ -237,60 +242,67 @@ export class Blockchain {
     }
     /** Retrieves a range of blocks from disk by height.
      * @param {number} fromHeight - The starting height of the range.
-     * @param {number} [toHeight=999_999_999] - The ending height of the range.
-     * @param {boolean} [deserialize=true] - Whether to deserialize the blocks. */
-    async getRangeOfBlocksByHeight(fromHeight, toHeight = 999_999_999, deserialize = true, includesInfo = false) {
+     * @param {number} [toHeight] - The ending height of the range. Default: 999,999,999. */
+    async getRangeOfBlocksBytesByHeight(fromHeight, toHeight = 999_999_999, includesInfo = false) {
         if (typeof fromHeight !== 'number' || typeof toHeight !== 'number') throw new Error('Invalid block range: not numbers');
         if (fromHeight > toHeight) throw new Error(`Invalid range: ${fromHeight} > ${toHeight}`);
 
-        const blocks = [];
-		const blocksInfo = [];
+		/** @type {Uint8Array[]} */		const blocks = [];
+		/** @type {Uint8Array[]} */	const blocksInfo = [];
         for (let i = fromHeight; i <= toHeight; i++) {
-            const blockData = this.getBlock(i, deserialize);
+            const blockData = this.getBlockBytes(i);
             if (!blockData) break;
             blocks.push(blockData);
-			if (includesInfo) blocksInfo.push(this.blockStorage.getBlockInfoByIndex(i, deserialize));
+
 			await new Promise(resolve => setImmediate(resolve)); // breathing
+			if (!includesInfo) continue;
+
+			const blockInfoBytes = this.blockStorage.getBlockInfoBytesByIndex(i);
+			if (blockInfoBytes) blocksInfo.push(blockInfoBytes);
         }
         return { blocks, blocksInfo };
     }
     /** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
-    getBlock(heightOrHash, deserialize = true) {
-        //const startTimestamp = performance.now();
-        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') return null;
-        
-        /** @type {BlockData} */
-        let block;
-
-        // try to get the block from the cache
-        if (deserialize && typeof heightOrHash === 'number' && this.cache.blocksHashByHeight.has(heightOrHash))
-            block = this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(heightOrHash));
-        
-        if (deserialize && typeof heightOrHash === 'string' && this.cache.blocksByHash.has(heightOrHash))
-            block = this.cache.blocksByHash.get(heightOrHash);
-        //const readCacheTime = (performance.now() - startTimestamp).toFixed(5);
-        if (block) return block;
-
-        // try to get the block from the storage
-        block = this.blockStorage.retreiveBlock(heightOrHash, deserialize);
-        //console.warn(`[DB] Read cache: ${readCacheTime}ms - [DB] getBlock: ${(performance.now() - startTimestamp).toFixed(5)}ms`);
-        if (block) return block;
-
-        this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m, c) => console.info(m, c));
-        return null;
+    getBlockBytes(heightOrHash) {
+        const blockBytes = this.blockStorage.retreiveBlockBytes(heightOrHash);
+        if (!blockBytes) this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m, c) => console.info(m, c));
+        return blockBytes;
     }
+	/** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
+    getBlockFinalized(heightOrHash) {
+		/** @type {BlockFinalized | undefined} */	let block;
+        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') return null;
+
+		// try to get the block from the cache
+		if (typeof heightOrHash === 'string' && this.cache.blocksByHash.has(heightOrHash))
+			block = this.cache.blocksByHash.get(heightOrHash);
+        else if (typeof heightOrHash === 'number' && this.cache.blocksHashByHeight.has(heightOrHash)) {
+			const h = this.cache.blocksHashByHeight.get(heightOrHash);
+            if (h) block = this.cache.blocksByHash.get(h);
+		}
+        
+        if (block) return block; // from cache
+
+		const blockBytes = this.getBlockBytes(heightOrHash);
+		if (!blockBytes) return null;
+		else return serializer.deserialize.blockFinalized(blockBytes); // from disk
+	}
     /** Retrieve a transaction by its reference from cache(first) or disk(fallback). @param {string} txReference - The transaction reference in the format "height:txIndex" */
     getTransactionByReference(txReference, includeTimestamp = false) {
+		// Try from cache first
         const [height, txId] = txReference.split(':');
         const index = parseInt(height, 10);
-        if (this.cache.blocksHashByHeight.has(index)) { // Try from cache first
-            const block = this.cache.blocksByHash.get(this.cache.blocksHashByHeight.get(index));
-			const tx = block.Txs[parseInt(txId, 10)];
-            return tx ? { tx, timestamp: block.timestamp } : null;
-        }
+		const h = this.cache.blocksHashByHeight.get(index);
+		const block = h ? this.cache.blocksByHash.get(h) : null;
+		const tx = block ? block.Txs[parseInt(txId, 10)] : null;
+		if (block) return tx ? { tx, timestamp: block.timestamp } : null;
 
+		// fallback to disk
         try { return this.blockStorage.retreiveTx(txReference, includeTimestamp); } // Try from disk
-        catch (error) { this.miniLogger.log(`${txReference} => ${error.message}`, (m, c) => console.info(m, c)); }
+        catch (error) {
+			// @ts-expect-error - error typing
+			this.miniLogger.log(`${txReference} => ${error.message}`, (m, c) => console.info(m, c));
+		}
 
         return null;
     }
@@ -311,13 +323,13 @@ export class Blockchain {
         this.miniLogger.log(`Snapshot loaded: ${snapshotIndex}`, (m, c) => console.info(m, c));
         if (snapshotIndex < 1) { this.reset(); this.checkpointSystem?.resetCheckpoints() } // reset (:not: active) Checkpoints.
 
-        this.lastBlock = this.getBlock(snapshotIndex);
+        this.lastBlock = this.getBlockFinalized(snapshotIndex);
 
         // place snapshot to trash folder, we can restaure it if needed
         if (eraseHigher) this.snapshotSystem.moveSnapshotsHigherThanHeightToTrash(snapshotIndex - 1);
         return persistedHeight;
     }
-	/** @param {ContrastNode} node @param {BlockData} finalizedBlock */
+	/** @param {ContrastNode} node @param {BlockFinalized} finalizedBlock */
     async saveSnapshot(node, finalizedBlock) {
         if (finalizedBlock.index === 0) return;
         if (finalizedBlock.index % this.snapshotSystem.snapshotHeightModulo !== 0) return;
@@ -331,16 +343,16 @@ export class Blockchain {
             this.cache.eraseFromTo(cacheErasable.from, cacheErasable.to);
         }
 
-        await this.snapshotSystem.newSnapshot(node.utxoCache, node.vss, node.memPool, true);
+        await this.snapshotSystem.newSnapshot(node.utxoCache, node.vss, node.memPool);
         this.snapshotSystem.moveSnapshotsLowerThanHeightToTrash(finalizedBlock.index - eraseUnder);
         // avoid gap between the loaded snapshot and the new one
         // at this stage we know that the loaded snapshot is consistent with the blockchain
-        if (this.snapshotSystem.loadedSnapshotHeight < finalizedBlock.index - (eraseUnder*2))
+        if (this.snapshotSystem.loadedSnapshotHeight < finalizedBlock.index - (eraseUnder * 2))
             this.snapshotSystem.loadedSnapshotHeight = 0;
 
         this.snapshotSystem.restoreLoadedSnapshot();
     }
-	/** @param {ContrastNode} node @param {BlockData} finalizedBlock */
+	/** @param {ContrastNode} node @param {BlockFinalized} finalizedBlock */
     async saveCheckpoint(node, finalizedBlock, pruning = true) {
         if (finalizedBlock.index < 100) return;
 

@@ -103,7 +103,7 @@ export class SyncHandler {
             let data = new Uint8Array(0);
             if (msg.type === 'getBlocks' && typeof msg.startIndex === 'number' && typeof msg.endIndex === 'number') {
                 /** @type {GetBlocksAnwser} */
-				const getBlocksAnwser = await this.node.blockchain.getRangeOfBlocksByHeight(msg.startIndex, msg.endIndex, false, msg.includesBlockInfo);
+				const getBlocksAnwser = await this.node.blockchain.getRangeOfBlocksBytesByHeight(msg.startIndex, msg.endIndex, msg.includesBlockInfo);
                 if (!getBlocksAnwser.blocks) throw new Error('(#handleIncomingStream) Failed to get serialized blocks');
                 data = serializer.serialize.rawData(getBlocksAnwser);
             }
@@ -398,7 +398,7 @@ export class SyncHandler {
                 for (let i = 0; i < serializedBlocks.length; i++) {
                     const serializedBlock = serializedBlocks[i];
                     const byteLength = serializedBlock.byteLength;
-                    const block = serializer.deserialize.block_finalized(serializedBlock);
+                    const block = serializer.deserialize.blockFinalized(serializedBlock);
                     if (checkpointMode) {
                         this.node.updateState(`Fills checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`);
                         this.miniLogger.log(`Fills checkpoint's block #${block.index}/${activeCheckpointTargetHeight}...`, (m, c) => console.info(m, c));

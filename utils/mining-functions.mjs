@@ -1,3 +1,4 @@
+// @ts-check
 import { IS_VALID } from '../types/validation.mjs';
 import { conditionnals } from './conditionnals.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from './blockchain-settings.mjs';
@@ -6,19 +7,19 @@ const logger = new MiniLogger('mining-functions');
 
 /**
 * @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash
-* @typedef {import("../types/block.mjs").BlockData} BlockData
-*/
+* @typedef {import("../types/block.mjs").BlockCandidate} BlockCandidate
+* @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
 export const mining = {
-    /** @param {BlockData} lastBlock @returns {number} - New difficulty */
+    /** @param {BlockFinalized} lastBlock @param {number} averageBlockTimeMS @param {number} [targetBlockTime] */
     difficultyAdjustment: (lastBlock, averageBlockTimeMS, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime, logs = true) => {
         const blockIndex = lastBlock.index;
         const difficulty = lastBlock.difficulty;
 
-		if (typeof difficulty !== 'number') { logger.error('Invalid difficulty', (m, c) => console.error(m, c)); return 1; }
-		if (difficulty < 1) { logger.error('Invalid difficulty < 1', (m, c) => console.error(m, c)); return 1; }
+		if (typeof difficulty !== 'number') { logger.log('Invalid difficulty', (m, c) => console.error(m, c)); return 1; }
+		if (difficulty < 1) { logger.log('Invalid difficulty < 1', (m, c) => console.error(m, c)); return 1; }
 
-        if (typeof blockIndex !== 'number') { logger.error('Invalid blockIndex', (m, c) => console.error(m, c)); return difficulty; }
+        if (typeof blockIndex !== 'number') { logger.log('Invalid blockIndex', (m, c) => console.error(m, c)); return difficulty; }
 		if (blockIndex === 0) return difficulty;
         if (blockIndex % MINING_PARAMS.blocksBeforeAdjustment !== 0) return difficulty;
 
@@ -42,9 +43,9 @@ export const mining = {
 
         return newDifficulty;
     },
-    /** @param {BlockData} blockData - undefined if genesis block */
+    /** @param {BlockCandidate | BlockFinalized} blockData - undefined if genesis block */
     calculateNextCoinbaseReward(blockData) {
-        if (!blockData) { throw new Error('Invalid blockData'); }
+        if (!blockData) throw new Error('Invalid blockData');
 
         const halvings = Math.floor( (blockData.index + 1) / BLOCKCHAIN_SETTINGS.halvingInterval );
         const coinBases = [BLOCKCHAIN_SETTINGS.rewardMagicNb1, BLOCKCHAIN_SETTINGS.rewardMagicNb2];
@@ -56,10 +57,10 @@ export const mining = {
         const maxSupplyWillBeReached = blockData.supply + coinBase >= BLOCKCHAIN_SETTINGS.maxSupply;
         return maxSupplyWillBeReached ? BLOCKCHAIN_SETTINGS.maxSupply - blockData.supply : coinBase;
     },
-    /** @param {BlockData} lastBlock @param {BlockData} olderBlock */
+    /** @param {BlockFinalized} lastBlock @param {BlockFinalized} olderBlock */
     calculateAverageBlockTime: (lastBlock, olderBlock) => {
-        if (!olderBlock) { return BLOCKCHAIN_SETTINGS.targetBlockTime; }
-        if (lastBlock.index <= olderBlock.index) { return BLOCKCHAIN_SETTINGS.targetBlockTime; }
+        if (!olderBlock) return BLOCKCHAIN_SETTINGS.targetBlockTime;
+        if (lastBlock.index <= olderBlock.index) return BLOCKCHAIN_SETTINGS.targetBlockTime;
 
         const periodInterval = lastBlock.timestamp - olderBlock.timestamp;
         const blockCount = lastBlock.index - olderBlock.index;
@@ -88,10 +89,11 @@ export const mining = {
         const newBlockHash = await argon2HashFunction(blockSignature, nonce, mem, time, parallelism, type, hashLen);
         return newBlockHash;
     },
-    /** @param {BlockData} blockData */
+    /** @param {BlockCandidate | BlockFinalized} blockData */
     getBlockFinalDifficulty: (blockData, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
-        const { difficulty, legitimacy, posTimestamp, timestamp } = blockData;
-        const powTimestamp = timestamp || posTimestamp + targetBlockTime;
+        const { difficulty, legitimacy, posTimestamp } = blockData;
+		const timestamp = 'timestamp' in blockData ? blockData.timestamp : undefined;
+        const powTimestamp = timestamp || (posTimestamp + targetBlockTime);
 
         if (!IS_VALID.POSITIVE_INTEGER(posTimestamp)) throw new Error('Invalid posTimestamp');
         if (!IS_VALID.POSITIVE_INTEGER(powTimestamp)) throw new Error('Invalid timestamp');
@@ -100,7 +102,6 @@ export const mining = {
         const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
         const legitimacyAdjustment = legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
         const finalDifficulty = Math.max(difficulty + timeDiffAdjustment + legitimacyAdjustment, 1); // cap at 1 minimum
-
         return { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty };
     },
     /** @param {number} difficulty */
@@ -110,9 +111,9 @@ export const mining = {
         return { zeros, adjust };
     },
 
-    /** @param {string} HashBitsAsString @param {BlockData} blockData */
-    verifyBlockHashConformToDifficulty: (HashBitsAsString = '', blockData) => {
-		const { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty } = mining.getBlockFinalDifficulty(blockData);
+    /** @param {string} HashBitsAsString @param {BlockFinalized} block */
+    verifyBlockHashConformToDifficulty: (HashBitsAsString = '', block) => {
+		const { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty } = mining.getBlockFinalDifficulty(block);
         const { zeros, adjust } = mining.decomposeDifficulty(finalDifficulty);
         const result = { conform: false, message: 'na', difficulty, timeDiffAdjustment, legitimacy, finalDifficulty, zeros, adjust };
 		if (typeof HashBitsAsString !== 'string') {

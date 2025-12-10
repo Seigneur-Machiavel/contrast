@@ -1,3 +1,4 @@
+// @ts-ignore
 // NODEJS VERSION OF THE MINI LOGGER
 
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
@@ -22,13 +23,11 @@ let basePath = __dirname;
  * @property {number} maxHistory
  * @property {boolean} allActive
  * @property {{ [key: string]: boolean }} activeCategories */
-const MiniLoggerConfig = () => {
-    return {
-		maxHistory: 100,
-		allActive: false,
-		activeCategories: { global: true },
-		colors: { }
-	};
+class MiniLoggerConfig {
+	maxHistory = 100;
+	allActive = false;
+	activeCategories = { global: true };
+	colors = { };
 }
 async function loadedImports() {
 	for (let i = 0; i < 10; i++) {
@@ -78,19 +77,16 @@ export function loadMergedConfig() {
  * @property {string} type - Type of the log entry (e.g., 'log', 'error', 'warn')
  * @property {string} message - The log message */
 export class MiniLogger {
-    /** @type {HistoryEntry[]} */
-    history = [];
+    /** @type {HistoryEntry[]} */		history = [];
+	/** @type {MiniLoggerConfig} */	miniLoggerConfig;
 	color;
     filePath;
     exiting = false;
 	shouldLog = true;
     saveRequested = false;
 
-    /** @param {MiniLoggerConfig} miniLoggerConfig */
-    constructor(category = 'global', miniLoggerConfig) {
+    constructor(category = 'global') {
         this.category = category;
-        /** @type {MiniLoggerConfig} */
-        this.miniLoggerConfig = miniLoggerConfig || {};
         this.#init();
     }
     async #init() {

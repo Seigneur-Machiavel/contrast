@@ -1,6 +1,6 @@
 // @ts-check
 import { Converter } from 'hive-p2p';
-import { BlockData } from '../types/block.mjs';
+import { BlockFinalized, BlockCandidate } from '../types/block.mjs';
 import { Transaction, TxOutput } from '../types/transaction.mjs';
 import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
 
@@ -26,9 +26,10 @@ import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs'
 * @property {CheckpointInfo} checkpointInfo
 */
 
-const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
-const msgpack = isNode ? (await import('../libs/msgpack.min.js')).default : window.msgpack;
 const converter = new Converter();
+const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
+// @ts-expect-error - msgpack global added by browser script
+const msgpack = isNode ? (await import('../libs/msgpack.min.js')).default : window.msgpack;
 
 export class BinaryWriter {
 	cursor = 0;
@@ -254,7 +255,7 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Transaction serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-		/** @param {BlockData} blockData @param {'finalized' | 'candidate'} [mode] default: finalized */
+		/** @param {BlockFinalized | BlockCandidate} blockData @param {'finalized' | 'candidate'} [mode] default: finalized */
         block(blockData, mode = 'finalized') {
 			if (mode === 'candidate' && blockData.Txs.length !== 1) throw new Error('Candidate block must have exactly one transaction (the validator tx)');
 
@@ -280,11 +281,15 @@ export const serializer = {
 			w.writeBytes(converter.hexToBytes(blockData.prevHash));			// prevHash
 			w.writeBytes(converter.numberTo8Bytes(blockData.posTimestamp));	// posTimestamp
 			
-			if (mode === 'finalized') w.writeBytes(converter.numberTo8Bytes(blockData.timestamp || 0)); 	// timestamp
-			if (mode === 'candidate') w.writeBytes(converter.numberTo8Bytes(blockData.powReward || 0)); 	// powReward
+			if (mode === 'finalized' && 'timestamp' in blockData)
+				w.writeBytes(converter.numberTo8Bytes(blockData.timestamp || 0)); 	// timestamp
+			if (mode === 'candidate' && 'powReward' in blockData)
+				w.writeBytes(converter.numberTo8Bytes(blockData.powReward || 0)); 	// powReward
 
-			if (mode === 'finalized') w.writeBytes(converter.hexToBytes(blockData.hash || '00'.repeat(32))); // hash
-			if (mode === 'finalized') w.writeBytes(converter.numberTo4Bytes(blockData.nonce || 0)); 		// nonce
+			if (mode === 'finalized' && 'hash' in blockData)
+				w.writeBytes(converter.hexToBytes(blockData.hash || '00'.repeat(32))); // hash
+			if (mode === 'finalized' && 'nonce' in blockData)
+				w.writeBytes(converter.numberTo4Bytes(blockData.nonce || 0)); 		// nonce
             
             // POINTERS & TXS -> This specific traitment offer better reading performance:
             // no need to deserialize the whole block to read the txs
@@ -441,7 +446,7 @@ export const serializer = {
 			return new Transaction(inputs, outputs, witnesses, undefined, undefined, version, data);
 		},
 		/** @param {Uint8Array} serializedBlock @param {'finalized' | 'candidate'} [mode] default: finalized */
-		block(serializedBlock, mode = 'finalized') {
+		blockData(serializedBlock, mode = 'finalized') {
 			const r = new BinaryReader(serializedBlock);
 			const nbOfTxs = converter.bytes2ToNumber(r.read(2));
 			const index = converter.bytes4ToNumber(r.read(4));
@@ -478,7 +483,19 @@ export const serializer = {
 			}
 
 			if (!r.isReadingComplete) throw new Error('Block is not fully deserialized');
-			return new BlockData(index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce, powReward);
+			return { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce, powReward };
+		},
+		/** @param {Uint8Array} serializedBlock */
+		blockCandidate(serializedBlock) {
+			const { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, powReward } = this.blockData(serializedBlock, 'candidate');
+			if (typeof powReward === 'undefined') throw new Error('Candidate block is missing data');
+			return new BlockCandidate(index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, powReward);
+		},
+		/** @param {Uint8Array} serializedBlock */
+		blockFinalized(serializedBlock) {
+			const { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce } = this.blockData(serializedBlock, 'finalized');
+			if (typeof hash === 'undefined' || typeof timestamp === 'undefined' || typeof nonce === 'undefined') throw new Error('Finalized block is missing data');
+			return new BlockFinalized(index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce);
 		},
 		/** @param {Uint8Array} serializedNodeSetting */
         nodeSetting(serializedNodeSetting) {

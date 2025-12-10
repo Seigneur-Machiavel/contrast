@@ -1,5 +1,7 @@
+// @ts-check
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
-import { BlockData, BlockInfo, BlockHeader } from '../../types/block.mjs';
+import { BlockInfo, BlockFinalizedHeader, BlockFinalized,
+	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { Transaction_Builder } from './transaction.mjs';
@@ -13,66 +15,31 @@ import { serializer } from '../../utils/serializer.mjs';
 */
 
 export class BlockUtils {
-    /** @param {BlockData} blockData @param {boolean} excludeCoinbaseAndPos */
-    static async #getBlockTxsHash(blockData, excludeCoinbaseAndPos = false) {
+    /** @param {BlockCandidate | BlockFinalized} block @param {boolean} excludeCoinbaseAndPos */
+    static async #getBlockTxsHash(block, excludeCoinbaseAndPos = false) {
 		const txsSignables = [];
-		for (const tx of blockData.Txs)
+		for (const tx of block.Txs)
 			txsSignables.push(Transaction_Builder.getTransactionSignableString(tx));
 
-        let firstTxIsCoinbase = blockData.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(blockData.Txs[0]) : false;
+        let firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : false;
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
-        firstTxIsCoinbase = blockData.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(blockData.Txs[0]) : false;
+        firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : false;
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
 
         const txsIDStr = txsSignables.join('');
         return await HashFunctions.SHA256(txsIDStr);
     };
-    /** Get the block signature used for mining
-     * @param {BlockData} blockData
-     * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp
-     * @returns {Promise<string>} signature Hex */
-    static async getBlockSignature(blockData, isPosHash = false) {
-        const txsHash = await this.#getBlockTxsHash(blockData, isPosHash);
-        const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = blockData;
-        let signatureStr = `${index}${supply}${coinBase}${difficulty}${legitimacy}${prevHash}${posTimestamp}${txsHash}`;
-        if (!isPosHash) signatureStr += blockData.timestamp;
+	/** @param {BlockCandidate} block */
+    static #removeExistingCoinbaseTransaction(block) {
+        if (block.Txs.length === 0) return;
 
-        return await HashFunctions.SHA256(signatureStr);
-    }
-    /** @param {BlockData} blockData */
-    static async getMinerHash(blockData) {
-        if (typeof blockData.Txs[0].inputs[0] !== 'string') throw new Error('Invalid coinbase nonce');
-        const signatureHex = await this.getBlockSignature(blockData);
-        const headerNonce = blockData.nonce;
-        const coinbaseNonce = blockData.Txs[0].inputs[0];
-        const nonce = `${headerNonce}${coinbaseNonce}`;
-        const argon2Fnc = HashFunctions.Argon2;
-        const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
-        if (!blockHash) throw new Error('Invalid block hash');
-
-        return { hex: blockHash.hex, bitsArrayAsString: blockHash.bitsString };
-    }
-    /** @param {BlockData} blockData @param {Transaction} coinbaseTx */
-    static setCoinbaseTransaction(blockData, coinbaseTx) {
-        if (Transaction_Builder.isMinerOrValidatorTx(coinbaseTx) === false) {
-			console.error('Invalid coinbase transaction');
-			return false;
-		}
-
-        this.removeExistingCoinbaseTransaction(blockData);
-        blockData.Txs.unshift(coinbaseTx);
-    }
-    /** @param {BlockData} blockData */
-    static removeExistingCoinbaseTransaction(blockData) {
-        if (blockData.Txs.length === 0) return;
-
-        const secondTx = blockData.Txs[1]; // if second tx isn't fee Tx : there is no coinbase
+        const secondTx = block.Txs[1]; // if second tx isn't fee Tx : there is no coinbase
         if (!secondTx || !Transaction_Builder.isMinerOrValidatorTx(secondTx)) return;
 
-        const firstTx = blockData.Txs[0];
-        if (firstTx && Transaction_Builder.isMinerOrValidatorTx(firstTx)) { blockData.Txs.shift(); }
+        const firstTx = block.Txs[0];
+        if (firstTx && Transaction_Builder.isMinerOrValidatorTx(firstTx)) block.Txs.shift();
     }
-    /** @param {UtxoCache} utxoCache @param {Transaction[]} Txs */
+	/** @param {UtxoCache} utxoCache @param {Transaction[]} Txs */
     static #calculateTxsTotalFees(utxoCache, Txs) {
         const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTxs(Txs);
         if (!involvedUTXOs) throw new Error('At least one UTXO not found in utxoCache');
@@ -84,13 +51,48 @@ export class BlockUtils {
 
         return totalFees;
     }
-    /** @param {UtxoCache} utxoCache @param {BlockData} blockData */
-    static calculateBlockReward(utxoCache, blockData) {
-        const totalFees = this.#calculateTxsTotalFees(utxoCache, blockData.Txs);
-        const totalReward = totalFees + blockData.coinBase;
+
+    /** Get the block signature used for mining
+     * @param {BlockCandidate | BlockFinalized} block
+     * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp
+     * @returns {Promise<string>} signature Hex */
+    static async getBlockSignature(block, isPosHash = false) {
+        const txsHash = await this.#getBlockTxsHash(block, isPosHash);
+        const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = block;
+        let signatureStr = `${index}${supply}${coinBase}${difficulty}${legitimacy}${prevHash}${posTimestamp}${txsHash}`;
+        if (!isPosHash && 'timestamp' in block) signatureStr += block.timestamp;
+
+        return await HashFunctions.SHA256(signatureStr);
+    }
+    /** @param {BlockFinalized} block */
+    static async getMinerHash(block) {
+        if (typeof block.Txs[0].inputs[0] !== 'string') throw new Error('Invalid coinbase nonce');
+        const signatureHex = await this.getBlockSignature(block);
+        const headerNonce = block.nonce;
+        const coinbaseNonce = block.Txs[0].inputs[0];
+        const nonce = `${headerNonce}${coinbaseNonce}`;
+        const argon2Fnc = HashFunctions.Argon2;
+        const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
+        if (!blockHash) throw new Error('Invalid block hash');
+
+        return { hex: blockHash.hex, bitsArrayAsString: blockHash.bitsString };
+    }
+    /** @param {BlockCandidate} block @param {Transaction} coinbaseTx */
+    static setCoinbaseTransaction(block, coinbaseTx) {
+        if (Transaction_Builder.isMinerOrValidatorTx(coinbaseTx) === false) {
+			console.error('Invalid coinbase transaction');
+			return false;
+		}
+
+        this.#removeExistingCoinbaseTransaction(block);
+        block.Txs.unshift(coinbaseTx);
+    }
+    /** @param {UtxoCache} utxoCache @param {BlockFinalized | BlockCandidate} block */
+    static calculateBlockReward(utxoCache, block) {
+        const totalFees = this.#calculateTxsTotalFees(utxoCache, block.Txs);
+        const totalReward = totalFees + block.coinBase;
         const powReward = Math.floor(totalReward / 2);
         const posReward = totalReward - powReward;
-
         return { powReward, posReward, totalFees };
     }
 	/** @param {ContrastNode} node */
@@ -98,54 +100,64 @@ export class BlockUtils {
         const lastBlock = node.blockchain.lastBlock;
         if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
         
-        const olderBlock = node.blockchain.getBlock(Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
-        const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
+        const olderBlock = node.blockchain.getBlockFinalized(Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
+        if (!olderBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
+
+		const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
         const newDifficulty = mining.difficultyAdjustment(lastBlock, averageBlockTime);
         return { averageBlockTime, newDifficulty };
     }
-    /** @param {BlockData} blockData */
-    static dataAsJSON(blockData) {
-        return JSON.stringify(blockData);
+    /** @param {BlockFinalized | BlockCandidate} block */
+    static dataAsJSON(block) {
+        return JSON.stringify(block);
     }
-    /** @param {string} blockDataJSON */
-    static blockDataFromJSON(blockDataJSON) {
-        if (!blockDataJSON) throw new Error('Invalid blockDataJSON');
-        if (typeof blockDataJSON !== 'string') throw new Error('Invalid blockDataJSON');
+	/** @param {string} blockDataJSON */
+	static candidateBlockFromJSON(blockDataJSON) {
+		if (!blockDataJSON || typeof blockDataJSON !== 'string') throw new Error('Invalid blockDataJSON');
+		const parsed = JSON.parse(blockDataJSON);
+		const { index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, powReward } = parsed;
+		return new BlockCandidate(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, powReward);
+	}
+	/** @param {string} blockDataJSON */
+	static finalizedBlockFromJSON(blockDataJSON) {
+		if (!blockDataJSON || typeof blockDataJSON !== 'string') throw new Error('Invalid blockDataJSON');
+		const parsed = JSON.parse(blockDataJSON);
+		const { index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce } = parsed;
+		return new BlockFinalized(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce);
+	}
+    /** @param {BlockFinalized} block */
+    static cloneBlockFinalized(block) {
+        return this.finalizedBlockFromJSON(this.dataAsJSON(block));
+    }
+    /** @param {BlockCandidate} block */
+    static cloneBlockCandidate(block) { // TESTING Fnc(), unused
+        return this.candidateBlockFromJSON(this.dataAsJSON(block));
+    }
+	/** @param {BlockCandidate} block */
+    static getCandidateBlockHeader(block) {
+		const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = block;
+		return new BlockCandidateHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp);
+	}
+	/** @param {BlockFinalized} block */
+	static getFinalizedBlockHeader(block) {
+		const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = block;
+		return new BlockFinalizedHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
+	}
 
-        const parsed = JSON.parse(blockDataJSON);
-        const { index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce } = parsed;
-        return new BlockData(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce);
-    }
-    /** @param {BlockData} blockData */
-    static cloneBlockData(blockData) {
-        const JSON = this.dataAsJSON(blockData);
-        return this.blockDataFromJSON(JSON);
-    }
-    /** @param {BlockData} blockData */
-    static cloneBlockCandidate(blockData) { // TESTING Fnc(), unused
-        const JSON = this.dataAsJSON(blockData);
-        const jsonClone = this.blockDataFromJSON(JSON);
-        return jsonClone;
-    }
-    /** @param {BlockData} blockData */
-    static getBlockHeader(blockData) {
-        const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = blockData;
-        return new BlockHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
-    }
-    /** @param {UtxoCache} utxoCache @param {BlockData} blockData */
-    static getFinalizedBlockInfo(utxoCache, blockData, totalFees) {
+    /** @param {UtxoCache} utxoCache @param {BlockFinalized} block */
+    static getFinalizedBlockInfo(utxoCache, block, totalFees = 0) {
         /** @type {BlockInfo} */
         const blockInfo = {
-            header: this.getBlockHeader(blockData),
-            totalFees: totalFees || this.#calculateTxsTotalFees(utxoCache, blockData.Txs),
+            header: this.getFinalizedBlockHeader(block),
+            totalFees: totalFees || this.#calculateTxsTotalFees(utxoCache, block.Txs),
             lowerFeePerByte: 0,
             higherFeePerByte: 0,
-            blockBytes: serializer.serialize.block(blockData).length,
-            nbOfTxs: blockData.Txs.length
+            blockBytes: serializer.serialize.block(block).length,
+            nbOfTxs: block.Txs.length
         };
         
-        const firstTx = blockData.Txs[2];
-        const lastTx = blockData.Txs.length - 1 <= 2 ? firstTx : blockData.Txs[blockData.Txs.length - 1];
+        const firstTx = block.Txs[2];
+        const lastTx = block.Txs.length - 1 <= 2 ? firstTx : block.Txs[block.Txs.length - 1];
 
         if (firstTx) {
             const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(firstTx);
@@ -167,13 +179,14 @@ export class BlockUtils {
 
         return blockInfo;
     }
-    /** @param {BlockData} blockData @param {Object<string, string>} blockPubKeysAddresses */
-    static getFinalizedBlockTransactionsReferencesSortedByAddress(blockData, blockPubKeysAddresses) {
+    /** @param {BlockFinalized} block @param {Object<string, string>} blockPubKeysAddresses */
+    static getFinalizedBlockTransactionsReferencesSortedByAddress(block, blockPubKeysAddresses) {
         /** @type {Object<string, string[]>} */
         const txRefsRelatedToAddress = {};
-		for (let i = 0; i < blockData.Txs.length; i++) {
-			const Tx = blockData.Txs[i];
+		for (let i = 0; i < block.Txs.length; i++) {
+			/** @type {Object<string, boolean>} */
             const addressesRelatedToTx = {};
+			const Tx = block.Txs[i];
             for (const witness of Tx.witnesses) {
                 const pubKey = witness.split(':')[1];
                 const address = blockPubKeysAddresses[pubKey];
@@ -187,14 +200,15 @@ export class BlockUtils {
             
             for (const address of Object.keys(addressesRelatedToTx)) {
                 if (!txRefsRelatedToAddress[address]) txRefsRelatedToAddress[address] = [];
-                txRefsRelatedToAddress[address].push(`${blockData.index}:${i}`);
+                txRefsRelatedToAddress[address].push(`${block.index}:${i}`);
             }
         }
 
         // CONTROL
         for (const address in txRefsRelatedToAddress) {
-            const addressTxsRefs = txRefsRelatedToAddress[address];
+			/** @type {Object<string, boolean>} */
             const txsRefsDupiCounter = {};
+            const addressTxsRefs = txRefsRelatedToAddress[address];
             let duplicate = 0;
             for (let i = 0; i < addressTxsRefs.length; i++)
                 if (txsRefsDupiCounter[addressTxsRefs[i]]) duplicate++;
@@ -209,8 +223,10 @@ export class BlockUtils {
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
 		const { blockchain, memPool, utxoCache, vss, account, miner, time } = node;
-		const posTimestamp = blockchain.lastBlock ? blockchain.lastBlock.timestamp + 1 : time;
-		if (!blockchain.lastBlock) return new BlockData(0, 0, blockReward, initDiff, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
+		if (typeof time !== 'number') throw new Error('Invalid node time');
+
+		const posTimestamp = blockchain.lastBlock?.timestamp ? blockchain.lastBlock.timestamp + 1 : time;
+		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
 		
 		const prevHash = blockchain.lastBlock.hash;
 		const myLegitimacy = await vss.getAddressLegitimacy(account.address, prevHash);
@@ -228,20 +244,20 @@ export class BlockUtils {
 		node.info.averageBlockTime = averageBlockTime;
 		const coinBaseReward = mining.calculateNextCoinbaseReward(blockchain.lastBlock);
 		const Txs = memPool.getMostLucrativeTransactionsBatch(utxoCache);
-		return new BlockData(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, Txs, posTimestamp);
+		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, Txs, posTimestamp);
 	}
 	/** Adds POS reward transaction to the block candidate and signs it
-	 * @param {ContrastNode} node @param {BlockData} blockCandidate */
-	static async signBlockCandidate(node, blockCandidate) {
+	 * @param {ContrastNode} node @param {BlockCandidate} block */
+	static async signBlockCandidate(node, block) {
 		const { utxoCache, rewardAddresses, account } = node;
 		if (!rewardAddresses.validator || !account.address) return null;
 
-		const { powReward, posReward } = BlockUtils.calculateBlockReward(utxoCache, blockCandidate);
-		const posFeeTx = await Transaction_Builder.createPosReward(posReward, blockCandidate, rewardAddresses.validator, account.address);
+		const { powReward, posReward } = BlockUtils.calculateBlockReward(utxoCache, block);
+		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator, account.address);
 		const signedPosFeeTx = account.signTransaction(posFeeTx);
-		blockCandidate.Txs.unshift(signedPosFeeTx);
-		blockCandidate.powReward = powReward; // Reward for the miner
-		return blockCandidate;
+		block.Txs.unshift(signedPosFeeTx);
+		block.powReward = powReward; // Reward for the miner
+		return block;
 	}
 	/** @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createAndSignBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {

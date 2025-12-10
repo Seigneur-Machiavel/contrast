@@ -8,7 +8,7 @@ import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /**
- * @typedef {import("../types/block.mjs").BlockData} BlockData
+ * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  */
 
 // -> Imports compatibility for Node.js, Electron and browser
@@ -578,7 +578,7 @@ export class BlockchainStorage {
         const blockFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
         return blockFilePath;
     }
-    /** @param {BlockData} blockData */
+    /** @param {BlockFinalized} blockData */
     #saveBlockBinary(blockData) {
         try {
             /** @type {Uint8Array} */
@@ -594,28 +594,20 @@ export class BlockchainStorage {
             fs.writeFileSync(filePath, binary);
         } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); }
     }
-    /** @param {BlockData} blockData @param {string} dirPath */
+    /** @param {BlockFinalized} blockData @param {string} dirPath */
     #saveBlockDataJSON(blockData, dirPath) {
         const blockFilePath = path.join(dirPath, `${blockData.index}.json`);
         fs.writeFileSync(blockFilePath, JSON.stringify(blockData, (key, value) => { return value; }));
-    }
-    #getBlock(blockIndex = 0, blockHash = '', deserialize = true) {
-        const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
-
-        /** @type {Uint8Array} */
-        const serialized = fs.readFileSync(blockFilePath);
-        if (!deserialize) return serialized;
-        return serializer.deserialize.block(serialized);
     }
     #loadBlockDataJSON(blockIndex = 0, dirPath = '') {
         const blockFileName = `${blockIndex.toString()}.json`;
         const filePath = path.join(dirPath, blockFileName);
         const blockContent = fs.readFileSync(filePath);
-        const blockData = BlockUtils.blockDataFromJSON(blockContent);
+        const blockData = BlockUtils.finalizedBlockFromJSON(blockContent);
         return blockData;
     }
 
-    /** @param {BlockData} blockData @param {boolean} saveJSON */
+    /** @param {BlockFinalized} blockData @param {boolean} saveJSON */
     addBlock(blockData, saveJSON = false) {
         const prevHash = this.hashByIndex[blockData.index - 1];
         if (blockData.prevHash !== prevHash) throw new Error(`Block #${blockData.index} rejected: prevHash mismatch`);
@@ -641,22 +633,20 @@ export class BlockchainStorage {
         const filePath = path.join(batchFolderPath, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
         fs.writeFileSync(filePath, binary);
     }
-    #blockHashIndexFormHeightOrHash(heightOrHash) {
-        const blockHash = typeof heightOrHash === 'number' ? this.hashByIndex[heightOrHash] : heightOrHash;
-        const blockIndex = typeof heightOrHash === 'string' ? this.indexByHash[heightOrHash] : heightOrHash;
-        return { blockHash, blockIndex };
-    }
     /** @param {number | string} heightOrHash - The height or the hash of the block to retrieve */
-    retreiveBlock(heightOrHash, deserialize = true) {
+    retreiveBlockBytes(heightOrHash) {
         if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') return null;
 
-        const { blockHash, blockIndex } = this.#blockHashIndexFormHeightOrHash(heightOrHash);
-        if (blockIndex === -1 || blockHash === undefined || blockIndex === undefined) return null;
+		const isParamHash = typeof heightOrHash === 'string';
+		const blockHash = isParamHash ? heightOrHash : this.hashByIndex[parseInt(heightOrHash, 10)];
+		const blockIndex = isParamHash ? this.indexByHash[heightOrHash] : heightOrHash;
+		if (blockIndex === undefined || blockHash === undefined) return null;
 
-        const block = this.#getBlock(blockIndex, blockHash, deserialize);
-        return block;
+        /** @type {Uint8Array} */
+        const serialized = fs.readFileSync(this.#blockFilePathFromIndexAndHash(blockIndex, blockHash));
+		return serialized;
     }
-    getBlockInfoByIndex(blockIndex = 0, deserialize = true) {
+    getBlockInfoBytesByIndex(blockIndex = 0) {
         const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockIndex).name;
         const batchFolderPath = path.join(this.storage.PATH.BLOCKS_INFO, batchFolderName);
         const blockHash = this.hashByIndex[blockIndex];
@@ -664,18 +654,21 @@ export class BlockchainStorage {
 
         try {
             const buffer = fs.readFileSync(blockInfoFilePath);
-            if (!deserialize) return new Uint8Array(buffer);
-
-            /** @type {BlockInfo} */
-            const blockInfo = serializer.deserialize.rawData(buffer);
-            return blockInfo;
+            return new Uint8Array(buffer);
         } catch (error) {
             storageMiniLogger.log(`BlockInfo not found ${blockIndex.toString()}-${blockHash}.bin`, (m, c) => console.info(m, c));
             storageMiniLogger.log(error.stack, (m, c) => console.info(m, c));
             return null;
         }
     }
+	getBlockInfoByIndex(blockIndex = 0) {
+		const blockInfoBytes = this.getBlockInfoBytesByIndex(blockIndex);
+		if (!blockInfoBytes) return null;
 
+		/** @type {BlockInfo} */
+		const blockInfo = serializer.deserialize.rawData(blockInfoBytes);
+		return blockInfo;
+	}
     /** @param {Uint8Array} serializedBlock @param {number} txIndex - The reference of the transaction to retrieve */
     #findTxPointerInSerializedBlock(serializedBlock, txIndex) {
 		const nbOfTxs = this.converter.bytes2ToNumber(serializedBlock.slice(0, 2));
@@ -706,7 +699,7 @@ export class BlockchainStorage {
 		const s = txRef.split(':');
         const blockIndex = parseInt(s[0], 10);
 		const txIndex = parseInt(s[1], 10);
-        const serializedBlock = this.retreiveBlock(blockIndex, false);
+        const serializedBlock = this.retreiveBlockBytes(blockIndex);
         if (!serializedBlock) return null;
 
         const timestamp = includeTimestamp ? this.#extractSerializedBlockTimestamp(serializedBlock) : undefined;

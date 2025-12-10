@@ -14,7 +14,6 @@ import { addressUtils } from '../../utils/addressUtils.mjs';
  * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
  * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker
  * 
- * @typedef {import("../../types/block.mjs").BlockData} BlockData
  * @typedef {import("../../types/transaction.mjs").TxOutput} TxOutput
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO

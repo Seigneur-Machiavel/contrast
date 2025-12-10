@@ -5,7 +5,7 @@ import { readSnapshotsHeightsOfDir } from './snapshot.mjs';
 import { BlockchainStorage, CheckpointsStorage } from '../../utils/storage.mjs';
 
 /**
- * @typedef {import('../../types/block.mjs').BlockData} BlockData
+ * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
  * @typedef {import('../../miniLogger/mini-logger.mjs').MiniLogger} MiniLogger
  * @typedef {import('../../utils/storage.mjs').ContrastStorage} ContrastStorage
  * @typedef {import('../../utils/storage.mjs').BlockchainStorage} BlockchainStorage */
@@ -207,7 +207,7 @@ export class CheckpointSystem {
 		for (const folderName of fs.readdirSync(this.storage.PATH.BLOCKS)) fs.rmSync(path.join(this.storage.PATH.BLOCKS, folderName), { recursive: true, force: true });
 		for (const folderName of fs.readdirSync(this.storage.PATH.BLOCKS_INFO)) fs.rmSync(path.join(this.storage.PATH.BLOCKS_INFO, folderName), { recursive: true, force: true });
 	}
-	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
+	/** @param {BlockFinalized} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
 	#saveBlockBinary(finalizedBlock, serializedBlock, serializedBlockInfo) {
 		const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(finalizedBlock.index).name;
 		const batchFolderPath = path.join(this.activeCheckpointPath, 'blocks', batchFolderName);
@@ -223,7 +223,7 @@ export class CheckpointSystem {
 		if (!this.storage.saveBinary(blockFileName, serializedBlock, batchFolderPath)) throw new Error('(Checkpoint fill) Block file save failed');
 		if (!this.storage.saveBinary(blockFileName, serializedBlockInfo, infoBatchFolderPath)) throw new Error('(Checkpoint fill) Block info file save failed');
 	}
-	/** @param {BlockData} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
+	/** @param {BlockFinalized} finalizedBlock @param {Uint8Array} serializedBlock @param {Uint8Array} serializedBlockInfo */
 	async fillActiveCheckpointWithBlock(finalizedBlock, serializedBlock, serializedBlockInfo) {
 		if (this.activeCheckpointHeight === false) throw new Error('(Checkpoint fill) Active checkpoint not set');
 		if (this.activeCheckpointHeight + 1 !== finalizedBlock.index) throw new Error(`(Checkpoint fill) Block index mismatch: ${this.activeCheckpointHeight + 1} !== ${finalizedBlock.index}`);

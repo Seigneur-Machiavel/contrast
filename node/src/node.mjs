@@ -16,7 +16,7 @@ import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-setti
 /**
 * @typedef {import("./wallet.mjs").Account} Account
 * @typedef {import("./wallet.mjs").Wallet} Wallet
-* @typedef {import("../../types/block.mjs").BlockData} BlockData
+* @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * 
 * @typedef {Object} NodeOptions
 * @property {import('hive-p2p').CryptoCodex} cryptoCodex - A hiveP2P CryptoCodex instance (works as Identity).
@@ -139,44 +139,44 @@ export class ContrastNode {
 		if (!updated) return false;
 
 		this.p2pNode.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
-		this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getBlockHeader(myCandidate));
+		this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getCandidateBlockHeader(myCandidate));
 	}
 	/** Digest and apply a finalized block to the blockchain.
-     * @param {BlockData} finalizedBlock
+     * @param {BlockFinalized} block
      * @param {Object} [options] - Configuration options for the blockchain.
      * @param {boolean} [options.broadcastNewCandidate] - default: true
      * @param {boolean} [options.isSync] - default: false
      * @param {boolean} [options.persistToDisk] - default: true */
-    async digestFinalizedBlock(finalizedBlock, options = {}) {
+    async digestFinalizedBlock(block, options = {}) {
         const statePrefix = options.isSync ? '(syncing) ' : '';
-        this.updateState(`${statePrefix}finalized block #${finalizedBlock.index}`);
+        this.updateState(`${statePrefix}finalized block #${block.index}`);
 
         const { broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
         //if (!finalizedBlock || (this.syncHandler.isSyncing && !isSync)) 
             //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
         let totalFees;
-        this.updateState(`${statePrefix}block-validation #${finalizedBlock.index}`);
-        const validationResult = await BlockValidation.validateBlockProposal(this, finalizedBlock);
+        this.updateState(`${statePrefix}block-validation #${block.index}`);
+        const validationResult = await BlockValidation.validateBlockProposal(this, block);
         const hashConfInfo = validationResult.hashConfInfo;
         if (!(hashConfInfo?.conform)) throw new Error('Failed to validate block');
 
-        this.updateState(`${statePrefix}applying finalized block #${finalizedBlock.index}`);
+        this.updateState(`${statePrefix}applying finalized block #${block.index}`);
         this.memPool.addNewKnownPubKeysAddresses(validationResult.allDiscoveredPubKeysAddresses);
         
-        const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, finalizedBlock, persistToDisk, this.wsCallbacks.onBlockConfirmed, totalFees);
-		this.blockchain.applyBlock(this.utxoCache, this.vss, finalizedBlock);
-        this.memPool.removeFinalizedBlocksTransactions(finalizedBlock);
+        const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, block, persistToDisk, true, totalFees);
+		this.blockchain.applyBlock(this.utxoCache, this.vss, block);
+        this.memPool.removeFinalizedBlocksTransactions(block);
         if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
     
         //this.logger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length}`, (m, c) => console.info(m, c));
-        const timeBetweenPosPow = ((finalizedBlock.timestamp - finalizedBlock.posTimestamp) / 1000).toFixed(2);
-        const minerId = finalizedBlock.Txs[0].outputs[0].address.slice(0, 6);
-        const validatorId = finalizedBlock.Txs[1].outputs[0].address.slice(0, 6);
-        this.logger.log(`${statePrefix}#${finalizedBlock.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+        const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
+        const minerId = block.Txs[0].outputs[0].address.slice(0, 6);
+        const validatorId = block.Txs[1].outputs[0].address.slice(0, 6);
+        this.logger.log(`${statePrefix}#${block.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
 
 		// TODO: SAVE SNAPSHOT & CHECKPOINT
-        await this.blockchain.saveSnapshot(this, finalizedBlock);
-        await this.blockchain.saveCheckpoint(this, finalizedBlock);
+        await this.blockchain.saveSnapshot(this, block);
+        await this.blockchain.saveCheckpoint(this, block);
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate || isSync) return;

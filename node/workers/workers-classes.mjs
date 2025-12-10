@@ -3,7 +3,8 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 
 /**
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
- * @typedef {import("../../types/block.mjs").BlockData} BlockData
+ * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  */
 
@@ -78,19 +79,18 @@ export class ValidationWorker {
 }
 
 export class MinerWorker {
+	/** @type {BlockCandidate} */	blockCandidate = null;
+	/** @type {BlockFinalized} */	result = null;
+
+	terminate = false;
+	isWorking = false;
+	paused = false;
+	hashRate = 0;
+
     constructor (rewardAddress = '', bet = 0, timeOffset = 0) {
-        this.terminate = false;
         this.rewardAddress = rewardAddress;
         this.bet = bet;
         this.timeOffset = timeOffset;
-        /** @type {BlockData} */
-        this.blockCandidate = null;
-        
-        /** @type {BlockData} */
-        this.result = null;
-        this.isWorking = false;
-        this.paused = false;
-        this.hashRate = 0;
 
         /** @type {Worker} worker */
         this.worker = newWorker('./miner-worker-nodejs.mjs');
@@ -123,7 +123,7 @@ export class MinerWorker {
         // await 200 ms to allow the worker to process the new info
         return new Promise(resolve => setTimeout(resolve, 200));
     }
-    /** @param {BlockData} blockCandidate */
+    /** @param {BlockCandidate} blockCandidate */
     async updateCandidate(blockCandidate) {
         if (this.terminate) { return; }
         if (this.#isSameBlockCandidate(blockCandidate)) { return; }
@@ -134,17 +134,15 @@ export class MinerWorker {
         // await 200 ms to allow the worker to process the new candidate
         await new Promise(resolve => setTimeout(resolve, 200));
     }
-    /** @param {BlockData} blockCandidate */
-    #isSameBlockCandidate(blockCandidate) {
-        if (this.blockCandidate === null) { return false; }
+    /** @param {BlockCandidate} block */
+    #isSameBlockCandidate(block) {
+        if (this.blockCandidate === null) return false;
 
-        const sameIndex = this.blockCandidate.index === blockCandidate.index;
-        const samePrevHash = this.blockCandidate.prevHash === blockCandidate.prevHash;
-
+        const sameIndex = this.blockCandidate.index === block.index;
+        const samePrevHash = this.blockCandidate.prevHash === block.prevHash;
+        const newCandidateValidatorAddress = block.Txs[0].outputs[0].address;
         const currentCandidateValidatorAddress = this.blockCandidate.Txs[0].outputs[0].address;
-        const newCandidateValidatorAddress = blockCandidate.Txs[0].outputs[0].address;
         const sameValidatorAddress = currentCandidateValidatorAddress === newCandidateValidatorAddress;
-
         return sameIndex && samePrevHash && sameValidatorAddress;
     }
     async mineUntilValid() {

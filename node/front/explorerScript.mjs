@@ -13,7 +13,6 @@ import { addressUtils } from '../../utils/addressUtils.mjs';
 import { Transaction_Builder, utxoExtraction } from '../src/transaction.mjs';
 
 /**
-* @typedef {import("../src/block.mjs").BlockHeader} BlockHeader
 * @typedef {import("../src/block.mjs").BlockInfo} BlockInfo
 * @typedef {import("../src/block.mjs").BlockData} BlockData
 * @typedef {import("../src/transaction.mjs").Transaction} Transaction
