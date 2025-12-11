@@ -155,8 +155,7 @@ export class Wallet {
         }
 
         if (this.accounts[addressPrefix].length !== nbOfAccounts) {
-            this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m, c) => this.miniLogger.log(m, c));
-            //console.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`);
+            this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m, c) => console.info(m, c));
             return {};
         }
         
