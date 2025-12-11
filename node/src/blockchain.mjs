@@ -109,7 +109,7 @@ export class Blockchain {
 
         // if the snapHeight is the same as the indexStart, we need to start from the next block
         if (existingSnapHeight === startIndex) startIndex += 1;
-        if (existingSnapHeight +1 !== startIndex) {
+        if (existingSnapHeight + 1 !== startIndex) {
             this.miniLogger.log(`Addresses transactions references snapHeight mismatch: ${existingSnapHeight} != ${indexStart}`, (m, c) => console.info(m, c));
             return;
         }
@@ -148,9 +148,7 @@ export class Blockchain {
             }
         }
 
-        let duplicateCountTime = 0;
-        let totalRefs = 0;
-        let totalDuplicates = 0;
+		let [duplicateCountTime, totalRefs, totalDuplicates] = [0, 0, 0];
         let savePromises = [];
         const saveStart = performance.now();
 		for (const address in actualizedAddrsTxsRefs) {

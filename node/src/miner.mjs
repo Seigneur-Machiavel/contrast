@@ -146,7 +146,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorId} | M:${minerId} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
 
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
-        this.node.p2pNode.broadcast(new BLOCK_FINALIZED_MSG(block));
+        this.node.p2p.broadcast(new BLOCK_FINALIZED_MSG(block));
 		this.node.digestFinalizedBlock(block);
         if (this.wsCallbacks.onBroadcastFinalizedBlock) this.wsCallbacks.onBroadcastFinalizedBlock.execute(BlockUtils.getFinalizedBlockHeader(block));
     }

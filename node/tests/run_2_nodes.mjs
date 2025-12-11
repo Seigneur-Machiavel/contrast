@@ -20,14 +20,14 @@ const bootstrapSeed = '000000000000000000000000000000000000000000000000000000000
 const bootstrapStorage = new ContrastStorage(bootstrapSeed);
 if (clearOnStart) bootstrapStorage.clear(); // start fresh
 const bootstrapWallet = new Wallet(bootstrapSeed);
-await bootstrapWallet.deriveAccounts(2, 'C', bootstrapStorage);
+await bootstrapWallet.deriveAccounts(6, 'C', bootstrapStorage);
 
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
 const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
 await bootstrapNode.start(bootstrapWallet);
 
 // CLIENT NODES
-const bootstraps = [bootstrapNode.p2pNode.publicUrl];
+const bootstraps = [bootstrapNode.p2p.publicUrl];
 const clientSeeds = [
 	'0000000000000000000000000000000000000000000000000000000000000003',
 ]

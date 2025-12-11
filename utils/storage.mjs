@@ -212,12 +212,13 @@ export class CheckpointsStorage {
      * @param {number} checkpointHeight
      * @param {string} fromPath
      * @param {number[]} snapshotsHeights - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder
-     * @param {number[]} neededSnapHeights */
-    static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights, neededSnapHeights) {
+     * @param {number[]} neededSnapHeights
+	 * @param {ContrastStorage} storage */
+    static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights, neededSnapHeights, storage) {
         try {
             const zip = new AdmZip();
             const breather = new Breather();
-            const fromSnapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : PATH.SNAPSHOTS;
+            const fromSnapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : storage.PATH.SNAPSHOTS;
             if (!fs.existsSync(fromSnapshotsPath)) throw new Error(`Snapshots folder not found at ${fromSnapshotsPath}`);
 
             /** @type {Buffer[]} */
@@ -238,17 +239,16 @@ export class CheckpointsStorage {
             const hashesBuffer = Buffer.concat(snapshotsHashes);
             /** @type {string} */
             const hash = crypto.createHash('sha256').update(hashesBuffer).digest('hex');
-
             const buffer = zip.toBuffer();
             await breather.breathe();
-            const heightPath = path.join(PATH.CHECKPOINTS, checkpointHeight.toString());
+            const heightPath = path.join(storage.PATH.CHECKPOINTS, checkpointHeight.toString());
             if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
             fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
             return hash;
         } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
     }
-    /** @param {Buffer} buffer @param {string} hashToVerify */
-    static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify) {
+    /** @param {Buffer} buffer @param {string} hashToVerify @param {ContrastStorage} storage */
+    static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify, storage) {
         try {
             const buffer = Buffer.from(checkpointBuffer);
             const hash_V1 = crypto.createHash('sha256').update(buffer).digest('hex');
@@ -256,7 +256,7 @@ export class CheckpointsStorage {
             if (!isValidHash_V1) storageMiniLogger.log('<> Hash V1 mismatch! <>', (m, c) => console.info(m, c));
             //if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m, c) => console.info(m, c)); return false; }
     
-            const destPath = path.join(PATH.STORAGE, 'ACTIVE_CHECKPOINT');
+            const destPath = path.join(storage.PATH.STORAGE, 'ACTIVE_CHECKPOINT');
             if (fs.existsSync(destPath)) fs.rmSync(destPath, { recursive: true });
             fs.mkdirSync(destPath, { recursive: true });
 
@@ -812,6 +812,6 @@ async function test() {
 Time to load a big file: 0.74550ms
 Time to load multiple small files: 194.24940ms (~0.17657ms per tx)
 
-Time to read dir: 0.54700ms
+Time to read dir: 0.54700msJe
 Time to load multiple small files async: 361.34590ms (~0.32847ms per tx)
 */

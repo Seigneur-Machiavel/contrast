@@ -64,7 +64,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
     /** @param {string} address */
     getAddressAnchorsArray(address) {
         const serializedAnchors = this.addressesAnchors[address];
-        if (!serializedAnchors) { return []; }
+        if (!serializedAnchors) return [];
 
         const anchors = serializer.deserialize.anchorsArray(serializedAnchors);
         return anchors;
@@ -249,10 +249,11 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             consumedUtxosByAddress[utxo.address].push(utxo.anchor);
         }
 
+		// 
 		for (const address in consumedUtxosByAddress) {
             const addressAnchors = this.#getAddressAnchorsObj(address);
             for (const anchor of consumedUtxosByAddress[address]) {
-                if (!addressAnchors[anchor]) { throw new Error('Anchor not found'); }
+                if (!addressAnchors[anchor]) throw new Error('Anchor not found');
                 delete addressAnchors[anchor];
             }
 

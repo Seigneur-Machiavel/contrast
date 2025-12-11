@@ -151,11 +151,11 @@ export class Wallet {
 
             iterationsPerAccount += iterations;
             this.accounts[addressPrefix].push(account);
-            progressLogger.logProgress(this.accounts[addressPrefix].length - nbOfExistingAccounts, (m, c) => console.info(m, c));
+            progressLogger.logProgress(this.accounts[addressPrefix].length - nbOfExistingAccounts, (m, c) => this.miniLogger.log(m, c));
         }
 
         if (this.accounts[addressPrefix].length !== nbOfAccounts) {
-            this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m, c) => console.info(m, c));
+            this.miniLogger.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`, (m, c) => this.miniLogger.log(m, c));
             //console.log(`Failed to derive all accounts: ${this.accounts[addressPrefix].length}/${nbOfAccounts}`);
             return {};
         }
@@ -164,7 +164,7 @@ export class Wallet {
         const derivedAccounts = this.accounts[addressPrefix].slice(nbOfExistingAccounts);
         const avgIterations = derivedAccounts.length > 0 ? Math.round(iterationsPerAccount / derivedAccounts.length) : 0;
         this.miniLogger.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
-avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, (m, c) => console.info(m, c));
+avgIterations/account: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, (m, c) => console.info(m, c));
 		if (contrastStorage) await this.saveAccounts(contrastStorage);
 
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
@@ -205,11 +205,11 @@ avgIterations: ${avgIterations} | time: ${(endTime - startTime).toFixed(3)}ms`, 
 		
         // abort the running workers
         for (const worker of this.workers) worker.abortOperation();
-        for (const promise of Object.values(promises)) await promise;
+		for (const p in promises) await promises[p];
         
         let iterations = 0;
-        for (const promise of Object.values(promises)) {
-			const result = await promise;
+		for (const p in promises) {
+			const result = await promises[p];
             iterations += result.iterations || 0;
         }
 		

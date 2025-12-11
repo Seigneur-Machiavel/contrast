@@ -20,15 +20,16 @@ export const addressUtils = {
         M: { name: 'MultiSig', description: 'Multi-signature address', zeroBits: 0 }
     },
 
-    /** This function uses an Argon2 hash function to perform a hashing operation.
+    /** This function uses an Argon2 hash function to perform a hashing operation. (~20ms on Ryzen 5900HX)
      * @param {argon2Hash} argon2HashFunction
      * @param {string} pubKeyHex */
     deriveAddress: async (argon2HashFunction, pubKeyHex) => {
+		//const startTime = Date.now();
         const hex128 = pubKeyHex.substring(32, 64);
         const salt = pubKeyHex.substring(0, 32); // use first part as salt because entropy is lower
-
         const argon2hash = await argon2HashFunction(hex128, salt, addressUtils.params.argon2DerivationMemory, 1, 1, 2, addressUtils.params.addressDerivationBytes);
-        if (!argon2hash) { console.error('Failed to hash the SHA-512 pubKeyHex'); return false; }
+		//console.log(`[ADDRESS DERIVATION] Time taken: ${Date.now() - startTime} ms`);
+		if (!argon2hash) { console.error('Failed to hash the SHA-512 pubKeyHex'); return false; }
 
         const hex = argon2hash.hex;
         const addressBase58 = converter.hexToBase58(hex).substring(0, 20);

@@ -6,8 +6,6 @@ import { BlockUtils } from './block.mjs';
 import { UtxoCache } from './utxo-cache.mjs';
 import { Blockchain } from './blockchain.mjs';
 import { MESSAGE } from '../../types/messages.mjs';
-//import { serializer } from '../../utils/serializer.mjs';
-//import { Transaction_Builder } from './transaction.mjs';
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
@@ -38,7 +36,6 @@ export async function createContrastNode(options = {}) {
 	const p2pNode = asPublic ? await HiveP2P.createPublicNode(options) : await HiveP2P.createNode(options);
 	return new ContrastNode(p2pNode, options.storage, verb);
 }
-
 
 export class ContrastNode {
 	syncAndReady = false;
@@ -71,16 +68,16 @@ export class ContrastNode {
 		this.blockchain = new Blockchain(storage);
 		this.utxoCache = new UtxoCache(this.blockchain);
 		this.mainStorage = storage;
-		this.p2pNode = p2pNode;
+		this.p2p = p2pNode;
 		this.verb = verb;
 		
 		this.miner.startWithWorker();
-		this.p2pNode.onPeerConnect(() => this.logger.log('Peer connected to Contrast node', (m, c) => console.log(m, c)));
+		this.p2p.onPeerConnect(() => this.logger.log('Peer connected to Contrast node', (m, c) => console.log(m, c)));
 	}
 
 	// GETTERS --------------------------------------------------------------------------
-	get time() { return this.p2pNode.time; }
-	get neighborsCount() { return this.p2pNode.peerStore.neighborsList.length; }
+	get time() { return this.p2p.time; }
+	get neighborsCount() { return this.p2p.peerStore.neighborsList.length; }
 
 	// API ------------------------------------------------------------------------------
 	/** Update the node state and notify websocket clients. @param {string} newState @param {string} [onlyFrom] Updates only if current state matches */
@@ -107,9 +104,9 @@ export class ContrastNode {
             persistedHeight = await this.blockchain.loadSnapshot(this, startHeight);
         }
 
-		if (!this.p2pNode.started) { // START P2P NODE IF NOT
+		if (!this.p2p.started) { // START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
-			await this.p2pNode.start();
+			await this.p2p.start();
 		}
 
 		// TODO: SYNC BLOCKCHAIN FROM NETWORK
@@ -138,7 +135,7 @@ export class ContrastNode {
 		this.updateState("idle", "creating block candidate");
 		if (!updated) return false;
 
-		this.p2pNode.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
+		this.p2p.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
 		this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getCandidateBlockHeader(myCandidate));
 	}
 	/** Digest and apply a finalized block to the blockchain.

@@ -6,7 +6,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 const miniLogger = new MiniLogger('SnapshotSystem');
 
 /**
- * @typedef {import("./utxoCache.mjs").UtxoCache} UtxoCache
+ * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
  * @typedef {import("./mempool.mjs").MemPool} MemPool
  * @typedef {import("./vss.mjs").Vss} Vss */
  
@@ -56,7 +56,7 @@ export class SnapshotSystem {
 	async newSnapshot(utxoCache, vss, memPool) {
 		const height = utxoCache.blockchain.currentHeight;
 		const heightPath = path.join(this.storage.PATH.SNAPSHOTS, `${height}`);
-		if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
+		if (!fs.existsSync(heightPath)) fs.mkdirSync(heightPath);
 
 		const serializedSpectum = serializer.serialize.rawData(vss.spectrum);
 		await this.storage.saveBinaryAsync('vss', serializedSpectum, heightPath);

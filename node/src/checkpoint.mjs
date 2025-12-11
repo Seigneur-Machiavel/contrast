@@ -90,7 +90,8 @@ export class CheckpointSystem {
 			height - snapshotHeightModulo,
 			height - (snapshotHeightModulo * 2)
 		];
-		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath, snapshotsHeights, neededSnapHeights); // save new checkpoint archive (.zip)
+		// SAVE NEW CHECKPOINT ARCHIVE (.ZIP)
+		const hash = await CheckpointsStorage.archiveCheckpoint(height, fromPath, snapshotsHeights, neededSnapHeights, this.storage);
 		if (typeof hash !== 'string') {
 			this.miniLogger.log(`---! Checkpoint #${height} failed !---`, (m, c) => console.error(m, c));
 			return false;

@@ -67,7 +67,8 @@ export class BlockValidation {
     }
     /** Apply fullTransactionValidation() to all transactions in a block @param {BlockFinalized} block @param {ContrastNode} node */
     static async fullBlockTxsValidation(block, node) {
-		const { utxoCache, memPool, workers } = node;
+		const { utxoCache, memPool } = node;
+		const workers = node.workers.validations;
         const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTxs(block.Txs);
         if (!involvedUTXOs) throw new Error('At least one UTXO not found in utxoCache');
 
@@ -203,7 +204,7 @@ export class BlockValidation {
 		if (typeof block.index !== 'number') throw new Error('!banBlock! Invalid block index type');
 		if (Number.isInteger(block.index) === false) throw new Error('!banBlock! Invalid block index value');
 
-		// VALIDATE BLOCK SIGNATURE
+		// VALIDATE BLOCK SIGNATURE (CONFORMITY OF THE DATAS USING SERIALIZER)
 		const serializedBlock = serializer.serialize.block(block);
 		const deserializedBlock = serializer.deserialize.blockFinalized(serializedBlock);
 		const blockSignature = await BlockUtils.getBlockSignature(block);

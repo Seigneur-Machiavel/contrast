@@ -14,7 +14,7 @@ async function deriveKeyPair(masterHex, seedModifierHex) {
 async function deriveAccount(pubKeyHex, desiredPrefix = "C") {
     const addressBase58 = await addressUtils.deriveAddress(HashFunctions.Argon2, pubKeyHex);
     if (!addressBase58) throw new Error('Failed to derive address');
-    if (addressBase58.substring(0, 1) !== desiredPrefix) return false;
+    if (addressBase58.substring(0, 1) !== desiredPrefix) throw new Error('Address prefix not matched');
 
     addressUtils.conformityCheck(addressBase58);
     await addressUtils.securityCheck(addressBase58, pubKeyHex);
@@ -60,15 +60,16 @@ parentPort.on('message', async (task) => {
 					response.addressBase58 = addressBase58;
 					break;
                 } catch (error) {
-                    const errorSkippingLog = ['Address does not meet the security level'];
+                    const errorSkippingLog = ['Address does not meet the security level', 'Address prefix not matched'];
                     if (!errorSkippingLog.includes(error.message.slice(0, 40))) console.error(error.stack);
                 }
-                response.iterations += 1;
+                response.iterations++;
             }
             break;
         case 'abortOperation':
             if (!isWorking) return;
             abortOperation = true;
+			//console.log(`Worker ${workerId} aborting operation...`);
             return;
 		case 'terminate':
 			console.log(`Worker ${workerId} terminating...`);
