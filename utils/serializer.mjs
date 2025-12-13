@@ -7,7 +7,8 @@ import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs'
 /**
 * @typedef {import("../types/transaction.mjs").UTXO} UTXO
 * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
-* @typedef {import("../types/transaction.mjs").TxReference} TxReference
+* @typedef {import("../types/transaction.mjs").TxId} TxId
+* @typedef {import("../types/transaction.mjs").VoutId} VoutId
 * @typedef {import("../node/src/utxo-cache.mjs").UtxoCache} UtxoCache
 *
 * @typedef {Object} NodeSetting
@@ -75,18 +76,25 @@ export class BinaryReader {
 }
 /** Types length in bytes */
 const lengths = {
+	// CRYPTO/IDENTITY
 	pubKey: 32,
 	address: 16,
 	signature: 64,
 	witness: 96,
+	// TRANSACTION
 	anchor: 8,
-	miniUTXO: 25,
-	txReference: 6,
+	txId: 6,
+	voutId: 4,
 
-	/** nbOfTxs(2) + index(4) + supply(8) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(8) + powReward(8) */
-    blockCandidateHeader: 2 + 4 + 8 + 4 + 4 + 2 + 32 + 8 + 8,
-	/** nbOfTxs(2) + index(4) + supply(8) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(8) + timestamp(8) + hash(32) + nonce(4) */
-	blockFinalizedHeader: 2 + 4 + 8 + 4 + 4 + 2 + 32 + 8 + 8 + 32 + 4,
+	miniUTXO: 23, // deprecate ?
+	// BLOCK VALUES
+	amount: 6,
+	timestamp: 6,
+
+	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + powReward(6) */
+    blockCandidateHeader: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6,
+	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + timestamp(6) + hash(32) + nonce(4) */
+	blockFinalizedHeader: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4,
 }
 
 /** Theses functions are used to serialize and deserialize the data of the blockchain.
@@ -104,9 +112,9 @@ export const serializer = {
 		finalized: { 0: 'miner', 1: 'validator' },
 		candidate: { 0: 'validator' }
 	},
-	/** @param {TxReference} txRef ex: blockHeight:txIndex */
-	parseTxReference(txRef) {
-		const [height, txIndex] = txRef.split(':').map(n => parseInt(n, 10));
+	/** @param {TxId} txId ex: blockHeight:txIndex */
+	parseTxId(txId) {
+		const [height, txIndex] = txId.split(':').map(n => parseInt(n, 10));
 		return { height, txIndex };
 	},
 	/** @param {TxAnchor} anchor ex: blockHeight:txIndex:vout */
@@ -155,7 +163,7 @@ export const serializer = {
 
 			const w = new BinaryWriter(lengths.miniUTXO);
 			w.writeBytes(converter.addressBase58ToBytes(utxo.address));
-			w.writeBytes(converter.numberTo8Bytes(utxo.amount));
+			w.writeBytes(converter.numberTo6Bytes(utxo.amount));
 			w.writeByte(rule.code);
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`miniUTXO serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
@@ -167,7 +175,7 @@ export const serializer = {
 				const rule = UTXO_RULES_GLOSSARY[utxos[i].rule];
 				if (!rule) throw new Error(`Unknown UTXO rule: ${utxos[i].rule}`);
 				w.writeBytes(converter.addressBase58ToBytes(utxos[i].address));
-				w.writeBytes(converter.numberTo8Bytes(utxos[i].amount));
+				w.writeBytes(converter.numberTo6Bytes(utxos[i].amount));
 				w.writeByte(rule.code);
 			}
 			if (w.isWritingComplete) return w.getBytes();
@@ -189,11 +197,11 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`miniUTXOs object serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-		/** @param {TxReference[]} txsRef ex: blockHeight:txIndex */
-        txsReferencesArray(txsRef) {
-			const w = new BinaryWriter(txsRef.length * lengths.txReference);
-            for (let j = 0; j < txsRef.length; j++) {
-				const { height, txIndex } = serializer.parseTxReference(txsRef[j]);
+		/** @param {TxId[]} txsIds ex: blockHeight:txIndex */
+        txsIdsArray(txsIds) {
+			const w = new BinaryWriter(txsIds.length * lengths.txId);
+            for (let j = 0; j < txsIds.length; j++) {
+				const { height, txIndex } = serializer.parseTxId(txsIds[j]);
 				w.writeBytes(converter.numberTo4Bytes(height));
 				w.writeBytes(converter.numberTo2Bytes(txIndex))
             };
@@ -274,17 +282,17 @@ export const serializer = {
 			const w = new BinaryWriter(totalBytes);
 			w.writeBytes(converter.numberTo2Bytes(blockData.Txs.length));	// nbOfTxs
 			w.writeBytes(converter.numberTo4Bytes(blockData.index));		// index
-			w.writeBytes(converter.numberTo8Bytes(blockData.supply));		// supply
+			w.writeBytes(converter.numberTo6Bytes(blockData.supply));		// supply
 			w.writeBytes(converter.numberTo4Bytes(blockData.coinBase));		// coinBase
 			w.writeBytes(converter.numberTo4Bytes(blockData.difficulty));	// difficulty
 			w.writeBytes(converter.numberTo2Bytes(blockData.legitimacy));	// legitimacy
 			w.writeBytes(converter.hexToBytes(blockData.prevHash));			// prevHash
-			w.writeBytes(converter.numberTo8Bytes(blockData.posTimestamp));	// posTimestamp
+			w.writeBytes(converter.numberTo6Bytes(blockData.posTimestamp));	// posTimestamp
 			
 			if (mode === 'finalized' && 'timestamp' in blockData)
-				w.writeBytes(converter.numberTo8Bytes(blockData.timestamp || 0)); 	// timestamp
+				w.writeBytes(converter.numberTo6Bytes(blockData.timestamp || 0)); 	// timestamp
 			if (mode === 'candidate' && 'powReward' in blockData)
-				w.writeBytes(converter.numberTo8Bytes(blockData.powReward || 0)); 	// powReward
+				w.writeBytes(converter.numberTo6Bytes(blockData.powReward || 0)); 	// powReward
 
 			if (mode === 'finalized' && 'hash' in blockData)
 				w.writeBytes(converter.hexToBytes(blockData.hash || '00'.repeat(32))); // hash
@@ -357,7 +365,7 @@ export const serializer = {
         miniUTXO(serializedMiniUTXO) {
 			const r = new BinaryReader(serializedMiniUTXO);
 			const address = converter.addressBytesToBase58(r.read(lengths.address));
-			const amount = converter.bytes8ToNumber(r.read(8));
+			const amount = converter.bytes6ToNumber(r.read(6));
 			const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
 			if (r.isReadingComplete) return { address, amount, rule };
 			else throw new Error(`miniUTXO is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
@@ -382,19 +390,19 @@ export const serializer = {
 			}
 			return miniUTXOsObj;
         },
-		/** @param {Uint8Array} serializedTxsRef */
-        txsReferencesArray(serializedTxsRef) {
-			if (serializedTxsRef.length % lengths.txReference !== 0) throw new Error('Serialized txsReferences length is invalid');
-			/** @type {TxReference[]} */
-			const txsRef = [];
-			const expectedNbOfTxsRef = serializedTxsRef.length / lengths.txReference;
-			const r = new BinaryReader(serializedTxsRef);
-			for (let i = 0; i < expectedNbOfTxsRef; i++) {
+		/** @param {Uint8Array} serializedTxsIds */
+        txsIdsArray(serializedTxsIds) {
+			if (serializedTxsIds.length % lengths.txId !== 0) throw new Error('Serialized txIds length is invalid');
+			/** @type {TxId[]} */
+			const txsIds = [];
+			const expectedNbOfTxsId = serializedTxsIds.length / lengths.txId;
+			const r = new BinaryReader(serializedTxsIds);
+			for (let i = 0; i < expectedNbOfTxsId; i++) {
 				const blockHeight = converter.bytes4ToNumber(r.read(4));
 				const txIndex = converter.bytes2ToNumber(r.read(2));
-				txsRef.push(`${blockHeight}:${txIndex}`);
+				txsIds.push(`${blockHeight}:${txIndex}`);
 			}
-			return txsRef;
+			return txsIds;
         },
 		/** @param {Uint8Array} serializedPubkeyAddresses */
 		pubkeyAddressesObj(serializedPubkeyAddresses) {
@@ -450,16 +458,16 @@ export const serializer = {
 			const r = new BinaryReader(serializedBlock);
 			const nbOfTxs = converter.bytes2ToNumber(r.read(2));
 			const index = converter.bytes4ToNumber(r.read(4));
-			const supply = converter.bytes8ToNumber(r.read(8));
+			const supply = converter.bytes6ToNumber(r.read(6));
 			const coinBase = converter.bytes4ToNumber(r.read(4));
 			const difficulty = converter.bytes4ToNumber(r.read(4));
 			const legitimacy = converter.bytes2ToNumber(r.read(2));
 			const prevHash = converter.bytesToHex(r.read(32));
-			const posTimestamp = converter.bytes8ToNumber(r.read(8));
+			const posTimestamp = converter.bytes6ToNumber(r.read(6));
 
 			let timestamp, powReward;
-			if (mode === 'finalized') timestamp = converter.bytes8ToNumber(r.read(8));
-			if (mode === 'candidate') powReward = converter.bytes8ToNumber(r.read(8));
+			if (mode === 'finalized') timestamp = converter.bytes6ToNumber(r.read(6));
+			if (mode === 'candidate') powReward = converter.bytes6ToNumber(r.read(6));
 			
 			let hash, nonce;
 			if (mode === 'finalized') {

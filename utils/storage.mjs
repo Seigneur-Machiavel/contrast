@@ -8,7 +8,7 @@ import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /**
- * @typedef {import("../types/transaction.mjs").TxReference} TxReference
+ * @typedef {import("../types/transaction.mjs").TxId} TxId
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  */
 
@@ -61,7 +61,7 @@ class StorageRoot {
 			/** path to the storage folder (out of the root directory) */
 			STORAGE: basePath,
 			TRASH: path.join(basePath, 'trash'),
-			TXS_REFS: path.join(basePath, 'addresses-txs-refs'),
+			TXS_IDS: path.join(basePath, 'addresses-txs-ids'),
 			BLOCKS: path.join(basePath, 'blocks'),
 			JSON_BLOCKS: path.join(basePath, 'json-blocks'),
 			BLOCKS_INFO: path.join(basePath, 'blocks-info'),
@@ -96,12 +96,12 @@ class StorageRoot {
 			this.PATH.JSON_BLOCKS,
 			this.PATH.TRASH,
 			this.PATH.SNAPSHOTS,
-			this.PATH.TXS_REFS,
+			this.PATH.TXS_IDS,
 			this.PATH.CHECKPOINTS,
 			path.join(this.PATH.STORAGE, 'ACTIVE_CHECKPOINT'),
 			this.PATH.TEST_STORAGE
 		];
-		const filePaths = [ path.join(this.PATH.STORAGE, 'AddressesTxsRefsStorage_config.json') ];
+		const filePaths = [ path.join(this.PATH.STORAGE, 'AddressesTxsIdsStorage_config.json') ];
 		if (passHash) filePaths.push(path.join(this.PATH.STORAGE, 'passHash.bin'));
 		if (nodeSettings) filePaths.push(path.join(this.PATH.STORAGE, 'nodeSetting.bin'));
 
@@ -305,7 +305,7 @@ export class AddressesTxsRefsStorage {
     version = 0;
     loaded = false;
     configPath;
-	txsRefsPath;
+	txsIdsPath;
     batchSize = 1000; // number of transactions references per file
     snapHeight = -1;
 	
@@ -317,8 +317,8 @@ export class AddressesTxsRefsStorage {
     
 	/** @param {import('./storage.mjs').ContrastStorage} storage */
 	constructor(storage) {
-		this.configPath = path.join(storage.PATH.STORAGE, 'AddressesTxsRefsStorage_config.json');
-		this.txsRefsPath = storage.PATH.TXS_REFS;
+		this.configPath = path.join(storage.PATH.STORAGE, 'AddressesTxsIdsStorage_config.json');
+		this.txsIdsPath = storage.PATH.TXS_IDS;
 		this.#load();
 	}
 
@@ -362,13 +362,13 @@ export class AddressesTxsRefsStorage {
         const lvl0 = address.slice(0, 2);
         if (this.architecture[lvl0] === undefined) {
             this.architecture[lvl0] = {};
-            if (!fs.existsSync(path.join(this.txsRefsPath, lvl0))) fs.mkdirSync(path.join(this.txsRefsPath, lvl0));
+            if (!fs.existsSync(path.join(this.txsIdsPath, lvl0))) fs.mkdirSync(path.join(this.txsIdsPath, lvl0));
         }
 
         const lvl1 = address.slice(2, 3);
         if (this.architecture[lvl0][lvl1] === undefined) {
             this.architecture[lvl0][lvl1] = {};
-            if (!fs.existsSync(path.join(this.txsRefsPath, lvl0, lvl1))) fs.mkdirSync(path.join(this.txsRefsPath, lvl0, lvl1));
+            if (!fs.existsSync(path.join(this.txsIdsPath, lvl0, lvl1))) fs.mkdirSync(path.join(this.txsIdsPath, lvl0, lvl1));
         }
 
         return { lvl0, lvl1 };
@@ -376,7 +376,7 @@ export class AddressesTxsRefsStorage {
     #clearArchitectureIfFolderMissing(lvl0, lvl1, address) {
         if (!this.architecture[lvl0][lvl1][address]) return;
 
-        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
         if (!fs.existsSync(dirPath)) { // Clean the architecture if the folder is missing
             delete this.architecture[lvl0][lvl1][address];
             if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
@@ -392,42 +392,42 @@ export class AddressesTxsRefsStorage {
         if (!this.architecture[lvl0][lvl1][address]) return [];
         if (this.#clearArchitectureIfFolderMissing(lvl0, lvl1, address)) return [];
         
-        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
-        const existingBatch = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsRefs / this.batchSize);
+        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
+        const existingBatch = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsIds / this.batchSize);
         const fileName = batchNegativeIndex === 0 ? 'temp.bin' : `${existingBatch + batchNegativeIndex}.bin`;
         const filePath = path.join(dirPath, fileName);
         if (!fs.existsSync(filePath)) return []; // 'temp.bin can be missing'
 
         const serialized = fs.readFileSync(filePath);
         /** @type {Array<string>} */
-        const txsRefs = serializer.deserialize.txsReferencesArray(serialized);
-        return txsRefs;
+        const txsIds = serializer.deserialize.txsIdsArray(serialized);
+        return txsIds;
     }
-    async #saveNewBatchOfTxsRefs(address = '', batch = []) {
-        const serialized = serializer.serialize.txsReferencesArray(batch);
+    async #saveNewBatchOfTxsIds(address = '', batch = []) {
+        const serialized = serializer.serialize.txsIdsArray(batch);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        this.architecture[lvl0][lvl1][address].totalTxsRefs += batch.length;
+        this.architecture[lvl0][lvl1][address].totalTxsIds += batch.length;
 
-        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
         if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
         // 0-100: 0, 100-200: 1, 200-300: 2, etc...
-        const batchIndex = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsRefs / this.batchSize);
+        const batchIndex = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsIds / this.batchSize);
         const filePath = path.join(dirPath, `${batchIndex -1}.bin`);
         return fs.promises.writeFile(filePath, serialized); //? not sure "return" is good here
     }
-    async #saveTempTxsRefs(address = '', txsRefs = [], highestIndex = -1) {
-        const serialized = serializer.serialize.txsReferencesArray(txsRefs);
+    async #saveTempTxsIds(address = '', txsIds = [], highestIndex = -1) {
+        const serialized = serializer.serialize.txsIdsArray(txsIds);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
-        if (!fs.existsSync(dirPath)){ fs.mkdirSync(dirPath, { recursive: true }); }
+        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
+        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 
         const filePath = path.join(dirPath, `temp.bin`);
         return fs.promises.writeFile(filePath, serialized); //? not sure "return" is good here
     }
-	/** @param {string} address - The address to set txs references for @param {TxReference[]} txsRefs - The array of tx references to set @param {number} indexStart - The starting index of the tx references */
-    async setTxsReferencesOfAddress(address = '', txsRefs = [], indexStart = -1) {
-        if (txsRefs.length === 0) return; //TODO: ERASE ADDRESS DATA ?
+	/** @param {string} address - The address to set txs references for @param {TxId[]} txsIds - The array of tx ids to set @param {number} indexStart - The starting index of the tx ids */
+    async setTxsReferencesOfAddress(address = '', txsIds = [], indexStart = -1) {
+        if (txsIds.length === 0) return; //TODO: ERASE ADDRESS DATA ?
 
         // RECORD THE ADDRESS ACTIVITY FOR EASIER PRUNING
         if (this.involedAddressesOverHeights[indexStart] === undefined)
@@ -435,16 +435,16 @@ export class AddressesTxsRefsStorage {
         this.involedAddressesOverHeights[indexStart][address] = true;
 
         // UPDATE ARCHITECTURE INFO
-        const highestIndex = Number(txsRefs[txsRefs.length - 1].split(':')[0]);
+        const highestIndex = Number(txsIds[txsIds.length - 1].split(':')[0]);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         if (!this.architecture[lvl0][lvl1][address])
-            this.architecture[lvl0][lvl1][address] = { highestIndex, totalTxsRefs: 0 };
+            this.architecture[lvl0][lvl1][address] = { highestIndex, totalTxsIds: 0 };
 
         // SAVE BATCH IF TOO BIG
         let promises = [];
-        while (txsRefs.length > this.batchSize)
-            promises.push(this.#saveNewBatchOfTxsRefs(address, txsRefs.splice(0, this.batchSize)));
-        promises.push(this.#saveTempTxsRefs(address, txsRefs, highestIndex)); // SAVE TEMP TXS REFS
+        while (txsIds.length > this.batchSize)
+            promises.push(this.#saveNewBatchOfTxsIds(address, txsIds.splice(0, this.batchSize)));
+        promises.push(this.#saveTempTxsIds(address, txsIds, highestIndex)); // SAVE TEMP TXS IDS
 
         if (promises.length > 0) await Promise.allSettled(promises);
         this.architecture[lvl0][lvl1][address].highestIndex = highestIndex;
@@ -460,7 +460,7 @@ export class AddressesTxsRefsStorage {
         if (!this.architecture[lvl0][lvl1][address]) return false;
         if (this.#clearArchitectureIfFolderMissing(lvl0, lvl1, address)) return false;
 
-        const dirPath = path.join(this.txsRefsPath, lvl0, lvl1, address);
+        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
         const numberOfFiles = fs.readdirSync(dirPath).length;
         if (numberOfFiles === 0) return false; // no files to prune, should not happen because empty folders are deleted
 
@@ -473,15 +473,15 @@ export class AddressesTxsRefsStorage {
             const exists = fs.existsSync(filePath);
             if (exists) {
                 const serialized = fs.readFileSync(filePath);
-                const txsRefs = serializer.deserialize.txsReferencesArray(serialized);
-                const remainingBatchTxsRefs = this.#pruneBatchRefsUpperThan(txsRefs, height);
-                const removedTxs = txsRefs.length - remainingBatchTxsRefs.length;
+                const txsIds = serializer.deserialize.txsIdsArray(serialized);
+                const remainingBatchTxsIds = this.#pruneBatchRefsUpperThan(txsIds, height);
+                const removedTxs = txsIds.length - remainingBatchTxsIds.length;
 
                 if (batchNegativeIndex !== 0 && removedTxs === 0) break; // no more files to check
-                if (removedTxs !== 0) this.architecture[lvl0][lvl1][address].totalTxsRefs -= removedTxs;
+                if (removedTxs !== 0) this.architecture[lvl0][lvl1][address].totalTxsIds -= removedTxs;
                 
-                if (remainingBatchTxsRefs.length === 0) fs.rmSync(filePath); // delete the file if empty
-                else fs.writeFileSync(filePath, serializer.serialize.txsReferencesArray(remainingBatchTxsRefs));
+                if (remainingBatchTxsIds.length === 0) fs.rmSync(filePath); // delete the file if empty
+                else fs.writeFileSync(filePath, serializer.serialize.txsIdsArray(remainingBatchTxsIds));
             } else if (batchNegativeIndex !== 0) break; // no more files to check
 
             batchNegativeIndex--;
@@ -510,10 +510,10 @@ export class AddressesTxsRefsStorage {
         storageMiniLogger.log(`Pruned all transactions references upper than #${height}`, (m, c) => console.info(m, c));
     }
     reset(reason = 'na') {
-        if (fs.existsSync(this.txsRefsPath)) fs.rmSync(this.txsRefsPath, { recursive: true });
+        if (fs.existsSync(this.txsIdsPath)) fs.rmSync(this.txsIdsPath, { recursive: true });
         if (fs.existsSync(this.configPath)) fs.rmSync(this.configPath);
         
-        fs.mkdirSync(this.txsRefsPath);
+        fs.mkdirSync(this.txsIdsPath);
         this.snapHeight = -1;
         this.architecture = {};
         this.involedAddressesOverHeights = {};
@@ -521,7 +521,7 @@ export class AddressesTxsRefsStorage {
     }
 }
 
-export class BlockchainStorage {
+export class BlockchainStorage { // DEPRECATED => REFACTORING IN PROGRESS
 	converter = new HiveP2P.Converter();
 	storage;
 	batchFolders;
@@ -687,8 +687,8 @@ export class BlockchainStorage {
 
 		return { index: 0, start: offsetStart, end: offsetEnd };
     }
-    #extractSerializedBlockTimestamp(serializedBlock) {
-        return this.converter.bytes8ToNumber(serializedBlock.slice(62, 70));
+    #extractSerializedBlockTimestamp(serializedBlock) { // TO UPDATE !
+       return this.converter.bytes6ToNumber(serializedBlock.slice(62, 68));
     }
     /** @param {Uint8Array} serializedBlock @param {number} index @param {number} start @param {number} end */
     #readTxInSerializedBlockUsingPointer(serializedBlock, index = 0, start = 0, end = 1) {
@@ -739,6 +739,7 @@ export class BlockchainStorage {
 }
 
 // used to settle the difference between loading a big file and loading multiple small files
+// also compare reading methods: sync, async, partial read, etc...
 class TestStorage extends ContrastStorage {
     txBinaryWeight = 200; // in bytes
     txCount = 1100; // tx in a simulated block
@@ -897,7 +898,7 @@ async function test() {
 
 	console.log('--- Test end ---');
 }
-test();
+//test();
 
 /* 1100 files of 200 bytes each or 220KB => 1 block
 Time to load a big file: 0.74550ms

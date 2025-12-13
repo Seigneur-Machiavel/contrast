@@ -9,7 +9,7 @@ import { UTXO } from '../../types/transaction.mjs';
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
-* @typedef {import("../../types/transaction.mjs").TxReference} TxReference
+* @typedef {import("../../types/transaction.mjs").TxId} TxId
 * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack */
 
 export class UtxoCache { // Used to store, addresses's UTXOs and balance.
@@ -44,8 +44,8 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
 		/** @type {TxAnchor[]} */ 	const consumedUtxoAnchors = [];
         for (let i = 0; i < block.Txs.length; i++) {
             const transaction = block.Txs[i];
-			const txReference = `${block.index}:${i}`;
-            const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(txReference, transaction);
+			const txId = `${block.index}:${i}`;
+            const { newStakesOutputsFromTx, newUtxosFromTx } = this.#digestTransactionOutputs(txId, transaction);
             newStakesOutputs.push(...newStakesOutputsFromTx);
             newUtxos.push(...newUtxosFromTx);
 
@@ -193,13 +193,13 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
         const anchors = serializer.deserialize.anchorsObjFromArray(serializedAnchors);
         return anchors;
     }
-    /** Sort the new UTXOs and Stakes Outputs from a transaction @param {TxReference} txReference @param {Transaction} transaction */
-    #digestTransactionOutputs(txReference, transaction) {
+    /** Sort the new UTXOs and Stakes Outputs from a transaction @param {TxId} txId @param {Transaction} transaction */
+    #digestTransactionOutputs(txId, transaction) {
         const newUtxosFromTx = [];
         const newStakesOutputsFromTx = [];
         for (let i = 0; i < transaction.outputs.length; i++) {
             const { address, amount, rule } = transaction.outputs[i];
-            const anchor = `${txReference}:${i}`
+            const anchor = `${txId}:${i}`
             const utxo = new UTXO(anchor, amount, rule, address); // unspent
             if (utxo.amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) continue; // dust
             if (rule === "sigOrSlash") newStakesOutputsFromTx.push(utxo); // used to fill VSS stakes (for now we only create new range)

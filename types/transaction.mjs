@@ -1,6 +1,7 @@
 /**
- * @typedef {string} TxAnchor - The path to the UTXO, ex: blockHeight:txIndex:vout
- * @typedef {string} TxReference - The path to the transaction, ex: blockHeight:txIndex
+ * @typedef {string} TxAnchor 	- The path to the UTXO, ex: blockHeight:txIndex:vout
+ * @typedef {string} TxId 		- The path to the transaction, ex: blockHeight:txIndex
+ * @typedef {string} VoutId 	- The path to the output, ex: txIndex:vout
  */
 
 export class TxOutput {
