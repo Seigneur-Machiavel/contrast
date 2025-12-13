@@ -16,6 +16,14 @@
 			"program": "${workspaceFolder}/node/tests/run_2_nodes.mjs",
 			"args": ["--max-old-space-size=16384"]
 		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Test storage",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/utils/storage.mjs",
+			"args": ["--max-old-space-size=16384"]
+		},
         {
             "type": "node",
             "request": "launch",

@@ -136,7 +136,7 @@ export class MiniLogger {
     #saveLog(type, message) {
         this.history.push({ time: Date.now(), type, message });
 
-        const maxHistory = this.miniLoggerConfig.maxHistory || 100;
+        const maxHistory = this.miniLoggerConfig?.maxHistory || 100;
         while (this.history.length > maxHistory) this.history.shift();
         this.saveRequested = true;
     }
