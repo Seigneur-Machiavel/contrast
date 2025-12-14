@@ -74,19 +74,14 @@ export class Blockchain {
      * @param {UtxoCache} utxoCache - The UTXO cache to use for the block.
      * @param {BlockFinalized} block - The block to add.
      * @param {boolean} [persistToDisk] - Whether to persist the block to disk. Default: true.
-     * @param {boolean} [saveBlockInfo] - Whether to save the block info. Default: true.
 	 * @param {number} [totalFees] - The total fees included in the block. Default: 0 (calculated if not provided). */
-    addConfirmedBlock(utxoCache, block, persistToDisk = true, saveBlockInfo = true, totalFees = 0) {
-        //this.miniLogger.log(`Adding new block: #${block.index}, blockHash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
-		const blockInfo = saveBlockInfo ? BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees) : undefined;
+    addConfirmedBlock(utxoCache, block, persistToDisk = true, totalFees = 0) {
 		if (persistToDisk) this.blockStorage.addBlock(block);
-		if (saveBlockInfo) this.blockStorage.addBlockInfo(blockInfo);
 		this.cache.addBlock(block);
 		this.lastBlock = block;
 		this.currentHeight = block.index;
-
 		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
-		return blockInfo;
+		return BlockUtils.getFinalizedBlockInfo(utxoCache, block, totalFees);
     }
     /** Applies the changes from added blocks to the UTXO cache and VSS.
     * @param {UtxoCache} utxoCache - The UTXO cache to update.
@@ -248,9 +243,9 @@ export class Blockchain {
 		/** @type {Uint8Array[]} */		const blocks = [];
 		/** @type {Uint8Array[]} */	const blocksInfo = [];
         for (let i = fromHeight; i <= toHeight; i++) {
-            const blockData = this.getBlockBytes(i);
-            if (!blockData) break;
-            blocks.push(blockData);
+            const blockBytes = this.blockStorage.getBlockBytes(i)?.blockBytes;
+            if (!blockBytes) break;
+            blocks.push(blockBytes);
 
 			await new Promise(resolve => setImmediate(resolve)); // breathing
 			if (!includesInfo) continue;
@@ -259,12 +254,6 @@ export class Blockchain {
 			if (blockInfoBytes) blocksInfo.push(blockInfoBytes);
         }
         return { blocks, blocksInfo };
-    }
-    /** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
-    getBlockBytes(heightOrHash) {
-        const blockBytes = this.blockStorage.retreiveBlockBytes(heightOrHash);
-        if (!blockBytes) this.miniLogger.log(`Block not found: blockHeightOrHash=${heightOrHash}`, (m, c) => console.info(m, c));
-        return blockBytes;
     }
 	/** Retrieves a block by its height or hash. (Trying from cache first then from disk) @param {number|string} heightOrHash */
     getBlockFinalized(heightOrHash) {
@@ -281,22 +270,20 @@ export class Blockchain {
         
         if (block) return block; // from cache
 
-		const blockBytes = this.getBlockBytes(heightOrHash);
+		const blockBytes = this.blockStorage.getBlockBytes(heightOrHash)?.blockBytes;
 		if (!blockBytes) return null;
 		else return serializer.deserialize.blockFinalized(blockBytes); // from disk
 	}
-    /** Retrieve a transaction by its reference from cache(first) or disk(fallback). @param {string} txReference - The transaction reference in the format "height:txIndex" */
-    getTransactionByReference(txReference, includeTimestamp = false) {
+    /** Retrieve a transaction by its reference from cache(first) or disk(fallback). @param {number} height @param {number} txIndex @param {boolean} [includeTimestamp] */
+    getTransactionByReference(height, txIndex, includeTimestamp = false) {
 		// Try from cache first
-        const [height, txId] = txReference.split(':');
-        const index = parseInt(height, 10);
-		const h = this.cache.blocksHashByHeight.get(index);
+		const h = this.cache.blocksHashByHeight.get(height);
 		const block = h ? this.cache.blocksByHash.get(h) : null;
-		const tx = block ? block.Txs[parseInt(txId, 10)] : null;
+		const tx = block ? block.Txs[txIndex] : null;
 		if (block) return tx ? { tx, timestamp: block.timestamp } : null;
 
 		// fallback to disk
-        try { return this.blockStorage.retreiveTx(txReference, includeTimestamp); } // Try from disk
+        try { return this.blockStorage.getTransaction(height, txIndex, includeTimestamp); } // Try from disk
         catch (error) {
 			// @ts-expect-error - error typing
 			this.miniLogger.log(`${txReference} => ${error.message}`, (m, c) => console.info(m, c));

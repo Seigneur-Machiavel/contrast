@@ -8,7 +8,7 @@ import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs'
 * @typedef {import("../types/transaction.mjs").UTXO} UTXO
 * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../types/transaction.mjs").TxId} TxId
-* @typedef {import("../types/transaction.mjs").VoutId} VoutId
+* @typedef {import("../types/transaction.mjs").UtxoState} UtxoState
 * @typedef {import("../node/src/utxo-cache.mjs").UtxoCache} UtxoCache
 *
 * @typedef {Object} NodeSetting
@@ -74,6 +74,25 @@ export class BinaryReader {
 		return this.view.slice(start, end);
 	}
 }
+/** Two bytes VoutId encoder/decoder (values 0 and 1 are reserved)
+ * - We just shift the value by 2 to fit in the range 2-255 for each byte
+ * - We use this method to optimize UTXO state search with indexOf() => No fake positive are allowed
+ * - Max value: 64516 */
+export class VoutIdEncoder {
+    #buffer = new ArrayBuffer(2);
+    #bytes = new Uint8Array(this.#buffer);
+    
+	/** 0 - 64516 @param {number} value */
+    encode(value) {
+        this.#bytes[0] = Math.floor(value / 254) + 2;  	// MSB: 2-255
+        this.#bytes[1] = (value % 254) + 2;             // LSB: 2-255
+        return this.#bytes;
+    }
+    /** @param {Uint8Array} bytes */
+    decode(bytes) {
+        return (bytes[0] - 2) * 254 + (bytes[1] - 2);
+    }
+}
 /** Types length in bytes */
 const lengths = {
 	// CRYPTO/IDENTITY
@@ -84,10 +103,11 @@ const lengths = {
 	// TRANSACTION
 	anchor: 8,
 	txId: 6,
-	voutId: 4,
-
-	miniUTXO: 23, // deprecate ?
+	utxoState: 5,
+	miniUTXO: 23,
 	// BLOCK VALUES
+	hash: 32,
+	nonce: 4,
 	amount: 6,
 	timestamp: 6,
 
@@ -96,14 +116,20 @@ const lengths = {
 	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + timestamp(6) + hash(32) + nonce(4) */
 	blockFinalizedHeader: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4,
 }
+const dataPositions = { // specific helpers for partial block reading
+	nbOfTxs: 0,
+	timestampInFinalizedBlock: lengths.blockFinalizedHeader - lengths.timestamp - lengths.hash - lengths.nonce,
+}
 
 /** Theses functions are used to serialize and deserialize the data of the blockchain.
  * 
  * - functions do not check the input data.
  * - Make sure to validate the data before using these functions. */
 export const serializer = {
+	voutIdEncoder: new VoutIdEncoder(),
 	converter,
 	lengths,
+	dataPositions,
 	/** Routing of mode for transaction serialization
 	 * - In candidate blocks, the first tx is always the validator tx
 	 * - In finalized blocks, the first tx is always the miner (coinbase) tx, the second is the validator tx
@@ -208,6 +234,17 @@ export const serializer = {
             if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Txs references array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
+		/** @param {UtxoState[]} utxoStates */
+		utxosStatesArray(utxoStates) {
+			const w = new BinaryWriter(utxoStates.length * lengths.utxoState);
+			for (const utxoState of utxoStates) {
+				w.writeBytes(serializer.voutIdEncoder.encode(utxoState.txIndex));
+				w.writeBytes(serializer.voutIdEncoder.encode(utxoState.vout));
+				w.writeByte(utxoState.spent ? 1 : 0);
+			}
+			if (w.isWritingComplete) return w.getBytes();
+			else throw new Error(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
 		/** @param {Object<string, string>} pubkeyAddresses ex: { pubKeyHex: addressBase58, ... } */
         pubkeyAddressesObj(pubkeyAddresses) { // Here we minimize garbage.
 			let totalBytes = 0;
@@ -478,10 +515,7 @@ export const serializer = {
 			// POINTERS & TXS -> This specific traitment offer better reading performance:
 			// no need to deserialize the whole block to read the txs
 			const txPointers = [];
-			for (let i = 0; i < nbOfTxs; i++)
-				txPointers.push(converter.bytes4ToNumber(r.read(4)));
-
-			if (txPointers.length !== nbOfTxs) throw new Error('Invalid txs pointers');
+			for (let i = 0; i < nbOfTxs; i++) txPointers.push(converter.bytes4ToNumber(r.read(4)));
 			
 			const txs = [];
 			for (let i = 0; i < nbOfTxs; i++) {

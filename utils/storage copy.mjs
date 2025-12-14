@@ -6,11 +6,10 @@ import { serializer } from './serializer.mjs';
 import { BlockUtils } from "../node/src/block.mjs";
 import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
-import { UTXO_RULES_GLOSSARY } from '../utils/utxo-rules.mjs';
-import { Transaction, UtxoState, TxAnchor, TxId, VoutId, UTXO } from '../types/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from './blockchain-settings.mjs';
 
 /**
+ * @typedef {import("../types/transaction.mjs").TxId} TxId
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  */
 
@@ -64,10 +63,9 @@ class StorageRoot {
 			STORAGE: basePath,
 			TRASH: path.join(basePath, 'trash'),
 			TXS_IDS: path.join(basePath, 'addresses-txs-ids'),
-			BLOCKS: path.join(basePath, 'blocks'),			 // deprecated
-			JSON_BLOCKS: path.join(basePath, 'json-blocks'), // deprecated
-			BLOCKS_INFO: path.join(basePath, 'blocks-info'), // deprecated
-			BLOCKCHAIN: path.join(basePath, 'blockchain'),
+			BLOCKS: path.join(basePath, 'blocks'),
+			JSON_BLOCKS: path.join(basePath, 'json-blocks'),
+			BLOCKS_INFO: path.join(basePath, 'blocks-info'),
 			SNAPSHOTS: path.join(basePath, 'snapshots'),
 			CHECKPOINTS: path.join(basePath, 'checkpoints'),
 			TEST_STORAGE: path.join(basePath, 'test')
@@ -97,7 +95,6 @@ class StorageRoot {
 			this.PATH.BLOCKS,
 			this.PATH.BLOCKS_INFO,
 			this.PATH.JSON_BLOCKS,
-			this.PATH.BLOCKCHAIN,
 			this.PATH.TRASH,
 			this.PATH.SNAPSHOTS,
 			this.PATH.TXS_IDS,
@@ -119,12 +116,6 @@ class StorageRoot {
 
 		this.#init();
 	}
-}
-/** @param {number} fd - file descriptor @param {number} start - start position @param {number} totalBytes - number of bytes to read */
-function fsReadBytesSync(fd, start, totalBytes) {
-	const serialized = Buffer.alloc(totalBytes);
-	fs.readSync(fd, serialized, 0, totalBytes, start);
-	return serialized;
 }
 
 /** The main Storage */
@@ -531,176 +522,244 @@ export class AddressesTxsRefsStorage {
     }
 }
 
-/** New version of BlockchainStorage.
- * - No needs for "retreiveBlockByHash" anymore, we only use block indexes now
- * - Blocks hashes are stored in an index file (blockchain.idx) for fast retrieval
- * - Blocks are stored in binary files containing a batch of blocks (262_980 blocks per file) */
 export class BlockchainStorage {
 	converter = new HiveP2P.Converter();
 	storage;
+	hashes = []; 				// array of block hashes by height index
+	indexOfHash = new Map(); 	// map of block index by hash
 	batchSize = BLOCKCHAIN_SETTINGS.halvingInterval; // number of blocks per binary file
-
-	/** Bytes lenght of index entry: blockOffset(6 bytes) + blockBytes(4 bytes) + utxosStatesBytes(2 bytes) */
-	indexBytesLength = BLOCKCHAIN_SETTINGS.indexBytesLength;
-	lastBlockIndex = -1;
-	/** @type {number[]} blocks files descriptors */	fdBlockchain = [];
-	/** @type {number} indexes file descriptor */		fdIndexes = null;
+	fd = {						// file descriptors opened for reading binaries
+		indexes: [],
+		blocks: []
+	}
 	
 	/** @param {import('./storage.mjs').ContrastStorage} storage */
 	constructor(storage) {
 		this.storage = storage;
-		this.#loadIndexesFile();
-		storageMiniLogger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m, c) => console.info(m, c));
+		this.#init();
 	}
 	
-	// API METHODS
-	/** @param {BlockFinalized} blockData */
-    addBlock(blockData) { // WORK IN PROGRESS => IMPLY IDXING THE BLOCKS
-		if (blockData.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${blockData.index}`);
-
-		/** @type {UtxoState[]} */
-		const utxosStates = [];
-		for (let i = 0; i < blockData.Txs.length; i++)
-			for (let j = 0; j < blockData.Txs[i].outputs.length; j++)
-		utxosStates.push(new UtxoState(i, j, false));
-	
-		const fd = this.#getFdOfBlockIndex(blockData.index);
-		fs.appendFileSync(fd, serializer.serialize.block(blockData));
-		fs.appendFileSync(fd, serializer.serialize.utxosStatesArray(utxosStates));
-    }
-    getBlockBytes(height = 0, includeUtxosStates = false) {
-        if (height > this.lastBlockIndex) return null;
-
-		const offset = this.#getOffsetOfBlockData(height);
-		if (!offset) return null;
-
-		const { start, blockBytes, utxosStatesBytes } = offset;
-		const fd = this.#getFdOfBlockIndex(height);
-		const totalBytes = blockBytes + (includeUtxosStates ? utxosStatesBytes : 0);
-		const bytes = fsReadBytesSync(fd, start, totalBytes);
-		return {
-			blockBytes: includeUtxosStates ? bytes.subarray(0, blockBytes) : bytes,
-			utxosStatesBytes: includeUtxosStates ? bytes.subarray(blockBytes) : null,
-		}
-    }
-	/** @param {number} height @param {number[]} txIndexes */
-    getTransactions(height, txIndexes) {
-		if (height > this.lastBlockIndex) return null;
-
-		const { blockBytes } = this.getBlockBytes(height, false) || {};
-		if (blockBytes) return this.#extractTransactionsFromBlockBytes(blockBytes, txIndexes);
+	get getLastBlockIndex() { return this.hashes.length - 1; }
+	getHashByIndex(blockIndex = -1) { // ??
+		if (blockIndex === -1) return "0000000000000000000000000000000000000000000000000000000000000000";
+		return this.hashes[blockIndex] || null;
 	}
-	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) */
-	getUtxos(anchors, breakOnSpent = false) {
-		// GROUP ANCHORS BY BLOCK HEIGHT
-		/** height, Map(txindex, vout[]) @type {Map<number, Map<number, number[]>} */
-		const search = new Map();
-		for (const p of anchors) {
-			const { height, txIndex, vout } = serializer.parseAnchor(p);
-			if (!search.has(height)) search.set(height, new Map());
-			if (!search.get(height).has(txIndex)) search.get(height).set(txIndex, []);
-			search.get(height).get(txIndex).push(vout);
-		}
+}
 
-		// BY BLOCK HEIGHT
-		/** Key: Anchor, value: UTXO @type {Object<string, UTXO>} */
-		const utxos = {};
-		for (const height of search.keys()) {
-			if (height > this.lastBlockIndex) return null;
+export class BlockchainStorageOld { // DEPRECATED => REFACTORING IN PROGRESS
+	converter = new HiveP2P.Converter();
+	storage;
+	batchFolders;
+    lastBlockIndex = -1;
+    /** @type {Object<string, string>} */
+    hashByIndex = {"-1": "0000000000000000000000000000000000000000000000000000000000000000"};
+    /** @type {Object<string, number>} */
+    indexByHash = {"0000000000000000000000000000000000000000000000000000000000000000": 0};
 
-			const { blockBytes, utxosStatesBytes } = this.getBlockBytes(height, true) || {};
-			if (!blockBytes || !utxosStatesBytes) return null;
-
-			const txIndexes = Array.from(search.get(height).keys());
-			const txs = this.#extractTransactionsFromBlockBytes(blockBytes, txIndexes)?.txs;
-			if (!txs) return null;
-
-			// BY TRANSACTION INDEX
-			const searchPattern = new Uint8Array(4); // Search pattern: [txIndex(2), voutId(2)]
-			for (const txIndex of search.get(height).keys()) {
-				searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
-				
-				// BY VOUT ID
-				for (const voutId of search.get(height).get(txIndex)) {
-					if (!txs[txIndex]?.outputs[voutId]) return null; // unable to find the referenced tx/output
-					
-					let utxoSpent = true;
-					searchPattern.set(serializer.voutIdEncoder.encode(voutId), 2);
-					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
-					if (stateOffset !== -1) utxoSpent = utxosStatesBytes[stateOffset + 4] === 1;
-					if (utxoSpent && breakOnSpent) return null; // UTXO is spent
-
-					const anchor = `${height}:${txIndex}:${voutId}`;
-					const amount = txs[txIndex].outputs[voutId].amount;
-					const rule = txs[txIndex].outputs[voutId].rule;
-					const address = txs[txIndex].outputs[voutId].address;
-					utxos[anchor] = new UTXO(anchor, amount, rule, address, utxoSpent);
-				}
-			}
-		}
-
-		return utxos;
+	/** @param {import('./storage.mjs').ContrastStorage} storage */
+    constructor(storage) {
+		this.storage = storage;
+		this.batchFolders = BlockchainStorage.getListOfFoldersInBlocksDirectory(this.storage.PATH.BLOCKS);
+		this.#init();
 	}
-    undoBlock(height = 0) { // WORK IN PROGRESS
-        
+	/** @param {string} blocksPath */
+    static getListOfFoldersInBlocksDirectory(blocksPath) {
+        const blocksFolders = fs.readdirSync(blocksPath).filter(fileName => fs.lstatSync(path.join(blocksPath, fileName)).isDirectory());
+        // named as 0-999, 1000-1999, 2000-2999, etc... => sorting by the first number
+        const blocksFoldersSorted = blocksFolders.sort((a, b) => parseInt(a.split('-')[0], 10) - parseInt(b.split('-')[0], 10));
+        return blocksFoldersSorted;
+    }
+    #init() {
+		if (!this.converter && window?.hiveP2P?.Converter) // front logic
+			this.converter = new window.hiveP2P.Converter();
+
+        let currentIndex = -1;
+        for (let i = 0; i < this.batchFolders.length; i++) {
+            const batchFolderName = this.batchFolders[i];
+            const files = fs.readdirSync(path.join(this.storage.PATH.BLOCKS, batchFolderName));
+            for (let j = 0; j < files.length; j++) {
+                const fileName = files[j].split('.')[0];
+                const blockIndex = parseInt(fileName.split('-')[0], 10);
+                const blockHash = fileName.split('-')[1];
+                if (currentIndex >= blockIndex) {
+                    storageMiniLogger.log(`---! Duplicate block index !--- #${blockIndex}`, (m, c) => console.info(m, c));
+                    throw new Error(`Duplicate block index #${blockIndex}`);
+                }
+
+                this.hashByIndex[blockIndex] = blockHash;
+                this.indexByHash[blockHash] = blockIndex;
+                this.lastBlockIndex = Math.max(this.lastBlockIndex, blockIndex);
+            }
+        }
+
+        storageMiniLogger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m, c) => console.info(m, c));
+    }
+    static batchFolderFromBlockIndex(blockIndex = 0) {
+        const index = Math.floor(blockIndex / BLOCK_PER_DIRECTORY);
+        const name = `${Math.floor(blockIndex / BLOCK_PER_DIRECTORY) * BLOCK_PER_DIRECTORY}-${Math.floor(blockIndex / BLOCK_PER_DIRECTORY) * BLOCK_PER_DIRECTORY + BLOCK_PER_DIRECTORY - 1}`;
+        return { index, name };
+    }
+    #blockFilePathFromIndexAndHash(blockIndex = 0, blockHash = '') {
+        const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockIndex).name;
+        const batchFolderPath = path.join(this.storage.PATH.BLOCKS, batchFolderName);
+        const blockFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
+        return blockFilePath;
+    }
+    /** @param {BlockFinalized} blockData */
+    #saveBlockBinary(blockData) {
+        try {
+            /** @type {Uint8Array} */
+            const binary = serializer.serialize.block(blockData);
+            const batchFolder = BlockchainStorage.batchFolderFromBlockIndex(blockData.index);
+            const batchFolderPath = path.join(this.storage.PATH.BLOCKS, batchFolder.name);
+            if (this.batchFolders[batchFolder.index] !== batchFolder.name) {
+                fs.mkdirSync(batchFolderPath);
+                this.batchFolders.push(batchFolder.name);
+            }
+
+            const filePath = path.join(batchFolderPath, `${blockData.index.toString()}-${blockData.hash}.bin`);
+            fs.writeFileSync(filePath, binary);
+        } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); }
+    }
+    /** @param {BlockFinalized} blockData @param {string} dirPath */
+    #saveBlockDataJSON(blockData, dirPath) {
+        const blockFilePath = path.join(dirPath, `${blockData.index}.json`);
+        fs.writeFileSync(blockFilePath, JSON.stringify(blockData, (key, value) => { return value; }));
+    }
+    #loadBlockDataJSON(blockIndex = 0, dirPath = '') {
+        const blockFileName = `${blockIndex.toString()}.json`;
+        const filePath = path.join(dirPath, blockFileName);
+        const blockContent = fs.readFileSync(filePath);
+        const blockData = BlockUtils.finalizedBlockFromJSON(blockContent);
+        return blockData;
+    }
+
+    /** @param {BlockFinalized} blockData @param {boolean} saveJSON */
+    addBlock(blockData, saveJSON = false) {
+        const prevHash = this.hashByIndex[blockData.index - 1];
+        if (blockData.prevHash !== prevHash) throw new Error(`Block #${blockData.index} rejected: prevHash mismatch`);
+
+        const existingBlockHash = this.hashByIndex[blockData.index];
+        //if (existingBlockHash) { throw new Error(`Block #${blockData.index} already exists with hash ${existingBlockHash}`); }
+        if (existingBlockHash) this.removeBlock(blockData.index);
+
+        this.#saveBlockBinary(blockData);
+        this.hashByIndex[blockData.index] = blockData.hash;
+        this.indexByHash[blockData.hash] = blockData.index;
+
+        if (this.isElectronEnv) return; // Avoid saving heavy JSON format in production
+        if (saveJSON || blockData.index < 200) this.#saveBlockDataJSON(blockData, this.storage.PATH.JSON_BLOCKS);
+    }
+    /** @param {BlockInfo} blockInfo */
+    addBlockInfo(blockInfo) {
+        const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockInfo.header.index).name;
+        const batchFolderPath = path.join(this.storage.PATH.BLOCKS_INFO, batchFolderName);
+        if (!fs.existsSync(batchFolderPath)) { fs.mkdirSync(batchFolderPath); }
+
+        const binary = serializer.serialize.rawData(blockInfo);
+        const filePath = path.join(batchFolderPath, `${blockInfo.header.index.toString()}-${blockInfo.header.hash}.bin`);
+        fs.writeFileSync(filePath, binary);
+    }
+    /** @param {number | string} heightOrHash - The height or the hash of the block to retrieve */
+    retreiveBlockBytes(heightOrHash) {
+        if (typeof heightOrHash !== 'number' && typeof heightOrHash !== 'string') return null;
+
+		const isParamHash = typeof heightOrHash === 'string';
+		const blockHash = isParamHash ? heightOrHash : this.hashByIndex[parseInt(heightOrHash, 10)];
+		const blockIndex = isParamHash ? this.indexByHash[heightOrHash] : heightOrHash;
+		if (blockIndex === undefined || blockHash === undefined) return null;
+
+        /** @type {Uint8Array} */
+        const serialized = fs.readFileSync(this.#blockFilePathFromIndexAndHash(blockIndex, blockHash));
+		return serialized;
+    }
+    getBlockInfoBytesByIndex(blockIndex = 0) {
+        const batchFolderName = BlockchainStorage.batchFolderFromBlockIndex(blockIndex).name;
+        const batchFolderPath = path.join(this.storage.PATH.BLOCKS_INFO, batchFolderName);
+        const blockHash = this.hashByIndex[blockIndex];
+		const blockInfoFilePath = path.join(batchFolderPath, `${blockIndex.toString()}-${blockHash}.bin`);
+
+        try {
+            const buffer = fs.readFileSync(blockInfoFilePath);
+            return new Uint8Array(buffer);
+        } catch (error) {
+            storageMiniLogger.log(`BlockInfo not found ${blockIndex.toString()}-${blockHash}.bin`, (m, c) => console.info(m, c));
+            storageMiniLogger.log(error.stack, (m, c) => console.info(m, c));
+            return null;
+        }
+    }
+	getBlockInfoByIndex(blockIndex = 0) {
+		const blockInfoBytes = this.getBlockInfoBytesByIndex(blockIndex);
+		if (!blockInfoBytes) return null;
+
+		/** @type {BlockInfo} */
+		const blockInfo = serializer.deserialize.rawData(blockInfoBytes);
+		return blockInfo;
+	}
+    /** @param {Uint8Array} serializedBlock @param {number} txIndex - The reference of the transaction to retrieve */
+    #findTxPointerInSerializedBlock(serializedBlock, txIndex) {
+		const nbOfTxs = this.converter.bytes2ToNumber(serializedBlock.slice(0, 2));
+		if (txIndex >= nbOfTxs) return null;
+
+        const pointerStart = serializer.lengths.blockFinalizedHeader + (txIndex * 4);
+		const pointerBuffer = serializedBlock.slice(pointerStart, pointerStart + 4);
+		const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);
+
+		const nextPointerStart = pointerStart + 4;
+		const offsetEnd = txIndex + 1 < nbOfTxs
+			? this.converter.bytes4ToNumber(serializedBlock.slice(nextPointerStart, nextPointerStart + 4))
+			: serializedBlock.length;
+
+		return { index: 0, start: offsetStart, end: offsetEnd };
+    }
+    #extractSerializedBlockTimestamp(serializedBlock) { // TO UPDATE !
+       return this.converter.bytes6ToNumber(serializedBlock.slice(62, 68));
+    }
+    /** @param {Uint8Array} serializedBlock @param {number} index @param {number} start @param {number} end */
+    #readTxInSerializedBlockUsingPointer(serializedBlock, index = 0, start = 0, end = 1) {
+        const txBuffer = serializedBlock.slice(start, end);
+		const specialMode = { 0: 'miner', 1: 'validator' }; // finalized block only
+		return serializer.deserialize.transaction(txBuffer, specialMode[index]);
+    }
+	/** @param {import('../types/transaction.mjs').TxReference} txRef */
+    retreiveTx(txRef = '41:50', includeTimestamp = false) {
+		const s = txRef.split(':');
+        const blockIndex = parseInt(s[0], 10);
+		const txIndex = parseInt(s[1], 10);
+        const serializedBlock = this.retreiveBlockBytes(blockIndex);
+        if (!serializedBlock) return null;
+
+        const timestamp = includeTimestamp ? this.#extractSerializedBlockTimestamp(serializedBlock) : undefined;
+        const txOffset = this.#findTxPointerInSerializedBlock(serializedBlock, txIndex);
+        if (!txOffset) return null;
+
+        const { index, start, end } = txOffset;
+        const tx = this.#readTxInSerializedBlockUsingPointer(serializedBlock, index, start, end);
+
+        return { tx, timestamp };
+    }
+    removeBlock(blockIndex = 0) {
+        const blockHash = this.hashByIndex[blockIndex];
+        const blockFilePath = this.#blockFilePathFromIndexAndHash(blockIndex, blockHash);
+        fs.unlinkSync(blockFilePath);
+
+        delete this.hashByIndex[blockIndex];
+        delete this.indexByHash[blockHash];
+        this.lastBlockIndex = Math.max(...Object.keys(this.hashByIndex)); // optional
+    }
+    removeBlocksHigherThan(blockIndex = 0) {
+        for (let i = blockIndex + 1; i <= this.lastBlockIndex; i++) {
+            if (this.hashByIndex[i] === undefined) { break; }
+            this.removeBlock(i);
+        }
     }
     reset() {
         if (fs.existsSync(this.storage.PATH.BLOCKS)) fs.rmSync(this.storage.PATH.BLOCKS, { recursive: true });
         fs.mkdirSync(this.storage.PATH.BLOCKS);
+        this.batchFolders = [];
+        this.hashByIndex = { "-1": "0000000000000000000000000000000000000000000000000000000000000000" };
+        this.indexByHash = { "0000000000000000000000000000000000000000000000000000000000000000": -1 };
         this.lastBlockIndex = -1;
-    }
-
-	// INTERNAL METHODS
-	#openFileDescriptor(filePath = '', createIfMissing = true) {
-		if (!fs.existsSync(filePath))
-			if (createIfMissing) fs.writeFileSync(filePath, Buffer.alloc(0));
-			else throw new Error(`File not found: ${filePath}`);
-		return fs.openSync(filePath, 'r+');
-	}
-	#loadIndexesFile() {
-		this.fdIndexes = this.#openFileDescriptor(path.join(this.storage.PATH.BLOCKS, 'blockchain.idx'), true);
-		const stats = fs.fstatSync(this.fdIndexes);
-		if (stats.size % this.indexBytesLength !== 0) throw new Error(`blockchain.idx file is corrupted (size: ${stats.size})`);
-		this.lastBlockIndex = Math.ceil(stats.size / this.indexBytesLength) - 1;
-	}
-	#getOffsetOfBlockData(height = -1) { // if reading is too slow, we can implement a caching system here
-		if (height < 0 || height > this.lastBlockIndex) return null;
-		const offset = { start: 0, blockBytes: 0, utxosStatesBytes: 0 };
-		const buffer = fsReadBytesSync(this.fdIndexes, height * this.indexBytesLength, this.indexBytesLength);
-		offset.start = this.converter.bytes6ToNumber(buffer.subarray(0, 6));
-		offset.blockBytes = this.converter.bytes4ToNumber(buffer.subarray(6, 10));
-		offset.utxosStatesBytes = this.converter.bytes2ToNumber(buffer.subarray(10, 12));
-		return offset;
-	}
-	#getFdOfBlockIndex(height = 0) {
-		const batchIndex = Math.floor(height / this.batchSize);
-		if (this.fdBlockchain[batchIndex] === undefined) {
-			const filePath = path.join(this.storage.PATH.BLOCKCHAIN, `blockchain-${batchIndex}.bin`);
-			this.fdBlockchain[batchIndex] = this.#openFileDescriptor(filePath, false);
-		}
-		return this.fdBlockchain[batchIndex];
-	}
-	/** @param {Uint8Array} blockBytes @param {number[]} txIndexes */
-	#extractTransactionsFromBlockBytes(blockBytes, txIndexes) {
-		/** key: txIndex, value: transaction @type {Object<number, Transaction>} */
-		const txs = {};
-		const nbOfTxs = this.converter.bytes2ToNumber(blockBytes.subarray(0, 2));
-		const timestampOffset = serializer.dataPositions.timestampInFinalizedBlock;
-		const timestamp = this.converter.bytes6ToNumber(blockBytes.subarray(timestampOffset, timestampOffset + 6));
-		const specialMode = { 0: 'miner', 1: 'validator' }; // finalized block only
-		for (const i of txIndexes) {
-			if (txs[i] !== undefined) continue; // already extracted
-			if (i + 1 > nbOfTxs) return null;
-			const pointerStart = serializer.lengths.blockFinalizedHeader + (i * 4);
-			const pointerBuffer = blockBytes.subarray(pointerStart, pointerStart + 4);
-			const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);
-			const offsetEnd = i + 1 === nbOfTxs ? blockBytes.length
-				: this.converter.bytes4ToNumber(blockBytes.subarray(pointerStart + 4, pointerStart + 8));
-			const txBuffer = blockBytes.subarray(offsetStart, offsetEnd);
-			const tx = serializer.deserialize.transaction(txBuffer, specialMode[i]);
-			txs[i] = tx;
-		}
-		return { txs, timestamp };
     }
 }
 
@@ -806,17 +865,6 @@ class TestStorage extends ContrastStorage {
 		if (log) logs.push(`Time to close file: ${(performance.now() - s).toFixed(5)}ms`);
 		return { block, logs };
 	}
-	readXPercentOfBlockBytesTest(index = 0, percentRead = 10) {
-		const p = path.join(this.PATH.TEST_STORAGE, `${index}.bin`);
-		const fd = fs.openSync(p, 'r');
-		const size = fs.fstatSync(fd).size;
-		const start = performance.now();
-		const readSize = Math.floor(size * (percentRead / 100));
-		const buffer = fsReadBytesSync(fd, 0, readSize);
-		console.log(`Time to read ${percentRead}% of block bytes: ${(performance.now() - start).toFixed(5)}ms`);
-		fs.closeSync(fd);
-		return buffer;
-	}
 	truncateBlock(index = 0, offset = 0) {
 		const p = path.join(this.PATH.TEST_STORAGE, `${index}.bin`);
 		fs.truncateSync(p, offset);
@@ -827,15 +875,6 @@ class TestStorage extends ContrastStorage {
 		fs.ftruncateSync(fd, newSize);
 		fs.closeSync(fd);
 	}
-	getBlockFileSize(index = 0) {
-		const p = path.join(this.PATH.TEST_STORAGE, `${index}.bin`);
-		const fd = fs.openSync(p, 'r');
-		const getSizeStart = performance.now();
-		const stats = fs.fstatSync(fd);
-		console.log(`Block size: ${stats.size} bytes (calculated in ${(performance.now() - getSizeStart).toFixed(5)}ms)`);
-		fs.closeSync(fd);
-		return stats.size;
-	}
 }
 async function test() {
 	const testStorage = new TestStorage('00000000000000000000000000000000000000000000000000000000000000ff');
@@ -845,12 +884,6 @@ async function test() {
 	const nbOfTxsToRead = 100;
 	const writeStart = performance.now();
     await testStorage.createAndSaveBlocks(2, { unified: true, decomposed: false });
-
-	testStorage.getBlockFileSize(0);
-	testStorage.readXPercentOfBlockBytesTest(0, 1);
-	testStorage.readXPercentOfBlockBytesTest(0, 10);
-	testStorage.readXPercentOfBlockBytesTest(0, 100);
-
 	console.log(`Time to write test block: ${(performance.now() - writeStart).toFixed(5)}ms`);
 	//const { blockDir, files } = testStorage.getFilesInBlockDir(0);
 	console.log(`Test with ${testStorage.txCount} txs of ${testStorage.txBinaryWeight} bytes each (~${(testStorage.txCount * testStorage.txBinaryWeight / 1024).toFixed(2)}KB total)`);
@@ -879,8 +912,6 @@ async function test() {
 	const avgPartialReadTime = ((performance.now() - timeStart_H) / nbOfTxsToRead).toFixed(5);
 	console.log(`Time to read ${nbOfTxsToRead} txs: ${(performance.now() - timeStart_H).toFixed(5)}ms (~${avgPartialReadTime}ms per tx)`);
 
-
-
 	const timeStart_T = performance.now();
 	const truncatedOffset = Math.floor((testStorage.txBinaryWeight * testStorage.txCount) / 2);
 	testStorage.truncateBlock(1, truncatedOffset);
@@ -892,7 +923,7 @@ async function test() {
 
 	console.log('--- Test end ---');
 }
-test();
+//test();
 
 /* 1100 files of 200 bytes each or 220KB => 1 block
 Time to load a big file: 0.74550ms

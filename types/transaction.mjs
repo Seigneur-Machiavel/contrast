@@ -4,6 +4,15 @@
  * @typedef {string} VoutId 	- The path to the output, ex: txIndex:vout
  */
 
+export class UtxoState {
+	/** @param {number} txIndex @param {number} vout @param {boolean} [spent] default: false */
+	constructor(txIndex, vout, spent = false) {
+		this.txIndex = txIndex;
+		this.vout = vout;
+		this.spent = spent;
+	}
+}
+
 export class TxOutput {
 	/** @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - output only */
 	constructor(amount, rule, address) {
@@ -13,7 +22,7 @@ export class TxOutput {
 	}
 }
 
-export class UTXO {
+export class UTXO { // PROBABLY DEPRECATED => EXTRACT_BALANCES() method
 	/** @param {TxAnchor} anchor - the path to the UTXO blockHeight:txIndex:vout @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - the address of the recipient @param {boolean} [spent] - if the UTXO has been spent, default: false */
 	constructor(anchor, amount, rule, address, spent = false) {
 		this.address = address;
@@ -24,7 +33,7 @@ export class UTXO {
 	}
 
 	/** @param {UTXO[]} UTXOs */
-	static EXTRACT_BALANCES(UTXOs) {
+	static EXTRACT_BALANCES(UTXOs) { // PROBABLY DEPRECATED
 		let totalBalance = 0;
         let spendableBalance = 0;
         let stakedBalance = 0;

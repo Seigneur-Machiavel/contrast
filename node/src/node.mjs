@@ -160,7 +160,7 @@ export class ContrastNode {
         this.updateState(`${statePrefix}applying finalized block #${block.index}`);
         this.memPool.addNewKnownPubKeysAddresses(validationResult.allDiscoveredPubKeysAddresses);
         
-        const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, block, persistToDisk, true, totalFees);
+        const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, block, persistToDisk, totalFees);
 		this.blockchain.applyBlock(this.utxoCache, this.vss, block);
         this.memPool.removeFinalizedBlocksTransactions(block);
         if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
