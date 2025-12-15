@@ -199,7 +199,7 @@ export class Transaction_Builder {
             const transaction = Transaction_Builder.createTransfer(senderAccount, [transfer], feePerByte);
             senderAccount.signTransaction(transaction);
             return { signedTx: transaction, error: false };
-        } catch (error) { return { signedTx: false, error }; }
+        } catch (/**@type {any}*/ error) { return { signedTx: false, error }; }
     }
 	/** @param {Transaction} transaction */
 	static getTransactionSignableString(transaction) {

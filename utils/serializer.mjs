@@ -110,6 +110,11 @@ const lengths = {
 	nonce: 4,
 	amount: 6,
 	timestamp: 6,
+	// BLOCK INDEX ENTRY
+	startEntry: 6,
+	blockBytesEntry: 4,
+	utxosStatesBytesEntry: 2,
+	indexEntry: 12, // start(6) + blockBytes(4) + utxosStatesBytes(2)
 
 	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + powReward(6) */
     blockCandidateHeader: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6,
@@ -349,6 +354,14 @@ export const serializer = {
             if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Block serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
+		/** @param {number} start @param {number} blockBytes @param {number} utxosStatesBytes */
+		blockIndexEntry(start, blockBytes, utxosStatesBytes) {
+			const w = new BinaryWriter(12);
+			w.writeBytes(converter.numberTo6Bytes(start));
+			w.writeBytes(converter.numberTo4Bytes(blockBytes));
+			w.writeBytes(converter.numberTo2Bytes(utxosStatesBytes));
+			return w.getBytes();
+		},
 		/** @param {NodeSetting} nodeSetting */
         nodeSetting(nodeSetting) {
 			const w = new BinaryWriter(32 + 16 + 16 + 1);
@@ -359,7 +372,7 @@ export const serializer = {
             return w.getBytes();
         },
 		/** @param {UtxoCache} utxoCache */
-        utxoCacheData(utxoCache) {
+        utxoCacheData(utxoCache) { // DEPRECATED
             const miniUTXOsSerialized = serializer.serialize.miniUTXOsObj(utxoCache.unspentMiniUtxos);
 			const w = new BinaryWriter(8 + 8 + miniUTXOsSerialized.length);
 			w.writeBytes(converter.numberTo8Bytes(utxoCache.totalOfBalances));
@@ -524,7 +537,8 @@ export const serializer = {
 				txs.push(this.transaction(r.read(end - start), serializer.specialMode[mode][i]));
 			}
 
-			if (!r.isReadingComplete) throw new Error('Block is not fully deserialized');
+			if (!r.isReadingComplete)
+				throw new Error('Block is not fully deserialized');
 			return { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce, powReward };
 		},
 		/** @param {Uint8Array} serializedBlock */
@@ -538,6 +552,15 @@ export const serializer = {
 			const { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce } = this.blockData(serializedBlock, 'finalized');
 			if (typeof hash === 'undefined' || typeof timestamp === 'undefined' || typeof nonce === 'undefined') throw new Error('Finalized block is missing data');
 			return new BlockFinalized(index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce);
+		},
+		/** @param {Uint8Array} entry */
+		blockIndexEntry(entry) {
+			const offset = {
+				start: serializer.converter.bytes6ToNumber(entry.subarray(0, 6)),
+				blockBytes: serializer.converter.bytes4ToNumber(entry.subarray(6, 10)),
+				utxosStatesBytes: serializer.converter.bytes2ToNumber(entry.subarray(10, 12))
+			};
+			return offset;
 		},
 		/** @param {Uint8Array} serializedNodeSetting */
         nodeSetting(serializedNodeSetting) {

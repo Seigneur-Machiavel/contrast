@@ -143,7 +143,7 @@ export class UtxoCache { // Used to store, addresses's UTXOs and balance.
             
             if (repeatedAnchorsCount > 0) console.warn(`Repeated anchors: ${repeatedAnchorsCount}`);
             return this.getUTXOs(involvedAnchors);
-        } catch (error) { return false; }
+        } catch (/**@type {any}*/ error) { return false; }
     }
     /** Re build the addressesAnchors from the unspentMiniUtxos after loading or snapshot loading */
     buildAddressesAnchorsFromUnspentMiniUtxos(updateBiggestsHolders = true) {

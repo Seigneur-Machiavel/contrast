@@ -240,7 +240,7 @@ avgIterations/account: ${avgIterations} | time: ${(endTime - startTime).toFixed(
                     this.accountsGenerated[desiredPrefix].push({ address: account.address, seedModifierHex });
                     return { account, iterations: i };
                 }
-            } catch (error) {
+            } catch (/**@type {any}*/ error) {
                 const errorSkippingLog = ['Address does not meet the security level'];
                 if (!errorSkippingLog.includes(error.message.slice(0, 40))) this.miniLogger.log(error.stack, (m, c) => console.info(m, c));
             }

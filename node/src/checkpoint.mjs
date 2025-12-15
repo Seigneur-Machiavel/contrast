@@ -106,7 +106,7 @@ export class CheckpointSystem {
 			if (checkpointsHashes[height] !== archiveHash) continue;
 
 			try { return fs.readFileSync( path.join(this.storage.PATH.CHECKPOINTS, height, `${archiveHash}.zip`) ) }
-			catch (error) { this.miniLogger.log(error.stack, (m, c) => console.error(m, c)); return false }
+			catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.error(m, c)); return false }
 		}
 	}
 	/** Read one time only if necessary, this.lastCheckpointInfo filled by: newCheckpoint () */

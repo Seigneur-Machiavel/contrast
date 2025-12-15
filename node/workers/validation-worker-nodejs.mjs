@@ -29,7 +29,7 @@ parentPort.on('message', async (task) => {
                 response.discoveredPubKeysAddresses = allDiscoveredPubKeysAddresses;
                 response.isValid = true;
                 //console.log(`[VALIDATION_WORKER ${task.id}] addressOwnershipConfirmation: ${task.transaction.id} ${response.isValid}`);
-            } catch (error) {
+            } catch (/**@type {any}*/ error) {
                 console.error(`[VALIDATION_WORKER ${task.id}] addressOwnershipConfirmation: ${task.transaction.id} ${error.message}`);
                 response.error = error.message;
                 response.isValid = false;

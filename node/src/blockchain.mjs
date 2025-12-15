@@ -1,8 +1,5 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
-import { SnapshotSystem } from './snapshot.mjs';
-import { CheckpointSystem } from './checkpoint.mjs';
-import { BlocksCache } from './blockchain-cache.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.mjs';
@@ -10,14 +7,52 @@ import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.
 /**
 * @typedef {import("./vss.mjs").Vss} Vss
 * @typedef {import("./mempool.mjs").MemPool} MemPool
-* @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
 * @typedef {import("./node.mjs").ContrastNode} ContrastNode
+* @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData */
 
-/** Represents the blockchain and manages its operations. */
 export class Blockchain {
+    miniLogger = new MiniLogger('blockchain');
+	blockStorage;
+	addressesTxsRefsStorage;
+	/** @type {BlockFinalized | null} */	lastBlock = null;
+	get currentHeight() { return this.blockStorage.lastBlockIndex; }
+
+	/** @param {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
+	constructor(storage) {
+		if (!storage) throw new Error('Blockchain constructor: storage is required.');
+		this.blockStorage = new BlockchainStorage(storage);
+		this.addressesTxsRefsStorage = new AddressesTxsRefsStorage(storage);
+		if (this.currentHeight >= 0) this.lastBlock = this.getBlock() || null;
+	}
+
+	// API METHODS
+	/** Adds a new confirmed block to the blockchain. @param {BlockFinalized} block - The block to add. */
+    addConfirmedBlock(block) {
+		this.blockStorage.addBlock(block);
+		this.lastBlock = block;
+		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
+    }
+	getBlock(height = this.currentHeight) {
+		const blockBytes = this.blockStorage.getBlockBytes(height)?.blockBytes;
+		if (blockBytes) return serializer.deserialize.blockFinalized(blockBytes);
+	}
+	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) */
+	getUtxos(anchors, breakOnSpent = false) {
+		return this.blockStorage.getUtxos(anchors, breakOnSpent);
+	}
+	reset() {
+        this.blockStorage.reset();
+        this.addressesTxsRefsStorage.reset();
+        this.miniLogger.log('Database erased', (m, c) => console.info(m, c));
+    }
+
+	// INTERNAL METHODS
+}
+
+export class BlockchainOld { // DEPRECATED
     miniLogger = new MiniLogger('blockchain');
     cache = new BlocksCache(this.miniLogger);
 	blockStorage;
@@ -284,7 +319,7 @@ export class Blockchain {
 
 		// fallback to disk
         try { return this.blockStorage.getTransaction(height, txIndex, includeTimestamp); } // Try from disk
-        catch (error) {
+        catch (/**@type {any}*/ error) {
 			// @ts-expect-error - error typing
 			this.miniLogger.log(`${txReference} => ${error.message}`, (m, c) => console.info(m, c));
 		}

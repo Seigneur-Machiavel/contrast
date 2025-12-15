@@ -285,7 +285,7 @@ this.onmessage = async function(e) {
                         response.addressBase58 = addressBase58;
                         break;
                     }
-                } catch (error) {
+                } catch (/**@type {any}*/ error) {
                     const errorSkippingLog = ['Address does not meet the security level'];
                     if (!errorSkippingLog.includes(error.message.slice(0, 40))) { console.error(error.stack); }
                 }
@@ -684,7 +684,7 @@ const _verify = (sig, msg, pub, opts = dvo) => {
         SB = G.mul(s, false); // in the range 0 <= s < L
         hashable = concatB(R.toRawBytes(), A.toRawBytes(), msg); // dom2(F, C) || R || A || PH(M)
     }
-    catch (error) { }
+    catch (/**@type {any}*/ error) { }
     const finish = (hashed) => {
         if (SB == null)
             return false; // false if try-catch catched an error

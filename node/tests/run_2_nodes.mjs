@@ -47,3 +47,23 @@ const clientNodes = [];
 for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 
 // -------------------------------------------------------------------------------------
+while(bootstrapNode.blockchain.currentHeight < 10)
+	await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+// TEST: getBlock time
+const getBlockStart = performance.now();
+const block = bootstrapNode.blockchain.getBlock(0);
+const getBlockTime = performance.now() - getBlockStart;
+console.log(`Genesis block (served in ${getBlockTime.toFixed(5)} ms):`, block);
+
+// TEST: get utxos time
+//const anchors = ['0:0:0', '0:1:0', '1:0:0', '1:1:0', '2:0:0', '2:1:0', '3:0:0', '3:1:0', '4:0:0', '4:1:0'];
+const anchors = [];
+for (let i = 0; i < Math.min(bootstrapNode.blockchain.currentHeight + 1, 50); i++) {
+	anchors.push(`${i}:0:0`);
+	anchors.push(`${i}:1:0`);
+}
+const getUtxosStart = performance.now();
+const utxos = bootstrapNode.blockchain.getUtxos(anchors, false);
+const getUtxosTime = performance.now() - getUtxosStart;
+console.log(`${anchors.length} Utxos (served in ${getUtxosTime.toFixed(5)} ms):`, utxos);

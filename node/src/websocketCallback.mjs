@@ -9,7 +9,7 @@
  * @property {Function} fnc
  * @property {Object<string, WebSocket[]>} triggers
  * @property {boolean} active
- * @property {function(any, string | 'all'): void} execute
+ * @property {function(any, string | 'all' | undefined): void} execute
  * - arg0= data => To send to the clients.
  * - arg1= trigger - Key of the wsClients ~ ex: '11:ffee00:25'(anchor) default: 'all'
  */

@@ -1,9 +1,9 @@
+// @ts-check
 import HiveP2P from "hive-p2p";
 import { Vss } from './vss.mjs';
 import { Miner } from './miner.mjs';
 import { MemPool } from './mempool.mjs';
 import { BlockUtils } from './block.mjs';
-import { UtxoCache } from './utxo-cache.mjs';
 import { Blockchain } from './blockchain.mjs';
 import { MESSAGE } from '../../types/messages.mjs';
 import { BlockValidation } from './block-validation.mjs';
@@ -17,18 +17,18 @@ import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-setti
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * 
 * @typedef {Object} NodeOptions
-* @property {import('hive-p2p').CryptoCodex} cryptoCodex - A hiveP2P CryptoCodex instance (works as Identity).
-* @property {import('../../utils/storage.mjs').ContrastStorage} storage - ContrastStorage instance for node data persistence.
+* @property {import('hive-p2p').CryptoCodex} [cryptoCodex] - A hiveP2P CryptoCodex instance (works as Identity).
+* @property {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence.
 * @property {number} [verbose] - Verbosity level for logging.
 * @property {boolean} [autoStart] - Whether to automatically start the node upon creation. (default: true)
 * @property {string} [domain] - The domain name for the node (Public only).
 * @property {number} [port] - The port number for the node to listen on (Public only).
-* @property {string[]} [bootstraps] - An array of bootstrap node addresses. */
+* @property {string[]} bootstraps - An array of bootstrap node addresses. */
 
 /** @param {NodeOptions} [options] */
-export async function createContrastNode(options = {}) {
+export async function createContrastNode(options = { bootstraps: [] }) {
 	if (!options.cryptoCodex) throw new Error('Node requires a CryptoCodex instance in options.cryptoCodex');
-	
+
 	const verb = options.verbose !== undefined ? options.verbose : options.cryptoCodex.verbose;
 	const asPublic = options.domain !== undefined && options.port !== undefined;
 	if (options.autoStart === undefined) options.autoStart = true; // set default autoStart to true
@@ -47,11 +47,11 @@ export class ContrastNode {
     wsCallbacks = {};
 	mainStorage;
 	blockchain;
-	p2pNode;
+	p2p;
 	verb;
 
 	// CORE COMPONENTS ------------------------------------------------------------------
-	/** @type {Account} */		account;
+	/** @type {Account | undefined} */ account;
 	vss = new Vss();
 	memPool = new MemPool();
 	miner = new Miner(this);
@@ -59,14 +59,14 @@ export class ContrastNode {
 		nbOfValidationWorkers: 4,
 		/** @type {ValidationWorker[]} */		validations: [],
 	};
+	/** @type {Object<string, NodeJS.Timeout | null>} */
 	timeouts = { createAndShareBlockCandidate: null };
 
 	/** Node instance should be created with "createContrastNode" method, not using "new" constructor.
 	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance.
-	 * @param {import('../../utils/storage.mjs').ContrastStorage} storage - ContrastStorage instance for node data persistence. */
+	 * @param {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
 	constructor(p2pNode, storage, verb = 2) {
 		this.blockchain = new Blockchain(storage);
-		this.utxoCache = new UtxoCache(this.blockchain);
 		this.mainStorage = storage;
 		this.p2p = p2pNode;
 		this.verb = verb;
@@ -85,24 +85,13 @@ export class ContrastNode {
         const state = this.info.state;
         if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) return;
         this.info.state = newState;
-		this.wsCallbacks.onStateUpdate?.execute(newState);
+		this.wsCallbacks.onStateUpdate?.execute(newState, undefined);
     }
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
 	async start(wallet, startFromScratch = false) {
 		this.logger.log(`Starting Contrast node...`, (m, c) => console.log(m, c)); // control the clock
 		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
-		// PRUNE CHECKPOINTS AND LOAD SNAPSHOT
-		const activeCheckpoint = this.blockchain.checkpointSystem.checkForActiveCheckpoint();
-        let persistedHeight;
-        if (!activeCheckpoint && !startFromScratch) {
-            this.blockchain.checkpointSystem.pruneCheckpointsLowerThanHeight(); //? will preserve 3 highest checkpoints
-            this.mainStorage.dumpTrashFolder();
-            this.updateState("Loading blockchain");
-
-            const startHeight = await this.blockchain.load();
-            persistedHeight = await this.blockchain.loadSnapshot(this, startHeight);
-        }
 
 		if (!this.p2p.started) { // START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
@@ -112,7 +101,6 @@ export class ContrastNode {
 		// TODO: SYNC BLOCKCHAIN FROM NETWORK
 
 		await this.createAndShareMyBlockCandidate();
-
 	}
 	async stop() {
 		if (this.verb >= 1) this.logger.log(`Stopping Contrast node...`, (m, c) => console.log(m, c));
@@ -129,14 +117,19 @@ export class ContrastNode {
 		this.rewardAddresses.miner = wallet.accounts.C[1].address;
 	}
 	async createAndShareMyBlockCandidate() {
-		this.updateState("creating block candidate");
-		const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
-		const updated = this.miner.updateBestCandidate(myCandidate);
-		this.updateState("idle", "creating block candidate");
-		if (!updated) return false;
+		try {
+			this.updateState("creating block candidate");
+			const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
+			if (!myCandidate) throw new Error('Failed to create block candidate');
 
-		this.p2p.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
-		this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getCandidateBlockHeader(myCandidate));
+			const updated = this.miner.updateBestCandidate(myCandidate);
+			if (!updated) throw new Error('The miner rejected the created block candidate');
+	
+			this.p2p.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
+			this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getCandidateBlockHeader(myCandidate), undefined);
+		} catch (/** @type {any} */ error) { this.logger.log(error.stack, (m, c) => console.error(m, c)); }
+		
+		this.updateState("idle", "creating block candidate");
 	}
 	/** Digest and apply a finalized block to the blockchain.
      * @param {BlockFinalized} block
@@ -151,29 +144,30 @@ export class ContrastNode {
         const { broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
         //if (!finalizedBlock || (this.syncHandler.isSyncing && !isSync)) 
             //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
-        let totalFees;
         this.updateState(`${statePrefix}block-validation #${block.index}`);
         const validationResult = await BlockValidation.validateBlockProposal(this, block);
-        const hashConfInfo = validationResult.hashConfInfo;
+        const { hashConfInfo, involvedUTXOs, allDiscoveredPubKeysAddresses } = validationResult;
         if (!(hashConfInfo?.conform)) throw new Error('Failed to validate block');
 
+		const newStakesOutputs = BlockUtils.extractNewStakesFromFinalizedBlock(block);
+		if (!this.vss.newStakes(newStakesOutputs, 'control')) throw new Error('VSS: Max supply reached during applyBlock().');
+
         this.updateState(`${statePrefix}applying finalized block #${block.index}`);
-        this.memPool.addNewKnownPubKeysAddresses(validationResult.allDiscoveredPubKeysAddresses);
+        this.memPool.addNewKnownPubKeysAddresses(allDiscoveredPubKeysAddresses);
         
-        const blockInfo = this.blockchain.addConfirmedBlock(this.utxoCache, block, persistToDisk, totalFees);
-		this.blockchain.applyBlock(this.utxoCache, this.vss, block);
+        this.blockchain.addConfirmedBlock(block);
+		this.vss.newStakes(newStakesOutputs, 'persist');
         this.memPool.removeFinalizedBlocksTransactions(block);
-        if (this.wsCallbacks.onBlockConfirmed) this.wsCallbacks.onBlockConfirmed.execute(blockInfo);
+        if (this.wsCallbacks.onBlockConfirmed) {
+			const blockInfo = BlockUtils.getFinalizedBlockInfo(involvedUTXOs, block);
+			this.wsCallbacks.onBlockConfirmed.execute(blockInfo, undefined);
+		}
     
         //this.logger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length}`, (m, c) => console.info(m, c));
         const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
         const minerId = block.Txs[0].outputs[0].address.slice(0, 6);
         const validatorId = block.Txs[1].outputs[0].address.slice(0, 6);
         this.logger.log(`${statePrefix}#${block.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
-
-		// TODO: SAVE SNAPSHOT & CHECKPOINT
-        await this.blockchain.saveSnapshot(this, block);
-        await this.blockchain.saveCheckpoint(this, block);
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate || isSync) return;

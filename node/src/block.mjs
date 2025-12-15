@@ -7,11 +7,10 @@ import { HashFunctions } from './conCrypto.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { serializer } from '../../utils/serializer.mjs';
+import { Transaction, UTXO } from '../../types/transaction.mjs';
 
 /**
 * @typedef {import("./node.mjs").ContrastNode} ContrastNode
-* @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
-* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 */
 
 export class BlockUtils {
@@ -39,11 +38,8 @@ export class BlockUtils {
         const firstTx = block.Txs[0];
         if (firstTx && Transaction_Builder.isMinerOrValidatorTx(firstTx)) block.Txs.shift();
     }
-	/** @param {UtxoCache} utxoCache @param {Transaction[]} Txs */
-    static #calculateTxsTotalFees(utxoCache, Txs) {
-        const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTxs(Txs);
-        if (!involvedUTXOs) throw new Error('At least one UTXO not found in utxoCache');
-        
+	/** @param {Object<string, UTXO>} involvedUTXOs @param {Transaction[]} Txs */
+    static #calculateTxsTotalFees(involvedUTXOs, Txs) {
         let totalFees = 0;
         for (const Tx of Txs)
             if (Transaction_Builder.isMinerOrValidatorTx(Tx)) continue;
@@ -87,9 +83,9 @@ export class BlockUtils {
         this.#removeExistingCoinbaseTransaction(block);
         block.Txs.unshift(coinbaseTx);
     }
-    /** @param {UtxoCache} utxoCache @param {BlockFinalized | BlockCandidate} block */
-    static calculateBlockReward(utxoCache, block) {
-        const totalFees = this.#calculateTxsTotalFees(utxoCache, block.Txs);
+    /** @param {Object<string, UTXO>} involvedUTXOs @param {BlockFinalized | BlockCandidate} block */
+    static calculateBlockReward(involvedUTXOs, block) {
+        const totalFees = this.#calculateTxsTotalFees(involvedUTXOs, block.Txs);
         const totalReward = totalFees + block.coinBase;
         const powReward = Math.floor(totalReward / 2);
         const posReward = totalReward - powReward;
@@ -100,7 +96,11 @@ export class BlockUtils {
         const lastBlock = node.blockchain.lastBlock;
         if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
         
-        const olderBlock = node.blockchain.getBlockFinalized(Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment));
+		// const olderBlockHeight = lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment;
+		// if (olderBlockHeight < 0) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
+		
+		const olderBlockHeight = Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
+        const olderBlock = node.blockchain.getBlock(olderBlockHeight);
         if (!olderBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
 
 		const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
@@ -143,13 +143,12 @@ export class BlockUtils {
 		const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = block;
 		return new BlockFinalizedHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
 	}
-
-    /** @param {UtxoCache} utxoCache @param {BlockFinalized} block */
-    static getFinalizedBlockInfo(utxoCache, block, totalFees = 0) {
+    /** @param {Object<string, UTXO>} involvedUTXOs @param {BlockFinalized} block */
+    static getFinalizedBlockInfo(involvedUTXOs, block, totalFees = 0) {
         /** @type {BlockInfo} */
         const blockInfo = {
             header: this.getFinalizedBlockHeader(block),
-            totalFees: totalFees || this.#calculateTxsTotalFees(utxoCache, block.Txs),
+            totalFees: totalFees || this.#calculateTxsTotalFees(involvedUTXOs, block.Txs),
             lowerFeePerByte: 0,
             higherFeePerByte: 0,
             blockBytes: serializer.serialize.block(block).length,
@@ -159,22 +158,17 @@ export class BlockUtils {
         const firstTx = block.Txs[2];
         const lastTx = block.Txs.length - 1 <= 2 ? firstTx : block.Txs[block.Txs.length - 1];
 
+		// THIS IS SHITTY CODE, BUT NOT SENSITIVE - TO REWORK LATER
         if (firstTx) {
-            const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(firstTx);
-            if (!involvedUTXOs) throw new Error('At least one UTXO not found in utxoCache');
-
-            //const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
-            //const firstTxWeight = Transaction_Builder.getTxWeight(firstTx, specialTx);
-            //blockInfo.higherFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, firstTx) / firstTxWeight);
+            const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
+            const firstTxWeight = serializer.serialize.transaction(firstTx, specialTx || undefined).length;
+			blockInfo.higherFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, firstTx) / firstTxWeight);
         }
         
         if (lastTx) {
-            const involvedUTXOs = utxoCache.extractInvolvedUTXOsOfTx(lastTx);
-            if (!involvedUTXOs) throw new Error('At least one UTXO not found in utxoCache');
-
-        	//const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
-            //const lastTxWeight = Transaction_Builder.getTxWeight(lastTx, specialTx);
-            //blockInfo.lowerFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, lastTx) / lastTxWeight);
+        	const specialTx = Transaction_Builder.isMinerOrValidatorTx(lastTx);
+            const lastTxWeight = serializer.serialize.transaction(lastTx, specialTx || undefined).length;
+            blockInfo.lowerFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, lastTx) / lastTxWeight);
         }
 
         return blockInfo;
@@ -222,8 +216,9 @@ export class BlockUtils {
 	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
-		const { blockchain, memPool, utxoCache, vss, account, miner, time } = node;
+		const { blockchain, memPool, vss, account, miner, time } = node;
 		if (typeof time !== 'number') throw new Error('Invalid node time');
+		if (!account || !account.address) throw new Error('Node account not set');
 
 		const posTimestamp = blockchain.lastBlock?.timestamp ? blockchain.lastBlock.timestamp + 1 : time;
 		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
@@ -243,16 +238,20 @@ export class BlockUtils {
 		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
 		node.info.averageBlockTime = averageBlockTime;
 		const coinBaseReward = mining.calculateNextCoinbaseReward(blockchain.lastBlock);
-		const Txs = memPool.getMostLucrativeTransactionsBatch(utxoCache);
+		const Txs = memPool.getMostLucrativeTransactionsBatch();
 		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, Txs, posTimestamp);
 	}
 	/** Adds POS reward transaction to the block candidate and signs it
 	 * @param {ContrastNode} node @param {BlockCandidate} block */
 	static async signBlockCandidate(node, block) {
-		const { utxoCache, rewardAddresses, account } = node;
-		if (!rewardAddresses.validator || !account.address) return null;
+		const { blockchain, rewardAddresses, account } = node;
+		if (!rewardAddresses.validator || !account || !account.address) throw new Error('Node reward addresses or account not set');
 
-		const { powReward, posReward } = BlockUtils.calculateBlockReward(utxoCache, block);
+		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
+		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
+		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
+
+		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
 		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator, account.address);
 		const signedPosFeeTx = account.signTransaction(posFeeTx);
 		block.Txs.unshift(signedPosFeeTx);
@@ -262,7 +261,33 @@ export class BlockUtils {
 	/** @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createAndSignBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
 		const blockCandidate = await this.createBlockCandidate(node, blockReward, initDiff);
-		if (!blockCandidate) return null;
 		return await this.signBlockCandidate(node, blockCandidate);
+	}
+	/** @param {BlockFinalized | BlockCandidate} block @param {'blockFinalized' | 'blockCandidate'} [mode] Default: 'blockFinalized' */
+	static extractInvolvedAnchors(block, mode = 'blockFinalized') {
+		/** @type {Object<string, boolean>} */
+		const control = {};
+		const involvedAnchors = [];
+		let repeatedAnchorsCount = 0;
+		for (let i = mode === 'blockFinalized' ? 2 : 0; i < block.Txs.length; i++)
+			for (const input of block.Txs[i].inputs)
+				if (control[input]) repeatedAnchorsCount++;
+				else { control[input] = true; involvedAnchors.push(input); }
+
+		return { involvedAnchors, repeatedAnchorsCount };
+	}
+	/** @param {BlockFinalized} block */
+	static extractNewStakesFromFinalizedBlock(block) {
+		/** @type {UTXO[]} */ const newStakesOutputs = [];
+		for (let txId = 2; txId < block.Txs.length; txId++) // skip coinbase and pos fee Txs
+			for (let voudId = 0; voudId < block.Txs[txId].outputs.length; voudId++) {
+				const { address, amount, rule } = block.Txs[txId].outputs[voudId];
+				if (amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) continue;
+				if (rule !== "sigOrSlash") continue;
+
+				newStakesOutputs.push(new UTXO(`${block.index}:${txId}:${voudId}`, amount, rule, address, false));
+			}
+
+		return newStakesOutputs;
 	}
 }

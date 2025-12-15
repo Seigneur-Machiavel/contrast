@@ -72,13 +72,10 @@ export class MemPool {
         for (let [pubKeyHex, address] of Object.entries(discoveredPubKeysAddresses))
             this.knownPubKeysAddresses[pubKeyHex] = address;
     }
-    /** @param {BlockFinalized[]} blockData */
-    removeFinalizedBlocksTransactions(blockData) {
-        const Txs = blockData.Txs;
-        if (!Array.isArray(Txs)) throw new Error('Txs is not an array');
-
+    /** @param {BlockFinalized} block */
+    removeFinalizedBlocksTransactions(block) {
         // Remove the transactions included in the block that collide with the mempool
-        for (const tx of Txs) {
+        for (const tx of block.Txs) {
             if (Transaction_Builder.isMinerOrValidatorTx(tx)) continue;
 
             const colliding = this.#caughtTransactionsAnchorsCollision(tx);
@@ -126,14 +123,13 @@ export class MemPool {
             try {
                 await this.pushTransaction(utxoCache, transaction);
                 results.success.push(transaction);
-            } catch (error) { results.failed.push(error.message) }
+            } catch (/**@type {any}*/ error) { results.failed.push(error.message) }
             await new Promise(resolve => setImmediate(resolve));
         }
 
         return results;
     }
-    /** @param {UtxoCache} utxoCache */
-    getMostLucrativeTransactionsBatch(utxoCache) {
+    getMostLucrativeTransactionsBatch() {
         const totalBytesTrigger = BLOCKCHAIN_SETTINGS.maxBlockSize * 0.98;
         const transactions = [];
         let totalBytes = 0;
@@ -142,14 +138,14 @@ export class MemPool {
         const candidateTransactions = this.transactionQueue.getTransactions();
         for (let tx of candidateTransactions) {
             let txCanBeAdded = true;
-            for (const anchor of tx.inputs) {
+            /*for (const anchor of tx.inputs) {
                 const utxo = utxoCache.getUTXO(anchor);
                 if (utxo && !utxo.spent) continue;
             
                 txCanBeAdded = false;
                 this.transactionQueue.remove(tx.id);
                 break; 
-            }
+            }*/
             if (!txCanBeAdded) continue;
 
             const txWeight = tx.byteWeight;

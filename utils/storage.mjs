@@ -1,34 +1,29 @@
+// @ts-check
 // A primitive way to store the blockchain data and wallet data etc...
 // As usual, use Ctrl + k, Ctrl + 0 to fold all blocks of code
+import fs from 'fs';
+import url from 'url';
+import path from 'path';
+import crypto from 'crypto';
+import AdmZip from 'adm-zip';
 import HiveP2P from "hive-p2p";
 import { Breather } from './breather.mjs';
 import { serializer } from './serializer.mjs';
-import { BlockUtils } from "../node/src/block.mjs";
 import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
-import { UTXO_RULES_GLOSSARY } from '../utils/utxo-rules.mjs';
-import { Transaction, UtxoState, TxAnchor, TxId, VoutId, UTXO } from '../types/transaction.mjs';
+import { UtxoState, UTXO } from '../types/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from './blockchain-settings.mjs';
 
 /**
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  */
 
-// -> Imports compatibility for Node.js, Electron and browser
-const isNode = typeof window === 'undefined';
-/** @type {typeof import('fs')} */
-const fs = isNode ? await import('fs') : window.fs;
-/** @type {typeof import('path')} */
-const path = isNode ? await import('path') : window.path;
-const url = isNode ? await import('url') : window.url;
-const crypto = isNode ? await import('crypto') : window.crypto;
-/** @type {typeof import('adm-zip')} */
-const AdmZip = isNode ? await import('adm-zip').then(module => module.default) : window.AdmZip;
-
 /**
 * @typedef {import("hive-p2p").Converter} Converter
-* @typedef {import("../node/src/node.mjs").Node} Node
-* @typedef {import("../node/src/block.mjs").BlockInfo} BlockInfo
+* @typedef {import("../types/block.mjs").BlockInfo} BlockInfo
+* @typedef {import("../types/transaction.mjs").TxId} TxId
+* @typedef {import("../types/transaction.mjs").VoutId} VoutId
+* @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../types/transaction.mjs").Transaction} Transaction
 */
 
@@ -41,7 +36,6 @@ const BLOCK_PER_DIRECTORY = 1000;
 class StorageRoot {
 	/** The local identifier used as subFolder */	localIdentifier;
 	/** Is running in electron environment */		  isElectronEnv;
-	/** Path to this file @type {string} */				   filePath;
 	/** Root folder path @type {string} */				 rootFolder;
 	/** Paths used for storage */							   PATH;
 
@@ -64,19 +58,15 @@ class StorageRoot {
 			STORAGE: basePath,
 			TRASH: path.join(basePath, 'trash'),
 			TXS_IDS: path.join(basePath, 'addresses-txs-ids'),
-			BLOCKS: path.join(basePath, 'blocks'),			 // deprecated
-			JSON_BLOCKS: path.join(basePath, 'json-blocks'), // deprecated
-			BLOCKS_INFO: path.join(basePath, 'blocks-info'), // deprecated
 			BLOCKCHAIN: path.join(basePath, 'blockchain'),
-			SNAPSHOTS: path.join(basePath, 'snapshots'),
-			CHECKPOINTS: path.join(basePath, 'checkpoints'),
 			TEST_STORAGE: path.join(basePath, 'test')
 		};
 		this.#init();
 	}
 	#init() {
 		// create the contrast-storage folder if it doesn't exist, and any of subfolder
-		if (this.isElectronEnv) { delete this.PATH.TEST_STORAGE; delete this.PATH.JSON_BLOCKS; }
+		// @ts-ignore
+		if (this.isElectronEnv) delete this.PATH.TEST_STORAGE;
 		if (!fs.existsSync(path.join(path.dirname(this.rootFolder), 'contrast-storage')))
 			fs.mkdirSync(path.join(path.dirname(this.rootFolder), 'contrast-storage'));
 		for (const dirPath of Object.values(this.PATH))
@@ -94,14 +84,9 @@ class StorageRoot {
 	}
 	clear(passHash = true, nodeSettings = true) {
 		const dirPaths = [
-			this.PATH.BLOCKS,
-			this.PATH.BLOCKS_INFO,
-			this.PATH.JSON_BLOCKS,
 			this.PATH.BLOCKCHAIN,
 			this.PATH.TRASH,
-			this.PATH.SNAPSHOTS,
 			this.PATH.TXS_IDS,
-			this.PATH.CHECKPOINTS,
 			path.join(this.PATH.STORAGE, 'ACTIVE_CHECKPOINT'),
 			this.PATH.TEST_STORAGE
 		];
@@ -122,13 +107,55 @@ class StorageRoot {
 }
 /** @param {number} fd - file descriptor @param {number} start - start position @param {number} totalBytes - number of bytes to read */
 function fsReadBytesSync(fd, start, totalBytes) {
-	const serialized = Buffer.alloc(totalBytes);
+	const serialized = Buffer.allocUnsafe(totalBytes);
 	fs.readSync(fd, serialized, 0, totalBytes, start);
 	return serialized;
 }
 
+class BinaryHandler {
+    fd; cursor;
+	get size() { return this.cursor; }
+	
+	/** @param {string} filePath @param {boolean} [createIfMissing] Default: true */
+    constructor(filePath, createIfMissing = true) {
+    	if (!fs.existsSync(filePath))
+			if (createIfMissing) fs.writeFileSync(filePath, Buffer.alloc(0));
+			else throw new Error(`File not found: ${filePath}`);
+
+		this.fd = fs.openSync(filePath, 'r+');
+        const stats = fs.fstatSync(this.fd);
+        this.cursor = stats.size; // Start at end
+    }
+
+    /** @param {Uint8Array} data @param {number} [position] Default: this.cursor (append) */
+    write(data, position = this.cursor) {
+        fs.writeSync(this.fd, data, 0, data.length, position);
+        this.cursor += data.length;
+    } 
+	/** @param {number} position @param {number} length */
+    read(position, length) {
+        const buffer = Buffer.allocUnsafe(length);
+        fs.readSync(this.fd, buffer, 0, length, position);
+        return buffer; // Don't move cursor for reads
+    }
+	/** Truncate the file to a new size @param {number} newSize */
+    truncate(newSize) {
+		if (newSize < 0) throw new Error('Cannot truncate file below size 0');
+        fs.ftruncateSync(this.fd, newSize);
+        this.cursor = newSize;
+    }
+	/** Reduce the file size by removing a number of bytes from the end @param {number} bytesToRemove */
+	shrink(bytesToRemove) {
+		const newSize = this.cursor - bytesToRemove;
+		if (newSize < 0) throw new Error('Cannot shrink file below size 0');
+		fs.ftruncateSync(this.fd, newSize);
+		this.cursor = newSize;
+	}
+}
+
 /** The main Storage */
 export class ContrastStorage extends StorageRoot {
+	/** @param {string|null} masterHex - master hex string to generate local identifier */
 	constructor(masterHex = null) { super(masterHex); }
 
 	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
@@ -138,14 +165,14 @@ export class ContrastStorage extends StorageRoot {
 			if (!fs.existsSync(d)) fs.mkdirSync(d);
 			
 			fs.writeFileSync(path.join(d, `${fileName}.bin`), serializedData);
-		} catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
+		} catch (/**@type {any}*/ error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 		return true;
 	}
 	/** @param {string} fileName @param {string} directoryPath @returns {Uint8Array|boolean} */
 	loadBinary(fileName, directoryPath) {
 		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
 		try { return fs.readFileSync(filePath) } // work as Uint8Array
-		catch (error) {
+		catch (/**@type {any}*/ error) {
 			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m, c) => console.info(m, c));
 			else storageMiniLogger.log(error.stack, (m, c) => console.info(m, c));
 		}
@@ -157,7 +184,7 @@ export class ContrastStorage extends StorageRoot {
 			const d = directoryPath || this.PATH.STORAGE;
 			if (!fs.existsSync(d)) fs.mkdirSync(d);
 			await fs.promises.writeFile(path.join(d, `${fileName}.bin`), serializedData);
-		} catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
+		} catch (/**@type {any}*/ error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 	}
 	/** @param {string} fileName @param {string} directoryPath @returns {Promise<Uint8Array|boolean>} */
 	async loadBinaryAsync(fileName, directoryPath) {
@@ -165,14 +192,14 @@ export class ContrastStorage extends StorageRoot {
 		try {
 			const buffer = await fs.promises.readFile(filePath);
 			return buffer;
-		} catch (error) {
+		} catch (/**@type {any}*/ error) {
 			if (error.code === 'ENOENT') storageMiniLogger.log(`File not found: ${filePath}`, (m, c) => console.info(m, c));
 			else storageMiniLogger.log(error.stack, (m, c) => console.info(m, c));
 		}
 		return false;
 	}
-	isFileExist(fileNameWithExtension = 'toto.bin', directoryPath) {
-		const filePath = path.join(directoryPath || this.PATH.STORAGE, fileNameWithExtension);
+	isFileExist(fileNameWithExtension = 'toto.bin', directoryPath = this.PATH.STORAGE) {
+		const filePath = path.join(directoryPath, fileNameWithExtension);
 		return fs.existsSync(filePath);
 	}
 	/** @param {string} fileName - The name of the file @param {any} data - The data to save */
@@ -181,12 +208,13 @@ export class ContrastStorage extends StorageRoot {
 			const filePath = path.join(this.PATH.STORAGE, `${fileName}.json`);
 			if (!fs.existsSync(path.dirname(filePath))) fs.mkdirSync(path.dirname(filePath));
 			fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-		} catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false }
+		} catch (/**@type {any}*/ error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false }
 	}
 	/** @param {string} fileName - The name of the file @returns {any|boolean} */
 	loadJSON(fileName) {
+		// @ts-ignore: readFileSync() on .json file returns string
 		try { return JSON.parse(fs.readFileSync(path.join(this.PATH.STORAGE, `${fileName}.json`))) }
-		catch (error) { return false }
+		catch (/**@type {any}*/ error) { return false }
 	}
 	/** @param {string} fileNameWithExtension - ex: 'toto.bin' @param {string} [directoryPath] - default is this.PATH.STORAGE */
 	deleteFile(fileNameWithExtension = 'toto.bin', directoryPath = this.PATH.STORAGE) {
@@ -199,117 +227,10 @@ export class ContrastStorage extends StorageRoot {
 	}
 }
 
-// IGNORE THESES CLASSES, WE ARE REFACTORING FROM STATIC LOGICS TO INSTANCED LOGICS
-// ALL OF THE FOLLOWING CLASSES WILL BE MODIFIED LATER OVER THE REFACTORING PROCESS
-export class CheckpointsStorage {
-    static maxSnapshotsInCheckpoints = 3; // number of snapshots to keep in checkpoints
-    static hashOfSnapshotFolder(folderPath) {
-        // load files (.bin) of snapshot folder to hash them
-        const files = fs.readdirSync(folderPath);
-        let hashBin = Buffer.alloc(0);
-        for (const file of files) {
-            const filePath = path.join(folderPath, file);
-            const bin = fs.readFileSync(filePath);
-            const fileHash = crypto.createHash('sha256').update(bin).digest();
-            // addition of hashes to create a unique hash for the folder
-            hashBin = Buffer.concat([hashBin, fileHash]);
-        }
-
-        /** @type {Buffer} */
-        const folderHash = crypto.createHash('sha256').update(hashBin).digest();
-        return folderHash;
-    }
-    /** 
-     * @param {number} checkpointHeight
-     * @param {string} fromPath
-     * @param {number[]} snapshotsHeights - used to archive a checkpoint from a ACTIVE_CHECKPOINT folder
-     * @param {number[]} neededSnapHeights
-	 * @param {ContrastStorage} storage */
-    static async archiveCheckpoint(checkpointHeight = 0, fromPath, snapshotsHeights, neededSnapHeights, storage) {
-        try {
-            const zip = new AdmZip();
-            const breather = new Breather();
-            const fromSnapshotsPath = fromPath ? path.join(fromPath, 'snapshots') : storage.PATH.SNAPSHOTS;
-            if (!fs.existsSync(fromSnapshotsPath)) throw new Error(`Snapshots folder not found at ${fromSnapshotsPath}`);
-
-            /** @type {Buffer[]} */
-            const snapshotsHashes = [];
-            for (let i = snapshotsHeights.length - 1; i >= 0; i--) {
-                if (snapshotsHashes.length >= CheckpointsStorage.maxSnapshotsInCheckpoints) break;
-                if (!neededSnapHeights.includes(snapshotsHeights[i])) continue; // skip the needed snapshots
-                const snapshotHeight = snapshotsHeights[i].toString();
-                const snapshotPath = path.join(fromSnapshotsPath, snapshotHeight);
-                if (!fs.existsSync(snapshotPath)) throw new Error(`Snapshot ${snapshotHeight} not found at ${snapshotPath}`);
-
-                snapshotsHashes.push(CheckpointsStorage.hashOfSnapshotFolder(snapshotPath));
-                zip.addLocalFolder(snapshotPath, `snapshots/${snapshotHeight}`);
-                await breather.breathe();
-            }
-            //zip.addLocalFolder(snapshotsPath, 'snapshots');
-            
-            const hashesBuffer = Buffer.concat(snapshotsHashes);
-            /** @type {string} */
-            const hash = crypto.createHash('sha256').update(hashesBuffer).digest('hex');
-            const buffer = zip.toBuffer();
-            await breather.breathe();
-            const heightPath = path.join(storage.PATH.CHECKPOINTS, checkpointHeight.toString());
-            if (!fs.existsSync(heightPath)) { fs.mkdirSync(heightPath); }
-            fs.writeFileSync(path.join(heightPath, `${hash}.zip`), buffer);
-            return hash;
-        } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
-    }
-    /** @param {Buffer} buffer @param {string} hashToVerify @param {ContrastStorage} storage */
-    static unarchiveCheckpointBuffer(checkpointBuffer, hashToVerify, storage) {
-        try {
-            const buffer = Buffer.from(checkpointBuffer);
-            const hash_V1 = crypto.createHash('sha256').update(buffer).digest('hex');
-            const isValidHash_V1 = hash_V1 === hashToVerify;
-            if (!isValidHash_V1) storageMiniLogger.log('<> Hash V1 mismatch! <>', (m, c) => console.info(m, c));
-            //if (hash !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m, c) => console.info(m, c)); return false; }
-    
-            const destPath = path.join(storage.PATH.STORAGE, 'ACTIVE_CHECKPOINT');
-            if (fs.existsSync(destPath)) fs.rmSync(destPath, { recursive: true });
-            fs.mkdirSync(destPath, { recursive: true });
-
-            const zip = new AdmZip(buffer);
-            zip.extractAllTo(destPath, true);
-
-            // HASH CHECK
-            let isValidHash_V2 = false;
-            try {
-                /** @type {Buffer[]} */
-                const snapshotsHashes = [];
-                const snapshotsDir = path.join(destPath, 'snapshots');
-                if (!fs.existsSync(snapshotsDir)) throw new Error(`Snapshots folder not found at ${snapshotsDir}`);
-    
-                const snapshotsFolders = fs.readdirSync(snapshotsDir);
-                for (const folder of snapshotsFolders) {
-                    const folderPath = path.join(snapshotsDir, folder);
-                    if (fs.lstatSync(folderPath).isDirectory())
-                        snapshotsHashes.push(CheckpointsStorage.hashOfSnapshotFolder(folderPath));
-                }
-    
-                const buffer = Buffer.concat(snapshotsHashes);
-                const hash_V2 = crypto.createHash('sha256').update(buffer).digest('hex');
-                if (hash_V2 !== hashToVerify) { storageMiniLogger.log('<> Hash mismatch! <>', (m, c) => console.info(m, c)); return false; }
-                isValidHash_V2 = hash_V2 === hashToVerify;
-            } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); }
-
-            if (!isValidHash_V2) storageMiniLogger.log('<> Hash V2 mismatch! <>', (m, c) => console.info(m, c));
-            if (!isValidHash_V1 && !isValidHash_V2) storageMiniLogger.log('--- Checkpoint is corrupted! ---', (m, c) => console.info(m, c));
-            return true;
-        } catch (error) { storageMiniLogger.log(error.stack, (m, c) => console.info(m, c)); return false }
-    }
-	/** @param {string} checkpointsPath */
-    static reset(checkpointsPath) {
-        if (fs.existsSync(checkpointsPath)) fs.rmSync(checkpointsPath, { recursive: true });
-    }
-}
-
 /** Transactions references are stored in binary format, folder architecture is optimized for fast access
  * @typedef {Object} addTxsRefsInfo
  * @property {number} highestIndex - The highest index of the transactions referenced (including temp refs)
- * @property {number} totalTxsRefs - The total number of transactions referenced (excluding temp refs) */
+ * @property {number} totalTxsIds - The total number of transactions referenced (excluding temp refs) */
 export class AddressesTxsRefsStorage {
     codeVersion = 4;
     version = 0;
@@ -339,7 +260,7 @@ export class AddressesTxsRefsStorage {
         }
 
         try {
-            /** @type {number} */
+            // @ts-ignore: readFileSync() on .json file returns string
             const config = JSON.parse(fs.readFileSync(this.configPath));
             this.version = config.version;
             this.snapHeight = config.snapHeight || -1;
@@ -348,7 +269,7 @@ export class AddressesTxsRefsStorage {
 
             storageMiniLogger.log('[AddressesTxsRefsStorage] => config loaded', (m, c) => console.log(m, c));
             this.loaded = true;
-        } catch (error) { storageMiniLogger.log(error, (m, c) => console.error(m, c)); }
+        } catch (/**@type {any}*/ error) { storageMiniLogger.log(error, (m, c) => console.error(m, c)); }
     }
     #pruneInvoledAddressesOverHeights() {
         // SORT BY DESCENDING HEIGHTS -> KEEP ONLY THE UPPER HEIGHTS
@@ -356,7 +277,7 @@ export class AddressesTxsRefsStorage {
         for (let i = 0; i < keys.length; i++)
             if (i > this.maxInvoledHeights) delete this.involedAddressesOverHeights[keys[i]];
     }
-    save(indexEnd) {
+    save(indexEnd = -1) {
         this.#pruneInvoledAddressesOverHeights();
 
         this.snapHeight = indexEnd;
@@ -383,7 +304,7 @@ export class AddressesTxsRefsStorage {
 
         return { lvl0, lvl1 };
     }
-    #clearArchitectureIfFolderMissing(lvl0, lvl1, address) {
+    #clearArchitectureIfFolderMissing(lvl0 = 'Ca', lvl1 = 'a', address = 'Caabccddeeff00112233') {
         if (!this.architecture[lvl0][lvl1][address]) return;
 
         const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
@@ -394,7 +315,7 @@ export class AddressesTxsRefsStorage {
             return true;
         }
     }
-    /** @param {string | number} batchNegativeIndex 0 for the temp batch, -1 for the last batch, -2 for the second to last batch, etc... */
+    /** @param {number} batchNegativeIndex 0 for the temp batch, -1 for the last batch, -2 for the second to last batch, etc... */
     getTxsReferencesOfAddress(address = '', batchNegativeIndex = 0) {
         if (typeof address !== 'string' || address.length !== 20) return [];
 
@@ -409,11 +330,10 @@ export class AddressesTxsRefsStorage {
         if (!fs.existsSync(filePath)) return []; // 'temp.bin can be missing'
 
         const serialized = fs.readFileSync(filePath);
-        /** @type {Array<string>} */
-        const txsIds = serializer.deserialize.txsIdsArray(serialized);
-        return txsIds;
+        return serializer.deserialize.txsIdsArray(serialized);
     }
-    async #saveNewBatchOfTxsIds(address = '', batch = []) {
+	/** @param {string} address - The address to save txs references for @param {TxId[]} batch - The array of tx ids to save */
+    async #saveNewBatchOfTxsIds(address, batch) {
         const serialized = serializer.serialize.txsIdsArray(batch);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         this.architecture[lvl0][lvl1][address].totalTxsIds += batch.length;
@@ -426,7 +346,8 @@ export class AddressesTxsRefsStorage {
         const filePath = path.join(dirPath, `${batchIndex -1}.bin`);
         return fs.promises.writeFile(filePath, serialized); //? not sure "return" is good here
     }
-    async #saveTempTxsIds(address = '', txsIds = [], highestIndex = -1) {
+	/** @param {string} address - The address to save txs references for @param {TxId[]} txsIds - The array of tx ids to save */
+    async #saveTempTxsIds(address, txsIds) {
         const serialized = serializer.serialize.txsIdsArray(txsIds);
         const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
         const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
@@ -454,13 +375,13 @@ export class AddressesTxsRefsStorage {
         let promises = [];
         while (txsIds.length > this.batchSize)
             promises.push(this.#saveNewBatchOfTxsIds(address, txsIds.splice(0, this.batchSize)));
-        promises.push(this.#saveTempTxsIds(address, txsIds, highestIndex)); // SAVE TEMP TXS IDS
+        promises.push(this.#saveTempTxsIds(address, txsIds)); // SAVE TEMP TXS IDS
 
         if (promises.length > 0) await Promise.allSettled(promises);
         this.architecture[lvl0][lvl1][address].highestIndex = highestIndex;
     }
-
-    #pruneBatchRefsUpperThan(batch = [], height = 0) {
+	/** @param {TxId[]} batch @param {number} height */
+    #pruneBatchRefsUpperThan(batch, height) {
         return batch.filter(txsRef => Number(txsRef.split(':')[0]) <= height);
     }
     #pruneAddressRefsUpperThan(address = '', height = 0) {
@@ -498,8 +419,8 @@ export class AddressesTxsRefsStorage {
         }
 
         // if the address is empty, we can delete it from the architecture
-        const totalTxsRefs = this.architecture[lvl0][lvl1][address].totalTxsRefs;
-        if (!totalTxsRefs || totalTxsRefs <= 0) {
+        const totalTxsIds = this.architecture[lvl0][lvl1][address].totalTxsIds;
+        if (!totalTxsIds || totalTxsIds <= 0) {
             fs.rmSync(dirPath, { recursive: true }); // delete the folder
             delete this.architecture[lvl0][lvl1][address];
             if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
@@ -539,34 +460,40 @@ export class BlockchainStorage {
 	converter = new HiveP2P.Converter();
 	storage;
 	batchSize = BLOCKCHAIN_SETTINGS.halvingInterval; // number of blocks per binary file
-
-	/** Bytes lenght of index entry: blockOffset(6 bytes) + blockBytes(4 bytes) + utxosStatesBytes(2 bytes) */
-	indexBytesLength = BLOCKCHAIN_SETTINGS.indexBytesLength;
 	lastBlockIndex = -1;
-	/** @type {number[]} blocks files descriptors */	fdBlockchain = [];
-	/** @type {number} indexes file descriptor */		fdIndexes = null;
+	/** Blockchain parts handler (blockchain-X.bin) Key: block file index @type {Object<number, BinaryHandler>} */
+	bcHandlers = {};
+	/** Blocks indexes (blockchain.idx) handler @type {BinaryHandler} */
+	idxsHandler;
 	
 	/** @param {import('./storage.mjs').ContrastStorage} storage */
 	constructor(storage) {
 		this.storage = storage;
-		this.#loadIndexesFile();
+		this.idxsHandler = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, 'blockchain.idx'));
+		if (this.idxsHandler.size % serializer.lengths.indexEntry !== 0) throw new Error(`blockchain.idx file is corrupted (size: ${this.idxsHandler.size})`);
+		this.lastBlockIndex = Math.ceil(this.idxsHandler.size / serializer.lengths.indexEntry) - 1;
 		storageMiniLogger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m, c) => console.info(m, c));
 	}
 	
 	// API METHODS
-	/** @param {BlockFinalized} blockData */
-    addBlock(blockData) { // WORK IN PROGRESS => IMPLY IDXING THE BLOCKS
-		if (blockData.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${blockData.index}`);
+	/** @param {BlockFinalized} block */
+    addBlock(block) {
+		if (block.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${block.index}`);
 
-		/** @type {UtxoState[]} */
-		const utxosStates = [];
-		for (let i = 0; i < blockData.Txs.length; i++)
-			for (let j = 0; j < blockData.Txs[i].outputs.length; j++)
-		utxosStates.push(new UtxoState(i, j, false));
-	
-		const fd = this.#getFdOfBlockIndex(blockData.index);
-		fs.appendFileSync(fd, serializer.serialize.block(blockData));
-		fs.appendFileSync(fd, serializer.serialize.utxosStatesArray(utxosStates));
+		const utxosStates = this.#buildUtxosStatesofBlock(block);
+		const blockBytes = serializer.serialize.block(block);
+		const utxosStatesBytes = serializer.serialize.utxosStatesArray(utxosStates);
+		const previousOffset = block.index % this.batchSize === 0 ? null
+			: this.#getOffsetOfBlockData(this.lastBlockIndex);
+		const start = previousOffset ? previousOffset.start + previousOffset.blockBytes + previousOffset.utxosStatesBytes : 0;
+		const indexesBytes = serializer.serialize.blockIndexEntry(start, blockBytes.length, utxosStatesBytes.length);
+		
+		// UPDATE INDEXES and BLOCKCHAIN FILE, do not use "appendFileSync" => cursor position issues
+		const blockchainHandler = this.#getBlockchainHandler(block.index);
+		blockchainHandler.write(blockBytes);
+		blockchainHandler.write(utxosStatesBytes);
+		this.idxsHandler.write(indexesBytes);
+		this.lastBlockIndex++;
     }
     getBlockBytes(height = 0, includeUtxosStates = false) {
         if (height > this.lastBlockIndex) return null;
@@ -575,9 +502,9 @@ export class BlockchainStorage {
 		if (!offset) return null;
 
 		const { start, blockBytes, utxosStatesBytes } = offset;
-		const fd = this.#getFdOfBlockIndex(height);
+		const blockchainHandler = this.#getBlockchainHandler(height);
 		const totalBytes = blockBytes + (includeUtxosStates ? utxosStatesBytes : 0);
-		const bytes = fsReadBytesSync(fd, start, totalBytes);
+		const bytes = blockchainHandler.read(start, totalBytes);
 		return {
 			blockBytes: includeUtxosStates ? bytes.subarray(0, blockBytes) : bytes,
 			utxosStatesBytes: includeUtxosStates ? bytes.subarray(blockBytes) : null,
@@ -598,7 +525,9 @@ export class BlockchainStorage {
 		for (const p of anchors) {
 			const { height, txIndex, vout } = serializer.parseAnchor(p);
 			if (!search.has(height)) search.set(height, new Map());
-			if (!search.get(height).has(txIndex)) search.get(height).set(txIndex, []);
+			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point, if not, we want the error to be thrown
+			if (!search.get(height).has(txIndex)) search.get(height)?.set(txIndex, []);
+			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point, if not, we want the error to be thrown
 			search.get(height).get(txIndex).push(vout);
 		}
 
@@ -610,17 +539,18 @@ export class BlockchainStorage {
 
 			const { blockBytes, utxosStatesBytes } = this.getBlockBytes(height, true) || {};
 			if (!blockBytes || !utxosStatesBytes) return null;
-
+			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point
 			const txIndexes = Array.from(search.get(height).keys());
 			const txs = this.#extractTransactionsFromBlockBytes(blockBytes, txIndexes)?.txs;
 			if (!txs) return null;
 
 			// BY TRANSACTION INDEX
 			const searchPattern = new Uint8Array(4); // Search pattern: [txIndex(2), voutId(2)]
-			for (const txIndex of search.get(height).keys()) {
+			for (const txIndex of txIndexes) {
 				searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
 				
 				// BY VOUT ID
+				// @ts-ignore: search.get(height).get(txIndex) can only contain valid voutIds at this point
 				for (const voutId of search.get(height).get(txIndex)) {
 					if (!txs[txIndex]?.outputs[voutId]) return null; // unable to find the referenced tx/output
 					
@@ -641,53 +571,51 @@ export class BlockchainStorage {
 
 		return utxos;
 	}
-    undoBlock(height = 0) { // WORK IN PROGRESS
-        
+    undoBlock() {
+        const offset = this.#getOffsetOfBlockData(this.lastBlockIndex);
+		if (!offset) return false;
+
+		// TRUNCATE INDEXES, AND BLOCKCHAIN FILE
+		const blockchainHandler = this.#getBlockchainHandler(this.lastBlockIndex);
+		blockchainHandler.shrink(offset.blockBytes + offset.utxosStatesBytes);
+		this.idxsHandler.shrink(serializer.lengths.indexEntry);
+		this.lastBlockIndex--;
     }
     reset() {
-        if (fs.existsSync(this.storage.PATH.BLOCKS)) fs.rmSync(this.storage.PATH.BLOCKS, { recursive: true });
-        fs.mkdirSync(this.storage.PATH.BLOCKS);
+        if (fs.existsSync(this.storage.PATH.BLOCKCHAIN)) fs.rmSync(this.storage.PATH.BLOCKCHAIN, { recursive: true });
+        fs.mkdirSync(this.storage.PATH.BLOCKCHAIN);
         this.lastBlockIndex = -1;
     }
 
 	// INTERNAL METHODS
-	#openFileDescriptor(filePath = '', createIfMissing = true) {
-		if (!fs.existsSync(filePath))
-			if (createIfMissing) fs.writeFileSync(filePath, Buffer.alloc(0));
-			else throw new Error(`File not found: ${filePath}`);
-		return fs.openSync(filePath, 'r+');
-	}
-	#loadIndexesFile() {
-		this.fdIndexes = this.#openFileDescriptor(path.join(this.storage.PATH.BLOCKS, 'blockchain.idx'), true);
-		const stats = fs.fstatSync(this.fdIndexes);
-		if (stats.size % this.indexBytesLength !== 0) throw new Error(`blockchain.idx file is corrupted (size: ${stats.size})`);
-		this.lastBlockIndex = Math.ceil(stats.size / this.indexBytesLength) - 1;
-	}
 	#getOffsetOfBlockData(height = -1) { // if reading is too slow, we can implement a caching system here
 		if (height < 0 || height > this.lastBlockIndex) return null;
-		const offset = { start: 0, blockBytes: 0, utxosStatesBytes: 0 };
-		const buffer = fsReadBytesSync(this.fdIndexes, height * this.indexBytesLength, this.indexBytesLength);
-		offset.start = this.converter.bytes6ToNumber(buffer.subarray(0, 6));
-		offset.blockBytes = this.converter.bytes4ToNumber(buffer.subarray(6, 10));
-		offset.utxosStatesBytes = this.converter.bytes2ToNumber(buffer.subarray(10, 12));
-		return offset;
+		const buffer = this.idxsHandler.read(height * serializer.lengths.indexEntry, serializer.lengths.indexEntry);
+		return serializer.deserialize.blockIndexEntry(buffer);
 	}
-	#getFdOfBlockIndex(height = 0) {
+	#getBlockchainHandler(height = 0) {
 		const batchIndex = Math.floor(height / this.batchSize);
-		if (this.fdBlockchain[batchIndex] === undefined) {
-			const filePath = path.join(this.storage.PATH.BLOCKCHAIN, `blockchain-${batchIndex}.bin`);
-			this.fdBlockchain[batchIndex] = this.#openFileDescriptor(filePath, false);
-		}
-		return this.fdBlockchain[batchIndex];
+		if (this.bcHandlers[batchIndex] === undefined)
+			this.bcHandlers[batchIndex] = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, `blockchain-${batchIndex}.bin`));
+		return this.bcHandlers[batchIndex];
+	}
+	/** @param {BlockFinalized} block @returns {UtxoState[]} */
+	#buildUtxosStatesofBlock(block) {
+		const utxosStates = [];
+		for (let i = 0; i < block.Txs.length; i++)
+			for (let j = 0; j < block.Txs[i].outputs.length; j++)
+				utxosStates.push(new UtxoState(i, j, false));
+		return utxosStates;
 	}
 	/** @param {Uint8Array} blockBytes @param {number[]} txIndexes */
 	#extractTransactionsFromBlockBytes(blockBytes, txIndexes) {
 		/** key: txIndex, value: transaction @type {Object<number, Transaction>} */
 		const txs = {};
+		/** @type {Object<number, 'miner' | 'validator'>} */
+		const specialMode = { 0: 'miner', 1: 'validator' }; // finalized block only
 		const nbOfTxs = this.converter.bytes2ToNumber(blockBytes.subarray(0, 2));
 		const timestampOffset = serializer.dataPositions.timestampInFinalizedBlock;
 		const timestamp = this.converter.bytes6ToNumber(blockBytes.subarray(timestampOffset, timestampOffset + 6));
-		const specialMode = { 0: 'miner', 1: 'validator' }; // finalized block only
 		for (const i of txIndexes) {
 			if (txs[i] !== undefined) continue; // already extracted
 			if (i + 1 > nbOfTxs) return null;
@@ -697,7 +625,7 @@ export class BlockchainStorage {
 			const offsetEnd = i + 1 === nbOfTxs ? blockBytes.length
 				: this.converter.bytes4ToNumber(blockBytes.subarray(pointerStart + 4, pointerStart + 8));
 			const txBuffer = blockBytes.subarray(offsetStart, offsetEnd);
-			const tx = serializer.deserialize.transaction(txBuffer, specialMode[i]);
+			const tx = serializer.deserialize.transaction(txBuffer, specialMode[i] || 'tx');
 			txs[i] = tx;
 		}
 		return { txs, timestamp };
@@ -709,10 +637,8 @@ export class BlockchainStorage {
 class TestStorage extends ContrastStorage {
     txBinaryWeight = 200; // in bytes
     txCount = 1100; // tx in a simulated block
-
-	constructor(masterHex = '') {
-		super(masterHex);
-	}
+	/** @param {string|null} masterHex - master hex string to generate local identifier */
+	constructor(masterHex = '') { super(masterHex); }
 
     // erase all blocks
     reset() {
@@ -730,6 +656,7 @@ class TestStorage extends ContrastStorage {
         for (let i = 0; i < this.txCount; i++) block.push(this.#createRandomTx());
         return block;
     }
+	/** @param {Uint8Array[]} block @param {number} index */
     async saveBlock(block, index) {
         const totalSize = block.reduce((acc, tx) => acc + tx.length, 0);
         const concatenated = new Uint8Array(totalSize);
@@ -741,6 +668,7 @@ class TestStorage extends ContrastStorage {
 
         await this.saveBinaryAsync(index.toString(), concatenated, this.PATH.TEST_STORAGE);
     }
+	/** @param {Uint8Array[]} block @param {number} index */
     saveBlockDecomposed(block, index) {
         const blockDir = path.join(this.PATH.TEST_STORAGE, index.toString());
         for (let i = 0; i < block.length; i++) this.saveBinary(`${index}-${i}`, block[i], blockDir);
@@ -752,10 +680,10 @@ class TestStorage extends ContrastStorage {
             if (decomposed) this.saveBlockDecomposed(block, i);
         }
     }
-
-    loadBlock(index, count = this.txCount) {
+    loadBlock(index = 0, count = this.txCount) {
 		const block = [];
 		const buffer = this.loadBinary(index.toString(), this.PATH.TEST_STORAGE);
+		if (typeof buffer === 'boolean') throw new Error(`Unable to load block #${index}`);
 		for (let i = 0; i < count; i++) {
 			const start = i * this.txBinaryWeight;
 			const end = start + this.txBinaryWeight;
@@ -763,7 +691,7 @@ class TestStorage extends ContrastStorage {
 		}
 		return block;
     }
-	async loadBlockAsync(index) {
+	async loadBlockAsync(index = 0) {
 		return await this.loadBinaryAsync(index.toString(), this.PATH.TEST_STORAGE);
 	}
 	getFilesInBlockDir(index = 0) {
@@ -892,7 +820,7 @@ async function test() {
 
 	console.log('--- Test end ---');
 }
-test();
+//test();
 
 /* 1100 files of 200 bytes each or 220KB => 1 block
 Time to load a big file: 0.74550ms

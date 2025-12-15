@@ -11,7 +11,7 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 //const WorkerModule = isNode ? (await import('worker_threads')).Worker : Worker;
 let WorkerModule;
 try { WorkerModule = (await import('worker_threads')).Worker }
-catch (error) { WorkerModule = Worker }
+catch (/**@type {any}*/ error) { WorkerModule = Worker }
 
 function newWorker(scriptPath, workerCode, workerData = {}) {
     if (scriptPath) return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });

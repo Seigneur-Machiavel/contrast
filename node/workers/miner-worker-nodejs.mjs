@@ -84,7 +84,7 @@ async function mineBlockUntilValid() {
 			const blockReadyIn = Math.max(mined.finalizedBlock.timestamp - now, 0);
 			await new Promise((resolve) => setTimeout(resolve, blockReadyIn));
 			return mined.finalizedBlock;
-		} catch (error) {
+		} catch (/**@type {any}*/ error) {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 			return { error: error.stack };
 		}

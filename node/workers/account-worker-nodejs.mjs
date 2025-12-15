@@ -2,7 +2,7 @@ import { parentPort } from 'worker_threads';
 import { HashFunctions, AsymetricFunctions } from '../src/conCrypto.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
 
-process.on('uncaughtException', (error) => console.error('Uncatched exception:', error.stack));
+process.on('uncaughtException', (/**@type {any}*/ error) => console.error('Uncatched exception:', error.stack));
 process.on('unhandledRejection', (reason, promise) => console.error('Promise rejected:', promise, 'reason:', reason));
 
 async function deriveKeyPair(masterHex, seedModifierHex) {
@@ -59,7 +59,7 @@ parentPort.on('message', async (task) => {
 					response.privKeyHex = keyPair.privKeyHex;
 					response.addressBase58 = addressBase58;
 					break;
-                } catch (error) {
+                } catch (/**@type {any}*/ error) {
                     const errorSkippingLog = ['Address does not meet the security level', 'Address prefix not matched'];
                     if (!errorSkippingLog.includes(error.message.slice(0, 40))) console.error(error.stack);
                 }

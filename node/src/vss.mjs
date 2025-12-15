@@ -55,7 +55,7 @@ export class Vss {
         let upperBound = spectrumFunctions.getHighestUpperBound(this.spectrum);
         for (const utxo of utxos) {
 			const { address, anchor, amount } = utxo;
-            upperBound = upperBound + amount;
+            upperBound += amount;
             if (upperBound > BLOCKCHAIN_SETTINGS.maxSupply) return false;
 			if (mode === 'control') continue;
             this.spectrum[upperBound] = { address, anchor, amount };

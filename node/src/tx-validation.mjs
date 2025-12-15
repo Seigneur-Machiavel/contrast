@@ -38,7 +38,7 @@ export class TxValidation {
         if (transaction.outputs.length === 0) throw new Error('Invalid transaction: no outputs');
 
         try { for (const witness of transaction.witnesses) this.#decomposeWitnessOrThrow(witness);
-        } catch (error) { throw new Error('Invalid signature size'); }
+        } catch (/**@type {any}*/ error) { throw new Error('Invalid signature size'); }
         
         for (let i = 0; i < transaction.outputs.length; i++) {
             const output = transaction.outputs[i];
@@ -261,7 +261,11 @@ export class TxValidation {
      * @param {Transaction} transaction
      * @param {'miner' | 'validator' | false} specialTx */
     static async fullTransactionValidation(involvedUTXOs, memPool, transaction, specialTx) {
-        const result = { fee: 0, success: false, discoveredPubKeysAddresses: {} };
+        const result = {
+			/** @type {Object<string, string>} */
+			discoveredPubKeysAddresses: {},
+			fee: 0, success: false
+		};
         this.isConformTransaction(involvedUTXOs, transaction, specialTx); // also check spendable UTXOs
         
         const impliedKnownPubkeysAddresses = this.controlAllWitnessesSignatures(memPool, transaction);
@@ -278,7 +282,11 @@ export class TxValidation {
      * @param {Transaction} transaction
      * @param {string | false} specialTx - 'miner' || 'validator' or false */
     static async partialTransactionValidation(involvedUTXOs, memPool, transaction, specialTx) {
-        const result = { fee: 0, success: false, impliedKnownPubkeysAddresses: {} };
+        const result = {
+			/** @type {Object<string, string>} */
+			impliedKnownPubkeysAddresses: {},
+			fee: 0, success: false
+		};
         this.isConformTransaction(involvedUTXOs, transaction, specialTx); // also check spendable UTXOs
         
         const impliedKnownPubkeysAddresses = this.controlAllWitnessesSignatures(memPool, transaction);

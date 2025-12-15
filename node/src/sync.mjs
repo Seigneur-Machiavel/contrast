@@ -424,7 +424,7 @@ export class SyncHandler {
                 peerHeight = syncRes.currentHeight;
                 await breather.breathe();
             }
-        } catch (error) {
+        } catch (/**@type {any}*/ error) {
             this.miniLogger.log(`#getMissingBlocks() error occurred`, (m, c) => console.info(m, c));
             this.miniLogger.log(error, (m, c) => console.info(m, c));
         }
