@@ -32,6 +32,7 @@ const isNode = typeof process !== 'undefined' && process.versions != null && pro
 // @ts-expect-error - msgpack global added by browser script
 const msgpack = isNode ? (await import('../libs/msgpack.min.js')).default : window.msgpack;
 
+// Binary Reader/Writer => Simple and fast Uint8Array reader/writer
 export class BinaryWriter {
 	cursor = 0;
 	buffer;
@@ -47,7 +48,7 @@ export class BinaryWriter {
 	/** @param {number} byte */
 	writeByte(byte) {
 		this.view[this.cursor] = byte;
-		this.cursor += 1;
+		this.cursor++;
 	}
 	/** @param {Uint8Array} data */
 	writeBytes(data) {
@@ -57,7 +58,7 @@ export class BinaryWriter {
 	getBytes() { return this.view; }
 }
 export class BinaryReader {
-	cursor = 0
+	cursor = 0;
 	view;
 
 	/** @param {ArrayBuffer | Uint8Array} buffer */
@@ -74,6 +75,7 @@ export class BinaryReader {
 		return this.view.slice(start, end);
 	}
 }
+
 /** Two bytes VoutId encoder/decoder (values 0 and 1 are reserved)
  * - We just shift the value by 2 to fit in the range 2-255 for each byte
  * - We use this method to optimize UTXO state search with indexOf() => No fake positive are allowed
@@ -93,29 +95,19 @@ export class VoutIdEncoder {
         return (bytes[0] - 2) * 254 + (bytes[1] - 2);
     }
 }
+
 /** Types length in bytes */
 const lengths = {
 	// CRYPTO/IDENTITY
-	pubKey: 32,
-	address: 16,
-	signature: 64,
-	witness: 96,
+	pubKey: 32, address: 16, signature: 64, witness: 96,
 	// TRANSACTION
-	anchor: 8,
-	txId: 6,
-	utxoState: 5,
-	miniUTXO: 23,
+	anchor: 8, txId: 6, utxoState: 5, miniUTXO: 23,
 	// BLOCK VALUES
-	hash: 32,
-	nonce: 4,
-	amount: 6,
-	timestamp: 6,
+	hash: 32, nonce: 4, amount: 6, timestamp: 6,
 	// BLOCK INDEX ENTRY
-	startEntry: 6,
-	blockBytesEntry: 4,
-	utxosStatesBytesEntry: 2,
+	startEntry: 6, blockBytesEntry: 4, utxosStatesBytesEntry: 2,
 	indexEntry: 12, // start(6) + blockBytes(4) + utxosStatesBytes(2)
-
+	// BLOCK HEADERS
 	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + powReward(6) */
     blockCandidateHeader: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6,
 	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + timestamp(6) + hash(32) + nonce(4) */
@@ -275,7 +267,7 @@ export const serializer = {
 			if (mode === 'miner' && (tx.inputs.length !== 1 || tx.inputs[0].length !== 8)) throw new Error('Invalid coinbase transaction');
             if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== 85)) throw new Error('Invalid transaction');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
-
+			
 			const witnessesBytes = tx.witnesses.length * lengths.witness;
 			let inputBytes = lengths.anchor;
 			if (mode === 'miner') inputBytes = 4; 			// input = nonce
@@ -283,7 +275,7 @@ export const serializer = {
 			const inputsBytes = tx.inputs.length * inputBytes;
 			const outputsBytes = tx.outputs.length * lengths.miniUTXO;
 			const dataBytes = tx.data?.length || 0;			// arbitrary data
-
+			
 			// header (10) => version(2) + witnesses(2) + inputs(2) + outputs(2) + dataLength(2)
 			const w = new BinaryWriter(10 + witnessesBytes + inputsBytes + outputsBytes + dataBytes);
 			w.writeBytes(converter.numberTo2Bytes(tx.version)); 				// version
@@ -470,7 +462,7 @@ export const serializer = {
 		},
 		/** @param {Uint8Array} serializedWitnesses */
 		witnessesArray(serializedWitnesses) {
-			if (serializedWitnesses.length % lengths.witness !== 0) throw new Error('Serialized witnesses length is invalid');
+			if (serializedWitnesses.length % lengths.witness !== 0)throw new Error('Serialized witnesses length is invalid');
 			const witnesses = [];
 			const expectedNbOfWitnesses = serializedWitnesses.length / lengths.witness;
 			const r = new BinaryReader(serializedWitnesses);
@@ -537,8 +529,7 @@ export const serializer = {
 				txs.push(this.transaction(r.read(end - start), serializer.specialMode[mode][i]));
 			}
 
-			if (!r.isReadingComplete)
-				throw new Error('Block is not fully deserialized');
+			if (!r.isReadingComplete) throw new Error('Block is not fully deserialized');
 			return { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce, powReward };
 		},
 		/** @param {Uint8Array} serializedBlock */

@@ -4,10 +4,10 @@ import { BlockInfo, BlockFinalizedHeader, BlockFinalized,
 	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
 import { mining } from '../../utils/mining-functions.mjs';
 import { HashFunctions } from './conCrypto.mjs';
-import { Transaction_Builder } from './transaction.mjs';
 import { TxValidation } from './tx-validation.mjs';
+import { Transaction_Builder } from './transaction.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { Transaction, UTXO } from '../../types/transaction.mjs';
+import { Transaction, UTXO, UtxoState } from '../../types/transaction.mjs';
 
 /**
 * @typedef {import("./node.mjs").ContrastNode} ContrastNode
@@ -238,8 +238,8 @@ export class BlockUtils {
 		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
 		node.info.averageBlockTime = averageBlockTime;
 		const coinBaseReward = mining.calculateNextCoinbaseReward(blockchain.lastBlock);
-		const Txs = memPool.getMostLucrativeTransactionsBatch();
-		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, Txs, posTimestamp);
+		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch();
+		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, txs, posTimestamp);
 	}
 	/** Adds POS reward transaction to the block candidate and signs it
 	 * @param {ContrastNode} node @param {BlockCandidate} block */
@@ -289,5 +289,13 @@ export class BlockUtils {
 			}
 
 		return newStakesOutputs;
+	}
+	/** @param {BlockFinalized} block @returns {UtxoState[]} */
+	static buildUtxosStatesOfFinalizedBlock(block) {
+		const utxosStates = [];
+		for (let i = 0; i < block.Txs.length; i++)
+			for (let j = 0; j < block.Txs[i].outputs.length; j++)
+				utxosStates.push(new UtxoState(i, j, false));
+		return utxosStates;
 	}
 }

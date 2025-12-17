@@ -191,6 +191,23 @@ export class Transaction_Builder {
         const witnesses = transaction.witnesses.slice();
 		return new Transaction(inputs, outputs, witnesses, transaction.feePerByte, transaction.byteWeight, transaction.version);
     }
+	/** @param {Transaction} tx */
+	static extractInvolvedAnchors(tx, abortOnDoubles = true) {
+		/** @type {Object<string, boolean>} */
+		const control = {};
+		const involvedAnchors = [];
+		let repeatedAnchorsCount = 0;
+		for (const input of tx.inputs)
+			if (control[input]) {
+				repeatedAnchorsCount++;
+				if (abortOnDoubles) break;
+			} else {
+				control[input] = true;
+				involvedAnchors.push(input);
+			}
+
+		return { involvedAnchors, repeatedAnchorsCount };
+	}
     // Multi-functions methods
     /** @param {Account} senderAccount @param {number} amount @param {string} recipientAddress @param {number} [feePerByte] */
     static createAndSignTransfer(senderAccount, amount, recipientAddress, feePerByte) {

@@ -5,7 +5,6 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockchainStorage, AddressesTxsRefsStorage } from '../../utils/storage.mjs';
 
 /**
-* @typedef {import("./vss.mjs").Vss} Vss
 * @typedef {import("./mempool.mjs").MemPool} MemPool
 * @typedef {import("./node.mjs").ContrastNode} ContrastNode
 * @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor

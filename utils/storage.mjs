@@ -7,30 +7,34 @@ import path from 'path';
 import crypto from 'crypto';
 import AdmZip from 'adm-zip';
 import HiveP2P from "hive-p2p";
-import { Breather } from './breather.mjs';
 import { serializer } from './serializer.mjs';
+import { UTXO } from '../types/transaction.mjs';
+import { BlockUtils } from '../node/src/block.mjs';
 import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
-import { UtxoState, UTXO } from '../types/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from './blockchain-settings.mjs';
 
 /**
+ * @typedef {import("hive-p2p").Converter} Converter
+ * @typedef {import("../types/block.mjs").BlockInfo} BlockInfo
+ * @typedef {import("../types/transaction.mjs").TxId} TxId
+ * @typedef {import("../types/transaction.mjs").VoutId} VoutId
+ * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
+ * @typedef {import("../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
- */
-
-/**
-* @typedef {import("hive-p2p").Converter} Converter
-* @typedef {import("../types/block.mjs").BlockInfo} BlockInfo
-* @typedef {import("../types/transaction.mjs").TxId} TxId
-* @typedef {import("../types/transaction.mjs").VoutId} VoutId
-* @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
-* @typedef {import("../types/transaction.mjs").Transaction} Transaction
 */
 
 // GLOBALS VARS
 /** @type {MiniLogger} */
 const storageMiniLogger = new MiniLogger('storage');
 const BLOCK_PER_DIRECTORY = 1000;
+
+/** @param {number} fd - file descriptor @param {number} start - start position @param {number} totalBytes - number of bytes to read */
+function fsReadBytesSync(fd, start, totalBytes) {
+	const serialized = Buffer.allocUnsafe(totalBytes);
+	fs.readSync(fd, serialized, 0, totalBytes, start);
+	return serialized;
+}
 
 /** THE COMMON CLASS TO HANDLE THE STORAGE PATHS */
 class StorageRoot {
@@ -105,12 +109,6 @@ class StorageRoot {
 		this.#init();
 	}
 }
-/** @param {number} fd - file descriptor @param {number} start - start position @param {number} totalBytes - number of bytes to read */
-function fsReadBytesSync(fd, start, totalBytes) {
-	const serialized = Buffer.allocUnsafe(totalBytes);
-	fs.readSync(fd, serialized, 0, totalBytes, start);
-	return serialized;
-}
 
 class BinaryHandler {
     fd; cursor;
@@ -130,7 +128,7 @@ class BinaryHandler {
     /** @param {Uint8Array} data @param {number} [position] Default: this.cursor (append) */
     write(data, position = this.cursor) {
         fs.writeSync(this.fd, data, 0, data.length, position);
-        this.cursor += data.length;
+        if (position === this.cursor) this.cursor += data.length;
     } 
 	/** @param {number} position @param {number} length */
     read(position, length) {
@@ -480,7 +478,13 @@ export class BlockchainStorage {
     addBlock(block) {
 		if (block.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${block.index}`);
 
-		const utxosStates = this.#buildUtxosStatesofBlock(block);
+		// DIGEST THE CONSUMED UTXOS
+		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
+		if (repeatedAnchorsCount > 0) throw new Error(`Block contains ${repeatedAnchorsCount} repeated UTXO anchors`);
+		if (involvedAnchors.length && !this.#consumeUtxos(involvedAnchors)) throw new Error('Unable to consume UTXOs for the new block');
+
+		// PREPARE DATA TO WRITE
+		const utxosStates = BlockUtils.buildUtxosStatesOfFinalizedBlock(block);
 		const blockBytes = serializer.serialize.block(block);
 		const utxosStatesBytes = serializer.serialize.utxosStatesArray(utxosStates);
 		const previousOffset = block.index % this.batchSize === 0 ? null
@@ -508,6 +512,7 @@ export class BlockchainStorage {
 		return {
 			blockBytes: includeUtxosStates ? bytes.subarray(0, blockBytes) : bytes,
 			utxosStatesBytes: includeUtxosStates ? bytes.subarray(blockBytes) : null,
+			blockchainHandler, offset
 		}
     }
 	/** @param {number} height @param {number[]} txIndexes */
@@ -519,21 +524,11 @@ export class BlockchainStorage {
 	}
 	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) */
 	getUtxos(anchors, breakOnSpent = false) {
-		// GROUP ANCHORS BY BLOCK HEIGHT
-		/** height, Map(txindex, vout[]) @type {Map<number, Map<number, number[]>} */
-		const search = new Map();
-		for (const p of anchors) {
-			const { height, txIndex, vout } = serializer.parseAnchor(p);
-			if (!search.has(height)) search.set(height, new Map());
-			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point, if not, we want the error to be thrown
-			if (!search.get(height).has(txIndex)) search.get(height)?.set(txIndex, []);
-			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point, if not, we want the error to be thrown
-			search.get(height).get(txIndex).push(vout);
-		}
-
-		// BY BLOCK HEIGHT
 		/** Key: Anchor, value: UTXO @type {Object<string, UTXO>} */
 		const utxos = {};
+		const search = this.#getUtxosSearchPattern(anchors);
+
+		// BY BLOCK HEIGHT
 		for (const height of search.keys()) {
 			if (height > this.lastBlockIndex) return null;
 
@@ -588,6 +583,55 @@ export class BlockchainStorage {
     }
 
 	// INTERNAL METHODS
+	/** @param {TxAnchor[]} anchors */
+	#consumeUtxos(anchors) {
+		const u = new Uint8Array(1); u[0] = 1; // spent state
+		const search = this.#getUtxosSearchPattern(anchors);
+
+		// BY BLOCK HEIGHT
+		for (const height of search.keys()) {
+			if (height > this.lastBlockIndex) return false;
+
+			const { blockBytes, utxosStatesBytes, blockchainHandler, offset } = this.getBlockBytes(height, true) || {};
+			if (!blockBytes || !utxosStatesBytes || !blockchainHandler || !offset) return false;
+
+			// BY TRANSACTION INDEX
+			const utxosStatesBytesStart = offset.start + offset.blockBytes;
+			const searchPattern = new Uint8Array(4); // Search pattern: [txIndex(2), voutId(2)]
+			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point
+			for (const txIndex of search.get(height).keys()) {
+				// BY VOUT ID
+				// @ts-ignore: search.get(height).get(txIndex) can only contain valid voutIds at this point
+				for (const voutId of search.get(height).get(txIndex)) {
+					searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
+					searchPattern.set(serializer.voutIdEncoder.encode(voutId), 2);
+					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
+					if (stateOffset === -1) throw new Error(`UTXO not found (anchor: ${height}:${txIndex}:${voutId})`);
+					if (utxosStatesBytes[stateOffset + 4] === 1) throw new Error(`UTXO already spent (anchor: ${height}:${txIndex}:${voutId})`);
+					
+					// MARK UTXO AS SPENT
+					blockchainHandler.write(u, utxosStatesBytesStart + stateOffset + 4);
+				}
+			}
+		}
+
+		return true;
+	}
+	/** @param {TxAnchor[]} anchors */
+	#getUtxosSearchPattern(anchors) {
+		// GROUP ANCHORS BY BLOCK HEIGHT
+		/** height, Map(txindex, vout[]) @type {Map<number, Map<number, number[]>} */
+		const search = new Map();
+		for (const p of anchors) {
+			const { height, txIndex, vout } = serializer.parseAnchor(p);
+			if (!search.has(height)) search.set(height, new Map());
+			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point, if not, we want the error to be thrown
+			if (!search.get(height).has(txIndex)) search.get(height)?.set(txIndex, []);
+			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point, if not, we want the error to be thrown
+			search.get(height).get(txIndex).push(vout);
+		}
+		return search;
+	}
 	#getOffsetOfBlockData(height = -1) { // if reading is too slow, we can implement a caching system here
 		if (height < 0 || height > this.lastBlockIndex) return null;
 		const buffer = this.idxsHandler.read(height * serializer.lengths.indexEntry, serializer.lengths.indexEntry);
@@ -598,14 +642,6 @@ export class BlockchainStorage {
 		if (this.bcHandlers[batchIndex] === undefined)
 			this.bcHandlers[batchIndex] = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, `blockchain-${batchIndex}.bin`));
 		return this.bcHandlers[batchIndex];
-	}
-	/** @param {BlockFinalized} block @returns {UtxoState[]} */
-	#buildUtxosStatesofBlock(block) {
-		const utxosStates = [];
-		for (let i = 0; i < block.Txs.length; i++)
-			for (let j = 0; j < block.Txs[i].outputs.length; j++)
-				utxosStates.push(new UtxoState(i, j, false));
-		return utxosStates;
 	}
 	/** @param {Uint8Array} blockBytes @param {number[]} txIndexes */
 	#extractTransactionsFromBlockBytes(blockBytes, txIndexes) {
@@ -619,6 +655,7 @@ export class BlockchainStorage {
 		for (const i of txIndexes) {
 			if (txs[i] !== undefined) continue; // already extracted
 			if (i + 1 > nbOfTxs) return null;
+
 			const pointerStart = serializer.lengths.blockFinalizedHeader + (i * 4);
 			const pointerBuffer = blockBytes.subarray(pointerStart, pointerStart + 4);
 			const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);

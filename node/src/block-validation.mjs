@@ -232,7 +232,7 @@ export class BlockValidation {
 		const expectedCoinBase = mining.calculateNextCoinbaseReward(lastBlock || block);
         if (block.coinBase !== expectedCoinBase) throw new Error(`!banBlock! !applyOffense! Invalid #${block.index} coinbase: ${block.coinBase} - expected: ${expectedCoinBase}`);
 
-		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block);
+		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
 		if (repeatedAnchorsCount > 0) throw new Error('!banBlock! !applyOffense! Repeated UTXO anchors detected in block');
 
 		const involvedUTXOs = node.blockchain.getUtxos(involvedAnchors, true);

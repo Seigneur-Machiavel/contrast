@@ -15,7 +15,6 @@
         "validation": true,
         "wallet": true,
         "dashboard": true,
-		"SnapshotSystem": true,
         "storage": true,
         "stress-test": true
     },
@@ -24,7 +23,6 @@
 		"miner": "color: darkseagreen",
 		"mining-functions": "color: darkseagreen",
 		"node": "color: deepskyblue; font-weight: bold",
-		"SnapshotSystem": "color: white",
 		"storage": "color: white",
 		"validation": "color: green",
 		"wallet": "color: yellow"

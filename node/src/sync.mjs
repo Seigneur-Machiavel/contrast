@@ -1,9 +1,8 @@
-import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { Storage, CheckpointsStorage, PATH } from '../../utils/storage-manager.mjs';
-import { FastConverter } from '../../utils/converters.mjs';
 import { serializer } from '../../utils/serializer.mjs';
+import { FastConverter } from '../../utils/converters.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { P2PNetwork, readableId, STREAM, PROTOCOLS, P2P_OPTIONS } from './p2p.mjs';
-import { Breather } from '../../utils/breather.mjs';
+import { Storage, CheckpointsStorage, PATH } from '../../utils/storage-manager.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} Node
@@ -81,7 +80,6 @@ export class SyncHandler {
         
         let readResultCopy;
         try {
-            const breather = new Breather();
             const readResult = await STREAM.READ(stream);
             if (!readResult) { throw new Error('(#handleIncomingStream) Failed to read data from stream'); }
             readResultCopy = readResult;

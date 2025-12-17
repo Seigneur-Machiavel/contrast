@@ -51,11 +51,11 @@ export class IS_VALID {
 
 		return true;
 	}
-	/** @param {string} txReference - "height:txIndex" - ex: "8:2" */
-	static TX_REFERENCE(txReference) {
-		if (typeof txReference !== 'string') return false;
+	/** @param {string} txId - "height:txIndex" - ex: "8:2" */
+	static TX_ID(txId) {
+		if (typeof txId !== 'string') return false;
 
-		const splitted = txReference.split(':');
+		const splitted = txId.split(':');
 		if (splitted.length !== 2) return false;
 
 		// height

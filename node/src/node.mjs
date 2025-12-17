@@ -47,13 +47,13 @@ export class ContrastNode {
     wsCallbacks = {};
 	mainStorage;
 	blockchain;
+	memPool;
 	p2p;
 	verb;
 
-	// CORE COMPONENTS ------------------------------------------------------------------
-	/** @type {Account | undefined} */ account;
+	/** @type {Account | undefined} */
+	account;
 	vss = new Vss();
-	memPool = new MemPool();
 	miner = new Miner(this);
 	workers = {
 		nbOfValidationWorkers: 4,
@@ -67,6 +67,7 @@ export class ContrastNode {
 	 * @param {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
 	constructor(p2pNode, storage, verb = 2) {
 		this.blockchain = new Blockchain(storage);
+		this.memPool = new MemPool(this.blockchain);
 		this.mainStorage = storage;
 		this.p2p = p2pNode;
 		this.verb = verb;
@@ -135,14 +136,14 @@ export class ContrastNode {
      * @param {BlockFinalized} block
      * @param {Object} [options] - Configuration options for the blockchain.
      * @param {boolean} [options.broadcastNewCandidate] - default: true
-     * @param {boolean} [options.isSync] - default: false
-     * @param {boolean} [options.persistToDisk] - default: true */
+     * @param {boolean} [options.isSync] - default: false */
     async digestFinalizedBlock(block, options = {}) {
+		const startTime = performance.now();
         const statePrefix = options.isSync ? '(syncing) ' : '';
         this.updateState(`${statePrefix}finalized block #${block.index}`);
 
-        const { broadcastNewCandidate = true, isSync = false, persistToDisk = true } = options;
-        //if (!finalizedBlock || (this.syncHandler.isSyncing && !isSync)) 
+        const { broadcastNewCandidate = true, isSync = false } = options;
+        //if (!finalizedBlock || (this.syncHandler.isSyncing && !isSync))
             //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
         this.updateState(`${statePrefix}block-validation #${block.index}`);
         const validationResult = await BlockValidation.validateBlockProposal(this, block);
@@ -167,7 +168,7 @@ export class ContrastNode {
         const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
         const minerId = block.Txs[0].outputs[0].address.slice(0, 6);
         const validatorId = block.Txs[1].outputs[0].address.slice(0, 6);
-        this.logger.log(`${statePrefix}#${block.index} -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+        this.logger.log(`${statePrefix}#${block.index} (${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate || isSync) return;
