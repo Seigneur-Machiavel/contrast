@@ -80,7 +80,7 @@ export class Wallet {
     constructor(masterHex) { this.#masterHex = masterHex; }
 
 	// API
-	/** @param {import("../../utils/storage.mjs").ContrastStorage} contrastStorage */
+	/** @param {import("../../storage/storage.mjs").ContrastStorage} contrastStorage */
     async loadAccounts(contrastStorage) {
         const accountsGeneratedEncrypted = contrastStorage.loadJSON(`accounts-${contrastStorage.localIdentifier}`);
         if (!accountsGeneratedEncrypted) return false;
@@ -95,7 +95,7 @@ export class Wallet {
 	/** Derive accounts from master seed corresponding to the desired address prefix. (If storage is provide: load and save accounts)
 	 * @param {number} [nbOfAccounts] - default: 1
 	 * @param {string} [addressPrefix] - default: "C"
-	 * @param {import("../../utils/storage.mjs").ContrastStorage} [contrastStorage] */
+	 * @param {import("../../storage/storage.mjs").ContrastStorage} [contrastStorage] */
     async deriveAccounts(nbOfAccounts = 1, addressPrefix = "C", contrastStorage) {
 		if (contrastStorage) await this.loadAccounts(contrastStorage);
 
@@ -168,7 +168,7 @@ avgIterations/account: ${avgIterations} | time: ${(endTime - startTime).toFixed(
 
         return { derivedAccounts: this.accounts[addressPrefix], avgIterations: avgIterations };
     }
-	/** @param {import("../../utils/storage.mjs").ContrastStorage} contrastStorage */
+	/** @param {import("../../storage/storage.mjs").ContrastStorage} contrastStorage */
     async saveAccounts(contrastStorage) {
         const encryptedAccounts = await this.#encryptAccountsGenerated();
         contrastStorage.saveJSON(`accounts-${contrastStorage.localIdentifier}`, encryptedAccounts);

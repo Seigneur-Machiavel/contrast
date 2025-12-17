@@ -9,7 +9,6 @@ import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs'
 * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../types/transaction.mjs").TxId} TxId
 * @typedef {import("../types/transaction.mjs").UtxoState} UtxoState
-* @typedef {import("../node/src/utxo-cache.mjs").UtxoCache} UtxoCache
 *
 * @typedef {Object} NodeSetting
 * @property {string} privateKey
@@ -265,7 +264,7 @@ export const serializer = {
         /** @param {Transaction} tx @param {'tx' | 'validator' | 'miner'} [mode] default: normal */
         transaction(tx, mode = 'tx') {
 			if (mode === 'miner' && (tx.inputs.length !== 1 || tx.inputs[0].length !== 8)) throw new Error('Invalid coinbase transaction');
-            if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== 85)) throw new Error('Invalid transaction');
+            if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== 85)) throw new Error('Invalid transaction: validator input must be address + posHash');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
 			
 			const witnessesBytes = tx.witnesses.length * lengths.witness;
@@ -362,17 +361,7 @@ export const serializer = {
 			w.writeBytes(converter.addressBase58ToBytes(nodeSetting.minerAddress));
 			w.writeByte(nodeSetting.minerThreads);
             return w.getBytes();
-        },
-		/** @param {UtxoCache} utxoCache */
-        utxoCacheData(utxoCache) { // DEPRECATED
-            const miniUTXOsSerialized = serializer.serialize.miniUTXOsObj(utxoCache.unspentMiniUtxos);
-			const w = new BinaryWriter(8 + 8 + miniUTXOsSerialized.length);
-			w.writeBytes(converter.numberTo8Bytes(utxoCache.totalOfBalances));
-			w.writeBytes(converter.numberTo8Bytes(utxoCache.totalSupply));
-			w.writeBytes(miniUTXOsSerialized);
-			if (w.isWritingComplete) return w.getBytes();
-			else throw new Error(`UTXO cache serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
-        },
+        }
 	},
     deserialize: {
 		/** @param {Uint8Array} encodedData */

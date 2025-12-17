@@ -21,7 +21,7 @@
 			"request": "launch",
 			"name": "Test storage",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/utils/storage.mjs",
+			"program": "${workspaceFolder}/storage/storage.mjs",
 			"args": ["--max-old-space-size=16384"]
 		},
         {

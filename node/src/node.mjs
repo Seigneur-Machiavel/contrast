@@ -18,7 +18,7 @@ import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-setti
 * 
 * @typedef {Object} NodeOptions
 * @property {import('hive-p2p').CryptoCodex} [cryptoCodex] - A hiveP2P CryptoCodex instance (works as Identity).
-* @property {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence.
+* @property {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence.
 * @property {number} [verbose] - Verbosity level for logging.
 * @property {boolean} [autoStart] - Whether to automatically start the node upon creation. (default: true)
 * @property {string} [domain] - The domain name for the node (Public only).
@@ -64,7 +64,7 @@ export class ContrastNode {
 
 	/** Node instance should be created with "createContrastNode" method, not using "new" constructor.
 	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance.
-	 * @param {import('../../utils/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
+	 * @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
 	constructor(p2pNode, storage, verb = 2) {
 		this.blockchain = new Blockchain(storage);
 		this.memPool = new MemPool(this.blockchain);
@@ -154,11 +154,11 @@ export class ContrastNode {
 		if (!this.vss.newStakes(newStakesOutputs, 'control')) throw new Error('VSS: Max supply reached during applyBlock().');
 
         this.updateState(`${statePrefix}applying finalized block #${block.index}`);
-        this.memPool.addNewKnownPubKeysAddresses(allDiscoveredPubKeysAddresses);
         
-        this.blockchain.addConfirmedBlock(block);
+        this.blockchain.addBlock(block);
 		this.vss.newStakes(newStakesOutputs, 'persist');
         this.memPool.removeFinalizedBlocksTransactions(block);
+        this.memPool.addNewKnownPubKeysAddresses(allDiscoveredPubKeysAddresses);
         if (this.wsCallbacks.onBlockConfirmed) {
 			const blockInfo = BlockUtils.getFinalizedBlockInfo(involvedUTXOs, block);
 			this.wsCallbacks.onBlockConfirmed.execute(blockInfo, undefined);

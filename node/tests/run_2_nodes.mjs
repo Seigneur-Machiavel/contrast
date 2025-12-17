@@ -13,7 +13,7 @@ const clearOnStart = false;
 import HiveP2P from "hive-p2p";
 import { Wallet } from '../src/wallet.mjs';
 import { createContrastNode } from '../src/node.mjs';
-import { ContrastStorage } from '../../utils/storage.mjs';
+import { ContrastStorage } from '../../storage/storage.mjs';
 import { Transaction_Builder } from "../src/transaction.mjs";
 
 // BOOTSTRAP NODE

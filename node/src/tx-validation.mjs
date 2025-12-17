@@ -1,22 +1,21 @@
+// @ts-check
 // Lot of performance optimization has been done in this file,
 // The code is not the most readable but it's the fastest possible
-
-import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
-import { Transaction_Builder } from './transaction.mjs';
-import { UTXO_RULES_GLOSSARY } from '../../utils/utxo-rules.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
+import { Transaction_Builder } from './transaction.mjs';
 import { addressUtils } from '../../utils/addressUtils.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { UTXO_RULES_GLOSSARY } from '../../utils/utxo-rules.mjs';
+import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
  * @typedef {import("./mempool.mjs").MemPool} MemPool
- * @typedef {import("./utxo-cache.mjs").UtxoCache} UtxoCache
  * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker
  * 
+ * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").TxOutput} TxOutput
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
- * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  */
 
 const validationMiniLogger = new MiniLogger('validation');
@@ -105,14 +104,15 @@ export class TxValidation {
     /** ==> Fourth validation, low computation cost. - control the right to create outputs using the rule
      * @param {Transaction} transaction */
     static controlTransactionOutputsRulesConditions(transaction) { //TODO: NOT SURE IF WE CONSERVE THIS
-        for (let i = 0; i < transaction.outputs.length; i++) {
+        return;
+		/*for (let i = 0; i < transaction.outputs.length; i++) {
             const inRule = transaction.inputs[i] ? transaction.inputs[i].rule : undefined;
             const inAmount = transaction.inputs[i] ? transaction.inputs[i].amount : undefined;
             const inAddress = transaction.inputs[i] ? transaction.inputs[i].address : undefined;
             const outRule = transaction.outputs[i] ? transaction.outputs[i].rule : undefined;
             const outAmount = transaction.outputs[i] ? transaction.outputs[i].amount : undefined;
             const outAddress = transaction.outputs[i] ? transaction.outputs[i].address : undefined;
-        }
+        }*/
     } // NOT SURE IF WE CONSERVE THIS
 
     /** ==> Fifth validation, medium computation cost. - control the signature of the inputs
@@ -245,16 +245,6 @@ export class TxValidation {
 
         return true
     }
-    /** @param {MemPool} memPool @param {Transaction} transaction */
-    static extractImpliedKnownPubkeysAddresses(memPool, transaction) {
-        const impliedKnownPubkeysAddresses = {};
-        for (let i = 0; i < transaction.witnesses.length; i++) {
-            const { pubKeyHex } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
-            const pubKeyAddress = memPool.knownPubKeysAddresses[pubKeyHex];
-            if (pubKeyAddress) impliedKnownPubkeysAddresses[pubKeyHex] = pubKeyAddress;
-        }
-        return impliedKnownPubkeysAddresses;
-    }
     /** ==> Sequencially call the full set of validations
      * @param {Object<string, UTXO>} involvedUTXOs
      * @param {MemPool} memPool
@@ -287,7 +277,9 @@ export class TxValidation {
 			impliedKnownPubkeysAddresses: {},
 			fee: 0, success: false
 		};
-        this.isConformTransaction(involvedUTXOs, transaction, specialTx); // also check spendable UTXOs
+
+		// CHECK CONFORMITY & SPENDABILITY
+        this.isConformTransaction(involvedUTXOs, transaction, specialTx);
         
         const impliedKnownPubkeysAddresses = this.controlAllWitnessesSignatures(memPool, transaction);
         result.impliedKnownPubkeysAddresses = impliedKnownPubkeysAddresses;

@@ -1,8 +1,9 @@
 /**
 * @typedef {import("./node.mjs").Node} Node
+* @typedef {import("../../types/transaction.mjs").TxId} TxId
+* @typedef {import("../../types/block.mjs").BlockInfo} BlockInfo
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
-* @typedef {import("../../types/block.mjs").BlockInfo} BlockInfo
 */
 
 /** @typedef {Object} WebSocketCallBack
@@ -186,11 +187,11 @@ const CALLBACKS_FUNCTIONS = {
             sendToClients({ type: 'transaction_broadcasted', data: txInfo, trigger }, wsClients);
         },
         /** send tx reference when the uxto is spent.
-         * @param {string} txReference tx ref: height:TxID - '0:ffffff'
+         * @param {TxId} txId txId: blockHeight:txIndex - '0:1'
          * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'uxto_spent', data: txReference, trigger } */
-        uxtoSpent: (txReference = '0:ffffff', wsClients = [], trigger = '') => {
-            sendToClients({ type: 'uxto_spent', data: txReference, trigger }, wsClients);
+         * @emits msgSent: { type: 'uxto_spent', data: txId, trigger } */
+        uxtoSpent: (txId = '0:1', wsClients = [], trigger = '') => {
+            sendToClients({ type: 'uxto_spent', data: txId, trigger }, wsClients);
         },
     },
     utxoCache: {

@@ -28,16 +28,6 @@ export class BlockUtils {
         const txsIDStr = txsSignables.join('');
         return await HashFunctions.SHA256(txsIDStr);
     };
-	/** @param {BlockCandidate} block */
-    static #removeExistingCoinbaseTransaction(block) {
-        if (block.Txs.length === 0) return;
-
-        const secondTx = block.Txs[1]; // if second tx isn't fee Tx : there is no coinbase
-        if (!secondTx || !Transaction_Builder.isMinerOrValidatorTx(secondTx)) return;
-
-        const firstTx = block.Txs[0];
-        if (firstTx && Transaction_Builder.isMinerOrValidatorTx(firstTx)) block.Txs.shift();
-    }
 	/** @param {Object<string, UTXO>} involvedUTXOs @param {Transaction[]} Txs */
     static #calculateTxsTotalFees(involvedUTXOs, Txs) {
         let totalFees = 0;
@@ -47,6 +37,22 @@ export class BlockUtils {
 
         return totalFees;
     }
+	/** Adds POS reward transaction to the block candidate and signs it
+	 * @param {ContrastNode} node @param {BlockCandidate} block */
+	static async #signBlockCandidate(node, block) {
+		const { blockchain, rewardAddresses, account } = node;
+		if (!rewardAddresses.validator || !account || !account.address) throw new Error('Node reward addresses or account not set');
+
+		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
+		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
+		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
+
+		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
+		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator, account.address);
+		const signedPosFeeTx = account.signTransaction(posFeeTx);
+		block.Txs.unshift(signedPosFeeTx);
+		block.powReward = powReward; // Reward for the miner
+	}
 
     /** Get the block signature used for mining
      * @param {BlockCandidate | BlockFinalized} block
@@ -75,12 +81,15 @@ export class BlockUtils {
     }
     /** @param {BlockCandidate} block @param {Transaction} coinbaseTx */
     static setCoinbaseTransaction(block, coinbaseTx) {
-        if (Transaction_Builder.isMinerOrValidatorTx(coinbaseTx) === false) {
-			console.error('Invalid coinbase transaction');
-			return false;
-		}
+        if (Transaction_Builder.isMinerOrValidatorTx(coinbaseTx) !== 'miner')
+			throw new Error('Invalid coinbase transaction');
 
-        this.#removeExistingCoinbaseTransaction(block);
+		// REMOVE EXISTING COINBASE IF ANY
+		const firstTx = block.Txs[0];
+		if (firstTx && Transaction_Builder.isMinerOrValidatorTx(firstTx) === 'miner')
+			block.Txs.shift();
+
+		// SET NEW COINBASE TX
         block.Txs.unshift(coinbaseTx);
     }
     /** @param {Object<string, UTXO>} involvedUTXOs @param {BlockFinalized | BlockCandidate} block */
@@ -241,27 +250,11 @@ export class BlockUtils {
 		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch();
 		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, txs, posTimestamp);
 	}
-	/** Adds POS reward transaction to the block candidate and signs it
-	 * @param {ContrastNode} node @param {BlockCandidate} block */
-	static async signBlockCandidate(node, block) {
-		const { blockchain, rewardAddresses, account } = node;
-		if (!rewardAddresses.validator || !account || !account.address) throw new Error('Node reward addresses or account not set');
-
-		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
-		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
-		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
-
-		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
-		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator, account.address);
-		const signedPosFeeTx = account.signTransaction(posFeeTx);
-		block.Txs.unshift(signedPosFeeTx);
-		block.powReward = powReward; // Reward for the miner
-		return block;
-	}
 	/** @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createAndSignBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
 		const blockCandidate = await this.createBlockCandidate(node, blockReward, initDiff);
-		return await this.signBlockCandidate(node, blockCandidate);
+		await this.#signBlockCandidate(node, blockCandidate);
+		return blockCandidate;
 	}
 	/** @param {BlockFinalized | BlockCandidate} block @param {'blockFinalized' | 'blockCandidate'} [mode] Default: 'blockFinalized' */
 	static extractInvolvedAnchors(block, mode = 'blockFinalized') {
