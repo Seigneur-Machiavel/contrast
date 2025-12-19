@@ -16,8 +16,7 @@ import { BLOCKCHAIN_SETTINGS } from '../utils/blockchain-settings.mjs';
  * @typedef {import("../types/transaction.mjs").VoutId} VoutId
  * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
  * @typedef {import("../types/transaction.mjs").Transaction} Transaction
- * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
-*/
+ * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
 /** New version of BlockchainStorage.
  * - No needs for "retreiveBlockByHash" anymore, we only use block indexes now
@@ -44,14 +43,10 @@ export class BlockchainStorage {
 	}
 	
 	// API METHODS
-	/** @param {BlockFinalized} block */
-    addBlock(block) {
+	/** @param {BlockFinalized} block @param {TxAnchor[]} involvedAnchors */
+    addBlock(block, involvedAnchors) {
 		if (block.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${block.index}`);
-
-		// DIGEST THE CONSUMED UTXOS
-		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
-		if (repeatedAnchorsCount > 0) throw new Error(`Block contains ${repeatedAnchorsCount} repeated UTXO anchors`);
-		if (involvedAnchors.length && !this.#consumeUtxos(involvedAnchors)) throw new Error('Unable to consume UTXOs for the new block');
+		if (!this.#consumeUtxos(involvedAnchors)) throw new Error('Unable to consume UTXOs for the new block');
 
 		// PREPARE DATA TO WRITE
 		const utxosStates = BlockUtils.buildUtxosStatesOfFinalizedBlock(block);
@@ -97,8 +92,6 @@ export class BlockchainStorage {
 		/** Key: Anchor, value: UTXO @type {Object<string, UTXO>} */
 		const utxos = {};
 		const search = this.#getUtxosSearchPattern(anchors);
-
-		// BY BLOCK HEIGHT
 		for (const height of search.keys()) {
 			if (height > this.lastBlockIndex) return null;
 
@@ -109,26 +102,24 @@ export class BlockchainStorage {
 			const txs = this.#extractTransactionsFromBlockBytes(blockBytes, txIndexes)?.txs;
 			if (!txs) return null;
 
-			// BY TRANSACTION INDEX
 			const searchPattern = new Uint8Array(4); // Search pattern: [txIndex(2), voutId(2)]
 			for (const txIndex of txIndexes) {
 				searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
 				
-				// BY VOUT ID
 				// @ts-ignore: search.get(height).get(txIndex) can only contain valid voutIds at this point
-				for (const voutId of search.get(height).get(txIndex)) {
-					if (!txs[txIndex]?.outputs[voutId]) return null; // unable to find the referenced tx/output
+				for (const voutIndex of search.get(height).get(txIndex)) {
+					if (!txs[txIndex]?.outputs[voutIndex]) return null; // unable to find the referenced tx/output
 					
 					let utxoSpent = true;
-					searchPattern.set(serializer.voutIdEncoder.encode(voutId), 2);
+					searchPattern.set(serializer.voutIdEncoder.encode(voutIndex), 2);
 					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
 					if (stateOffset !== -1) utxoSpent = utxosStatesBytes[stateOffset + 4] === 1;
 					if (utxoSpent && breakOnSpent) return null; // UTXO is spent
 
-					const anchor = `${height}:${txIndex}:${voutId}`;
-					const amount = txs[txIndex].outputs[voutId].amount;
-					const rule = txs[txIndex].outputs[voutId].rule;
-					const address = txs[txIndex].outputs[voutId].address;
+					const anchor = `${height}:${txIndex}:${voutIndex}`;
+					const amount = txs[txIndex].outputs[voutIndex].amount;
+					const rule = txs[txIndex].outputs[voutIndex].rule;
+					const address = txs[txIndex].outputs[voutIndex].address;
 					utxos[anchor] = new UTXO(anchor, amount, rule, address, utxoSpent);
 				}
 			}
@@ -155,29 +146,28 @@ export class BlockchainStorage {
 	// INTERNAL METHODS
 	/** @param {TxAnchor[]} anchors */
 	#consumeUtxos(anchors) {
+		if (anchors.length === 0) return true;
+
 		const u = new Uint8Array(1); u[0] = 1; // spent state
 		const search = this.#getUtxosSearchPattern(anchors);
-
-		// BY BLOCK HEIGHT
 		for (const height of search.keys()) {
 			if (height > this.lastBlockIndex) return false;
 
 			const { blockBytes, utxosStatesBytes, blockchainHandler, offset } = this.getBlockBytes(height, true) || {};
 			if (!blockBytes || !utxosStatesBytes || !blockchainHandler || !offset) return false;
 
-			// BY TRANSACTION INDEX
 			const utxosStatesBytesStart = offset.start + offset.blockBytes;
 			const searchPattern = new Uint8Array(4); // Search pattern: [txIndex(2), voutId(2)]
 			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point
 			for (const txIndex of search.get(height).keys()) {
-				// BY VOUT ID
+				searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
+				
 				// @ts-ignore: search.get(height).get(txIndex) can only contain valid voutIds at this point
-				for (const voutId of search.get(height).get(txIndex)) {
-					searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
-					searchPattern.set(serializer.voutIdEncoder.encode(voutId), 2);
+				for (const voutIndex of search.get(height).get(txIndex)) {
+					searchPattern.set(serializer.voutIdEncoder.encode(voutIndex), 2);
 					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
-					if (stateOffset === -1) throw new Error(`UTXO not found (anchor: ${height}:${txIndex}:${voutId})`);
-					if (utxosStatesBytes[stateOffset + 4] === 1) throw new Error(`UTXO already spent (anchor: ${height}:${txIndex}:${voutId})`);
+					if (stateOffset === -1) throw new Error(`UTXO not found (anchor: ${height}:${txIndex}:${voutIndex})`);
+					if (utxosStatesBytes[stateOffset + 4] === 1) throw new Error(`UTXO already spent (anchor: ${height}:${txIndex}:${voutIndex})`);
 					
 					// MARK UTXO AS SPENT
 					blockchainHandler.write(u, utxosStatesBytesStart + stateOffset + 4);
@@ -190,7 +180,7 @@ export class BlockchainStorage {
 	/** @param {TxAnchor[]} anchors */
 	#getUtxosSearchPattern(anchors) {
 		// GROUP ANCHORS BY BLOCK HEIGHT
-		/** height, Map(txindex, vout[]) @type {Map<number, Map<number, number[]>} */
+		/** height, Map(txindex, vout[]) @type {Map<number, Map<number, number[]>>} */
 		const search = new Map();
 		for (const p of anchors) {
 			const { height, txIndex, vout } = serializer.parseAnchor(p);

@@ -13,68 +13,91 @@ let WorkerModule;
 try { WorkerModule = (await import('worker_threads')).Worker }
 catch (/**@type {any}*/ error) { WorkerModule = Worker }
 
-function newWorker(scriptPath, workerCode, workerData = {}) {
+/*function newWorker(scriptPath, workerCode, workerData = {}) { // DEPRECATED
     if (scriptPath) return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
     
     const blob = new Blob([workerCode], { type: 'application/javascript' });
     return new Worker(URL.createObjectURL(blob));
+}*/
+function newWorker(scriptPath, workerCode, workerData = {}) { // UNIFIED FOR BROWSER & NODEJS
+    const worker = scriptPath 
+        ? new WorkerModule(new URL(scriptPath, import.meta.url), { workerData })
+        : new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
+    
+    // Add addEventListener/removeEventListener to Node.js workers
+    if (worker.on && !worker.addEventListener) {
+        worker.addEventListener = (event, handler) => {
+            const wrappedHandler = (data) => handler({ data }); // Wrap Node.js data in event object
+            worker.on(event, wrappedHandler);
+            // Store mapping for removeEventListener
+            if (!worker._handlerMap) worker._handlerMap = new Map();
+            worker._handlerMap.set(handler, wrappedHandler);
+        };
+        
+        worker.removeEventListener = (event, handler) => {
+            const wrappedHandler = worker._handlerMap?.get(handler);
+            if (wrappedHandler) {
+                worker.off(event, wrappedHandler);
+                worker._handlerMap.delete(handler);
+            }
+        };
+    }
+    
+    return worker;
 }
 
 // CLASSES SIMPLIFYING USAGE OF THE WORKERS
 export class ValidationWorker {
-    constructor (id = 0) {
-        this.id = id;
-        this.state = 'idle';
+	/** @type {Worker} worker */
+	worker = newWorker('./validation-worker-nodejs.mjs');
+	state = 'idle';
 
-        /** @type {Worker} worker */
-        this.worker = newWorker('./validation-worker-nodejs.mjs');
-        this.worker.on('exit', (code) => { console.log(`ValidationWorker ${this.id} stopped with exit code ${code}`); });
-        this.worker.on('close', () => { console.log(`ValidationWorker ${this.id} closed`); });
-    }
-	/** ==> Sixth validation, high computation cost.
-     * 
-     * - control the inputAddresses/witnessesPubKeys correspondence
-     * @param {Object<string, UTXO>} involvedUTXOs
-     * @param {Transaction[]} transactions
-     * @param {Object<string, string>} impliedKnownPubkeysAddresses */
-    addressOwnershipConfirmation(involvedUTXOs, transactions, impliedKnownPubkeysAddresses = {}) {
-        /** @type {Promise<{ discoveredPubKeysAddresses: {}, isValid: boolean }>} */
+    constructor (id = 0) { this.id = id; }
+	/** @param {Array<{address: string, pubKey: string}>} batchOfLinks*/
+	linkValidation(batchOfLinks) {
+		this.state = 'working';
+
         const promise = new Promise((resolve, reject) => {
-            this.worker.postMessage({
-                id: this.id,
-                type: 'addressOwnershipConfirmation',
-                involvedUTXOs,
-                transactions,
-                impliedKnownPubkeysAddresses
-            });
-            this.worker.on('message', (message) => {
-                if (message.id !== this.id) { return; }
-                if (message.error) { return reject({ isValid: message.isValid, error: message.error }); }
-                    //reject(message.error); }
+            const onMessage = (event) => {
+				const message = event.data || event;
+                if (message.id !== this.id) return;
+				this.worker.removeEventListener('message', onMessage);
+				this.state = 'idle';
+                if (message.error) return reject(message.error);
+                else resolve();
+            };
 
-                const result = {
-                    discoveredPubKeysAddresses: message.discoveredPubKeysAddresses,
-                    isValid: message.isValid
-                };
-                //console.info(`ValidationWorker ${this.id} addressOwnershipConfirmation result: ${JSON.stringify(result)}`);
-                resolve(result);
-            });
+			this.worker.addEventListener('message', onMessage);
+			this.worker.postMessage({ id: this.id, type: 'linkValidation', batchOfLinks });
         });
         return promise;
     }
+	abortOperation() {
+		if (this.state === 'working') this.worker.postMessage({ type: 'abortOperation' });
+	}
     terminateAsync() {
-        setTimeout(() => { this.worker.postMessage({ type: 'terminate', id: this.id }); }, 1000);
-        this.worker.removeAllListeners();
-        return new Promise((resolve, reject) => {
-            this.worker.on('exit', (code) => { console.log(`ValidationWorker stopped with exit code ${code}`); resolve(); });
-            this.worker.on('close', () => { console.log('ValidationWorker closed'); resolve(); });
+		// BROWSER SHUTDOWN
+		if (typeof window !== 'undefined') {
+			this.worker.terminate();
+			return Promise.resolve();
+		}
 
-            setTimeout(() => {
-                console.error('ValidationWorker termination timeout -> terminate from parent');
-                this.worker.terminate();
-                resolve();
-            }, 10000);
-        });
+		// NODEJS GRACEFUL SHUTDOWN
+		return new Promise((resolve) => {
+			const forceTerminate = setTimeout(async () => {
+				console.error('ValidationWorker timeout -> forcing termination');
+				await this.worker.terminate();
+				resolve();
+			}, 10000);
+
+			this.worker.addEventListener('exit', () => {
+				clearTimeout(forceTerminate);
+				console.log('ValidationWorker exited gracefully');
+				resolve();
+			});
+
+			this.worker.postMessage({ type: 'terminate', id: this.id });
+		});
     }
 }
 
@@ -87,196 +110,196 @@ export class MinerWorker {
 	paused = false;
 	hashRate = 0;
 
-    constructor (rewardAddress = '', bet = 0, timeOffset = 0) {
-        this.rewardAddress = rewardAddress;
-        this.bet = bet;
-        this.timeOffset = timeOffset;
+	constructor(rewardAddress = '', bet = 0, timeOffset = 0) {
+		this.rewardAddress = rewardAddress;
+		this.bet = bet;
+		this.timeOffset = timeOffset;
+		this.worker = newWorker('./miner-worker-nodejs.mjs');
+		this.worker.addEventListener('message', this.#onMessage);
+	}
 
-        /** @type {Worker} worker */
-        this.worker = newWorker('./miner-worker-nodejs.mjs');
-        this.worker.on('close', () => { console.log('MinerWorker closed'); });
-        this.worker.on('message', (message) => {
-            if (message.paused === true || message.paused === false) {
-                if (message.paused === true) this.paused = true;
-                if (message.paused === false) this.paused = false;
-                console.log('MinerWorker paused new state:', message.paused);
-                return;
-            }
+	#onMessage = (event) => {
+		const message = event.data || event;
+		if (message.paused === true || message.paused === false) {
+			this.paused = message.paused;
+			console.log('MinerWorker paused new state:', message.paused);
+			return;
+		}
+		if (message.hashRate) { this.hashRate = message.hashRate; return; }
+		if (message.result?.error) console.error(message.result.error);
+		if (message.result && !message.result.error) this.result = message.result;
+		this.isWorking = false;
+	}
+	/** @param {BlockCandidate} block */
+	#isSameBlockCandidate(block) {
+		if (this.blockCandidate === null) return false;
 
-            if (message.hashRate) { this.hashRate = message.hashRate; return; }
-            if (message.result.error) console.error(message.result.error);
-            if (!message.result.error) this.result = message.result;
-            this.isWorking = false;
-        });
-    }
-    /** @param {string} rewardAddress @param {number} bet @param {number} timeOffset */
-    async updateInfo(rewardAddress, bet, timeOffset) {
-        if (this.terminate) { return; }
-        const isSame = this.rewardAddress === rewardAddress && this.bet === bet && this.timeOffset === timeOffset;
-        if (isSame) { return; }
+		const sameIndex = this.blockCandidate.index === block.index;
+		const samePrevHash = this.blockCandidate.prevHash === block.prevHash;
+		const newCandidateValidatorAddress = block.Txs[0].outputs[0].address;
+		const currentCandidateValidatorAddress = this.blockCandidate.Txs[0].outputs[0].address;
+		const sameValidatorAddress = currentCandidateValidatorAddress === newCandidateValidatorAddress;
+		return sameIndex && samePrevHash && sameValidatorAddress;
+	}
+	
+	/** @param {string} rewardAddress @param {number} bet @param {number} timeOffset */
+	async updateInfo(rewardAddress, bet, timeOffset) {
+		if (this.terminate) return;
+		
+		const isSame = this.rewardAddress === rewardAddress && this.bet === bet && this.timeOffset === timeOffset;
+		if (isSame) return;
 
-        this.rewardAddress = rewardAddress;
-        this.bet = bet;
-        this.timeOffset = timeOffset;
-        this.worker.postMessage({ type: 'updateInfo', rewardAddress, bet, timeOffset });
+		this.rewardAddress = rewardAddress;
+		this.bet = bet;
+		this.timeOffset = timeOffset;
+		this.worker.postMessage({ type: 'updateInfo', rewardAddress, bet, timeOffset });
 
-        // await 200 ms to allow the worker to process the new info
-        return new Promise(resolve => setTimeout(resolve, 200));
-    }
-    /** @param {BlockCandidate} blockCandidate */
-    async updateCandidate(blockCandidate) {
-        if (this.terminate) { return; }
-        if (this.#isSameBlockCandidate(blockCandidate)) { return; }
+		return new Promise(resolve => setTimeout(resolve, 200));
+	}
+	/** @param {BlockCandidate} blockCandidate */
+	async updateCandidate(blockCandidate) {
+		if (this.terminate) return;
+		if (this.#isSameBlockCandidate(blockCandidate)) return;
 
-        this.blockCandidate = blockCandidate;
-        this.worker.postMessage({ type: 'newCandidate', blockCandidate });
+		this.blockCandidate = blockCandidate;
+		this.worker.postMessage({ type: 'newCandidate', blockCandidate });
 
-        // await 200 ms to allow the worker to process the new candidate
-        await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    /** @param {BlockCandidate} block */
-    #isSameBlockCandidate(block) {
-        if (this.blockCandidate === null) return false;
+		await new Promise(resolve => setTimeout(resolve, 200));
+	}
+	async mineUntilValid() {
+		if (this.terminate) return;
+		if (this.isWorking) return;
+		
+		this.isWorking = true;
+		this.result = null;
 
-        const sameIndex = this.blockCandidate.index === block.index;
-        const samePrevHash = this.blockCandidate.prevHash === block.prevHash;
-        const newCandidateValidatorAddress = block.Txs[0].outputs[0].address;
-        const currentCandidateValidatorAddress = this.blockCandidate.Txs[0].outputs[0].address;
-        const sameValidatorAddress = currentCandidateValidatorAddress === newCandidateValidatorAddress;
-        return sameIndex && samePrevHash && sameValidatorAddress;
-    }
-    async mineUntilValid() {
-        if (this.terminate) { return; }
-        if (this.isWorking) { return; }
-        this.isWorking = true;
-        this.result = null;
+		this.worker.postMessage({
+			type: 'mineUntilValid',
+			rewardAddress: this.rewardAddress,
+			bet: this.bet,
+			timeOffset: this.timeOffset
+		});
+	}
+	getResultAndClear() {
+		const finalizedBlock = this.result;
+		this.result = null;
+		return finalizedBlock;
+	}
+	pause() { this.worker.postMessage({ type: 'pause' }); }
+	resume() { this.worker.postMessage({ type: 'resume' }); }
+	terminateAsync() {
+		this.terminate = true;
 
-        this.worker.postMessage({
-            type: 'mineUntilValid',
-            rewardAddress: this.rewardAddress,
-            bet: this.bet,
-            timeOffset: this.timeOffset
-        });
-    }
-    getResultAndClear() {
-        const finalizedBlock = this.result;
-        this.result = null;
-        return finalizedBlock;
-    }
-    pause() {
-        this.worker.postMessage({ type: 'pause' });
-    }
-    resume() {
-        this.worker.postMessage({ type: 'resume' });
-    }
-    terminateAsync() {
-        this.terminate = true;
-        //setTimeout(() => { this.worker.terminate() }, 1000);
-        setTimeout(() => { this.worker.postMessage({ type: 'terminate' }); }, 1000);
-        this.worker.removeAllListeners();
-        return new Promise((resolve, reject) => {
-            this.worker.on('exit', (code) => { console.log(`MinerWorker stopped with exit code ${code}`); resolve(); });
-            this.worker.on('close', () => { console.log('MinerWorker closed'); resolve(); });
-            setTimeout(() => {
-                console.error('MinerWorker termination timeout -> terminate from parent');
-                this.worker.terminate();
-                resolve();
-            }, 10000);
-        });
-    }
+		// BROWSER SHUTDOWN
+		if (typeof window !== 'undefined') {
+			this.worker.removeEventListener('message', this.#onMessage);
+			this.worker.terminate();
+			return Promise.resolve();
+		}
+
+		// NODEJS GRACEFUL SHUTDOWN
+		return new Promise((resolve) => {
+			const forceTerminate = setTimeout(async () => {
+				console.error('MinerWorker timeout -> forcing termination');
+				await this.worker.terminate();
+				resolve();
+			}, 10000);
+
+			this.worker.addEventListener('exit', () => {
+				clearTimeout(forceTerminate);
+				this.worker.removeEventListener('message', this.#onMessage);
+				console.log('MinerWorker exited gracefully');
+				resolve();
+			});
+
+			this.worker.postMessage({ type: 'terminate' });
+		});
+	}
 }
 
 export class AccountDerivationWorker {
-    constructor (id = 0) {
-        this.id = id;
-        this.state = 'idle';
+	worker = typeof accountWorkerCode === 'undefined' 
+		? newWorker('./account-worker-nodejs.mjs') 
+		: newWorker(undefined, accountWorkerCode);
+	state = 'idle';
 
-        /** @type {Worker} worker */
-        //this.worker = isNode ?
-        //newWorker('./account-worker-nodejs.mjs') :
-        //newWorker(undefined, accountWorkerCode || window?.accountWorkerCode);
-        this.worker = typeof accountWorkerCode === 'undefined' ? newWorker('./account-worker-nodejs.mjs') : newWorker(undefined, accountWorkerCode);
-		if (typeof accountWorkerCode !== 'undefined') return;
-
-		this.worker.on('exit', (code) => console.log(`DerivationWorker ${this.id} stopped with exit code ${code}`));
-        this.worker.on('close', () => console.log(`DerivationWorker ${this.id} closed`));
+	constructor(id = 0) { 
+		this.id = id;
+		this.worker.addEventListener('message', this.#onMessage);
 	}
-    async derivationUntilValidAccount(seedModifierStart, maxIterations, masterHex, desiredPrefix) {
-        this.state = 'working';
 
-        if (typeof accountWorkerCode === 'undefined') this.worker.removeAllListeners();
-        else this.worker.onmessage = null;
+	#onMessage = (event) => {
+		const message = event.data || event;
+		if (message.id !== this.id) return;
 
-        const promise = new Promise((resolve, reject) => {
-            this.state = 'working';
-            if (typeof accountWorkerCode === 'undefined') {
-                this.worker.on('message', (message) => {
-                    if (message.id !== this.id) { return; }
-                    if (message.error) { return reject({ isValid: message.isValid, error: message.error }); }
+		this.state = 'idle';
+		if (message.error) {
+			this.reject?.({ isValid: message.isValid, error: message.error });
+			return;
+		}
 
-                    //response = { id, isValid: false, seedModifierHex: '', pubKeyHex: '', privKeyHex: '', addressBase58: '', error: false };
-                    const result = {
-                        id: message.id,
-                        isValid: message.isValid,
-                        seedModifierHex: message.seedModifierHex,
-                        pubKeyHex: message.pubKeyHex,
-                        privKeyHex: message.privKeyHex,
-                        addressBase58: message.addressBase58,
-                        iterations: message.iterations
-                    };
+		this.resolve?.({
+			id: message.id,
+			isValid: message.isValid,
+			seedModifierHex: message.seedModifierHex,
+			pubKeyHex: message.pubKeyHex,
+			privKeyHex: message.privKeyHex,
+			addressBase58: message.addressBase58,
+			iterations: message.iterations
+		});
+	}
 
-                    resolve(result);
-                });
-            } else {
-                this.worker.onmessage = (e) => {
-                    const message = e.data;
-                    if (message.error) { return reject({ isValid: message.isValid, error: message.error }); }
+	async derivationUntilValidAccount(seedModifierStart, maxIterations, masterHex, desiredPrefix) {
+		this.state = 'working';
 
-                    //response = { id, isValid: false, seedModifierHex: '', pubKeyHex: '', privKeyHex: '', addressBase58: '', error: false };
-                    const result = {
-                        id: message.id,
-                        isValid: message.isValid,
-                        seedModifierHex: message.seedModifierHex,
-                        pubKeyHex: message.pubKeyHex,
-                        privKeyHex: message.privKeyHex,
-                        addressBase58: message.addressBase58,
-                        iterations: message.iterations
-                    };
+		const promise = new Promise((resolve, reject) => {
+			this.resolve = resolve;
+			this.reject = reject;
 
-                    resolve(result);
-                };
-            }
+			this.worker.postMessage({
+				id: this.id,
+				type: 'derivationUntilValidAccount',
+				seedModifierStart,
+				maxIterations,
+				masterHex,
+				desiredPrefix
+			});
+		});
 
-            this.worker.postMessage({
-                id: this.id,
-                type: 'derivationUntilValidAccount',
-                seedModifierStart,
-                maxIterations,
-                masterHex,
-                desiredPrefix
-            });
-        });
-        const resolvedPromise = await promise;
-        this.state = 'idle';
-        //console.log(`DerivationWorker ${this.id} derivationUntilValidAccount result: ${JSON.stringify(resolvedPromise)}`);
-        return resolvedPromise;
-    }
-    abortOperation() {
-        if (this.state === 'idle') { return; }
-        this.worker.postMessage({ type: 'abortOperation' });
-    }
-    terminateAsync() {
-        //console.info(`DerivationWorker ${this.id} terminating...`);
-        setTimeout(() => { this.worker.postMessage({ type: 'terminate', id: this.id }); }, 1000);
-        return new Promise((resolve, reject) => {
-            this.worker.on('message', (message) => {
-                if (message.id !== this.id) { return; }
-                if (message.error) { return reject(message.error); }
-                resolve();
-            });
-            this.worker.on('exit', (code) => resolve());
-        });
-    }
+		return promise;
+	}
+
+	abortOperation() {
+		if (this.state === 'idle') return;
+		this.worker.postMessage({ type: 'abortOperation' });
+	}
+
+	terminateAsync() {
+		// BROWSER SHUTDOWN
+		if (typeof window !== 'undefined') {
+			this.worker.removeEventListener('message', this.#onMessage);
+			this.worker.terminate();
+			return Promise.resolve();
+		}
+
+		// NODEJS GRACEFUL SHUTDOWN
+		return new Promise((resolve) => {
+			const forceTerminate = setTimeout(async () => {
+				console.error('AccountDerivationWorker timeout -> forcing termination');
+				await this.worker.terminate();
+				resolve();
+			}, 10000);
+
+			this.worker.addEventListener('exit', () => {
+				clearTimeout(forceTerminate);
+				this.worker.removeEventListener('message', this.#onMessage);
+				console.log(`DerivationWorker ${this.id} exited gracefully`);
+				resolve();
+			});
+
+			this.worker.postMessage({ type: 'terminate', id: this.id });
+		});
+	}
 }
 
 export class NodeAppWorker { // NODEJS ONLY ( no front usage available )

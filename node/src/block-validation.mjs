@@ -12,16 +12,32 @@ import { serializer } from '../../utils/serializer.mjs';
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- */
+ * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */
+
+const failureErrorMessages = {
+	// others can goes up in there but i'm tired now...
+	invalidDifficulty: (diff = 0, expected = 0) => `!banBlock! !applyOffense! Invalid difficulty: ${diff} - expected: ${expected}`,
+	invalidPowHash: (diff = 0, h = '', msg = '') => `!banBlock! !applyOffense! Invalid pow hash (difficulty: ${diff}): ${h} -> ${msg}`,
+	invalidCoinbase: (index = 0, coinBase = 0, expected = 0) => `!banBlock! !applyOffense! Invalid #${index} coinbase: ${coinBase} - expected: ${expected}`,
+	repeatedAnchors: '!banBlock! !applyOffense! Repeated UTXO anchors detected in block',
+	missingUtxo: '!banBlock! !applyOffense! At least one UTXO not found or spent in blockchain during block validation',
+	invalidReward: '!banBlock! !applyOffense! Invalid rewards',
+	doubleSpending: '!banBlock! !applyOffense! Double spending detected',
+	discoveredDerivationFailure: '!banBlock! !applyOffense! Address derivation control failed during block validation',
+}
 
 const validationMiniLogger = new MiniLogger('validation');
 export class BlockValidation {
 	// PUBLIC STATIC METHODS
     /** @param {number} powReward @param {number} posReward @param {BlockFinalized} block */
-    static areExpectedRewards(powReward, posReward, block) {
-        if (block.Txs[0].outputs[0].amount !== powReward) throw new Error(`Invalid PoW reward: ${block.Txs[0].outputs[0].amount} - expected: ${powReward}`);
-        if (block.Txs[1].outputs[0].amount !== posReward) throw new Error(`Invalid PoS reward: ${block.Txs[1].outputs[0].amount} - expected: ${posReward}`);
-    }
+    static #areExpectedRewards(powReward, posReward, block) {
+		const isValid = block.Txs[0].outputs[0].amount === powReward && block.Txs[1].outputs[0].amount === posReward;
+        if (isValid) return; // PASS
+		// LOG & THROW ERROR
+		if (block.Txs[0].outputs[0].amount !== powReward) validationMiniLogger.log(`Invalid PoW reward: ${block.Txs[0].outputs[0].amount} - expected: ${powReward}`, (m, c) => console.warn(m, c));
+        if (block.Txs[1].outputs[0].amount !== posReward) validationMiniLogger.log(`Invalid PoS reward: ${block.Txs[1].outputs[0].amount} - expected: ${posReward}`, (m, c) => console.warn(m, c));
+		throw new Error(failureErrorMessages.invalidReward);
+	}
 	/** @param {ContrastNode} node @param {BlockFinalized} block */
     static async validateBlockProposal(node, block) {
 		if (typeof node.time !== 'number') throw new Error('Node time is missing');
@@ -60,31 +76,30 @@ export class BlockValidation {
 
 		// VALIDATE BLOCK DIFFICULTY EQUAL TO EXPECTED
         const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node);
-        if (block.difficulty !== newDifficulty) throw new Error(`!banBlock! !applyOffense! Invalid difficulty: ${block.difficulty} - expected: ${newDifficulty}`);
+        if (block.difficulty !== newDifficulty) throw new Error(failureErrorMessages.invalidDifficulty(block.difficulty, newDifficulty));
         
 		// VALIDATE BLOCK POW HASH AGAINST DIFFICULTY
 		const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, block);
-        if (!hashConfInfo.conform) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (difficulty): ${block.hash} -> ${hashConfInfo.message}`);
+        if (!hashConfInfo.conform) throw new Error(failureErrorMessages.invalidPowHash(block.difficulty, block.hash, hashConfInfo.message));
         
 		// POS/POW REWARDS & TRANSACTION VALIDATION
 		const expectedCoinBase = mining.calculateNextCoinbaseReward(lastBlock || block);
-        if (block.coinBase !== expectedCoinBase) throw new Error(`!banBlock! !applyOffense! Invalid #${block.index} coinbase: ${block.coinBase} - expected: ${expectedCoinBase}`);
+        if (block.coinBase !== expectedCoinBase) throw new Error(failureErrorMessages.invalidCoinbase(block.index, block.coinBase, expectedCoinBase));
 
+		// UTXOs INVOLVED EXTRACTION & VALIDATION
 		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
-		if (repeatedAnchorsCount > 0) throw new Error('!banBlock! !applyOffense! Repeated UTXO anchors detected in block');
+		if (repeatedAnchorsCount > 0) throw new Error(failureErrorMessages.repeatedAnchors);
 
 		const involvedUTXOs = node.blockchain.getUtxos(involvedAnchors, true);
-		if (involvedUTXOs === null) throw new Error('!banBlock! !applyOffense! At least one UTXO not found or spent in blockchain during block validation');
+		if (involvedUTXOs === null) throw new Error(failureErrorMessages.missingUtxo);
         
+		// FULL BLOCK TXs VALIDATION we finish with the harder function
 		const { powReward, posReward, totalFees } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
-        try { this.areExpectedRewards(powReward, posReward, block); } 
-        catch { throw new Error('!banBlock! !applyOffense! Invalid rewards'); }
-
-        try { this.#isFinalizedBlockDoubleSpending(block); }
-        catch { throw new Error('!banBlock! !applyOffense! Double spending detected'); }
+        this.#areExpectedRewards(powReward, posReward, block); // throw if invalid rewards
+        this.#isFinalizedBlockDoubleSpending(block); // throw if double spending detected
         
-		const allDiscoveredPubKeysAddresses = await this.#fullBlockTxsValidation(block, node, involvedUTXOs);
-        return { hashConfInfo, powReward, posReward, totalFees, allDiscoveredPubKeysAddresses, involvedUTXOs };
+		const involvedLedgers = await this.#fullBlockTxsValidation(node, block, involvedUTXOs);
+        return { hashConfInfo, powReward, posReward, totalFees, involvedAnchors, involvedUTXOs, involvedLedgers };
     }
 
 	// PRIVATE STATIC METHODS
@@ -122,132 +137,64 @@ export class BlockValidation {
         const utxoSpent = new Set();
         for (let i = 0; i < block.Txs.length; i++) {
             const tx = block.Txs[i];
-            const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : false;
+            const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : undefined;
             if (specialTx) continue; // coinbase Tx / validator Tx
 
             for (const input of tx.inputs)
-                if (utxoSpent.has(input)) throw new Error('Double spending!');
+                if (utxoSpent.has(input)) throw new Error(failureErrorMessages.doubleSpending);
                 else utxoSpent.add(input);
         }
     }
-    /** Apply fullTransactionValidation() to all transactions in a block @param {BlockFinalized} block @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs */
-    static async #fullBlockTxsValidation(block, node, involvedUTXOs) {
-		/** @type {Object<string, string>} */
-        const allDiscoveredPubKeysAddresses = {};
-		const memPool = node.memPool;
+	/** @param {ContrastNode} node @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {Object<string, AddressLedger>} [involvedLedgers] Pass it for chained validation (avoid re-fetching) */
+    static async #fullBlockTxsValidation(node, block, involvedUTXOs = {}, involvedLedgers = {}) {
 		const workers = node.workers.validations || [];
         const nbOfWorkers = workers.length;
-        const minTxsToUseWorkers = 1; //15;
-        const singleThreadStart = Date.now();
-        if (nbOfWorkers === 0 || block.Txs.length <= minTxsToUseWorkers) {
-            for (let i = 0; i < block.Txs.length; i++) {
-                const tx = block.Txs[i];
-                const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : false; // coinbase Tx / validator Tx
-                const { fee, success, discoveredPubKeysAddresses } = await TxValidation.fullTransactionValidation(involvedUTXOs, memPool, tx, specialTx);
-                if (!success) throw new Error(`Invalid transaction: ${block.index}:${i}`);
-
-				for (const pubKeyHex in discoveredPubKeysAddresses)
-					allDiscoveredPubKeysAddresses[pubKeyHex] = discoveredPubKeysAddresses[pubKeyHex];
-            }
-            validationMiniLogger.log(`Single thread ${block.Txs.length} txs validated in ${Date.now() - singleThreadStart} ms`, (m, c) => console.info(m, c));
-            return allDiscoveredPubKeysAddresses;
-        }
-
-        // THIS CODE IS NOT EXECUTED IF nbOfWorkers === 0 // IGNORED ATM
-        //#region - MULTI THREADING VALIDATION_v2
-        const multiThreadStart = Date.now();
-        // PARTIAL VALIDATION
-		/** @type {Object<string, string>} */
-        const allImpliedKnownPubkeysAddresses = {};
-        for (let i = 0; i < block.Txs.length; i++) {
+		if (nbOfWorkers === 0) throw new Error('No validation workers available');
+		
+		/** @type {Array<{address: string, pubKey: string}>} */
+        const discovery = [];
+        const validationStart = Date.now();
+		for (let i = 0; i < block.Txs.length; i++) {
             const tx = block.Txs[i];
-			const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : false; // coinbase Tx / validator Tx
-            const r = await TxValidation.partialTransactionValidation(involvedUTXOs, memPool, tx, specialTx);
+			const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
+            const r = await TxValidation.transactionValidation(node, involvedUTXOs, tx, specialTx, involvedLedgers);
 			if (!r.success) throw new Error(`Invalid transaction: ${block.index}:${i}`);
 			
-			for (const pubKeyHex in r.impliedKnownPubkeysAddresses)
-				allImpliedKnownPubkeysAddresses[pubKeyHex] = r.impliedKnownPubkeysAddresses[pubKeyHex];
+			// STORE DISCOVERY TO VALIDATE DERIVATION
+			if (!r.discovered.address || !r.discovered.pubKey) continue;
+			discovery.push({ address: r.discovered.address, pubKey: r.discovered.pubKey });
         }
 
-        // ADDRESS OWNERSHIP CONFIRMATION WITH WORKERS
-		/** @type {Set<number>} */
-        const treatedTxs = new Set();
-        let remainingTxs = block.Txs.length;
-        let fastTreatedTxs = 0;
-        // treat the first 2 transactions in the main thread
-        for (let i = 0; i < 2; i++) {
-            const tx = block.Txs[i];
-			const specialTx = Transaction_Builder.isMinerOrValidatorTx(tx); // coinbase Tx / validator Tx
-			if (!specialTx) throw new Error(`Invalid special transaction at index ${i} in block ${block.index}`);
-			
-			const r = await TxValidation.fullTransactionValidation(involvedUTXOs, memPool, tx, specialTx);
-            if (!r.success) throw new Error(`Invalid transaction: ${block.index}:${i}`);
+		// INITIALIZE WORKERS TASKS
+		/** @type {Array<Promise<any> | null>} */
+		const promises = [];
+        const nbOfTxsPerWorker = Math.floor(discovery.length / nbOfWorkers);
+		let batch = [];
+        let workerIndex = 0;
+		for (const link of discovery) {
+			if (workerIndex === nbOfWorkers - 1) throw new Error('Worker index overflow');
 
-			for (const pubKeyHex in r.discoveredPubKeysAddresses)
-				allDiscoveredPubKeysAddresses[pubKeyHex] = r.discoveredPubKeysAddresses[pubKeyHex];
+			batch.push(link);
+			if (batch.length < nbOfTxsPerWorker) continue;
 
-			treatedTxs.add(i);
-            remainingTxs--;
-        }
+			promises.push(workers[workerIndex].linkValidation(batch));
+			batch = [];
+			workerIndex++;
+		}
+		if (batch.length > 0) throw new Error('Leftover batch in block validation, adjust the nb of workers or the batch size calculation');
 
-        // treat the txs that can be fast validated because we know the pubKey-address correspondence
-        for (let i = 2; i < block.Txs.length; i++) {
-            const tx = block.Txs[i];
-            const isValid = await TxValidation.addressOwnershipConfirmationOnlyIfKownPubKey(
-                involvedUTXOs, tx, allImpliedKnownPubkeysAddresses, false
-            );
-            if (isValid === false) continue; // can't proceed fast confirmation
-
-            remainingTxs--;
-            fastTreatedTxs++;
-			treatedTxs.add(i);
-        }
-
-        if (remainingTxs === 0) {
-            validationMiniLogger.log(`Multi thread ${block.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m, c) => console.info(m, c));
-            return allDiscoveredPubKeysAddresses;
-        }
-
-		/** @type {Object<number, Transaction[]>} */			const txsByWorkers = {};
-		/** @type {Object<number, Promise<any> | null>} */		const workersPromises = {};
-        for (const worker of workers) {
-			workersPromises[worker.id] = null;
-			txsByWorkers[worker.id] = [];
+		try { await Promise.all(promises); }
+		catch (error) {
+			for (const worker of workers) worker.abortOperation();
+			throw new Error(failureErrorMessages.discoveredDerivationFailure);
 		}
 
-        // SPLIT THE REMAINING TRANSACTIONS BETWEEN WORKERS
-        const nbOfTxsPerWorker = Math.floor(remainingTxs / nbOfWorkers);
-        let currentWorkerIndex = 0;
-        for (let i = 2; i < block.Txs.length; i++) {
-			if (treatedTxs.has(i)) continue; // already treated
-			txsByWorkers[workers[currentWorkerIndex].id].push(block.Txs[i]);
+		// ALL VALIDATIONS PASSED => ASSIGN LEDGERS PUBKEY (throw if already assigned)
+		for (const link of discovery)
+			if (involvedLedgers[link.address]?.pubKey !== '0000000000000000000000000000000000000000000000000000000000000000') throw new Error(`Ledger for address ${link.address} already has a pubKey assigned`);
+			else involvedLedgers[link.address].pubKey = link.pubKey;
 
-            const isLastWorker = currentWorkerIndex === nbOfWorkers - 1;
-            if (isLastWorker) continue; // avoid giving tx to undefined worker
-
-            // check nbOfTxsPerWorker to increment the currentWorkerIndex
-            const workerTxsCount = txsByWorkers[workers[currentWorkerIndex].id].length;
-            if (workerTxsCount >= nbOfTxsPerWorker) currentWorkerIndex++;
-        }
-
-        for (const worker of workers) {
-            const txs = txsByWorkers[worker.id];
-            if (txs.length === 0) continue;
-
-            workersPromises[worker.id] = worker.addressOwnershipConfirmation(involvedUTXOs, txs, allImpliedKnownPubkeysAddresses);
-        }
-
-        for (const worker of workers) {
-            if (workersPromises[worker.id] === null) continue; // no task sent
-
-            const resolved = await workersPromises[worker.id];
-            if (!resolved.isValid) throw new Error(resolved.error);
-
-			for (const pubKeyHex in resolved.discoveredPubKeysAddresses)
-				allDiscoveredPubKeysAddresses[pubKeyHex] = resolved.discoveredPubKeysAddresses[pubKeyHex];
-        }
-
-        validationMiniLogger.log(`Multi thread ${block.Txs.length}(fast: ${fastTreatedTxs}) txs validated in ${Date.now() - multiThreadStart} ms`, (m, c) => console.info(m, c));
-        return allDiscoveredPubKeysAddresses;
-    }
+		validationMiniLogger.log(`(${block.Txs.length} threads) Txs validated in ${Date.now() - validationStart} ms`, (m, c) => console.info(m, c));
+		return involvedLedgers;
+	}
 }

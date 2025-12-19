@@ -77,14 +77,13 @@ while(true) {
 
 	const a = bootstrapWallet.accounts.C[0];
 	const receipient = bootstrapWallet.accounts.C[1].address;
-	a.UTXOs = [];
-	for (const anchor in utxos)
-		if (!utxos[anchor].spent) a.UTXOs.push(utxos[anchor]);
+	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
+	a.ledgerUtxos = ledger.ledgerUtxos;
 	const tx = Transaction_Builder.createAndSignTransfer(a, 10, receipient)?.signedTx;
 	if (!tx) continue; // failed to create tx
 
 	// TEST: push transaction
 	console.log(`Pushing transaction spending: ${tx.inputs.join(', ')}`);
-	try { await bootstrapNode.memPool.pushTransaction(tx); }
+	try { await bootstrapNode.memPool.pushTransaction(bootstrapNode,tx); }
 	catch (error) { console.error('Failed to push transaction to mempool:', error.message); }
 }

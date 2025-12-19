@@ -1,9 +1,10 @@
+// @ts-check
 import { BlockUtils } from './block.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { conditionnals } from '../../utils/conditionnals.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import { Transaction, TxOutput, UTXO } from '../../types/transaction.mjs';
+import { Transaction, TxOutput, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
 /**
  * @typedef {import('./wallet.mjs').Account} Account
@@ -54,14 +55,15 @@ export class Transaction_Builder {
     /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte // RANDOM IS TEMPORARY */
     static createTransfer(senderAccount, transfers, feePerByte = Math.round(Math.random() * 10) + 1) {
         const senderAddress = senderAccount.address;
-        const UTXOs = senderAccount.UTXOs.filter(utxo => utxo.rule !== 'sigOrSlash');
-        if (UTXOs.length === 0) throw new Error('No UTXO to spend');
+		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
+        const UTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
+		if (UTXOs.length === 0) throw new Error('No UTXO to spend');
         if (transfers.length === 0) throw new Error('No transfer to make');
 
         this.checkMalformedAnchorsInUtxosArray(UTXOs);
         this.checkDuplicateAnchorsInUtxosArray(UTXOs);
 
-        const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig', 1);
+        const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress);
         if (changeOutput) { outputs.push(changeOutput); }
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
@@ -72,10 +74,11 @@ export class Transaction_Builder {
      * @param {Account} senderAccount @param {string} stakingAddress @param {number} amount
      * @param {number} feePerByte // RANDOM IS TEMPORARY
      * @param {boolean} useOnlyNecessaryUtxos - if true, the transaction will use only the necessary UTXOs to reach the amount */
-    static createStakingVss(senderAccount, stakingAddress, amount, feePerByte = Math.round(Math.random() * 10) + 1) {
+    static createStakingVss(senderAccount, stakingAddress, amount, feePerByte = Math.round(Math.random() * 10) + 1, useOnlyNecessaryUtxos = true) {
         if (amount < BLOCKCHAIN_SETTINGS.minStakeAmount) throw new Error(`Amount too low: ${amount} < ${BLOCKCHAIN_SETTINGS.minStakeAmount}`);
         const senderAddress = senderAccount.address;
-        const UTXOs = senderAccount.UTXOs.filter(utxo => utxo.rule !== 'sigOrSlash');
+		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
+		const UTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
         if (UTXOs.length === 0) throw new Error('No UTXO to spend');
 
         this.checkMalformedAnchorsInUtxosArray(UTXOs);
@@ -84,7 +87,7 @@ export class Transaction_Builder {
         const availableAmount = UTXOs.reduce((a, b) => a + b.amount, 0);
         if (availableAmount < amount * 2) throw new Error(`Not enough funds: ${availableAmount} < ${amount * 2}`);
 
-        const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom([{ recipientAddress: stakingAddress, amount }], 'sigOrSlash', 1);
+        const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom([{ recipientAddress: stakingAddress, amount }], 'sigOrSlash');
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, amount);
         if (changeOutput) { outputs.push(changeOutput); }
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
@@ -92,6 +95,7 @@ export class Transaction_Builder {
         return Transaction.fromUTXOs(utxos, outputs);
 		
     }
+	/** @param {UTXO[]} UTXOs @param {TxOutput[]} outputs @param {number} totalSpent @param {number} feePerByte @param {string} senderAddress @param {number} [feeSupplement] */
     static #estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, feeSupplement) {
         const estimatedWeight = Transaction_Builder.simulateTxToEstimateWeight(UTXOs, outputs);
         const { fee } = Transaction_Builder.calculateFeeAndChange(UTXOs, totalSpent, estimatedWeight, feePerByte, feeSupplement);
@@ -128,11 +132,7 @@ export class Transaction_Builder {
 		const tx = new Transaction(inputs, outputsClone, witnesses);
 		return serializer.serialize.transaction(tx).length;
     }
-    /**
-     * @param {{recipientAddress: string, amount: number}[]} transfers
-     * @param {string} rule
-     * @param {number} version
-     */
+    /** @param {{recipientAddress: string, amount: number}[]} transfers @param {string} rule */
     static buildOutputsFrom(transfers = [{ recipientAddress: 'recipientAddress', amount: 1 }], rule = 'sig') {
         const outputs = [];
         let totalSpent = 0;
@@ -146,13 +146,7 @@ export class Transaction_Builder {
 
         return { outputs, totalSpent };
     }
-    /**
-     * @param {UTXO[]} utxos
-     * @param {number} totalSpent
-     * @param {number} estimatedWeight
-     * @param {number} feePerByte
-     * @param {number} feeSupplement
-     */
+    /** @param {UTXO[]} utxos @param {number} totalSpent @param {number} estimatedWeight @param {number} feePerByte @param {number} [feeSupplement] */
     static calculateFeeAndChange(utxos, totalSpent, estimatedWeight, feePerByte, feeSupplement = 0) {
         if (feePerByte < BLOCKCHAIN_SETTINGS.minTransactionFeePerByte) { throw new Error(`Invalid feePerByte: ${feePerByte}`); }
         const totalInputAmount = utxos.reduce((a, b) => a + b.amount, 0);
@@ -174,10 +168,9 @@ export class Transaction_Builder {
     }
     /** @param {Transaction} transaction */
     static isMinerOrValidatorTx(transaction) {
-        if (transaction.inputs.length !== 1) return false;
+        if (transaction.inputs.length !== 1) return;
         if (transaction.inputs[0].length === 8) return 'miner'; // nonce length is 8
         if (transaction.inputs[0].length === 20 + 1 + 64) return 'validator'; // address length 20 + : + posHash length is 64
-        return false;
     }
     /** @param {Transaction} transaction */
     static isIncriptionTx(transaction) {

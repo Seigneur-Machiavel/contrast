@@ -2,49 +2,40 @@ import { parentPort } from 'worker_threads';
 import { TxValidation } from '../src/tx-validation.mjs';
 
 // WORKER SIDE
+let abortOperationRequested = false;
 let workerId = undefined;
-let exiting = false;
 parentPort.on('message', async (task) => {
     const id = task.id;
     workerId = workerId || id;
-	const response = { id, isValid: false, discoveredPubKeysAddresses: {}, error: false };
+	const response = { id, error: false };
     switch (task.type) {
-        case 'addressOwnershipConfirmation':
-            try {
-                const allDiscoveredPubKeysAddresses = {};
-                const transactions = task.transactions
-                for (const tx of transactions) {
-                    if (exiting) break;
-                    const discoveredPubKeysAddresses = await TxValidation.addressOwnershipConfirmation(
-                        task.involvedUTXOs,
-                        tx,
-                        task.impliedKnownPubkeysAddresses,
-                        false // specialTx
-                    );
-
-					for (const pubKeyHex in discoveredPubKeysAddresses)
-						allDiscoveredPubKeysAddresses[pubKeyHex] = discoveredPubKeysAddresses[pubKeyHex];
-                }
-                
-                response.discoveredPubKeysAddresses = allDiscoveredPubKeysAddresses;
-                response.isValid = true;
-                //console.log(`[VALIDATION_WORKER ${task.id}] addressOwnershipConfirmation: ${task.transaction.id} ${response.isValid}`);
-            } catch (/**@type {any}*/ error) {
-                console.error(`[VALIDATION_WORKER ${task.id}] addressOwnershipConfirmation: ${task.transaction.id} ${error.message}`);
-                response.error = error.message;
-                response.isValid = false;
-            }
-            break
+		case 'linkValidation':
+			abortOperationRequested = false; // Reset for new task
+			try {
+				/** @type {Array<{address: string, pubKey: string}>} */
+				const batchOfLinks = task.batchOfLinks;
+				for (const link of batchOfLinks) {
+					if (abortOperationRequested) return;
+					await TxValidation.controlAddressDerivation(link.address, link.pubKey);
+				}
+			} catch (/**@type {any}*/ error) {
+				console.error(`[VALIDATION_WORKER ${task.id}] linkValidation error: ${error.message}`);
+				abortOperationRequested = false;
+				response.error = error.message;
+			}
+			break;
+		case 'abortOperation':
+			abortOperationRequested = true;
+			return;
 		case 'terminate':
             //console.log(`[VALIDATION_WORKER ${workerId}] Terminating...`);
-            exiting = true;
-			parentPort.close(); // close the worker
-			break;
+			abortOperationRequested = true;
+			parentPort.close();
+			return;
         default:
 			response.error = 'Invalid task type';
             break;
     }
 
-    if (exiting) { return; }
 	parentPort.postMessage(response);
 });

@@ -7,6 +7,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
  * @typedef {string} TxUniqueId - Unique identifier of tx, hash of serialized transaction.
+ * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
@@ -56,20 +57,14 @@ class FeeTiersOrganizer {
 export class MemPool {
 	blockchain;
 	organizer = new FeeTiersOrganizer();
-	/** @type {Object<string, string>} */				knownPubKeysAddresses = {};
     /** @type {Map<string, Transaction>} */				byAnchor = new Map();
     /** @type {Object<string, WebSocketCallBack>} */	wsCallbacks = {};
 
 	/** @param {import("./blockchain.mjs").Blockchain} blockchain */
 	constructor(blockchain) { this.blockchain = blockchain; }
 
-	/** @param {Object<string, string>} discoveredPubKeysAddresses */
-    addNewKnownPubKeysAddresses(discoveredPubKeysAddresses) {
-		for (const pubKeyHex in discoveredPubKeysAddresses)
-            this.knownPubKeysAddresses[pubKeyHex] = discoveredPubKeysAddresses[pubKeyHex];
-    }
-    /** @param {Transaction} tx */
-    async pushTransaction(tx, replaceConflicting = false) {
+    /** @param {ContrastNode} node @param {Transaction} tx */
+    async pushTransaction(node, tx, replaceConflicting = false) {
 		// CHECK CONFORMITY & SPENDABILITY
         TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
 		const { involvedAnchors, repeatedAnchorsCount } = Transaction_Builder.extractInvolvedAnchors(tx, true);
@@ -77,21 +72,21 @@ export class MemPool {
 		
 		const involvedUTXOs = this.blockchain.getUtxos(involvedAnchors, true);
 		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for transaction, spent or missing UTXO detected');
-        TxValidation.isConformTransaction(involvedUTXOs, tx, false); // throw if not conform/spendable
+        TxValidation.isConformTransaction(involvedUTXOs, tx); // throw if not conform/spendable
 		
 		// CHECK CONFLICTS
         const colliding = this.#caughtTransactionsAnchorsCollision(tx);
         if (colliding?.tx && !replaceConflicting) throw new Error(`Conflicting UTXOs anchor: ${colliding?.anchor}`);
 		
+		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
         const serialized = serializer.serialize.transaction(tx);
-        const fee = TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
-        tx.byteWeight = serialized.byteLength;
-        tx.feePerByte = fee / tx.byteWeight;
+        const result = await TxValidation.transactionValidation(node, involvedUTXOs, tx);
+		if (result.discovered.address && result.discovered.pubKey)
+			await TxValidation.controlAddressDerivation(result.discovered.address, result.discovered.pubKey);
+        
+		tx.byteWeight = serialized.byteLength;
+        tx.feePerByte = result.fee / tx.byteWeight;
 		if (tx.feePerByte <= (colliding?.tx?.feePerByte || 0)) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${(colliding?.tx?.feePerByte || 0)} >= ${tx.feePerByte}`);
-
-		// CONFIRM ADDRESS OWNERSHIP
-        const impliedKnownPubkeysAddresses = TxValidation.controlAllWitnessesSignatures(this, tx);
-        await TxValidation.addressOwnershipConfirmation(involvedUTXOs, tx, impliedKnownPubkeysAddresses);
         
 		this.#addMempoolTransaction(tx, colliding?.tx);
     }
@@ -102,13 +97,13 @@ export class MemPool {
             if (colliding) this.#removeMempoolTransaction(colliding.tx);
         }
     }
-    /** @param {Transaction[]} txs @param {number} [breathGap] number of txs before await immediate pause */
-    async pushTransactions(txs, breathGap = 10) {
+    /** @param {ContrastNode} node @param {Transaction[]} txs @param {number} [breathGap] number of txs before await immediate pause */
+    async pushTransactions(node, txs, breathGap = 10) {
         /** @type {{ success: Transaction[], failed: string[] }} */
         const results = { success: [], failed: [] };
 		for (let i = 0; i < txs.length; i++) {
             try {
-                await this.pushTransaction(txs[i]);
+                await this.pushTransaction(node, txs[i]);
                 results.success.push(txs[i]);
             } catch (/**@type {any}*/ error) { results.failed.push(error.message) }
 
@@ -137,7 +132,7 @@ export class MemPool {
 		const controlCurrentBatch = () => {
 			const involvedUTXOs = this.blockchain.getUtxos(batch.anchors, false) || {};
 			for (const tx of batch.txs) {
-				try { TxValidation.isConformTransaction(involvedUTXOs, tx, false) }
+				try { TxValidation.isConformTransaction(involvedUTXOs, tx) }
 				catch (error) { invalidTransactions.push(tx); continue; }
 				
 				// ADD THE TRANSACTION

@@ -20,9 +20,9 @@ export class BlockUtils {
 		for (const tx of block.Txs)
 			txsSignables.push(Transaction_Builder.getTransactionSignableString(tx));
 
-        let firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : false;
+        let firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : undefined;
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
-        firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : false;
+        firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : undefined;
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
 
         const txsIDStr = txsSignables.join('');
@@ -139,7 +139,7 @@ export class BlockUtils {
         return this.finalizedBlockFromJSON(this.dataAsJSON(block));
     }
     /** @param {BlockCandidate} block */
-    static cloneBlockCandidate(block) { // TESTING Fnc(), unused
+    static cloneBlockCandidate(block) {
         return this.candidateBlockFromJSON(this.dataAsJSON(block));
     }
 	/** @param {BlockCandidate} block */
@@ -181,46 +181,6 @@ export class BlockUtils {
         }
 
         return blockInfo;
-    }
-    /** @param {BlockFinalized} block @param {Object<string, string>} blockPubKeysAddresses */
-    static getFinalizedBlockTransactionsReferencesSortedByAddress(block, blockPubKeysAddresses) {
-        /** @type {Object<string, string[]>} */
-        const txRefsRelatedToAddress = {};
-		for (let i = 0; i < block.Txs.length; i++) {
-			/** @type {Object<string, boolean>} */
-            const addressesRelatedToTx = {};
-			const Tx = block.Txs[i];
-            for (const witness of Tx.witnesses) {
-                const pubKey = witness.split(':')[1];
-                const address = blockPubKeysAddresses[pubKey];
-                if (addressesRelatedToTx[address]) continue; // no duplicates
-                addressesRelatedToTx[address] = true;
-            }
-
-            for (const output of Tx.outputs)
-                if (addressesRelatedToTx[output.address]) continue; // no duplicates
-                else addressesRelatedToTx[output.address] = true;
-            
-            for (const address of Object.keys(addressesRelatedToTx)) {
-                if (!txRefsRelatedToAddress[address]) txRefsRelatedToAddress[address] = [];
-                txRefsRelatedToAddress[address].push(`${block.index}:${i}`);
-            }
-        }
-
-        // CONTROL
-        for (const address in txRefsRelatedToAddress) {
-			/** @type {Object<string, boolean>} */
-            const txsRefsDupiCounter = {};
-            const addressTxsRefs = txRefsRelatedToAddress[address];
-            let duplicate = 0;
-            for (let i = 0; i < addressTxsRefs.length; i++)
-                if (txsRefsDupiCounter[addressTxsRefs[i]]) duplicate++;
-                else txsRefsDupiCounter[addressTxsRefs[i]] = true;
-				
-            if (duplicate > 0) console.warn(`[DB] ${duplicate} duplicate txs references found for address ${address}`);
-        }
-
-        return txRefsRelatedToAddress;
     }
 	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */

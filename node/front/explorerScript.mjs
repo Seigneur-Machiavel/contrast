@@ -893,7 +893,7 @@ export class BlockExplorerWidget {
     /** @param {number} txIndex @param {Transaction} tx @param {HTMLElement} tbodyDiv */
     #createTransactionOfTableElement(txIndex, tx, tbodyDiv) {
         const outputsAmount = tx.outputs.reduce((a, b) => a + b.amount, 0);
-        const specialTx = txIndex < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : false;
+        const specialTx = txIndex < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : undefined;
         const weight = Transaction_Builder.getTxWeight(tx, specialTx);
 
         const row = document.createElement('tr');

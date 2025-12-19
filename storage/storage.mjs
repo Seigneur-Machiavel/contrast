@@ -96,13 +96,12 @@ export class ContrastStorage extends StorageRoot {
 	saveBinary(fileName, serializedData, directoryPath) {
 		try {
 			const d = directoryPath || this.PATH.STORAGE;
-			if (!fs.existsSync(d)) fs.mkdirSync(d);
-			
+			fs.mkdirSync(d, { recursive: true });
 			fs.writeFileSync(path.join(d, `${fileName}.bin`), serializedData);
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 		return true;
 	}
-	/** @param {string} fileName @param {string} directoryPath @returns {Uint8Array|boolean} */
+	/** @param {string} fileName @param {string} directoryPath @returns {Uint8Array | null} */
 	loadBinary(fileName, directoryPath) {
 		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
 		try { return fs.readFileSync(filePath) } // work as Uint8Array
@@ -110,7 +109,7 @@ export class ContrastStorage extends StorageRoot {
 			if (error.code === 'ENOENT') this.miniLogger.log(`File not found: ${filePath}`, (m, c) => console.info(m, c));
 			else this.miniLogger.log(error.stack, (m, c) => console.info(m, c));
 		}
-		return false;
+		return null;
 	}
 	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
 	async saveBinaryAsync(fileName, serializedData, directoryPath) {
@@ -120,17 +119,15 @@ export class ContrastStorage extends StorageRoot {
 			await fs.promises.writeFile(path.join(d, `${fileName}.bin`), serializedData);
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 	}
-	/** @param {string} fileName @param {string} directoryPath @returns {Promise<Uint8Array|boolean>} */
+	/** @param {string} fileName @param {string} directoryPath @returns {Promise<Uint8Array | null>} */
 	async loadBinaryAsync(fileName, directoryPath) {
 		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
-		try {
-			const buffer = await fs.promises.readFile(filePath);
-			return buffer;
-		} catch (/**@type {any}*/ error) {
+		try { return await fs.promises.readFile(filePath); } // work as Uint8Array
+		catch (/**@type {any}*/ error) {
 			if (error.code === 'ENOENT') this.miniLogger.log(`File not found: ${filePath}`, (m, c) => console.info(m, c));
 			else this.miniLogger.log(error.stack, (m, c) => console.info(m, c));
 		}
-		return false;
+		return null;
 	}
 	isFileExist(fileNameWithExtension = 'toto.bin', directoryPath = this.PATH.STORAGE) {
 		const filePath = path.join(directoryPath, fileNameWithExtension);
@@ -213,7 +210,7 @@ class TestStorage extends ContrastStorage {
     loadBlock(index = 0, count = this.txCount) {
 		const block = [];
 		const buffer = this.loadBinary(index.toString(), this.PATH.TEST_STORAGE);
-		if (typeof buffer === 'boolean') throw new Error(`Unable to load block #${index}`);
+		if (!buffer) throw new Error(`Unable to load block #${index}`);
 		for (let i = 0; i < count; i++) {
 			const start = i * this.txBinaryWeight;
 			const end = start + this.txBinaryWeight;

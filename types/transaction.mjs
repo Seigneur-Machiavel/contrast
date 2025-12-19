@@ -1,8 +1,33 @@
 /**
+ * @typedef {Object} UTXORule
+ * @property {number} code - The code of the rule
+ * @property {string} description - The description of the rule
+ * @property {number} [withdrawLockBlocks] - Number of blocks to lock for 'sigOrSlash' rule
+ * @property {number} [lockUntilBlock] - Block height until which the UTXO is locked for 'lockUntilBlock' rule
+ *
  * @typedef {string} TxAnchor 	- The path to the UTXO, ex: blockHeight:txIndex:vout
  * @typedef {string} TxId 		- The path to the transaction, ex: blockHeight:txIndex
- * @typedef {string} VoutId 	- The path to the output, ex: txIndex:vout
- */
+ * @typedef {string} VoutId 	- The path to the output, ex: txIndex:vout */
+
+/** @type {Record<string, UTXORule>} */
+export const UTXO_RULES_GLOSSARY = {
+    sig: { code: 0, description: 'Simple signature verification' },
+    sigOrSlash: { code: 1, description: "Open right to slash the UTXO if validator's fraud proof is provided", withdrawLockBlocks: 144 },
+    lockUntilBlock: { code: 2, description: 'UTXO locked until block height', lockUntilBlock: 0 },
+    multiSigCreate: { code: 3, description: 'Multi-signature creation' },
+    p2pExchange: { code: 4, description: 'Peer-to-peer exchange' },
+    lightHousePause: { code: 6, description: 'LightHouse pause' },
+    lightHouseResume: { code: 7, description: 'LightHouse resume' },
+};
+
+/** @type {Record<number, string>} */
+export const UTXO_RULESNAME_FROM_CODE = {
+    0: 'sig',
+    1: 'sigOrSlash',
+    2: 'lockUntilBlock',
+    3: 'multiSigCreate',
+    4: 'p2pExchange'
+};
 
 export class UtxoState {
 	/** @param {number} txIndex @param {number} vout @param {boolean} [spent] default: false */
@@ -22,7 +47,7 @@ export class TxOutput {
 	}
 }
 
-export class UTXO { // PROBABLY DEPRECATED => EXTRACT_BALANCES() method
+export class UTXO {
 	/** @param {TxAnchor} anchor - the path to the UTXO blockHeight:txIndex:vout @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - the address of the recipient @param {boolean} [spent] - if the UTXO has been spent, default: false */
 	constructor(anchor, amount, rule, address, spent = false) {
 		this.address = address;
@@ -32,47 +57,38 @@ export class UTXO { // PROBABLY DEPRECATED => EXTRACT_BALANCES() method
 		this.spent = spent;
 	}
 
-	/** @param {UTXO[]} UTXOs */
-	static EXTRACT_BALANCES(UTXOs) { // PROBABLY DEPRECATED
-		let totalBalance = 0;
-        let spendableBalance = 0;
-        let stakedBalance = 0;
-        let lockedBalance = 0;
-        let p2pExchangeBalance = 0;
-
-        for (let i = 0; i < UTXOs.length; i++) {
-            const rule = UTXOs[i].rule;
-            const amount = UTXOs[i].amount;
-
-            totalBalance += amount;
-            switch (rule) {
-                case 'sigOrSlash':
-                    stakedBalance += amount;
-                    break;
-                case 'lockUntilBlock':
-                    lockedBalance += amount;
-                    break;
-                case 'p2pExchange':
-                    p2pExchangeBalance += amount;
-                    break;
-                default:
-                    spendableBalance += amount;
-                    break;
-            }
-        }
-
-        return { totalBalance, stakedBalance, spendableBalance, lockedBalance, p2pExchangeBalance };
+	/** @param {string} address @param {LedgerUtxo} ledgerUtxo */
+	static fromLedgerUtxo(address, ledgerUtxo) {
+		const ruleName = UTXO_RULESNAME_FROM_CODE[ledgerUtxo.ruleCode];
+		return new UTXO(ledgerUtxo.anchor, ledgerUtxo.amount, ruleName, address, false);
 	}
-	/** @param {UTXO[]} UTXOs */
-	static BY_RULES(UTXOs) {
-		/** @type {Object<string, UTXO[]>} */
-		const utxosByRule = {};
-		for (let i = 0; i < UTXOs.length; i++) {
-			const rule = UTXOs[i].rule;
-			if (!utxosByRule[rule]) { utxosByRule[rule] = []; }
-			utxosByRule[rule].push(UTXOs[i]);
-		}
-		return utxosByRule;
+	/** @param {string} address @param {LedgerUtxo[]} ledgerUtxos @param {Set<number>} [ruleCodesToExclude] */
+	static fromLedgerUtxos(address, ledgerUtxos, ruleCodesToExclude) {
+		const UTXOs = [];
+		for (const l of ledgerUtxos)
+			if (ruleCodesToExclude?.has(l.ruleCode)) continue;
+			else UTXOs.push(UTXO.fromLedgerUtxo(address, l));
+
+		return UTXOs;
+	}
+}
+
+export class LedgerUtxo { // lightweight UTXO representation without address, unspent only
+	/** @param {TxAnchor} anchor @param {number} amount @param {number} ruleCode */
+	constructor(anchor, amount, ruleCode) {
+		this.anchor = anchor;
+		this.amount = amount;
+		this.ruleCode = ruleCode;
+	}
+
+	/** @param {UTXO} utxo */
+	static fromUTXO(utxo) {
+		const ruleCode = UTXO_RULES_GLOSSARY[utxo.rule].code;
+		return new LedgerUtxo(utxo.anchor, utxo.amount, ruleCode);
+	}
+	/** @param {UTXO[]} utxos */
+	static fromUTXOs(utxos) {
+		return utxos.map(utxo => LedgerUtxo.fromUTXO(utxo));
 	}
 }
 

@@ -1,253 +1,188 @@
 // @ts-check
 import fs from 'fs';
 import path from 'path';
-import { serializer } from '../utils/serializer.mjs';
+import HiveP2P from 'hive-p2p';
+import { UTXO } from '../types/transaction.mjs';
+import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs';
 
 /**
+ * @typedef {import("../types/transaction.mjs").LedgerUtxo} LedgerUtxo
+ * @typedef {import("../types/transaction.mjs").TxId} TxId
+ * @typedef {import("../types/transaction.mjs").VoutId} VoutId
+ * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
- * @typedef {import("../types/transaction.mjs").TxId} TxId */
+/*{ // SAMPLE LEDGER BINARY FORMAT
+  pubKey				(32b)
+  balance				(6b)
+  totalSent				(6b)
+  totalReceived			(6b)
+  nbUtxos				(4b)
+  nbHistory				(4b)
+  utxos					(15b x nb)
+  history-TxIds 		(6b x nb)
+}*/
 
+export class AddressLedger {
+	/** 
+	 * @param {string} pubKey @param {number} balance @param {number} totalSent @param {number} totalReceived @param {number} nbUtxos @param {number} nbHistory
+	 * @param {LedgerUtxo[]} [ledgerUtxos] @param {TxId[]} [history] @param {Buffer} [utxosBuffer] @param {Uint8Array} [historyBytes] */
+	constructor(pubKey, balance, totalSent, totalReceived, nbUtxos, nbHistory, ledgerUtxos, history, utxosBuffer, historyBytes) {
+		this.pubKey = pubKey;
+		this.balance = balance;
+		this.totalSent = totalSent;
+		this.totalReceived = totalReceived;
+		this.nbUtxos = nbUtxos;
+		this.nbHistory = nbHistory;
+		this.ledgerUtxos = ledgerUtxos;
+		this.history = history;
+		this.utxosBuffer = utxosBuffer;
+		this.historyBytes = historyBytes;
+	}
+}
+
+class AddressChanges {
+	/** Incoming UTXOs entries @type {Uint8Array[]} */ 			in = [];
+	/** Outgoing UTXOs entries @type {Uint8Array[]} */ 			out = [];
+	/** Incoming total amount @type {number} */ 				totalInAmount = 0;
+	/** Outgoing total amount @type {number} */ 				totalOutAmount = 0;
+	/** History txIds @type {Set<TxId>} */						historyTxIds = new Set();
+
+	/** @param {'in' | 'out'} direction @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
+	add(direction, height, txIndex, vout, amount, rule) {
+		// COUNT AMOUNT
+		if (direction === 'in') this.totalInAmount += amount;
+		else this.totalOutAmount += amount;
+		
+		// ADD THE UTXO TO THE CORRECT DIRECTION
+		const serializedUtxo = serializer.serialize.ledgerUtxo(height, txIndex, vout, amount, rule);
+		if (direction === 'in') this.in.push(serializedUtxo);
+		else this.out.push(serializedUtxo);
+
+		// ADD THE TxId TO THE HISTORY IF NOT EXISTS
+		if (direction === 'out') return; // out = consumed = already in history
+		const txId = `${height}:${txIndex}`;
+		if (!this.historyTxIds.has(txId)) this.historyTxIds.add(txId);
+	}
+}
 
 export class LedgersStorage {
 	storage;
 	get logger() { return this.storage.miniLogger; }
+	converter = new HiveP2P.Converter();
 
 	/** @param {import('./storage.mjs').ContrastStorage} storage */
-	constructor(storage) {
-		this.storage = storage;
-		//this.#load();
+	constructor(storage) { this.storage = storage; }
+
+	// API METHODS
+	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {Object<string, AddressLedger>} involvedLedgers */
+	digestBlock(block, involvedUTXOs, involvedLedgers) {
+		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
+		for (const address in changesByAddress)
+			this.#applyAddressChanges(address, changesByAddress[address], involvedLedgers[address]);
+	}
+	/** @param {string} address @param {boolean} [deserializeUtxosAndHistory] Default: true */
+	getAddressLedger(address, deserializeUtxosAndHistory = true) {
+		const l = this.#readAddressLedger(address);
+		const ledgerUtxos = deserializeUtxosAndHistory ? serializer.deserialize.ledgerUtxosArray(l.utxosBuffer) : undefined;
+		const history = 	deserializeUtxosAndHistory ? serializer.deserialize.txsIdsArray(l.historyBytes) : undefined;
+		return new AddressLedger(l.pubKey, l.balance, l.totalSent, l.totalReceived, l.nbUtxos, l.nbHistory, ledgerUtxos, history, l.utxosBuffer, l.historyBytes);
+	}
+	reset() {
+		if (fs.existsSync(this.storage.PATH.LEDGERS)) fs.rmSync(this.storage.PATH.LEDGERS, { recursive: true });
+		fs.mkdirSync(this.storage.PATH.LEDGERS);
 	}
 
-	reset() { // TO IMPLEMENT
+	// INTERNAL METHODS
+	/** @param {string} address Base58 string address */
+	#pathOfAddressLedgerDir(address) {
+		return path.join(this.storage.PATH.LEDGERS, address.slice(0, 2), address.slice(2, 4));
+    }
+	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
+	#extractChangesByAddress(block, involvedUTXOs) {
+		/** @type {Object<string, AddressChanges>} */
+		const r = {}; // RESULT
+		for (const utxoAnchor in involvedUTXOs) {
+			const utxo = involvedUTXOs[utxoAnchor];
+			if (!r[utxo.address]) r[utxo.address] = new AddressChanges();
+
+			const { height, txIndex, vout } = serializer.parseAnchor(utxoAnchor);
+			r[utxo.address].add('out', height, txIndex, vout, utxo.amount, utxo.rule);
+		}
+
+		for (let txIndex = 0; txIndex < block.Txs.length; txIndex++)
+			for (let voutIndex = 0; voutIndex < block.Txs[txIndex].outputs.length; voutIndex++) {
+				const { address, amount, rule } = block.Txs[txIndex].outputs[voutIndex];
+				if (!r[address]) r[address] = new AddressChanges();
+
+				r[address].add('in', block.index, txIndex, voutIndex, amount, rule);
+			}
 		
+		return r;
 	}
-}
+	/** @param {string} address @param {AddressChanges} changes @param {AddressLedger} [addressLedger] */
+	#applyAddressChanges(address, changes, addressLedger) {
+		const l = addressLedger || this.#readAddressLedger(address);
+		if (!l || !l.utxosBuffer || !l.historyBytes) throw new Error(`Ledger for address ${address} not found or corrupted`);
 
-/** Transactions references are stored in binary format, folder architecture is optimized for fast access
- * @typedef {Object} addTxsRefsInfo
- * @property {number} highestIndex - The highest index of the transactions referenced (including temp refs)
- * @property {number} totalTxsIds - The total number of transactions referenced (excluding temp refs) */
-class AddressesTxsRefsStorage {
-	storage;
-	get logger() { return this.storage.miniLogger; }
+		// PREPARE NEW LEDGER VALUES
+		const newNbUtxos = l.nbUtxos + changes.in.length - changes.out.length;
+		const newNbHistory = l.nbHistory + changes.historyTxIds.size;
+		l.balance += (changes.totalInAmount - changes.totalOutAmount);
+		l.totalSent += changes.totalOutAmount;
+		l.totalReceived += changes.totalInAmount;
+		const w = new BinaryWriter(32 + 6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
+		w.writeBytes(this.converter.hexToBytes(l.pubKey));
+		w.writeBytes(this.converter.numberTo6Bytes(l.balance));
+		w.writeBytes(this.converter.numberTo6Bytes(l.totalSent));
+		w.writeBytes(this.converter.numberTo6Bytes(l.totalReceived));
+		w.writeBytes(this.converter.numberTo4Bytes(newNbUtxos));
+		w.writeBytes(this.converter.numberTo4Bytes(newNbHistory));
+		
+		// WRITE KEPT UTXOS
+		const indexesToSkip = this.#extractIndexesOfMatches(l.utxosBuffer, changes.out);
+		for (let i = 0; i < l.nbUtxos * 15; i += 15)
+			if (!indexesToSkip.has(i)) w.writeBytes(l.utxosBuffer.subarray(i, i + 15));
 
-    codeVersion = 4;
-    loaded = false;
-    version = 0;
-    configPath;
-	txsIdsPath;
-    batchSize = 1000; // number of transactions references per file
-    snapHeight = -1;
-	
-    /** @type {Object<string, Object<string, Object<string, addTxsRefsInfo>>} */
-    architecture = {}; // lvl0: { lvl1: { address: addTxsRefsInfo } }
-    /** @type {Object<number, Object<string, boolean>>} */
-    involedAddressesOverHeights = {}; // { height: {addresses: true} } useful for pruning
-    maxInvoledHeights = 10; // max number of heights to keep in memory useful when loading snapshots
-    
-	/** @param {import('./storage.mjs').ContrastStorage} storage */
-	constructor(storage) {
-		this.storage = storage;
-		this.configPath = path.join(storage.PATH.STORAGE, 'AddressesTxsIdsStorage_config.json');
-		this.txsIdsPath = storage.PATH.TXS_IDS;
-		this.#load();
+		// WRITE NEW UTXOS
+		for (const entryBytes of changes.in) w.writeBytes(entryBytes);
+
+		// WRITE HISTORY TXIDS
+		w.writeBytes(l.historyBytes);
+		for (const txId of changes.historyTxIds) {
+			const { height, txIndex } = serializer.parseTxId(txId);
+			w.writeBytes(this.converter.numberTo4Bytes(height));
+			w.writeBytes(this.converter.numberTo2Bytes(txIndex));
+		}
+
+		const dirPath = this.#pathOfAddressLedgerDir(address);
+		if (w.isWritingComplete) this.storage.saveBinary(address, w.getBytes(), dirPath);
+		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 	}
-
-    #load() {
-        if (!fs.existsSync(this.configPath)) {
-            this.logger.log(`no config file found: ${this.configPath}`, (m, c) => console.error(m, c));
-            return;
-        }
-
-        try {
-            // @ts-ignore: readFileSync() on .json file returns string
-            const config = JSON.parse(fs.readFileSync(this.configPath));
-            this.version = config.version;
-            this.snapHeight = config.snapHeight || -1;
-            this.architecture = config.architecture || {};
-            this.involedAddressesOverHeights = config.involedAddressesOverHeights || {};
-
-            this.logger.log('[AddressesTxsRefsStorage] => config loaded', (m, c) => console.log(m, c));
-            this.loaded = true;
-        } catch (/**@type {any}*/ error) { this.logger.log(error, (m, c) => console.error(m, c)); }
-    }
-    #pruneInvoledAddressesOverHeights() {
-        // SORT BY DESCENDING HEIGHTS -> KEEP ONLY THE UPPER HEIGHTS
-        const keys = Object.keys(this.involedAddressesOverHeights).map(Number).sort((a, b) => b - a);
-        for (let i = 0; i < keys.length; i++)
-            if (i > this.maxInvoledHeights) delete this.involedAddressesOverHeights[keys[i]];
-    }
-    save(indexEnd = -1) {
-        this.#pruneInvoledAddressesOverHeights();
-
-        this.snapHeight = indexEnd;
-        const config = {
-            version: this.codeVersion,
-            snapHeight: this.snapHeight,
-            architecture: this.architecture,
-            involedAddressesOverHeights: this.involedAddressesOverHeights
-        };
-        fs.writeFileSync(this.configPath, JSON.stringify(config));
-    }
-    #dirPathOfAddress(address = '') {
-        const lvl0 = address.slice(0, 2);
-        if (this.architecture[lvl0] === undefined) {
-            this.architecture[lvl0] = {};
-            if (!fs.existsSync(path.join(this.txsIdsPath, lvl0))) fs.mkdirSync(path.join(this.txsIdsPath, lvl0));
-        }
-
-        const lvl1 = address.slice(2, 3);
-        if (this.architecture[lvl0][lvl1] === undefined) {
-            this.architecture[lvl0][lvl1] = {};
-            if (!fs.existsSync(path.join(this.txsIdsPath, lvl0, lvl1))) fs.mkdirSync(path.join(this.txsIdsPath, lvl0, lvl1));
-        }
-
-        return { lvl0, lvl1 };
-    }
-    #clearArchitectureIfFolderMissing(lvl0 = 'Ca', lvl1 = 'a', address = 'Caabccddeeff00112233') {
-        if (!this.architecture[lvl0][lvl1][address]) return;
-
-        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
-        if (!fs.existsSync(dirPath)) { // Clean the architecture if the folder is missing
-            delete this.architecture[lvl0][lvl1][address];
-            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
-            if (Object.keys(this.architecture[lvl0]).length === 0) delete this.architecture[lvl0];
-            return true;
-        }
-    }
-    /** @param {number} batchNegativeIndex 0 for the temp batch, -1 for the last batch, -2 for the second to last batch, etc... */
-    getTxsReferencesOfAddress(address = '', batchNegativeIndex = 0) {
-        if (typeof address !== 'string' || address.length !== 20) return [];
-
-        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        if (!this.architecture[lvl0][lvl1][address]) return [];
-        if (this.#clearArchitectureIfFolderMissing(lvl0, lvl1, address)) return [];
-        
-        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
-        const existingBatch = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsIds / this.batchSize);
-        const fileName = batchNegativeIndex === 0 ? 'temp.bin' : `${existingBatch + batchNegativeIndex}.bin`;
-        const filePath = path.join(dirPath, fileName);
-        if (!fs.existsSync(filePath)) return []; // 'temp.bin can be missing'
-
-        const serialized = fs.readFileSync(filePath);
-        return serializer.deserialize.txsIdsArray(serialized);
-    }
-	/** @param {string} address - The address to save txs references for @param {TxId[]} batch - The array of tx ids to save */
-    async #saveNewBatchOfTxsIds(address, batch) {
-        const serialized = serializer.serialize.txsIdsArray(batch);
-        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        this.architecture[lvl0][lvl1][address].totalTxsIds += batch.length;
-
-        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
-        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
-
-        // 0-100: 0, 100-200: 1, 200-300: 2, etc...
-        const batchIndex = Math.floor(this.architecture[lvl0][lvl1][address].totalTxsIds / this.batchSize);
-        const filePath = path.join(dirPath, `${batchIndex -1}.bin`);
-        return fs.promises.writeFile(filePath, serialized); //? not sure "return" is good here
-    }
-	/** @param {string} address - The address to save txs references for @param {TxId[]} txsIds - The array of tx ids to save */
-    async #saveTempTxsIds(address, txsIds) {
-        const serialized = serializer.serialize.txsIdsArray(txsIds);
-        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
-        if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
-
-        const filePath = path.join(dirPath, `temp.bin`);
-        return fs.promises.writeFile(filePath, serialized); //? not sure "return" is good here
-    }
-	/** @param {string} address - The address to set txs references for @param {TxId[]} txsIds - The array of tx ids to set @param {number} indexStart - The starting index of the tx ids */
-    async setTxsReferencesOfAddress(address = '', txsIds = [], indexStart = -1) {
-        if (txsIds.length === 0) return; //TODO: ERASE ADDRESS DATA ?
-
-        // RECORD THE ADDRESS ACTIVITY FOR EASIER PRUNING
-        if (this.involedAddressesOverHeights[indexStart] === undefined)
-            this.involedAddressesOverHeights[indexStart] = {};
-        this.involedAddressesOverHeights[indexStart][address] = true;
-
-        // UPDATE ARCHITECTURE INFO
-        const highestIndex = Number(txsIds[txsIds.length - 1].split(':')[0]);
-        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        if (!this.architecture[lvl0][lvl1][address])
-            this.architecture[lvl0][lvl1][address] = { highestIndex, totalTxsIds: 0 };
-
-        // SAVE BATCH IF TOO BIG
-        let promises = [];
-        while (txsIds.length > this.batchSize)
-            promises.push(this.#saveNewBatchOfTxsIds(address, txsIds.splice(0, this.batchSize)));
-        promises.push(this.#saveTempTxsIds(address, txsIds)); // SAVE TEMP TXS IDS
-
-        if (promises.length > 0) await Promise.allSettled(promises);
-        this.architecture[lvl0][lvl1][address].highestIndex = highestIndex;
-    }
-	/** @param {TxId[]} batch @param {number} height */
-    #pruneBatchRefsUpperThan(batch, height) {
-        return batch.filter(txsRef => Number(txsRef.split(':')[0]) <= height);
-    }
-    #pruneAddressRefsUpperThan(address = '', height = 0) {
-        if (typeof address !== 'string' || address.length !== 20) return false;
-        
-        const { lvl0, lvl1 } = this.#dirPathOfAddress(address);
-        if (!this.architecture[lvl0][lvl1][address]) return false;
-        if (this.#clearArchitectureIfFolderMissing(lvl0, lvl1, address)) return false;
-
-        const dirPath = path.join(this.txsIdsPath, lvl0, lvl1, address);
-        const numberOfFiles = fs.readdirSync(dirPath).length;
-        if (numberOfFiles === 0) return false; // no files to prune, should not happen because empty folders are deleted
-
-        const existingBatch = Math.floor(numberOfFiles / this.batchSize);
-        let batchNegativeIndex = numberOfFiles -1;
-        
-        while (true) {
-            const fileName = batchNegativeIndex === 0 ? 'temp.bin' : `${existingBatch + batchNegativeIndex}.bin`;
-            const filePath = path.join(dirPath, fileName);
-            const exists = fs.existsSync(filePath);
-            if (exists) {
-                const serialized = fs.readFileSync(filePath);
-                const txsIds = serializer.deserialize.txsIdsArray(serialized);
-                const remainingBatchTxsIds = this.#pruneBatchRefsUpperThan(txsIds, height);
-                const removedTxs = txsIds.length - remainingBatchTxsIds.length;
-
-                if (batchNegativeIndex !== 0 && removedTxs === 0) break; // no more files to check
-                if (removedTxs !== 0) this.architecture[lvl0][lvl1][address].totalTxsIds -= removedTxs;
-                
-                if (remainingBatchTxsIds.length === 0) fs.rmSync(filePath); // delete the file if empty
-                else fs.writeFileSync(filePath, serializer.serialize.txsIdsArray(remainingBatchTxsIds));
-            } else if (batchNegativeIndex !== 0) break; // no more files to check
-
-            batchNegativeIndex--;
-        }
-
-        // if the address is empty, we can delete it from the architecture
-        const totalTxsIds = this.architecture[lvl0][lvl1][address].totalTxsIds;
-        if (!totalTxsIds || totalTxsIds <= 0) {
-            fs.rmSync(dirPath, { recursive: true }); // delete the folder
-            delete this.architecture[lvl0][lvl1][address];
-            if (Object.keys(this.architecture[lvl0][lvl1]).length === 0) delete this.architecture[lvl0][lvl1];
-            if (Object.keys(this.architecture[lvl0]).length === 0) delete this.architecture[lvl0];
-        }
-    }
-    /** Pruning to use while loading a snapshot */
-    pruneAllUpperThan(height = 0) {
-        const keys = Object.keys(this.involedAddressesOverHeights).map(Number).filter(h => h > height);
-        for (let i = 0; i < keys.length; i++) {
-            for (const address in this.involedAddressesOverHeights[keys[i]])
-                this.#pruneAddressRefsUpperThan(address, keys[i]);
-
-            delete this.involedAddressesOverHeights[keys[i]];
-        }
-
-        this.snapHeight = Math.min(this.snapHeight, height);
-        this.logger.log(`Pruned all transactions references upper than #${height}`, (m, c) => console.info(m, c));
-    }
-    reset(reason = 'na') {
-        if (fs.existsSync(this.txsIdsPath)) fs.rmSync(this.txsIdsPath, { recursive: true });
-        if (fs.existsSync(this.configPath)) fs.rmSync(this.configPath);
-        
-        fs.mkdirSync(this.txsIdsPath);
-        this.snapHeight = -1;
-        this.architecture = {};
-        this.involedAddressesOverHeights = {};
-        this.logger.log(`AddressesTxsRefsStorage reset: ${reason}`, (m, c) => console.info(m, c));
-    }
+	/** @param {string} address */
+	#readAddressLedger(address) {
+		const dirPath = this.#pathOfAddressLedgerDir(address);
+		const r = new BinaryReader(this.storage.loadBinary(address, dirPath) || new Uint8Array(32 + 6 + 6 + 6 + 4 + 4));
+		let pubKey = 		this.converter.bytesToHex(r.read(32));
+		let balance = 		this.converter.bytes6ToNumber(r.read(6));
+		let totalSent = 	this.converter.bytes6ToNumber(r.read(6));
+		let totalReceived = this.converter.bytes6ToNumber(r.read(6));
+		const nbUtxos = 	this.converter.bytes4ToNumber(r.read(4));
+		const nbHistory = 	this.converter.bytes4ToNumber(r.read(4)); // don't update before reading history
+		const utxosBuffer = Buffer.from(r.read(nbUtxos * 15));
+		const historyBytes= r.read(nbHistory * 6);
+		if (!r.isReadingComplete) this.logger.log(`Ledger for address ${address} is corrupted`, (m, c) => console.error(m, c));
+		return { pubKey, balance, totalSent, totalReceived, nbUtxos, nbHistory, utxosBuffer, historyBytes };
+	}
+	/** @param {Buffer} buffer @param {Uint8Array[]} entriesToSkip */
+	#extractIndexesOfMatches(buffer, entriesToSkip) {
+		/** @type {Set<number>} */
+		const indexes = new Set();
+		for (const entryBytes of entriesToSkip) {
+			const idx = buffer.indexOf(entryBytes);
+			if (idx === -1) throw new Error(`UTXO entry not found: ${Buffer.from(entryBytes).toString('hex')}`);
+			if (idx % 15 !== 0) throw new Error(`UTXO found at invalid offset: ${idx}`);
+			indexes.add(idx);
+		}
+		return indexes;
+	}
 }

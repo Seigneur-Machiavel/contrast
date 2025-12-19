@@ -1,14 +1,14 @@
 import { Converter } from 'hive-p2p';
-import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
-import { ProgressLogger } from '../../utils/progress-logger.mjs';
-import { addressUtils } from '../../utils/addressUtils.mjs';
-import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
 import { Transaction_Builder } from './transaction.mjs';
+import { addressUtils } from '../../utils/addressUtils.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { ProgressLogger } from '../../utils/progress-logger.mjs';
+import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
+import { AccountDerivationWorker } from '../workers/workers-classes.mjs';
 
 /**
 * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
-* @typedef {import("../../types/transaction.mjs").UTXO} UTXO
+* @typedef {import("../../types/transaction.mjs").LedgerUtxo} LedgerUtxo
 * @typedef {Object} generatedAccount
 * @property {string} address
 * @property {string} seedModifierHex
@@ -25,10 +25,11 @@ export class Account {
 	#pubKey;
 	address;
 
-	/** @type {UTXO[]} */					UTXOs = [];
+	/** @type {LedgerUtxo[]} */				ledgerUtxos = [];
     /** @type {number} */ 					balance = 0;
+	/** @type {number} */					totalSent = 0;
+	/** @type {number} */					totalReceived = 0;
     /** @type {number} */					spendableBalance = 0;
-    /** @type {Object.<string, UTXO>} */	spentUTXOByAnchors = {};
 
 	/** @param {string} pubKey @param {string} privKey @param {string} address */
     constructor(pubKey, privKey, address) {
@@ -48,13 +49,13 @@ export class Account {
         transaction.witnesses.push(`${signatureHex}:${this.#pubKey}`);
         return transaction;
     }
-    /** @param {number} balance @param {UTXO[]} UTXOs */
-    setBalanceAndUTXOs(balance, UTXOs, spendableBalance = 0) {
+    /** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */
+    setBalanceAndUTXOs(balance, ledgerUtxos, spendableBalance = 0) {
         if (typeof balance !== 'number') throw new Error('Invalid balance');
-        if (!Array.isArray(UTXOs)) throw new Error('Invalid UTXOs');
+        if (!Array.isArray(ledgerUtxos)) throw new Error('Invalid LedgerUtxos');
 
         this.balance = balance;
-        this.UTXOs = UTXOs;
+        this.ledgerUtxos = ledgerUtxos;
         this.spendableBalance = spendableBalance;
     }
     /** @param {number} length - len of the hex hash */

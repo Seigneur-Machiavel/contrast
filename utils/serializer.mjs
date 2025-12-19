@@ -1,11 +1,10 @@
 // @ts-check
 import { Converter } from 'hive-p2p';
 import { BlockFinalized, BlockCandidate } from '../types/block.mjs';
-import { Transaction, TxOutput } from '../types/transaction.mjs';
-import { UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from './utxo-rules.mjs';
+import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from '../types/transaction.mjs';
 
 /**
-* @typedef {import("../types/transaction.mjs").UTXO} UTXO
+ * @typedef {import("../types/transaction.mjs").UTXO} UTXO
 * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../types/transaction.mjs").TxId} TxId
 * @typedef {import("../types/transaction.mjs").UtxoState} UtxoState
@@ -39,7 +38,8 @@ export class BinaryWriter {
 
 	/** @param {number} size */
 	constructor(size) {
-		this.buffer = new ArrayBuffer(size);
+		//this.buffer = new ArrayBuffer(size);
+		this.buffer = isNode ? Buffer.allocUnsafe(size) : new ArrayBuffer(size);
 		this.view = new Uint8Array(this.buffer);
 	}
 
@@ -100,7 +100,7 @@ const lengths = {
 	// CRYPTO/IDENTITY
 	pubKey: 32, address: 16, signature: 64, witness: 96,
 	// TRANSACTION
-	anchor: 8, txId: 6, utxoState: 5, miniUTXO: 23,
+	anchor: 8, txId: 6, utxoState: 5, miniUTXO: 23, ledgerUtxo: 15,
 	// BLOCK VALUES
 	hash: 32, nonce: 4, amount: 6, timestamp: 6,
 	// BLOCK INDEX ENTRY
@@ -178,6 +178,17 @@ export const serializer = {
         anchorsObjToArray(anchors) {
             return this.anchorsArray(Object.keys(anchors));
         },
+		/** @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
+		ledgerUtxo(height, txIndex, vout, amount, rule) {
+			const w = new BinaryWriter(lengths.ledgerUtxo);
+			w.writeBytes(converter.numberTo4Bytes(height));
+			w.writeBytes(converter.numberTo2Bytes(txIndex));
+			w.writeBytes(converter.numberTo2Bytes(vout));
+			w.writeBytes(converter.numberTo6Bytes(amount));
+			w.writeByte(UTXO_RULES_GLOSSARY[rule].code);
+			if (w.isWritingComplete) return w.getBytes();
+			else throw new Error(`Ledger UTXO serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
         /** serialize the UTXO as a miniUTXO: {address, amount, rule} @param {UTXO | TxOutput} utxo */
         miniUTXO(utxo) {
 			const rule = UTXO_RULES_GLOSSARY[utxo.rule];
@@ -202,22 +213,6 @@ export const serializer = {
 			}
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`miniUTXOs array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
-        },
-		/** @param {Object <string, Uint8Array>} utxos */
-        miniUTXOsObj(utxos) { // Here we minimize garbage.
-			let totalBytes = 0;
-			for (const a in utxos) totalBytes += lengths.anchor + lengths.miniUTXO;
-
-			const w = new BinaryWriter(totalBytes);
-			for (const anchor in utxos) {
-				const { height, txIndex, vout } = serializer.parseAnchor(anchor);
-				w.writeBytes(converter.numberTo4Bytes(height));
-				w.writeBytes(converter.numberTo2Bytes(txIndex));
-				w.writeBytes(converter.numberTo2Bytes(vout));
-				w.writeBytes(utxos[anchor]);
-			}
-			if (w.isWritingComplete) return w.getBytes();
-			else throw new Error(`miniUTXOs object serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
 		/** @param {TxId[]} txsIds ex: blockHeight:txIndex */
         txsIdsArray(txsIds) {
@@ -392,6 +387,21 @@ export const serializer = {
 			for (const anchor of this.anchorsArray(serializedAnchorsObj || [])) anchorsObj[anchor] = true;
 			return anchorsObj;
         },
+		/** @param {Uint8Array} serializedLedgerUtxos */
+		ledgerUtxosArray(serializedLedgerUtxos) {
+			/** @type {LedgerUtxo[]} */
+			const ledgerUtxos = [];
+			const r = new BinaryReader(serializedLedgerUtxos);
+			for (let i = 0; i < serializedLedgerUtxos.length; i += lengths.ledgerUtxo) {
+				const height = converter.bytes4ToNumber(r.read(4));
+				const txIndex = converter.bytes2ToNumber(r.read(2));
+				const vout = converter.bytes2ToNumber(r.read(2));
+				const amount = converter.bytes6ToNumber(r.read(6));
+				const ruleCode = r.read(1)[0];
+				ledgerUtxos.push(new LedgerUtxo(`${height}:${txIndex}:${vout}`, amount, ruleCode));
+			}
+			return ledgerUtxos;
+		},
 		/** Deserialize a miniUTXO: { address, amount, rule } @param {Uint8Array} serializedMiniUTXO */
         miniUTXO(serializedMiniUTXO) {
 			const r = new BinaryReader(serializedMiniUTXO);
@@ -407,19 +417,6 @@ export const serializer = {
             for (let i = 0; i < serializedMiniUTXOs.length; i += lengths.miniUTXO)
                 miniUTXOs.push(this.miniUTXO(serializedMiniUTXOs.slice(i, i + lengths.miniUTXO)));
             return miniUTXOs;
-        },
-        /** @param {Uint8Array} serializedMiniUTXOs */
-        miniUTXOsObj(serializedMiniUTXOs) {
-			if (serializedMiniUTXOs.length % (lengths.anchor + lengths.miniUTXO) !== 0) throw new Error('Serialized miniUTXOs length is invalid');
-			/** @type {Object<TxAnchor, Uint8Array>} */
-			const miniUTXOsObj = {};
-			const expectedNbOfUTXOs = serializedMiniUTXOs.length / (lengths.anchor + lengths.miniUTXO);
-			const r = new BinaryReader(serializedMiniUTXOs);
-			for (let i = 0; i < expectedNbOfUTXOs; i++) {
-				const anchor = this.anchor(r.read(lengths.anchor));
-				miniUTXOsObj[anchor] = r.read(lengths.miniUTXO);
-			}
-			return miniUTXOsObj;
         },
 		/** @param {Uint8Array} serializedTxsIds */
         txsIdsArray(serializedTxsIds) {

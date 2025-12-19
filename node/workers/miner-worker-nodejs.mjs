@@ -131,18 +131,15 @@ const minerVars = {
 	paused: false,
 	pausedAtTime: 0,
 
-	testMiningSpeedPenality: 0, // TODO: set to 0 after testing
+	testMiningSpeedPenality: 0 // TODO: set to 0 after testing
 };
 parentPort.on('message', async (task) => {
-	//console.log('miner-worker-nodejs', task);
-
 	const response = {};
     switch (task.type) {
 		case 'updateInfo':
 			minerVars.rewardAddress = task.rewardAddress;
 			minerVars.bet = task.bet;
 			minerVars.timeOffset = task.timeOffset;
-			//console.info('miner-worker-nodejs -> updateInfo');
 			return;
         case 'newCandidate':
 			minerVars.highestBlockHeight = task.blockCandidate.index;
@@ -150,11 +147,13 @@ parentPort.on('message', async (task) => {
 			minerVars.pausedAtTime = null;
 			return;
 		case 'mineUntilValid':
-			if (minerVars.working) { return; } else { minerVars.working = true; }
-
+			if (minerVars.working) return;
+			
+			minerVars.working = true;
 			minerVars.rewardAddress = task.rewardAddress;
 			minerVars.bet = task.bet;
 			minerVars.timeOffset = task.timeOffset;
+
 			const finalizedBlock = await mineBlockUntilValid();
 			response.result = finalizedBlock;
 			break;
@@ -168,7 +167,6 @@ parentPort.on('message', async (task) => {
 			parentPort.postMessage({ paused: false });
 			return;
 		case 'terminate':
-			//console.info('[miner-worker-nodejs] Terminating...');
 			minerVars.exiting = true;
 			parentPort.close(); // close the worker
 			break;
@@ -177,7 +175,8 @@ parentPort.on('message', async (task) => {
             break;
     }
 
-	if (minerVars.exiting) { return; }
+	if (minerVars.exiting) return;
+	
 	minerVars.working = false;
 	parentPort.postMessage(response);
 });

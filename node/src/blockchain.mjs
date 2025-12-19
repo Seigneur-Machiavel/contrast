@@ -9,10 +9,12 @@ import { LedgersStorage } from '../../storage/ledgers-store.mjs';
 /**
 * @typedef {import("./mempool.mjs").MemPool} MemPool
 * @typedef {import("./node.mjs").ContrastNode} ContrastNode
+* @typedef {import("../../types/transaction.mjs").UTXO} UTXO
 * @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
-* @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData */
+* @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData
+* @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */
 
 export class Blockchain {
 	/** @type {BlockFinalized | null} */	lastBlock = null;
@@ -30,9 +32,15 @@ export class Blockchain {
 	}
 
 	// API METHODS
-	/** Adds a new confirmed block to the blockchain. @param {BlockFinalized} block - The block to add. */
-    addBlock(block) {
-		this.blockStorage.addBlock(block);
+	/** Adds a new confirmed block to the blockchain.
+	 * - Everything should be roughly validated before calling this method.
+	 * @param {BlockFinalized} block - The block to add.
+	 * @param {TxAnchor[]} involvedAnchors - The list of UTXO anchors involved in the block.
+	 * @param {Object<string, UTXO>} involvedUTXOs - The list of UTXO anchors involved in the block
+	 * @param {Object<string, AddressLedger>} involvedLedgers */
+    addBlock(block, involvedAnchors, involvedUTXOs, involvedLedgers) {
+		this.ledgersStorage.digestBlock(block, involvedUTXOs, involvedLedgers);
+		this.blockStorage.addBlock(block, involvedAnchors);
 		this.lastBlock = block;
 		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
     }

@@ -147,7 +147,7 @@ export class ContrastNode {
             //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
         this.updateState(`${statePrefix}block-validation #${block.index}`);
         const validationResult = await BlockValidation.validateBlockProposal(this, block);
-        const { hashConfInfo, involvedUTXOs, allDiscoveredPubKeysAddresses } = validationResult;
+        const { hashConfInfo, involvedAnchors, involvedUTXOs, involvedLedgers } = validationResult;
         if (!(hashConfInfo?.conform)) throw new Error('Failed to validate block');
 
 		const newStakesOutputs = BlockUtils.extractNewStakesFromFinalizedBlock(block);
@@ -155,10 +155,9 @@ export class ContrastNode {
 
         this.updateState(`${statePrefix}applying finalized block #${block.index}`);
         
-        this.blockchain.addBlock(block);
+        this.blockchain.addBlock(block, involvedAnchors, involvedUTXOs, involvedLedgers);
 		this.vss.newStakes(newStakesOutputs, 'persist');
         this.memPool.removeFinalizedBlocksTransactions(block);
-        this.memPool.addNewKnownPubKeysAddresses(allDiscoveredPubKeysAddresses);
         if (this.wsCallbacks.onBlockConfirmed) {
 			const blockInfo = BlockUtils.getFinalizedBlockInfo(involvedUTXOs, block);
 			this.wsCallbacks.onBlockConfirmed.execute(blockInfo, undefined);
