@@ -53,7 +53,7 @@ export class Transaction_Builder {
 		return new Transaction(inputs, outputs);
     }
     /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte // RANDOM IS TEMPORARY */
-    static createTransfer(senderAccount, transfers, feePerByte = Math.round(Math.random() * 10) + 1) {
+    static createTransaction(senderAccount, transfers, feePerByte = Math.round(Math.random() * 10) + 1) {
         const senderAddress = senderAccount.address;
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
         const UTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
@@ -65,7 +65,7 @@ export class Transaction_Builder {
 
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress);
-        if (changeOutput) { outputs.push(changeOutput); }
+        if (changeOutput) outputs.push(changeOutput);
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
 		return Transaction.fromUTXOs(utxos, outputs);
@@ -203,10 +203,10 @@ export class Transaction_Builder {
 	}
     // Multi-functions methods
     /** @param {Account} senderAccount @param {number} amount @param {string} recipientAddress @param {number} [feePerByte] */
-    static createAndSignTransfer(senderAccount, amount, recipientAddress, feePerByte) {
+    static createAndSignTransaction(senderAccount, amount, recipientAddress, feePerByte) {
         try {
             const transfer = { recipientAddress, amount };
-            const transaction = Transaction_Builder.createTransfer(senderAccount, [transfer], feePerByte);
+            const transaction = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte);
             senderAccount.signTransaction(transaction);
             return { signedTx: transaction, error: false };
         } catch (/**@type {any}*/ error) { return { signedTx: false, error }; }

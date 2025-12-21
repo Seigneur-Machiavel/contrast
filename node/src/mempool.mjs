@@ -78,8 +78,11 @@ export class MemPool {
         const colliding = this.#caughtTransactionsAnchorsCollision(tx);
         if (colliding?.tx && !replaceConflicting) throw new Error(`Conflicting UTXOs anchor: ${colliding?.anchor}`);
 		
-		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
         const serialized = serializer.serialize.transaction(tx);
+		if (serialized.byteLength >= BLOCKCHAIN_SETTINGS.maxTransactionSize)
+			throw new Error(`Transaction size too big: ${serialized.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
+			
+		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
         const result = await TxValidation.transactionValidation(node, involvedUTXOs, tx);
 		if (result.discovered.address && result.discovered.pubKey)
 			await TxValidation.controlAddressDerivation(result.discovered.address, result.discovered.pubKey);
@@ -88,7 +91,10 @@ export class MemPool {
         tx.feePerByte = result.fee / tx.byteWeight;
 		if (tx.feePerByte <= (colliding?.tx?.feePerByte || 0)) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${(colliding?.tx?.feePerByte || 0)} >= ${tx.feePerByte}`);
         
-		this.#addMempoolTransaction(tx, colliding?.tx);
+		// ADD TRANSACTION TO MEMPOOL
+		if (colliding?.tx) this.#removeMempoolTransaction(colliding.tx);
+		this.organizer.addTransaction(tx, tx.feePerByte || 0);
+        for (const input of tx.inputs) this.byAnchor.set(input, tx);
     }
 	/** @param {BlockFinalized} block */
     removeFinalizedBlocksTransactions(block) {
@@ -97,21 +103,6 @@ export class MemPool {
             if (colliding) this.#removeMempoolTransaction(colliding.tx);
         }
     }
-    /** @param {ContrastNode} node @param {Transaction[]} txs @param {number} [breathGap] number of txs before await immediate pause */
-    async pushTransactions(node, txs, breathGap = 10) {
-        /** @type {{ success: Transaction[], failed: string[] }} */
-        const results = { success: [], failed: [] };
-		for (let i = 0; i < txs.length; i++) {
-            try {
-                await this.pushTransaction(node, txs[i]);
-                results.success.push(txs[i]);
-            } catch (/**@type {any}*/ error) { results.failed.push(error.message) }
-
-			if (i % breathGap === 0) await new Promise(resolve => setImmediate(resolve));
-        }
-
-        return results;
-    }
     getMostLucrativeTransactionsBatch() {
 		/** @type {Transaction[]} */
 		const invalidTransactions = [];
@@ -119,13 +110,14 @@ export class MemPool {
 		const maxSize = BLOCKCHAIN_SETTINGS.maxBlockSize;
     	const targetSize = maxSize * 0.98;
 		const batch = {
-			/** @type {Transaction[]} */ txs: [],
-			/** @type {string[]} */ anchors: []
+			/** @type {Transaction[]} */ 	txs: [],
+			/** @type {string[]} */ 	anchors: [],
+			bytes: 0
 		}
 		
 		const result = { 
-			/** @type {Transaction[]} */ txs: [],
-			totalBytes: 0,
+			/** @type {Transaction[]} */ 	txs: [],
+			bytes: 0,
 			totalFee: 0 
 		};
 
@@ -141,33 +133,32 @@ export class MemPool {
 				delete clone.byteWeight;
 				result.txs.push(clone);
 				result.totalFee += (tx.feePerByte || 0) * (tx.byteWeight || 0);
-				result.totalBytes += tx.byteWeight || 0;
-				if (result.totalBytes >= targetSize) break;
+				result.bytes += tx.byteWeight || 0;
+				if (result.bytes >= targetSize) break;
 			}
 
 			batch.anchors = [];
 			batch.txs = [];
+			batch.bytes = 0;
 		}
 
         // SELECT TRANSACTIONS FROM HIGHEST FEE TIERS TO LOWEST
         for (const rangeKey of this.organizer.rangesList) {
             const rangeMap = this.organizer.txsByRanges[rangeKey];
-			if (rangeMap.size === 0) continue;
-
         	for (const [h, tx] of rangeMap) {
 				if (!tx.byteWeight) throw new Error('Transaction in mempool missing byteWeight');
-				if (result.totalBytes + tx.byteWeight > maxSize) continue;
+				if (result.bytes + batch.bytes + tx.byteWeight > maxSize) continue;
 
 				batch.txs.push(tx);
 				batch.anchors.push(...tx.inputs);
-				if (batch.anchors.length < batchSize) continue;
-
-				controlCurrentBatch();
-				if (result.totalBytes >= targetSize) break;
+				batch.bytes += tx.byteWeight;
+				if (batch.anchors.length >= batchSize) controlCurrentBatch();
+				if (result.bytes + batch.bytes >= targetSize) controlCurrentBatch();
+				if (result.bytes >= targetSize) break;
 			}
 
 			controlCurrentBatch();
-			if (result.totalBytes >= targetSize) break;
+			if (result.bytes >= targetSize) break;
         }
 
 		// REMOVE INVALID TRANSACTIONS FROM MEMPOOL & RETURN RESULT
@@ -182,16 +173,9 @@ export class MemPool {
 			if (tx) return { tx, anchor: input };
 		}
     }
-    /** IMPORTANT : BE SURE THAT THE TRANSACTION IS CONFORM @param {Transaction} tx @param {Transaction} [txToReplace] */
-    #addMempoolTransaction(tx, txToReplace) {
-        if (txToReplace) this.#removeMempoolTransaction(txToReplace);
-        
-		this.organizer.addTransaction(tx, tx.feePerByte || 0);
-        for (const input of tx.inputs) this.byAnchor.set(input, tx);
-    }
     /** @param {Transaction} transaction */
     #removeMempoolTransaction(transaction) {
-        this.organizer.removeTransaction(transaction, transaction.feePerByte || 0);
 		for (const input of transaction.inputs) this.byAnchor.delete(input);
+        this.organizer.removeTransaction(transaction, transaction.feePerByte || 0);
     }
 }

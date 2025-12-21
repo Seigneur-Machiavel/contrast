@@ -111,6 +111,7 @@ export class ContrastNode {
 		await this.stop();
 		await this.start();
 	}
+
 	/** Associate a wallet with this node (for miner and validator functions) @param {Wallet} wallet */
 	associateWallet(wallet) { 
 		this.account = wallet.accounts.C[0];
@@ -167,13 +168,16 @@ export class ContrastNode {
         const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
         const minerId = block.Txs[0].outputs[0].address.slice(0, 6);
         const validatorId = block.Txs[1].outputs[0].address.slice(0, 6);
-        this.logger.log(`${statePrefix}#${block.index} (${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+        this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate || isSync) return;
 		const d = Math.round(BLOCKCHAIN_SETTINGS.targetBlockTime / 12);
 		this.timeouts.createAndShareBlockCandidate = setTimeout(() => this.createAndShareMyBlockCandidate(), d);
     }
+
+	// GETTERS
+	
 	// INTERNALS ------------------------------------------------------------------------
 
 }

@@ -79,7 +79,7 @@ while(true) {
 	const receipient = bootstrapWallet.accounts.C[1].address;
 	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
 	a.ledgerUtxos = ledger.ledgerUtxos;
-	const tx = Transaction_Builder.createAndSignTransfer(a, 10, receipient)?.signedTx;
+	const tx = Transaction_Builder.createAndSignTransaction(a, 10, receipient)?.signedTx;
 	if (!tx) continue; // failed to create tx
 
 	// TEST: push transaction

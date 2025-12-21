@@ -12,8 +12,10 @@ import { serializer } from '../../utils/serializer.mjs';
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
+ * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker
  * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */
 
+const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {
 	// others can goes up in there but i'm tired now...
 	invalidDifficulty: (diff = 0, expected = 0) => `!banBlock! !applyOffense! Invalid difficulty: ${diff} - expected: ${expected}`,
@@ -26,7 +28,49 @@ const failureErrorMessages = {
 	discoveredDerivationFailure: '!banBlock! !applyOffense! Address derivation control failed during block validation',
 }
 
-const validationMiniLogger = new MiniLogger('validation');
+class WorkerDispatcher {
+	/** @type {Array<Promise<any> | null>} */
+	promises = [];
+	workers;
+	workerIndex = 0;
+
+	/** @param {ValidationWorker[]} workers */
+	constructor(workers) { this.workers = workers; }
+
+	/** @param {Array<{address: string, pubKey: string}>} batch */
+	#assignJobToWorker(batch) {
+		const w = this.workers[this.workerIndex];
+		if (!w) throw new Error('Worker index overflow');
+
+		this.promises.push(w.linkValidation(batch));
+		this.workerIndex++;
+	}
+
+	/** @param {Array<{address: string, pubKey: string}>} discovery */
+	async dispatchJobAndWaitResult(discovery) {
+
+        const batchSize = Math.ceil(discovery.length / this.workers.length);
+		
+		let batch = [];
+		for (const link of discovery) {
+			batch.push(link);
+			if (batch.length < batchSize) continue;
+			// BATCH READY => ASSIGN TO WORKER & CLEAR BATCH
+			this.#assignJobToWorker(batch);
+			batch = [];
+		}
+
+		// ASSIGN LAST BATCH IF NEEDED
+		if (batch.length > 0) this.#assignJobToWorker(batch);
+
+		// WAIT FOR ALL WORKERS TO COMPLETE (OR ABORT ON ERROR)
+		try { await Promise.all(this.promises); return true; }
+		catch (error) { for (const worker of this.workers) worker.abortOperation(); }
+
+		return false;
+	}
+}
+
 export class BlockValidation {
 	// PUBLIC STATIC METHODS
     /** @param {number} powReward @param {number} posReward @param {BlockFinalized} block */
@@ -99,7 +143,7 @@ export class BlockValidation {
         this.#isFinalizedBlockDoubleSpending(block); // throw if double spending detected
         
 		const involvedLedgers = await this.#fullBlockTxsValidation(node, block, involvedUTXOs);
-        return { hashConfInfo, powReward, posReward, totalFees, involvedAnchors, involvedUTXOs, involvedLedgers };
+        return { hashConfInfo, powReward, posReward, totalFees, involvedAnchors, involvedUTXOs, involvedLedgers, size: serializedBlock.length };
     }
 
 	// PRIVATE STATIC METHODS
@@ -147,10 +191,10 @@ export class BlockValidation {
     }
 	/** @param {ContrastNode} node @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {Object<string, AddressLedger>} [involvedLedgers] Pass it for chained validation (avoid re-fetching) */
     static async #fullBlockTxsValidation(node, block, involvedUTXOs = {}, involvedLedgers = {}) {
-		const workers = node.workers.validations || [];
-        const nbOfWorkers = workers.length;
-		if (nbOfWorkers === 0) throw new Error('No validation workers available');
+		const workerDispatcher = new WorkerDispatcher(node.workers.validations || []);
+		if ((node.workers.validations || []).length === 0) throw new Error('No validation workers available');
 		
+		// PROCESS ALL TXs => COLLECT DISCOVERY INFOS (new addresses <> pubKeys signatures)
 		/** @type {Array<{address: string, pubKey: string}>} */
         const discovery = [];
         const validationStart = Date.now();
@@ -165,36 +209,16 @@ export class BlockValidation {
 			discovery.push({ address: r.discovered.address, pubKey: r.discovered.pubKey });
         }
 
-		// INITIALIZE WORKERS TASKS
-		/** @type {Array<Promise<any> | null>} */
-		const promises = [];
-        const nbOfTxsPerWorker = Math.floor(discovery.length / nbOfWorkers);
-		let batch = [];
-        let workerIndex = 0;
-		for (const link of discovery) {
-			if (workerIndex === nbOfWorkers - 1) throw new Error('Worker index overflow');
-
-			batch.push(link);
-			if (batch.length < nbOfTxsPerWorker) continue;
-
-			promises.push(workers[workerIndex].linkValidation(batch));
-			batch = [];
-			workerIndex++;
-		}
-		if (batch.length > 0) throw new Error('Leftover batch in block validation, adjust the nb of workers or the batch size calculation');
-
-		try { await Promise.all(promises); }
-		catch (error) {
-			for (const worker of workers) worker.abortOperation();
-			throw new Error(failureErrorMessages.discoveredDerivationFailure);
-		}
+		// DISPATCH WORKERS FOR ADDRESS DERIVATION VALIDATION
+		const dispatchedSuccessfully = await workerDispatcher.dispatchJobAndWaitResult(discovery);
+		if (!dispatchedSuccessfully) throw new Error(failureErrorMessages.discoveredDerivationFailure);
 
 		// ALL VALIDATIONS PASSED => ASSIGN LEDGERS PUBKEY (throw if already assigned)
 		for (const link of discovery)
 			if (involvedLedgers[link.address]?.pubKey !== '0000000000000000000000000000000000000000000000000000000000000000') throw new Error(`Ledger for address ${link.address} already has a pubKey assigned`);
 			else involvedLedgers[link.address].pubKey = link.pubKey;
 
-		validationMiniLogger.log(`(${block.Txs.length} threads) Txs validated in ${Date.now() - validationStart} ms`, (m, c) => console.info(m, c));
+		validationMiniLogger.log(`(${node.workers.validations.length} threads) ${block.Txs.length} Txs validated in ${Date.now() - validationStart} ms`, (m, c) => console.info(m, c));
 		return involvedLedgers;
 	}
 }

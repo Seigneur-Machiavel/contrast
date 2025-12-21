@@ -117,9 +117,9 @@ export class TxValidation {
     static #controlAllWitnessesSignatures(node, transaction) {
         if (!Array.isArray(transaction.witnesses)) throw new Error(`Invalid witnesses: ${transaction.witnesses} !== array`);
         
+		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
         for (let i = 0; i < transaction.witnesses.length; i++) {
             const { signature, pubKeyHex } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
-            const toSign = Transaction_Builder.getTransactionSignableString(transaction);
 			AsymetricFunctions.verifySignature(signature, toSign, pubKeyHex); // will throw an error if the signature is invalid
         }
     }
@@ -158,15 +158,15 @@ export class TxValidation {
 		// MINER TX HAS NO ADDRESS OWNERSHIP TO CONFIRM
 		if (specialTx === 'miner') return discovered;
 
-		// EXTRACT EXPECTED ADDRESSES FROM INPUTS
+		// EXTRACT EXPECTED ( PUBKEY > ADDRESS )s FROM INPUTS
 		for (let i = 0; i < tx.inputs.length; i++) {
 			const addressToVerify = specialTx === 'validator'
 				? tx.inputs[i].split(':')[0] // Validator: address is in the input
 				: involvedUTXOs[tx.inputs[i]]?.address; // Normal tx: address is in the UTXO
 			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${tx.inputs[i]}`);
-			if (addressPubKeyToConfirm.has(addressToVerify)) continue;
 
 			const ledger = involvedLedgers[addressToVerify] || node.blockchain.ledgersStorage.getAddressLedger(addressToVerify, false);
+			if (addressPubKeyToConfirm.has(ledger.pubKey)) continue;
 			if (ledger.pubKey === '0000000000000000000000000000000000000000000000000000000000000000') {
 				if (discovered.address && discovered.address !== addressToVerify) throw new Error('Multiple addresses to discover in one transaction');
 				else discovered.address = addressToVerify; // only one per transaction maximum
@@ -179,6 +179,7 @@ export class TxValidation {
 		// CONTROL EXPECTED ADDRESSES IN WITNESSES PRESENCE, STORE DISCOVERED PUBKEY IF ANY
 		for (const w of tx.witnesses) {
 			const { pubKeyHex } = this.#decomposeWitnessOrThrow(w);
+			if (pubKeyHex === '0000000000000000000000000000000000000000000000000000000000000000') throw new Error('Invalid pubKey: all zeroes');
 			if (addressPubKeyToConfirm.has(pubKeyHex)) addressPubKeyToConfirm.delete(pubKeyHex);
 			else if (discovered.pubKey) throw new Error('Multiple pubKeys to discover in one transaction');
 			else discovered.pubKey = pubKeyHex; // only one per transaction maximum

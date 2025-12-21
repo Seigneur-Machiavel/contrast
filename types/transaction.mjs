@@ -92,6 +92,14 @@ export class LedgerUtxo { // lightweight UTXO representation without address, un
 	}
 }
 
+export class Transfer {
+	/** @param {string} recipientAddress @param {number} amount */
+	constructor(recipientAddress, amount) {
+		this.recipientAddress = recipientAddress;
+		this.amount = amount;
+	}
+}
+
 export class Transaction {
 	/** @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {string[]} [witnesses] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {number} [version] @param {Uint8Array | undefined} [data] Arbitrary data attached to the transaction */
 	constructor(inputs, outputs, witnesses = [], feePerByte, byteWeight, version = TRANSACTION.VERSION, data) {

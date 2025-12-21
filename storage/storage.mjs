@@ -93,19 +93,20 @@ export class ContrastStorage extends StorageRoot {
 	constructor(masterHex = null) { super(masterHex); }
 
 	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
-	saveBinary(fileName, serializedData, directoryPath) {
+	saveBinary(fileName, serializedData, directoryPath, skipMkdir = false) {
 		try {
 			const d = directoryPath || this.PATH.STORAGE;
-			fs.mkdirSync(d, { recursive: true });
+			if (!skipMkdir) fs.mkdirSync(d, { recursive: true });
 			fs.writeFileSync(path.join(d, `${fileName}.bin`), serializedData);
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 		return true;
 	}
 	/** @param {string} fileName @param {string} directoryPath @returns {Uint8Array | null} */
-	loadBinary(fileName, directoryPath) {
+	loadBinary(fileName, directoryPath, logError = true) {
 		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
 		try { return fs.readFileSync(filePath) } // work as Uint8Array
 		catch (/**@type {any}*/ error) {
+			if (!logError) return null;
 			if (error.code === 'ENOENT') this.miniLogger.log(`File not found: ${filePath}`, (m, c) => console.info(m, c));
 			else this.miniLogger.log(error.stack, (m, c) => console.info(m, c));
 		}
@@ -158,7 +159,7 @@ export class ContrastStorage extends StorageRoot {
 	}
 }
 
-
+// TO REMOVE WHEN TESTS ARE DONE
 // used to settle the difference between loading a big file and loading multiple small files
 // also compare reading methods: sync, async, partial read, etc...
 class TestStorage extends ContrastStorage {
@@ -200,7 +201,15 @@ class TestStorage extends ContrastStorage {
         const blockDir = path.join(this.PATH.TEST_STORAGE, index.toString());
         for (let i = 0; i < block.length; i++) this.saveBinary(`${index}-${i}`, block[i], blockDir);
     }
-    async createAndSaveBlocks(num = 100, { unified = true, decomposed = true } = {}) {
+	/** @param {Uint8Array[]} block @param {number} index */
+    async saveBlockDecomposedAsync(block, index) {
+        const blockDir = path.join(this.PATH.TEST_STORAGE, index.toString());
+		const promises = [];
+        for (let i = 0; i < block.length; i++)
+			promises.push(this.saveBinaryAsync(`${index}-${i}`, block[i], blockDir));
+		await Promise.all(promises);
+    }
+    async createAndSaveBlocks(num = 100, { unified = true, decomposed = true, async = false } = {}) {
         for (let i = 0; i < num; i++) {
             const block = this.#createRandomBlock();
             if (unified) await this.saveBlock(block, i);
@@ -299,15 +308,23 @@ async function test() {
 	testStorage.txCount = 1100; //100 * 1024;
 	testStorage.reset();
 	const nbOfTxsToRead = 100;
-	const writeStart = performance.now();
+	const wStart1 = performance.now();
     await testStorage.createAndSaveBlocks(2, { unified: true, decomposed: false });
+	console.log(`Time to write test block (unified-sync): ${(performance.now() - wStart1).toFixed(5)}ms`);
+
+	const wStart2 = performance.now();
+	await testStorage.createAndSaveBlocks(2, { unified: true, decomposed: true });
+	console.log(`Time to write test block (decomposed-sync): ${(performance.now() - wStart2).toFixed(5)}ms`);
+
+	const wStart3 = performance.now();
+	await testStorage.createAndSaveBlocks(2, { unified: false, decomposed: true, async: true });
+	console.log(`Time to write test block (decomposed-async): ${(performance.now() - wStart3).toFixed(5)}ms`);
 
 	testStorage.getBlockFileSize(0);
 	testStorage.readXPercentOfBlockBytesTest(0, 1);
 	testStorage.readXPercentOfBlockBytesTest(0, 10);
 	testStorage.readXPercentOfBlockBytesTest(0, 100);
 
-	console.log(`Time to write test block: ${(performance.now() - writeStart).toFixed(5)}ms`);
 	//const { blockDir, files } = testStorage.getFilesInBlockDir(0);
 	console.log(`Test with ${testStorage.txCount} txs of ${testStorage.txBinaryWeight} bytes each (~${(testStorage.txCount * testStorage.txBinaryWeight / 1024).toFixed(2)}KB total)`);
 	
@@ -348,7 +365,7 @@ async function test() {
 
 	console.log('--- Test end ---');
 }
-//test();
+test();
 
 /* 1100 files of 200 bytes each or 220KB => 1 block
 Time to load a big file: 0.74550ms

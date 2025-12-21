@@ -19,6 +19,15 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Test Worst TXs Validations",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/tests/test-worst-txs-validations.mjs",
+			"args": ["--max-old-space-size=16384"],
+			"runtimeArgs": ["--inspect"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Test storage",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/storage/storage.mjs",

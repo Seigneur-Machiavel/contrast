@@ -49,17 +49,15 @@ class AddressChanges {
 
 	/** @param {'in' | 'out'} direction @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
 	add(direction, height, txIndex, vout, amount, rule) {
-		// COUNT AMOUNT
-		if (direction === 'in') this.totalInAmount += amount;
-		else this.totalOutAmount += amount;
-		
-		// ADD THE UTXO TO THE CORRECT DIRECTION
 		const serializedUtxo = serializer.serialize.ledgerUtxo(height, txIndex, vout, amount, rule);
-		if (direction === 'in') this.in.push(serializedUtxo);
-		else this.out.push(serializedUtxo);
-
-		// ADD THE TxId TO THE HISTORY IF NOT EXISTS
-		if (direction === 'out') return; // out = consumed = already in history
+		if (direction === 'out') {
+			this.totalOutAmount += amount;
+			this.out.push(serializedUtxo);
+			return;
+		}
+		
+		this.totalInAmount += amount;
+		this.in.push(serializedUtxo);
 		const txId = `${height}:${txIndex}`;
 		if (!this.historyTxIds.has(txId)) this.historyTxIds.add(txId);
 	}
@@ -76,7 +74,16 @@ export class LedgersStorage {
 	// API METHODS
 	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {Object<string, AddressLedger>} involvedLedgers */
 	digestBlock(block, involvedUTXOs, involvedLedgers) {
+		/** @type {Set<string>} */
+		const dirsToCreate = new Set();
 		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
+
+		for (const address in changesByAddress)
+			dirsToCreate.add(this.#pathOfAddressLedgerDir(address));
+		
+		for (const dirPath of dirsToCreate)
+			fs.mkdirSync(dirPath, { recursive: true });
+
 		for (const address in changesByAddress)
 			this.#applyAddressChanges(address, changesByAddress[address], involvedLedgers[address]);
 	}
@@ -155,13 +162,13 @@ export class LedgersStorage {
 		}
 
 		const dirPath = this.#pathOfAddressLedgerDir(address);
-		if (w.isWritingComplete) this.storage.saveBinary(address, w.getBytes(), dirPath);
+		if (w.isWritingComplete) this.storage.saveBinary(address, w.getBytes(), dirPath, true);
 		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 	}
 	/** @param {string} address */
 	#readAddressLedger(address) {
 		const dirPath = this.#pathOfAddressLedgerDir(address);
-		const r = new BinaryReader(this.storage.loadBinary(address, dirPath) || new Uint8Array(32 + 6 + 6 + 6 + 4 + 4));
+		const r = new BinaryReader(this.storage.loadBinary(address, dirPath, false) || new Uint8Array(32 + 6 + 6 + 6 + 4 + 4));
 		let pubKey = 		this.converter.bytesToHex(r.read(32));
 		let balance = 		this.converter.bytes6ToNumber(r.read(6));
 		let totalSent = 	this.converter.bytes6ToNumber(r.read(6));
