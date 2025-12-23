@@ -37,8 +37,8 @@ export class BlockchainStorage {
 	constructor(storage) {
 		this.storage = storage;
 		this.idxsHandler = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, 'blockchain.idx'));
-		if (this.idxsHandler.size % serializer.lengths.indexEntry !== 0) throw new Error(`blockchain.idx file is corrupted (size: ${this.idxsHandler.size})`);
-		this.lastBlockIndex = Math.ceil(this.idxsHandler.size / serializer.lengths.indexEntry) - 1;
+		if (this.idxsHandler.size % serializer.lengths.indexEntry.bytes !== 0) throw new Error(`blockchain.idx file is corrupted (size: ${this.idxsHandler.size})`);
+		this.lastBlockIndex = Math.ceil(this.idxsHandler.size / serializer.lengths.indexEntry.bytes) - 1;
 		this.logger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m, c) => console.info(m, c));
 	}
 	
@@ -87,6 +87,15 @@ export class BlockchainStorage {
 		const { blockBytes } = this.getBlockBytes(height, false) || {};
 		if (blockBytes) return this.#extractTransactionsFromBlockBytes(blockBytes, txIndexes);
 	}
+	/** @param {TxId} txId */
+	getTransaction(txId) {
+		const { height, txIndex } = serializer.parseTxId(txId);
+		const { blockBytes } = this.getBlockBytes(height, false) || {};
+		if (!blockBytes) return null;
+
+		const extracted = this.#extractTransactionsFromBlockBytes(blockBytes, [txIndex]);
+		return extracted?.txs[txIndex] || null;
+	}
 	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) */
 	getUtxos(anchors, breakOnSpent = false) {
 		/** Key: Anchor, value: UTXO @type {Object<string, UTXO>} */
@@ -134,7 +143,7 @@ export class BlockchainStorage {
 		// TRUNCATE INDEXES, AND BLOCKCHAIN FILE
 		const blockchainHandler = this.#getBlockchainHandler(this.lastBlockIndex);
 		blockchainHandler.shrink(offset.blockBytes + offset.utxosStatesBytes);
-		this.idxsHandler.shrink(serializer.lengths.indexEntry);
+		this.idxsHandler.shrink(serializer.lengths.indexEntry.bytes);
 		this.lastBlockIndex--;
     }
     reset() {
@@ -194,7 +203,7 @@ export class BlockchainStorage {
 	}
 	#getOffsetOfBlockData(height = -1) { // if reading is too slow, we can implement a caching system here
 		if (height < 0 || height > this.lastBlockIndex) return null;
-		const buffer = this.idxsHandler.read(height * serializer.lengths.indexEntry, serializer.lengths.indexEntry);
+		const buffer = this.idxsHandler.read(height * serializer.lengths.indexEntry.bytes, serializer.lengths.indexEntry.bytes);
 		return serializer.deserialize.blockIndexEntry(buffer);
 	}
 	#getBlockchainHandler(height = 0) {
@@ -216,7 +225,7 @@ export class BlockchainStorage {
 			if (txs[i] !== undefined) continue; // already extracted
 			if (i + 1 > nbOfTxs) return null;
 
-			const pointerStart = serializer.lengths.blockFinalizedHeader + (i * 4);
+			const pointerStart = serializer.lengths.blockFinalizedHeader.bytes + (i * 4);
 			const pointerBuffer = blockBytes.subarray(pointerStart, pointerStart + 4);
 			const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);
 			const offsetEnd = i + 1 === nbOfTxs ? blockBytes.length

@@ -13,12 +13,6 @@ let WorkerModule;
 try { WorkerModule = (await import('worker_threads')).Worker }
 catch (/**@type {any}*/ error) { WorkerModule = Worker }
 
-/*function newWorker(scriptPath, workerCode, workerData = {}) { // DEPRECATED
-    if (scriptPath) return new WorkerModule(new URL(scriptPath, import.meta.url), { workerData });
-    
-    const blob = new Blob([workerCode], { type: 'application/javascript' });
-    return new Worker(URL.createObjectURL(blob));
-}*/
 function newWorker(scriptPath, workerCode, workerData = {}) { // UNIFIED FOR BROWSER & NODEJS
     const worker = scriptPath 
         ? new WorkerModule(new URL(scriptPath, import.meta.url), { workerData })
@@ -53,22 +47,24 @@ export class ValidationWorker {
 	state = 'idle';
 
     constructor (id = 0) { this.id = id; }
-	/** @param {Array<{address: string, pubKey: string}>} batchOfLinks*/
-	linkValidation(batchOfLinks) {
+	/** @param {Transaction[]} batch */
+	derivationValidation(batch) {
 		this.state = 'working';
 
         const promise = new Promise((resolve, reject) => {
             const onMessage = (event) => {
 				const message = event.data || event;
                 if (message.id !== this.id) return;
+
 				this.worker.removeEventListener('message', onMessage);
 				this.state = 'idle';
+				
                 if (message.error) return reject(message.error);
                 else resolve();
             };
 
 			this.worker.addEventListener('message', onMessage);
-			this.worker.postMessage({ id: this.id, type: 'linkValidation', batchOfLinks });
+			this.worker.postMessage({ id: this.id, type: 'derivationValidation', batch });
         });
         return promise;
     }
@@ -217,7 +213,7 @@ export class MinerWorker {
 	}
 }
 
-export class AccountDerivationWorker {
+/*export class AccountDerivationWorker { // DEPRECATED
 	worker = typeof accountWorkerCode === 'undefined' 
 		? newWorker('./account-worker-nodejs.mjs') 
 		: newWorker(undefined, accountWorkerCode);
@@ -300,7 +296,7 @@ export class AccountDerivationWorker {
 			this.worker.postMessage({ type: 'terminate', id: this.id });
 		});
 	}
-}
+}*/
 
 export class NodeAppWorker { // NODEJS ONLY ( no front usage available )
     app;

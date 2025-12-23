@@ -169,8 +169,8 @@ export class Transaction_Builder {
     /** @param {Transaction} transaction */
     static isMinerOrValidatorTx(transaction) {
         if (transaction.inputs.length !== 1) return;
-        if (transaction.inputs[0].length === 8) return 'miner'; // nonce length is 8
-        if (transaction.inputs[0].length === 20 + 1 + 64) return 'validator'; // address length 20 + : + posHash length is 64
+        if (transaction.inputs[0].length === serializer.lengths.nonce.str) return 'miner'; // nonce length is 8
+        if (transaction.inputs[0].length === serializer.lengths.validatorInput.str) return 'validator'; // address length 20 + : + posHash length is 64
     }
     /** @param {Transaction} transaction */
     static isIncriptionTx(transaction) {
@@ -209,7 +209,7 @@ export class Transaction_Builder {
             const transaction = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte);
             senderAccount.signTransaction(transaction);
             return { signedTx: transaction, error: false };
-        } catch (/**@type {any}*/ error) { return { signedTx: false, error }; }
+        } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }
     }
 	/** @param {Transaction} transaction */
 	static getTransactionSignableString(transaction) {

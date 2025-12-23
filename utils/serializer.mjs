@@ -1,5 +1,6 @@
 // @ts-check
 import { Converter } from 'hive-p2p';
+import { ADDRESS } from '../types/address.mjs';
 import { BlockFinalized, BlockCandidate } from '../types/block.mjs';
 import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from '../types/transaction.mjs';
 
@@ -95,26 +96,40 @@ export class VoutIdEncoder {
     }
 }
 
-/** Types length in bytes */
 const lengths = {
 	// CRYPTO/IDENTITY
-	pubKey: 32, address: 16, signature: 64, witness: 96,
+	pubKey: { bytes: 32, str: 64 },
+	address: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES, str: ADDRESS.CRITERIA.TOTAL_LENGTH },
+	signature: { bytes: 64, str: 128 },
+	witness: { bytes: 96, str: 192 }, // WILL CHANGE => PUBKEY + SIGNATURE => SIGNATURE ONLY
+
 	// TRANSACTION
-	anchor: 8, txId: 6, utxoState: 5, miniUTXO: 23, ledgerUtxo: 15,
+	anchor: { bytes: 8, str: null },
+	txId: { bytes: 6, str: null },
+	utxoState: { bytes: 5, str: null },
+	miniUTXO: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 6 + 1, str: null }, // 5 + 6 + 1 = 12
+	ledgerUtxo: { bytes: 4 + 2 + 2 + 6 + 1, str: null }, // 4 + 2 + 2 + 6 + 1 = 15
+
 	// BLOCK VALUES
-	hash: 32, nonce: 4, amount: 6, timestamp: 6,
+	hash: { bytes: 32, str: 64 },
+	nonce: { bytes: 4, str: 8 },
+	amount: { bytes: 6, str: null },
+	timestamp: { bytes: 6, str: null },
+	validatorInput: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 1 + 32, str: ADDRESS.CRITERIA.TOTAL_LENGTH + 1 + 64 }, // addressB58 + : + posHashHex
+
 	// BLOCK INDEX ENTRY
-	startEntry: 6, blockBytesEntry: 4, utxosStatesBytesEntry: 2,
-	indexEntry: 12, // start(6) + blockBytes(4) + utxosStatesBytes(2)
+	startEntry: { bytes: 6, str: null },
+	blockBytesEntry: { bytes: 4, str: null },
+	utxosStatesBytesEntry: { bytes: 2, str: null },
+	indexEntry: { bytes: 12, str: null }, // start(6) + blockBytes(4) + utxosStatesBytes(2)
+
 	// BLOCK HEADERS
-	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + powReward(6) */
-    blockCandidateHeader: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6,
-	/** nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + timestamp(6) + hash(32) + nonce(4) */
-	blockFinalizedHeader: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4,
+	blockCandidateHeader: { bytes: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6, str: null }, // nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + powReward(6)
+	blockFinalizedHeader: { bytes: 2 + 4 + 6 + 4 + 4 + 2 + 32 + 6 + 6 + 32 + 4, str: null }, // nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + timestamp(6) + hash(32) + nonce(4)
 }
 const dataPositions = { // specific helpers for partial block reading
 	nbOfTxs: 0,
-	timestampInFinalizedBlock: lengths.blockFinalizedHeader - lengths.timestamp - lengths.hash - lengths.nonce,
+	timestampInFinalizedBlock: lengths.blockFinalizedHeader.bytes - lengths.timestamp.bytes - lengths.hash.bytes - lengths.nonce.bytes,
 }
 
 /** Theses functions are used to serialize and deserialize the data of the blockchain.
@@ -154,7 +169,7 @@ export const serializer = {
         },
         /** @param {TxAnchor} anchor ex: blockHeight:txIndex:vout */
         anchor(anchor) {
-			const w = new BinaryWriter(lengths.anchor);
+			const w = new BinaryWriter(lengths.anchor.bytes);
 			const { height, txIndex, vout } = serializer.parseAnchor(anchor);
 			w.writeBytes(converter.numberTo4Bytes(height));
 			w.writeBytes(converter.numberTo2Bytes(txIndex));
@@ -164,7 +179,7 @@ export const serializer = {
         },
         /** @param {TxAnchor[]} anchors */
         anchorsArray(anchors) {
-			const w = new BinaryWriter(lengths.anchor * anchors.length);
+			const w = new BinaryWriter(lengths.anchor.bytes * anchors.length);
             for (let j = 0; j < anchors.length; j++) { // -> anchor ex: "3:2:0"
 				const { height, txIndex, vout } = serializer.parseAnchor(anchors[j]);
 				w.writeBytes(converter.numberTo4Bytes(height));
@@ -180,7 +195,7 @@ export const serializer = {
         },
 		/** @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
 		ledgerUtxo(height, txIndex, vout, amount, rule) {
-			const w = new BinaryWriter(lengths.ledgerUtxo);
+			const w = new BinaryWriter(lengths.ledgerUtxo.bytes);
 			w.writeBytes(converter.numberTo4Bytes(height));
 			w.writeBytes(converter.numberTo2Bytes(txIndex));
 			w.writeBytes(converter.numberTo2Bytes(vout));
@@ -194,8 +209,8 @@ export const serializer = {
 			const rule = UTXO_RULES_GLOSSARY[utxo.rule];
 			if (!rule) throw new Error(`Unknown UTXO rule: ${utxo.rule}`);
 
-			const w = new BinaryWriter(lengths.miniUTXO);
-			w.writeBytes(converter.addressBase58ToBytes(utxo.address));
+			const w = new BinaryWriter(lengths.miniUTXO.bytes);
+			w.writeBytes(ADDRESS.B58_TO_BYTES(utxo.address));
 			w.writeBytes(converter.numberTo6Bytes(utxo.amount));
 			w.writeByte(rule.code);
 			if (w.isWritingComplete) return w.getBytes();
@@ -203,11 +218,11 @@ export const serializer = {
         },
 		/** @param {UTXO[] | TxOutput[]} utxos */
         miniUTXOsArray(utxos) {
-			const w = new BinaryWriter(lengths.miniUTXO * utxos.length);
+			const w = new BinaryWriter(lengths.miniUTXO.bytes * utxos.length);
 			for (let i = 0; i < utxos.length; i++) {
 				const rule = UTXO_RULES_GLOSSARY[utxos[i].rule];
 				if (!rule) throw new Error(`Unknown UTXO rule: ${utxos[i].rule}`);
-				w.writeBytes(converter.addressBase58ToBytes(utxos[i].address));
+				w.writeBytes(ADDRESS.B58_TO_BYTES(utxos[i].address));
 				w.writeBytes(converter.numberTo6Bytes(utxos[i].amount));
 				w.writeByte(rule.code);
 			}
@@ -216,7 +231,7 @@ export const serializer = {
         },
 		/** @param {TxId[]} txsIds ex: blockHeight:txIndex */
         txsIdsArray(txsIds) {
-			const w = new BinaryWriter(txsIds.length * lengths.txId);
+			const w = new BinaryWriter(txsIds.length * lengths.txId.bytes);
             for (let j = 0; j < txsIds.length; j++) {
 				const { height, txIndex } = serializer.parseTxId(txsIds[j]);
 				w.writeBytes(converter.numberTo4Bytes(height));
@@ -227,7 +242,7 @@ export const serializer = {
         },
 		/** @param {UtxoState[]} utxoStates */
 		utxosStatesArray(utxoStates) {
-			const w = new BinaryWriter(utxoStates.length * lengths.utxoState);
+			const w = new BinaryWriter(utxoStates.length * lengths.utxoState.bytes);
 			for (const utxoState of utxoStates) {
 				w.writeBytes(serializer.voutIdEncoder.encode(utxoState.txIndex));
 				w.writeBytes(serializer.voutIdEncoder.encode(utxoState.vout));
@@ -239,35 +254,35 @@ export const serializer = {
 		/** @param {Object<string, string>} pubkeyAddresses ex: { pubKeyHex: addressBase58, ... } */
         pubkeyAddressesObj(pubkeyAddresses) { // Here we minimize garbage.
 			let totalBytes = 0;
-			for (const p in pubkeyAddresses) totalBytes += lengths.pubKey + lengths.address;
+			for (const p in pubkeyAddresses) totalBytes += lengths.pubKey.bytes + lengths.address.bytes;
 
 			const w = new BinaryWriter(totalBytes);
 			for (const pubKeyHex in pubkeyAddresses) {
 				w.writeBytes(converter.hexToBytes(pubKeyHex));
-				w.writeBytes(converter.addressBase58ToBytes(pubkeyAddresses[pubKeyHex]));
+				w.writeBytes(ADDRESS.B58_TO_BYTES(pubkeyAddresses[pubKeyHex]));
 			}
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Pubkey-addresses object serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
         /** @param {string[]} witnesses ex: [ "signature:pubKey", ... ] */
         witnessesArray(witnesses) {
-			const w = new BinaryWriter(lengths.witness * witnesses.length);
+			const w = new BinaryWriter(lengths.witness.bytes * witnesses.length);
 			for (const witness of witnesses) w.writeBytes(converter.hexToBytes(witness.replace(':', '')));
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Witnesses array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
         /** @param {Transaction} tx @param {'tx' | 'validator' | 'miner'} [mode] default: normal */
         transaction(tx, mode = 'tx') {
-			if (mode === 'miner' && (tx.inputs.length !== 1 || tx.inputs[0].length !== 8)) throw new Error('Invalid coinbase transaction');
-            if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== 85)) throw new Error('Invalid transaction: validator input must be address + posHash');
+			if (mode === 'miner' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.nonce.str)) throw new Error('Invalid coinbase transaction');
+            if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.validatorInput.str)) throw new Error('Invalid transaction: validator input must be address + posHash');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
 			
-			const witnessesBytes = tx.witnesses.length * lengths.witness;
-			let inputBytes = lengths.anchor;
+			const witnessesBytes = tx.witnesses.length * lengths.witness.bytes;
+			let inputBytes = lengths.anchor.bytes;
 			if (mode === 'miner') inputBytes = 4; 			// input = nonce
-			if (mode === 'validator') inputBytes = 16 + 32;	// input = address + posHash
+			if (mode === 'validator') inputBytes = lengths.address.bytes + 32; // address + posHash
 			const inputsBytes = tx.inputs.length * inputBytes;
-			const outputsBytes = tx.outputs.length * lengths.miniUTXO;
+			const outputsBytes = tx.outputs.length * lengths.miniUTXO.bytes;
 			const dataBytes = tx.data?.length || 0;			// arbitrary data
 			
 			// header (10) => version(2) + witnesses(2) + inputs(2) + outputs(2) + dataLength(2)
@@ -282,7 +297,7 @@ export const serializer = {
 			if (mode === 'miner') w.writeBytes(converter.hexToBytes(tx.inputs[0])); // nonce (hex)
 			if (mode === 'validator') {
 				const s = tx.inputs[0].split(':');
-				w.writeBytes(converter.addressBase58ToBytes(s[0])); 			// address
+				w.writeBytes(ADDRESS.B58_TO_BYTES(s[0])); 						// address
 				w.writeBytes(converter.hexToBytes(s[1]));						// posHash
 			}
 			w.writeBytes(this.miniUTXOsArray(tx.outputs));						// outputs
@@ -304,7 +319,7 @@ export const serializer = {
                 totalTxsBytes += s.length; // tx bytes + pointer(4)
             }
             
-            let totalBytes = mode === 'finalized' ? lengths.blockFinalizedHeader : lengths.blockCandidateHeader;
+            let totalBytes = mode === 'finalized' ? lengths.blockFinalizedHeader.bytes : lengths.blockCandidateHeader.bytes;
 			totalBytes += (serializedTxs.length * 4) + totalTxsBytes; // pointers + txs
             
 			const w = new BinaryWriter(totalBytes);
@@ -350,10 +365,10 @@ export const serializer = {
 		},
 		/** @param {NodeSetting} nodeSetting */
         nodeSetting(nodeSetting) {
-			const w = new BinaryWriter(32 + 16 + 16 + 1);
+			const w = new BinaryWriter(32 + lengths.address.bytes + lengths.address.bytes + 1);
 			w.writeBytes(converter.hexToBytes(nodeSetting.privateKey));
-			w.writeBytes(converter.addressBase58ToBytes(nodeSetting.validatorRewardAddress));
-			w.writeBytes(converter.addressBase58ToBytes(nodeSetting.minerAddress));
+			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.validatorRewardAddress));
+			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.minerAddress));
 			w.writeByte(nodeSetting.minerThreads);
             return w.getBytes();
         }
@@ -376,8 +391,8 @@ export const serializer = {
         anchorsArray(serializedAnchorsArray) {
 			/** @type {TxAnchor[]} */
             const anchors = [];
-            for (let i = 0; i < serializedAnchorsArray.length; i += lengths.anchor)
-                anchors.push(this.anchor(serializedAnchorsArray.slice(i, i + lengths.anchor)));
+            for (let i = 0; i < serializedAnchorsArray.length; i += lengths.anchor.bytes)
+                anchors.push(this.anchor(serializedAnchorsArray.slice(i, i + lengths.anchor.bytes)));
             return anchors;
         },
         /** @param {Uint8Array} serializedAnchorsObj */
@@ -392,7 +407,7 @@ export const serializer = {
 			/** @type {LedgerUtxo[]} */
 			const ledgerUtxos = [];
 			const r = new BinaryReader(serializedLedgerUtxos);
-			for (let i = 0; i < serializedLedgerUtxos.length; i += lengths.ledgerUtxo) {
+			for (let i = 0; i < serializedLedgerUtxos.length; i += lengths.ledgerUtxo.bytes) {
 				const height = converter.bytes4ToNumber(r.read(4));
 				const txIndex = converter.bytes2ToNumber(r.read(2));
 				const vout = converter.bytes2ToNumber(r.read(2));
@@ -405,7 +420,7 @@ export const serializer = {
 		/** Deserialize a miniUTXO: { address, amount, rule } @param {Uint8Array} serializedMiniUTXO */
         miniUTXO(serializedMiniUTXO) {
 			const r = new BinaryReader(serializedMiniUTXO);
-			const address = converter.addressBytesToBase58(r.read(lengths.address));
+			const address = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
 			const amount = converter.bytes6ToNumber(r.read(6));
 			const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
 			if (r.isReadingComplete) return { address, amount, rule };
@@ -414,16 +429,16 @@ export const serializer = {
         /** @param {Uint8Array} serializedMiniUTXOs */
         miniUTXOsArray(serializedMiniUTXOs) {
             const miniUTXOs = [];
-            for (let i = 0; i < serializedMiniUTXOs.length; i += lengths.miniUTXO)
-                miniUTXOs.push(this.miniUTXO(serializedMiniUTXOs.slice(i, i + lengths.miniUTXO)));
+            for (let i = 0; i < serializedMiniUTXOs.length; i += lengths.miniUTXO.bytes)
+                miniUTXOs.push(this.miniUTXO(serializedMiniUTXOs.slice(i, i + lengths.miniUTXO.bytes)));
             return miniUTXOs;
         },
 		/** @param {Uint8Array} serializedTxsIds */
         txsIdsArray(serializedTxsIds) {
-			if (serializedTxsIds.length % lengths.txId !== 0) throw new Error('Serialized txIds length is invalid');
+			if (serializedTxsIds.length % lengths.txId.bytes !== 0) throw new Error('Serialized txIds length is invalid');
 			/** @type {TxId[]} */
 			const txsIds = [];
-			const expectedNbOfTxsId = serializedTxsIds.length / lengths.txId;
+			const expectedNbOfTxsId = serializedTxsIds.length / lengths.txId.bytes;
 			const r = new BinaryReader(serializedTxsIds);
 			for (let i = 0; i < expectedNbOfTxsId; i++) {
 				const blockHeight = converter.bytes4ToNumber(r.read(4));
@@ -434,23 +449,23 @@ export const serializer = {
         },
 		/** @param {Uint8Array} serializedPubkeyAddresses */
 		pubkeyAddressesObj(serializedPubkeyAddresses) {
-			if (serializedPubkeyAddresses.length % (lengths.pubKey + lengths.address) !== 0) throw new Error('Serialized pubkeyAddresses length is invalid');
+			if (serializedPubkeyAddresses.length % (lengths.pubKey.bytes + lengths.address.bytes) !== 0) throw new Error('Serialized pubkeyAddresses length is invalid');
 			/** @type {Object<string, string>} */
 			const pubkeyAddresses = {};
-			const expectedNbOfEntries = serializedPubkeyAddresses.length / (lengths.pubKey + lengths.address);
+			const expectedNbOfEntries = serializedPubkeyAddresses.length / (lengths.pubKey.bytes + lengths.address.bytes);
 			const r = new BinaryReader(serializedPubkeyAddresses);
 			for (let i = 0; i < expectedNbOfEntries; i++) {
-				const pubKeyHex = converter.bytesToHex(r.read(lengths.pubKey));
-				const addressBase58 = converter.addressBytesToBase58(r.read(lengths.address));
+				const pubKeyHex = converter.bytesToHex(r.read(lengths.pubKey.bytes));
+				const addressBase58 = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
 				pubkeyAddresses[pubKeyHex] = addressBase58;
 			}
 			return pubkeyAddresses;
 		},
 		/** @param {Uint8Array} serializedWitnesses */
 		witnessesArray(serializedWitnesses) {
-			if (serializedWitnesses.length % lengths.witness !== 0)throw new Error('Serialized witnesses length is invalid');
+			if (serializedWitnesses.length % lengths.witness.bytes !== 0)throw new Error('Serialized witnesses length is invalid');
 			const witnesses = [];
-			const expectedNbOfWitnesses = serializedWitnesses.length / lengths.witness;
+			const expectedNbOfWitnesses = serializedWitnesses.length / lengths.witness.bytes;
 			const r = new BinaryReader(serializedWitnesses);
 			for (let i = 0; i < expectedNbOfWitnesses; i++) {
 				const signature = converter.bytesToHex(r.read(64));
@@ -467,15 +482,15 @@ export const serializer = {
 			const nbOfInputs = converter.bytes2ToNumber(r.read(2));
 			const nbOfOutputs = converter.bytes2ToNumber(r.read(2));
 			const dataLength = converter.bytes2ToNumber(r.read(2));
-			const witnesses = mode !== 'miner' ? this.witnessesArray(r.read(nbOfWitnesses * lengths.witness)) : [];
-			const inputs = mode === 'tx' ? this.anchorsArray(r.read(nbOfInputs * lengths.anchor)) : [];
+			const witnesses = mode !== 'miner' ? this.witnessesArray(r.read(nbOfWitnesses * lengths.witness.bytes)) : [];
+			const inputs = mode === 'tx' ? this.anchorsArray(r.read(nbOfInputs * lengths.anchor.bytes)) : [];
 			if (mode === 'miner') inputs.push(converter.bytesToHex(r.read(4), 4)); // nonce
 			if (mode === 'validator') {
-				const address = converter.addressBytesToBase58(r.read(16));
+				const address = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
 				const posHash = converter.bytesToHex(r.read(32));
 				inputs.push(`${address}:${posHash}`);
 			}
-			const outputs = this.miniUTXOsArray(r.read(nbOfOutputs * lengths.miniUTXO));
+			const outputs = this.miniUTXOsArray(r.read(nbOfOutputs * lengths.miniUTXO.bytes));
 			const data = dataLength ? r.read(dataLength) : undefined;
 
 			if (!r.isReadingComplete) throw new Error('Transaction is not fully deserialized');
@@ -543,8 +558,8 @@ export const serializer = {
         nodeSetting(serializedNodeSetting) {
 			const r = new BinaryReader(serializedNodeSetting);
 			const privateKey = converter.bytesToHex(r.read(32));
-			const validatorRewardAddress = converter.addressBytesToBase58(r.read(16));
-			const minerAddress = converter.addressBytesToBase58(r.read(16));
+			const validatorRewardAddress = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
+			const minerAddress = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
 			const minerThreads = r.read(1)[0];
             return { privateKey, validatorRewardAddress, minerAddress, minerThreads };
         }

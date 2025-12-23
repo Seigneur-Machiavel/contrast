@@ -1,5 +1,6 @@
 // @ts-check
 import { HashFunctions } from './conCrypto.mjs';
+import { ADDRESS } from '../../types/address.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { serializer } from '../../utils/serializer.mjs';
@@ -64,7 +65,7 @@ export class MemPool {
 	constructor(blockchain) { this.blockchain = blockchain; }
 
     /** @param {ContrastNode} node @param {Transaction} tx */
-    async pushTransaction(node, tx, replaceConflicting = false) {
+    pushTransaction(node, tx, replaceConflicting = false) {
 		// CHECK CONFORMITY & SPENDABILITY
         TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
 		const { involvedAnchors, repeatedAnchorsCount } = Transaction_Builder.extractInvolvedAnchors(tx, true);
@@ -83,9 +84,8 @@ export class MemPool {
 			throw new Error(`Transaction size too big: ${serialized.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
 			
 		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
-        const result = await TxValidation.transactionValidation(node, involvedUTXOs, tx);
-		if (result.discovered.address && result.discovered.pubKey)
-			await TxValidation.controlAddressDerivation(result.discovered.address, result.discovered.pubKey);
+        const result = TxValidation.transactionValidation(node, involvedUTXOs, tx);
+		if (!result.success) throw new Error('Transaction validation failed: succes === false');
         
 		tx.byteWeight = serialized.byteLength;
         tx.feePerByte = result.fee / tx.byteWeight;

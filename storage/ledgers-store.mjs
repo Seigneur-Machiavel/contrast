@@ -12,7 +12,6 @@ import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs'
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
 /*{ // SAMPLE LEDGER BINARY FORMAT
-  pubKey				(32b)
   balance				(6b)
   totalSent				(6b)
   totalReceived			(6b)
@@ -24,10 +23,9 @@ import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs'
 
 export class AddressLedger {
 	/** 
-	 * @param {string} pubKey @param {number} balance @param {number} totalSent @param {number} totalReceived @param {number} nbUtxos @param {number} nbHistory
+	 * @param {number} balance @param {number} totalSent @param {number} totalReceived @param {number} nbUtxos @param {number} nbHistory
 	 * @param {LedgerUtxo[]} [ledgerUtxos] @param {TxId[]} [history] @param {Buffer} [utxosBuffer] @param {Uint8Array} [historyBytes] */
-	constructor(pubKey, balance, totalSent, totalReceived, nbUtxos, nbHistory, ledgerUtxos, history, utxosBuffer, historyBytes) {
-		this.pubKey = pubKey;
+	constructor(balance, totalSent, totalReceived, nbUtxos, nbHistory, ledgerUtxos, history, utxosBuffer, historyBytes) {
 		this.balance = balance;
 		this.totalSent = totalSent;
 		this.totalReceived = totalReceived;
@@ -72,8 +70,8 @@ export class LedgersStorage {
 	constructor(storage) { this.storage = storage; }
 
 	// API METHODS
-	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {Object<string, AddressLedger>} involvedLedgers */
-	digestBlock(block, involvedUTXOs, involvedLedgers) {
+	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
+	digestBlock(block, involvedUTXOs) {
 		/** @type {Set<string>} */
 		const dirsToCreate = new Set();
 		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
@@ -85,14 +83,14 @@ export class LedgersStorage {
 			fs.mkdirSync(dirPath, { recursive: true });
 
 		for (const address in changesByAddress)
-			this.#applyAddressChanges(address, changesByAddress[address], involvedLedgers[address]);
+			this.#applyAddressChanges(address, changesByAddress[address]);
 	}
 	/** @param {string} address @param {boolean} [deserializeUtxosAndHistory] Default: true */
 	getAddressLedger(address, deserializeUtxosAndHistory = true) {
 		const l = this.#readAddressLedger(address);
 		const ledgerUtxos = deserializeUtxosAndHistory ? serializer.deserialize.ledgerUtxosArray(l.utxosBuffer) : undefined;
 		const history = 	deserializeUtxosAndHistory ? serializer.deserialize.txsIdsArray(l.historyBytes) : undefined;
-		return new AddressLedger(l.pubKey, l.balance, l.totalSent, l.totalReceived, l.nbUtxos, l.nbHistory, ledgerUtxos, history, l.utxosBuffer, l.historyBytes);
+		return new AddressLedger(l.balance, l.totalSent, l.totalReceived, l.nbUtxos, l.nbHistory, ledgerUtxos, history, l.utxosBuffer, l.historyBytes);
 	}
 	reset() {
 		if (fs.existsSync(this.storage.PATH.LEDGERS)) fs.rmSync(this.storage.PATH.LEDGERS, { recursive: true });
@@ -126,9 +124,9 @@ export class LedgersStorage {
 		
 		return r;
 	}
-	/** @param {string} address @param {AddressChanges} changes @param {AddressLedger} [addressLedger] */
-	#applyAddressChanges(address, changes, addressLedger) {
-		const l = addressLedger || this.#readAddressLedger(address);
+	/** @param {string} address @param {AddressChanges} changes */
+	#applyAddressChanges(address, changes) {
+		const l = this.#readAddressLedger(address);
 		if (!l || !l.utxosBuffer || !l.historyBytes) throw new Error(`Ledger for address ${address} not found or corrupted`);
 
 		// PREPARE NEW LEDGER VALUES
@@ -137,8 +135,7 @@ export class LedgersStorage {
 		l.balance += (changes.totalInAmount - changes.totalOutAmount);
 		l.totalSent += changes.totalOutAmount;
 		l.totalReceived += changes.totalInAmount;
-		const w = new BinaryWriter(32 + 6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
-		w.writeBytes(this.converter.hexToBytes(l.pubKey));
+		const w = new BinaryWriter(6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
 		w.writeBytes(this.converter.numberTo6Bytes(l.balance));
 		w.writeBytes(this.converter.numberTo6Bytes(l.totalSent));
 		w.writeBytes(this.converter.numberTo6Bytes(l.totalReceived));
@@ -168,8 +165,7 @@ export class LedgersStorage {
 	/** @param {string} address */
 	#readAddressLedger(address) {
 		const dirPath = this.#pathOfAddressLedgerDir(address);
-		const r = new BinaryReader(this.storage.loadBinary(address, dirPath, false) || new Uint8Array(32 + 6 + 6 + 6 + 4 + 4));
-		let pubKey = 		this.converter.bytesToHex(r.read(32));
+		const r = new BinaryReader(this.storage.loadBinary(address, dirPath, false) || new Uint8Array(6 + 6 + 6 + 4 + 4));
 		let balance = 		this.converter.bytes6ToNumber(r.read(6));
 		let totalSent = 	this.converter.bytes6ToNumber(r.read(6));
 		let totalReceived = this.converter.bytes6ToNumber(r.read(6));
@@ -178,7 +174,7 @@ export class LedgersStorage {
 		const utxosBuffer = Buffer.from(r.read(nbUtxos * 15));
 		const historyBytes= r.read(nbHistory * 6);
 		if (!r.isReadingComplete) this.logger.log(`Ledger for address ${address} is corrupted`, (m, c) => console.error(m, c));
-		return { pubKey, balance, totalSent, totalReceived, nbUtxos, nbHistory, utxosBuffer, historyBytes };
+		return { balance, totalSent, totalReceived, nbUtxos, nbHistory, utxosBuffer, historyBytes };
 	}
 	/** @param {Buffer} buffer @param {Uint8Array[]} entriesToSkip */
 	#extractIndexesOfMatches(buffer, entriesToSkip) {

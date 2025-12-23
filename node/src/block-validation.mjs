@@ -12,8 +12,7 @@ import { serializer } from '../../utils/serializer.mjs';
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker
- * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */
+ * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker */
 
 const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {
@@ -37,23 +36,22 @@ class WorkerDispatcher {
 	/** @param {ValidationWorker[]} workers */
 	constructor(workers) { this.workers = workers; }
 
-	/** @param {Array<{address: string, pubKey: string}>} batch */
+	/** @param {Transaction[]} batch */
 	#assignJobToWorker(batch) {
 		const w = this.workers[this.workerIndex];
 		if (!w) throw new Error('Worker index overflow');
 
-		this.promises.push(w.linkValidation(batch));
+		this.promises.push(w.derivationValidation(batch));
 		this.workerIndex++;
 	}
 
-	/** @param {Array<{address: string, pubKey: string}>} discovery */
-	async dispatchJobAndWaitResult(discovery) {
+	/** @param {BlockFinalized} block */
+	async dispatchJobAndWaitResult(block) {
 
-        const batchSize = Math.ceil(discovery.length / this.workers.length);
-		
 		let batch = [];
-		for (const link of discovery) {
-			batch.push(link);
+        const batchSize = Math.ceil(block.Txs.length / this.workers.length);
+		for (const tx of block.Txs) {
+			batch.push(tx);
 			if (batch.length < batchSize) continue;
 			// BATCH READY => ASSIGN TO WORKER & CLEAR BATCH
 			this.#assignJobToWorker(batch);
@@ -142,8 +140,8 @@ export class BlockValidation {
         this.#areExpectedRewards(powReward, posReward, block); // throw if invalid rewards
         this.#isFinalizedBlockDoubleSpending(block); // throw if double spending detected
         
-		const involvedLedgers = await this.#fullBlockTxsValidation(node, block, involvedUTXOs);
-        return { hashConfInfo, powReward, posReward, totalFees, involvedAnchors, involvedUTXOs, involvedLedgers, size: serializedBlock.length };
+		await this.#fullBlockTxsValidation(node, block, involvedUTXOs);
+        return { hashConfInfo, powReward, posReward, totalFees, involvedAnchors, involvedUTXOs, size: serializedBlock.length };
     }
 
 	// PRIVATE STATIC METHODS
@@ -189,36 +187,31 @@ export class BlockValidation {
                 else utxoSpent.add(input);
         }
     }
-	/** @param {ContrastNode} node @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {Object<string, AddressLedger>} [involvedLedgers] Pass it for chained validation (avoid re-fetching) */
-    static async #fullBlockTxsValidation(node, block, involvedUTXOs = {}, involvedLedgers = {}) {
+	/** @param {ContrastNode} node @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
+    static async #fullBlockTxsValidation(node, block, involvedUTXOs = {}) {
 		const workerDispatcher = new WorkerDispatcher(node.workers.validations || []);
 		if ((node.workers.validations || []).length === 0) throw new Error('No validation workers available');
 		
-		// PROCESS ALL TXs => COLLECT DISCOVERY INFOS (new addresses <> pubKeys signatures)
-		/** @type {Array<{address: string, pubKey: string}>} */
-        const discovery = [];
+		// PROCESS ALL TXs
+		/** Key: Address, Value: PubKeys @type {Map<string, Set<string>>} */
+		const involvedIdentities = new Map(); // used to avoid re-fetching identities
         const validationStart = Date.now();
 		for (let i = 0; i < block.Txs.length; i++) {
             const tx = block.Txs[i];
 			const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
-            const r = await TxValidation.transactionValidation(node, involvedUTXOs, tx, specialTx, involvedLedgers);
-			if (!r.success) throw new Error(`Invalid transaction: ${block.index}:${i}`);
-			
-			// STORE DISCOVERY TO VALIDATE DERIVATION
-			if (!r.discovered.address || !r.discovered.pubKey) continue;
-			discovery.push({ address: r.discovered.address, pubKey: r.discovered.pubKey });
+        	TxValidation.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
+			const fee = specialTx ? 0 : TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
+			TxValidation.controlTransactionOutputsRulesConditions(tx);
+			TxValidation.controlAddressesOwnership(node, involvedUTXOs, tx, specialTx, involvedIdentities);
+			//const r = TxValidation.transactionValidation(node, involvedUTXOs, tx, specialTx, involvedIdentities);
+			//if (!r.success) throw new Error(`Invalid transaction: ${block.index}:${i}`);
         }
 
-		// DISPATCH WORKERS FOR ADDRESS DERIVATION VALIDATION
-		const dispatchedSuccessfully = await workerDispatcher.dispatchJobAndWaitResult(discovery);
+		// DEPRECATED === DISPATCH WORKERS FOR ADDRESS DERIVATION VALIDATION => NOW CHECKED in "transactionValidation()"
+		const dispatchedSuccessfully = await workerDispatcher.dispatchJobAndWaitResult(block);
 		if (!dispatchedSuccessfully) throw new Error(failureErrorMessages.discoveredDerivationFailure);
 
-		// ALL VALIDATIONS PASSED => ASSIGN LEDGERS PUBKEY (throw if already assigned)
-		for (const link of discovery)
-			if (involvedLedgers[link.address]?.pubKey !== '0000000000000000000000000000000000000000000000000000000000000000') throw new Error(`Ledger for address ${link.address} already has a pubKey assigned`);
-			else involvedLedgers[link.address].pubKey = link.pubKey;
-
+		// ALL VALIDATIONS PASSED
 		validationMiniLogger.log(`(${node.workers.validations.length} threads) ${block.Txs.length} Txs validated in ${Date.now() - validationStart} ms`, (m, c) => console.info(m, c));
-		return involvedLedgers;
 	}
 }

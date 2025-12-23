@@ -94,6 +94,7 @@ export class ContrastNode {
 		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
 
+		await this.blockchain.identityStore.init(this);
 		if (!this.p2p.started) { // START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
 			await this.p2p.start();
@@ -114,9 +115,9 @@ export class ContrastNode {
 
 	/** Associate a wallet with this node (for miner and validator functions) @param {Wallet} wallet */
 	associateWallet(wallet) { 
-		this.account = wallet.accounts.C[0];
-		this.rewardAddresses.validator = wallet.accounts.C[0].address;
-		this.rewardAddresses.miner = wallet.accounts.C[1].address;
+		this.account = wallet.accounts[0];
+		this.rewardAddresses.validator = wallet.accounts[0].address;
+		this.rewardAddresses.miner = wallet.accounts[1].address;
 	}
 	async createAndShareMyBlockCandidate() {
 		try {
@@ -148,7 +149,7 @@ export class ContrastNode {
             //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
         this.updateState(`${statePrefix}block-validation #${block.index}`);
         const validationResult = await BlockValidation.validateBlockProposal(this, block);
-        const { hashConfInfo, involvedAnchors, involvedUTXOs, involvedLedgers } = validationResult;
+        const { hashConfInfo, involvedAnchors, involvedUTXOs } = validationResult;
         if (!(hashConfInfo?.conform)) throw new Error('Failed to validate block');
 
 		const newStakesOutputs = BlockUtils.extractNewStakesFromFinalizedBlock(block);
@@ -156,7 +157,7 @@ export class ContrastNode {
 
         this.updateState(`${statePrefix}applying finalized block #${block.index}`);
         
-        this.blockchain.addBlock(block, involvedAnchors, involvedUTXOs, involvedLedgers);
+        this.blockchain.addBlock(block, involvedAnchors, involvedUTXOs);
 		this.vss.newStakes(newStakesOutputs, 'persist');
         this.memPool.removeFinalizedBlocksTransactions(block);
         if (this.wsCallbacks.onBlockConfirmed) {
@@ -166,9 +167,8 @@ export class ContrastNode {
     
         //this.logger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length}`, (m, c) => console.info(m, c));
         const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
-        const minerId = block.Txs[0].outputs[0].address.slice(0, 6);
-        const validatorId = block.Txs[1].outputs[0].address.slice(0, 6);
-        this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorId} | miner: ${minerId}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+        const [minerAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
+        this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorAddress} | miner: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
         
         this.updateState("idle", "applying finalized block");
         if (!broadcastNewCandidate || isSync) return;

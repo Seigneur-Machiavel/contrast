@@ -4,6 +4,7 @@ import { serializer } from '../../utils/serializer.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 //import { BlockchainStorage, AddressesTxsRefsStorage } from '../../storage/storage.mjs';
 import { BlockchainStorage } from '../../storage/bc-store.mjs';
+import { IdentityStore } from "../../storage/identity-store.mjs";
 import { LedgersStorage } from '../../storage/ledgers-store.mjs';
 
 /**
@@ -21,12 +22,14 @@ export class Blockchain {
 	get currentHeight() { return this.blockStorage.lastBlockIndex; }
     miniLogger = new MiniLogger('blockchain');
 	blockStorage;
+	identityStore;
 	ledgersStorage;
 
 	/** @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
 	constructor(storage) {
 		if (!storage) throw new Error('Blockchain constructor: storage is required.');
 		this.blockStorage = new BlockchainStorage(storage);
+		this.identityStore = new IdentityStore(this.blockStorage);
 		this.ledgersStorage = new LedgersStorage(storage);
 		if (this.currentHeight >= 0) this.lastBlock = this.getBlock() || null;
 	}
@@ -36,10 +39,10 @@ export class Blockchain {
 	 * - Everything should be roughly validated before calling this method.
 	 * @param {BlockFinalized} block - The block to add.
 	 * @param {TxAnchor[]} involvedAnchors - The list of UTXO anchors involved in the block.
-	 * @param {Object<string, UTXO>} involvedUTXOs - The list of UTXO anchors involved in the block
-	 * @param {Object<string, AddressLedger>} involvedLedgers */
-    addBlock(block, involvedAnchors, involvedUTXOs, involvedLedgers) {
-		this.ledgersStorage.digestBlock(block, involvedUTXOs, involvedLedgers);
+	 * @param {Object<string, UTXO>} involvedUTXOs - The list of UTXO anchors involved in the block */
+    addBlock(block, involvedAnchors, involvedUTXOs) {
+		this.ledgersStorage.digestBlock(block, involvedUTXOs);
+		this.identityStore.digestBlock(block, involvedUTXOs);
 		this.blockStorage.addBlock(block, involvedAnchors);
 		this.lastBlock = block;
 		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));

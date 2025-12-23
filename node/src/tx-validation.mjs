@@ -1,13 +1,14 @@
 // @ts-check
 // Lot of performance optimization has been done in this file,
 // The code is not the most readable but it's the fastest possible
+import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { addressUtils } from '../../utils/addressUtils.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
@@ -51,7 +52,18 @@ export class TxValidation {
 
         for (const input of transaction.inputs) {
             if (specialTx && typeof input !== 'string') throw new Error('Invalid coinbase input');
-            if (specialTx) continue;
+            if (specialTx === 'miner') continue;
+
+			if (specialTx === 'validator') {
+				const parts = input.split(':');
+				if (parts.length !== 2) throw new Error('Invalid validator anchor format');
+				if (parts[0].length !== serializer.lengths.address.str) throw new Error('Invalid validator address length');
+				if (parts[1].length !== 64) throw new Error('Invalid validator posHash length');
+				if (!ADDRESS.checkConformity(parts[0])) throw new Error(`Invalid validator address: ${parts[0]}`);
+				if (!IS_VALID.HEX(parts[1])) throw new Error(`Invalid validator posHash: ${parts[1]}`);
+				continue;
+			}
+
 
             const anchor = input;
             if (!IS_VALID.ANCHOR(anchor)) throw new Error('Invalid anchor');
@@ -60,7 +72,8 @@ export class TxValidation {
             if (!utxo) throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${anchor}`);
             if (utxo.spent) throw new Error(`Invalid transaction: UTXO already spent: ${anchor}`);
             if (utxo.rule === 'sigOrSlash') throw new Error(`Invalid transaction: sigOrSlash UTXO cannot be spend: ${anchor}`);
-        }
+			
+		}
     }
     /** @param {TxOutput} txOutput */
     static isConformOutput(txOutput) {
@@ -69,7 +82,7 @@ export class TxValidation {
         if (txOutput.amount % 1 !== 0) throw new Error('Invalid amount value: not integer');
         if (typeof txOutput.rule !== 'string') throw new Error('Invalid rule !== string');
         if (UTXO_RULES_GLOSSARY[txOutput.rule] === undefined) throw new Error(`Invalid rule name: ${txOutput.rule}`);
-        addressUtils.conformityCheck(txOutput.address);
+        if (!ADDRESS.checkConformity(txOutput.address)) throw new Error(`Invalid address: ${txOutput.address}`);
     }
 
     /** ==> Second validation, low computation cost.
@@ -112,102 +125,122 @@ export class TxValidation {
         }*/
     } // NOT SURE IF WE CONSERVE THIS
 
-    /** ==> Fourth validation, medium computation cost. - control the signature of the inputs
-     * @param {ContrastNode} node @param {Transaction} transaction */
-    static #controlAllWitnessesSignatures(node, transaction) {
-        if (!Array.isArray(transaction.witnesses)) throw new Error(`Invalid witnesses: ${transaction.witnesses} !== array`);
-        
-		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
-        for (let i = 0; i < transaction.witnesses.length; i++) {
-            const { signature, pubKeyHex } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
-			AsymetricFunctions.verifySignature(signature, toSign, pubKeyHex); // will throw an error if the signature is invalid
-        }
-    }
     /** @param {string} witness */
     static #decomposeWitnessOrThrow(witness) {
         if (typeof witness !== 'string') throw new Error(`Invalid witness: ${witness} !== string`);
 
+		// commented code allows pubKey-less witness (future use case?)
         const witnessParts = witness.split(':');
-        if (witnessParts.length !== 2) throw new Error('Invalid witness');
+		if (witnessParts.length !== 2) throw new Error('Invalid witness');
+        //if (witnessParts.length === 0 || witnessParts.length > 2) throw new Error('Invalid witness');
 
-        /*const signature = witnessParts[0];
-        const pubKeyHex = witnessParts[1];*/
-		const [signature, pubKeyHex] = witnessParts;
-        if (signature.length !== 128) throw new Error('Invalid signature size');
-        if (pubKeyHex.length !== 64) throw new Error('Invalid pubKey size');
+        const signature = witnessParts[0];
+        if (signature.length !== serializer.lengths.signature.str) throw new Error('Invalid signature size');
         if (!IS_VALID.HEX(signature)) throw new Error(`Invalid signature: ${signature} !== hex`);
+		//if (witnessParts.length === 1) return { signature, pubKeyHex: null };
+
+        const pubKeyHex = witnessParts[1];
+        if (pubKeyHex.length !== serializer.lengths.pubKey.str) throw new Error('Invalid pubKey size');
         if (!IS_VALID.HEX(pubKeyHex)) throw new Error(`Invalid pubKey: ${pubKeyHex} !== hex`);
 
         return { signature, pubKeyHex };
     }
 
-    /** ==> Fifth validation, medium disk access cost. ~0.5ms per address.
+    /** ==> Fifth validation, low disk access cost. ~0.1ms per address + low cpu cost (xxHash32).
 	 * - Control the inputAddresses/witnessesPubKeys correspondence
-	 * - Return the discoveredLink if any. (One only)
+	 * - Control the derivation of addresses<>pubKeys
+	 * - Throw if any problem found
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
      * @param {Transaction} tx @param {'miner' | 'validator'} [specialTx]
-	 * @param {Object<string, AddressLedger>} [involvedLedgers] Pass it for loop validation (avoid re-fetching) */
-    static #controlKnownAddressesOwnership(node, involvedUTXOs, tx, specialTx, involvedLedgers = {}) {
-		/** @type {Map<string, string>} */
-		const addressPubKeyToConfirm = new Map();
-		const discovered = { 
+	 * Key: Address, Value: PubKeys @param {Map<string, Set<string>>} [involvedIdentities] Pass it for loop validation (avoid re-fetching) */
+    static controlAddressesOwnership(node, involvedUTXOs, tx, specialTx, involvedIdentities = new Map()) {
+		/** Key: PubKey, Value: Address @type {Map<string, string>} */
+		const pkAddressToConfirm = new Map();
+		/** Key: PubKey, Value: Signature @type {Map<string, string>} */
+		const pkSignatureToConfirm = new Map();
+
+		/** Temp object to store discovered address and pubKeys */
+		const discovered = {
 			/** @type {null | string} */ address: null,
-			/** @type {null | string} */ pubKey: null
+			/** @type {Set<string>} */	 pubKeys: new Set(),
 		};
 
 		// MINER TX HAS NO ADDRESS OWNERSHIP TO CONFIRM
-		if (specialTx === 'miner') return discovered;
+		if (specialTx === 'miner') return;
 
-		// EXTRACT EXPECTED ( PUBKEY > ADDRESS )s FROM INPUTS
+		// EXTRACT DISCOVERED ADDRESS AND EXPECTED ( PUBKEY > ADDRESS )s FROM INPUTS
 		for (let i = 0; i < tx.inputs.length; i++) {
 			const addressToVerify = specialTx === 'validator'
 				? tx.inputs[i].split(':')[0] // Validator: address is in the input
 				: involvedUTXOs[tx.inputs[i]]?.address; // Normal tx: address is in the UTXO
 			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${tx.inputs[i]}`);
 
-			const ledger = involvedLedgers[addressToVerify] || node.blockchain.ledgersStorage.getAddressLedger(addressToVerify, false);
-			if (addressPubKeyToConfirm.has(ledger.pubKey)) continue;
-			if (ledger.pubKey === '0000000000000000000000000000000000000000000000000000000000000000') {
+			const pks = involvedIdentities.get(addressToVerify) || node.blockchain.identityStore.get(addressToVerify);
+			if (!pks) // NEW IDENTITY => DISCOVER
 				if (discovered.address && discovered.address !== addressToVerify) throw new Error('Multiple addresses to discover in one transaction');
 				else discovered.address = addressToVerify; // only one per transaction maximum
-			} else addressPubKeyToConfirm.set(ledger.pubKey, addressToVerify);
-
-			if (involvedLedgers[addressToVerify]) continue;
-				involvedLedgers[addressToVerify] = ledger; // STORE FOR LATER USE
+			
+			else for (const pk of pks) // EXISTING => SET TO CONFIRM
+				if (!pkAddressToConfirm.has(pk)) pkAddressToConfirm.set(pk, addressToVerify);
 		}
 
 		// CONTROL EXPECTED ADDRESSES IN WITNESSES PRESENCE, STORE DISCOVERED PUBKEY IF ANY
 		for (const w of tx.witnesses) {
-			const { pubKeyHex } = this.#decomposeWitnessOrThrow(w);
-			if (pubKeyHex === '0000000000000000000000000000000000000000000000000000000000000000') throw new Error('Invalid pubKey: all zeroes');
-			if (addressPubKeyToConfirm.has(pubKeyHex)) addressPubKeyToConfirm.delete(pubKeyHex);
-			else if (discovered.pubKey) throw new Error('Multiple pubKeys to discover in one transaction');
-			else discovered.pubKey = pubKeyHex; // only one per transaction maximum
+			const { pubKeyHex, signature } = this.#decomposeWitnessOrThrow(w);
+			if (pkSignatureToConfirm.has(pubKeyHex)) throw new Error('Duplicate pubKey in witnesses');
+
+			const isInToConfirmList = pkAddressToConfirm.has(pubKeyHex); 
+			const address = isInToConfirmList ? pkAddressToConfirm.get(pubKeyHex) : discovered.address;
+			if (!address) throw new Error('Witness pubKey has no corresponding address to confirm or discover');
+			if (!ADDRESS.isDerivedFrom(address, pubKeyHex)) throw new Error(`Witness pubKey does not match address: ${address}`);
+			
+			// STORE AS CONFIRMED, THROW IF ENCOUNTERED AGAIN
+			pkSignatureToConfirm.set(pubKeyHex, signature);
+			pkAddressToConfirm.delete(pubKeyHex);
+			
+			// NEW IDENTITY => DISCOVER
+			if (!isInToConfirmList) discovered.pubKeys.add(pubKeyHex);
+			if (!involvedIdentities.has(address)) involvedIdentities.set(address, new Set());
+
+			// @ts-ignore: We just checked that involvedIdentities has the address or we created it
+			involvedIdentities.get(address).add(pubKeyHex);
 		}
 
-		if (discovered.address && !discovered.pubKey) throw new Error('Discovered address without corresponding pubKey');
-		if (discovered.pubKey && !discovered.address) throw new Error('Discovered pubKey without corresponding address');
-		return discovered;
-    }
+		// CHECK ALL PUBKEYS WERE CONFIRMED
+		if (pkAddressToConfirm.size !== 0) throw new Error('Not all pubKey/address could be confirmed');
+		if (!discovered.address) return involvedIdentities; // NO DISCOVERY TO PERFORM => EXIT
 
-	/** ==> Seventh validation, high cpu/ram cost (argon2) @param {string} address @param {string} pubKeyHex */
-	static async controlAddressDerivation(address, pubKeyHex) {
-		const derivedAddressBase58 = await addressUtils.deriveAddress(HashFunctions.Argon2, pubKeyHex);
-		if (!derivedAddressBase58) throw new Error(`Invalid address derivation for pubKey: ${pubKeyHex}`);
-		if (derivedAddressBase58 !== address) throw new Error('Derived address does not match the provided address');
-        await addressUtils.securityCheck(derivedAddressBase58, pubKeyHex);
+		// CHECK DISCOVERY CONSISTENCY
+		const isMultiSig = ADDRESS.isMultiSigAddress(discovered.address);
+		if (discovered.pubKeys.size === 0) throw new Error('No pubKey discovered for new address');
+		if (!isMultiSig && discovered.pubKeys.size !== 1) throw new Error('Single-Sig address with multiple pubKeys to discover');
+		if (isMultiSig && discovered.pubKeys.size < 2) throw new Error('Multi-Sig address with less than 2 pubKeys to discover');
+
+		return involvedIdentities;
 	}
 
-    /** ==> Sequencially call the set of validations - One discovered link can result
+	/** ==> Fourth validation, medium computation cost. - control the signature of the inputs
+     * @param {Transaction} transaction */
+    static controlAllWitnessesSignatures(transaction) {
+        if (!Array.isArray(transaction.witnesses)) throw new Error(`Invalid witnesses: ${transaction.witnesses} !== array`);
+        
+		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
+        for (let i = 0; i < transaction.witnesses.length; i++) {
+            let { signature, pubKeyHex } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
+			AsymetricFunctions.verifySignature(signature, toSign, pubKeyHex); // will throw an error if the signature is invalid
+        }
+    }
+
+    /** ==> Sequencially call the set of validations
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
      * @param {Transaction} transaction @param {'miner' | 'validator'} [specialTx]
-	 * @param {Object<string, AddressLedger>} [involvedLedgers] Pass it for chained validation (avoid re-fetching) */
-    static async transactionValidation(node, involvedUTXOs, transaction, specialTx, involvedLedgers = {}) {
+	 * @param {Map<string, Set<string>>} [involvedIdentities] Key: Address, Value: PubKey */
+    static transactionValidation(node, involvedUTXOs, transaction, specialTx, involvedIdentities = new Map()) {
         this.isConformTransaction(involvedUTXOs, transaction, specialTx); // also check spendable UTXOs
         const fee = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, transaction);
 		this.controlTransactionOutputsRulesConditions(transaction);
-        this.#controlAllWitnessesSignatures(node, transaction);
-		const discovered = this.#controlKnownAddressesOwnership(node, involvedUTXOs, transaction, specialTx, involvedLedgers);
-		return { discovered, fee, success: true };
+		this.controlAddressesOwnership(node, involvedUTXOs, transaction, specialTx, involvedIdentities);
+        this.controlAllWitnessesSignatures(transaction);
+		return { fee, success: true };
     }
 }

@@ -39,6 +39,7 @@ class StorageRoot {
 			TRASH: path.join(basePath, 'trash'),
 			LEDGERS: path.join(basePath, 'ledgers'),
 			BLOCKCHAIN: path.join(basePath, 'blockchain'),
+			IDENTITIES: path.join(basePath, 'identities'),
 			TEST_STORAGE: path.join(basePath, 'test')
 		};
 		this.#init();
@@ -67,6 +68,7 @@ class StorageRoot {
 			this.PATH.TRASH,
 			this.PATH.LEDGERS,
 			this.PATH.BLOCKCHAIN,
+			this.PATH.IDENTITIES,
 			this.PATH.TEST_STORAGE
 		];
 		const filePaths = [];
@@ -365,7 +367,7 @@ async function test() {
 
 	console.log('--- Test end ---');
 }
-test();
+//test();
 
 /* 1100 files of 200 bytes each or 220KB => 1 block
 Time to load a big file: 0.74550ms

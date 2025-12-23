@@ -140,10 +140,9 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         this.powBroadcastState.foundHeight = block.index;
         this.powBroadcastState.sentTryCount++;
 
-        const [validatorId, minerId] = [validatorAddress.slice(0, 6), minerAddress.slice(0, 6)];
-        if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorId} | miner: ${minerId}
+        if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorAddress} | miner: ${minerAddress}
 (Height: ${block.index}) | Diff = ${block.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));
-        if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorId} | M:${minerId} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
+        if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorAddress} | M:${minerAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
 
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
         this.node.p2p.broadcast(new BLOCK_FINALIZED_MSG(block));
