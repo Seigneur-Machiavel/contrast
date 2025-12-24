@@ -101,7 +101,7 @@ export class BlockUtils {
         return { powReward, posReward, totalFees };
     }
 	/** @param {ContrastNode} node */
-	static calculateAverageBlockTimeAndDifficulty(node) {
+	static calculateAverageBlockTimeAndDifficulty(node, logs = false) {
         const lastBlock = node.blockchain.lastBlock;
         if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
         
@@ -113,7 +113,7 @@ export class BlockUtils {
         if (!olderBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
 
 		const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
-        const newDifficulty = mining.difficultyAdjustment(lastBlock, averageBlockTime);
+        const newDifficulty = mining.difficultyAdjustment(lastBlock, averageBlockTime, undefined, logs);
         return { averageBlockTime, newDifficulty };
     }
     /** @param {BlockFinalized | BlockCandidate} block */

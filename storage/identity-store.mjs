@@ -1,4 +1,5 @@
 // @ts-check
+import fs from 'fs';
 import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
@@ -23,37 +24,12 @@ export class IdentityStore {
 	constructor(blockchainStorage) {
 		this.bcStorage = blockchainStorage;
 		this.basePath = blockchainStorage.storage.PATH.IDENTITIES;
-	}
 
-	// API METHODS
-	/** Initialize the identity store files and handlers @param {import("../node/src/node.mjs").ContrastNode} node */
-	async init(node) {
-		const chunkSize = 2 ** 30;
-		const buffer = new Uint8Array(chunkSize);
-		const batchCount = MAX_ENTRIES_PER_FILE * ENTRY_BYTES / chunkSize;
-		for (const prefix of ADDRESS.AUTHORIZED_PREFIXES) {
+		for (const prefix of ADDRESS.AUTHORIZED_PREFIXES)
 			if (this.handlers[prefix]) continue;
-			
-			const filePath = path.join(this.basePath, `${prefix}.dat`);
-			this.handlers[prefix] = new BinaryHandler(filePath);
-			if (this.handlers[prefix].size === MAX_ENTRIES_PER_FILE * ENTRY_BYTES) continue; // READY
-			
-			// WRITE "0" IN FILE BY BUFFER OR 1GB CHUNKS. (1_073_741_824 bytes = 1 GB)
-			// 24GB FILE WRITING TOOK 23s ON SSD
-			this.handlers[prefix].cursor = 0; // RESET CURSOR
-			const creationStart = Date.now();
-			for (let i = 0; i < batchCount; i++) {
-				const stateText = `IdentityStore: creating identity store for prefix '${prefix}' (${i + 1}/${batchCount}) ...`;
-				node.updateState(stateText);
-				this.bcStorage.logger.log(stateText, (m, c) => console.log(m, c));
-
-				this.handlers[prefix].write(buffer);
-				await new Promise(r => setImmediate(r)); // Yield to event loop
-			}
-
-			this.bcStorage.logger.log(`IdentityStore: created identity store for prefix '${prefix}' at: ${filePath} in ${Date.now() - creationStart}ms`, (m, c) => console.log(m, c));
-		}
+			else this.#createHandlerForPrefix(prefix);
 	}
+
 	/** Create the new identities entries for the addresses involved in the block (pointers)
 	 * @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
 	digestBlock(block, involvedUTXOs) {
@@ -101,6 +77,14 @@ export class IdentityStore {
 		for (const w of tx.witnesses) pubKeys.add(w.split(':')[1]);
 		return pubKeys;
 	}
+	reset() {
+		if (fs.existsSync(this.basePath)) fs.rmSync(this.basePath, { recursive: true });
+		fs.mkdirSync(this.basePath);
+
+		for (const prefix of ADDRESS.AUTHORIZED_PREFIXES)
+			if (this.handlers[prefix]) continue;
+			else this.#createHandlerForPrefix(prefix);
+	}
 
 	// INTERNAL METHODS
 	/** @param {string} address @param {TxId} txId */
@@ -110,5 +94,19 @@ export class IdentityStore {
 		const handler = this.handlers[a.prefix];
 		const entryBytes = serializer.serialize.txsIdsArray([txId]);
 		handler.write(entryBytes, a.uint32 * ENTRY_BYTES);
+	}
+	#createHandlerForPrefix(prefix = 'C') {
+		if (this.handlers[prefix]) this.handlers[prefix].close();
+		
+		// OPEN OR CREATE FILE
+		const filePath = path.join(this.basePath, `${prefix}.dat`);
+		this.handlers[prefix] = new BinaryHandler(filePath);
+		if (this.handlers[prefix].size === MAX_ENTRIES_PER_FILE * ENTRY_BYTES) return; // READY
+
+		// CREATE EMPTY FILE OF MAX SIZE (VERY FAST)
+		this.handlers[prefix].truncate(MAX_ENTRIES_PER_FILE * ENTRY_BYTES); // 24GB FILE
+		this.handlers[prefix].close();
+		this.handlers[prefix] = new BinaryHandler(filePath);
+		if (this.handlers[prefix].size !== MAX_ENTRIES_PER_FILE * ENTRY_BYTES) throw new Error('IdentityStore.init: unable to create identity store file of correct size.');
 	}
 }

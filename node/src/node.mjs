@@ -94,7 +94,6 @@ export class ContrastNode {
 		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
 
-		await this.blockchain.identityStore.init(this);
 		if (!this.p2p.started) { // START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
 			await this.p2p.start();

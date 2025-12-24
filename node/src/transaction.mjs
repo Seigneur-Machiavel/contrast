@@ -60,8 +60,8 @@ export class Transaction_Builder {
 		if (UTXOs.length === 0) throw new Error('No UTXO to spend');
         if (transfers.length === 0) throw new Error('No transfer to make');
 
-        this.checkMalformedAnchorsInUtxosArray(UTXOs);
-        this.checkDuplicateAnchorsInUtxosArray(UTXOs);
+        //this.checkMalformedAnchorsInUtxosArray(UTXOs);
+        //this.checkDuplicateAnchorsInUtxosArray(UTXOs);
 
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
         const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress);

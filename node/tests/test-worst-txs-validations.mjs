@@ -61,8 +61,17 @@ while(true) {
 	}
 	
 	const a = bootstrapWallet.accounts[0];
-	const ledgerUtxos = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address).ledgerUtxos;
-	if (ledgerUtxos) a.ledgerUtxos = ledgerUtxos;
+	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
+	if (ledger.totalReceived - ledger.totalSent !== ledger.balance) throw new Error('Inconsistent balance calculation!');
+	a.ledgerUtxos = ledger?.ledgerUtxos || [];
+
+	// CONTROL UTXOs Anchor duplication
+	const seen = new Set();
+	for (const utxo of a.ledgerUtxos) {
+		if (seen.has(utxo.anchor)) console.warn('Duplicate UTXO anchor detected in account UTXOs:', utxo.anchor);
+		else seen.add(utxo.anchor);
+	}
+	//const u = bootstrapNode.blockchain.getUtxos(['713:1:0']);
 
 	const tx = Transaction_Builder.createTransaction(a, transfers, 1);
 	const signedTx = a.signTransaction(tx);

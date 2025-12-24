@@ -18,6 +18,8 @@ import { BLOCKCHAIN_SETTINGS } from '../utils/blockchain-settings.mjs';
  * @typedef {import("../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
+const ENTRY_BYTES = serializer.lengths.indexEntry.bytes;
+
 /** New version of BlockchainStorage.
  * - No needs for "retreiveBlockByHash" anymore, we only use block indexes now
  * - Blocks hashes are stored in an index file (blockchain.idx) for fast retrieval
@@ -37,8 +39,8 @@ export class BlockchainStorage {
 	constructor(storage) {
 		this.storage = storage;
 		this.idxsHandler = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, 'blockchain.idx'));
-		if (this.idxsHandler.size % serializer.lengths.indexEntry.bytes !== 0) throw new Error(`blockchain.idx file is corrupted (size: ${this.idxsHandler.size})`);
-		this.lastBlockIndex = Math.ceil(this.idxsHandler.size / serializer.lengths.indexEntry.bytes) - 1;
+		if (this.idxsHandler.size % ENTRY_BYTES !== 0) throw new Error(`blockchain.idx file is corrupted (size: ${this.idxsHandler.size})`);
+		this.lastBlockIndex = Math.ceil(this.idxsHandler.size / ENTRY_BYTES) - 1;
 		this.logger.log(`BlockchainStorage initialized with ${this.lastBlockIndex + 1} blocks`, (m, c) => console.info(m, c));
 	}
 	
@@ -59,9 +61,9 @@ export class BlockchainStorage {
 		
 		// UPDATE INDEXES and BLOCKCHAIN FILE, do not use "appendFileSync" => cursor position issues
 		const blockchainHandler = this.#getBlockchainHandler(block.index);
+		this.idxsHandler.write(indexesBytes);
 		blockchainHandler.write(blockBytes);
 		blockchainHandler.write(utxosStatesBytes);
-		this.idxsHandler.write(indexesBytes);
 		this.lastBlockIndex++;
     }
     getBlockBytes(height = 0, includeUtxosStates = false) {
@@ -142,9 +144,19 @@ export class BlockchainStorage {
 
 		// TRUNCATE INDEXES, AND BLOCKCHAIN FILE
 		const blockchainHandler = this.#getBlockchainHandler(this.lastBlockIndex);
-		blockchainHandler.shrink(offset.blockBytes + offset.utxosStatesBytes);
-		this.idxsHandler.shrink(serializer.lengths.indexEntry.bytes);
+		blockchainHandler.truncate(offset.start);
+		this.idxsHandler.truncate(this.lastBlockIndex * ENTRY_BYTES);
 		this.lastBlockIndex--;
+    }
+	/** Ensure the blockchain file length matches the last indexed block offset, used at startup only */
+	checkBlockchainBytesLengthConsistency() {
+		const lastOffset = this.#getOffsetOfBlockData(this.lastBlockIndex);
+		if (!lastOffset) throw new Error('Blockchain storage is corrupted: unable to retrieve last block offset.');
+
+		const blockchainHandler = this.#getBlockchainHandler(this.lastBlockIndex);
+		const stats = fs.fstatSync(blockchainHandler.fd);
+		const expectedSize = lastOffset.start + lastOffset.blockBytes + lastOffset.utxosStatesBytes;
+		return stats.size === expectedSize;
     }
     reset() {
         if (fs.existsSync(this.storage.PATH.BLOCKCHAIN)) fs.rmSync(this.storage.PATH.BLOCKCHAIN, { recursive: true });
@@ -203,7 +215,7 @@ export class BlockchainStorage {
 	}
 	#getOffsetOfBlockData(height = -1) { // if reading is too slow, we can implement a caching system here
 		if (height < 0 || height > this.lastBlockIndex) return null;
-		const buffer = this.idxsHandler.read(height * serializer.lengths.indexEntry.bytes, serializer.lengths.indexEntry.bytes);
+		const buffer = this.idxsHandler.read(height * ENTRY_BYTES, ENTRY_BYTES);
 		return serializer.deserialize.blockIndexEntry(buffer);
 	}
 	#getBlockchainHandler(height = 0) {

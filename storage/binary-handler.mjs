@@ -33,11 +33,8 @@ export class BinaryHandler {
 		fs.ftruncateSync(this.fd, newSize);
 		this.cursor = newSize;
 	}
-	/** Reduce the file size by removing a number of bytes from the end @param {number} bytesToRemove */
-	shrink(bytesToRemove) {
-		const newSize = this.cursor - bytesToRemove;
-		if (newSize < 0) throw new Error('Cannot shrink file below size 0');
-		fs.ftruncateSync(this.fd, newSize);
-		this.cursor = newSize;
+	/** Close the file descriptor */
+	close() {
+		fs.closeSync(this.fd);
 	}
 }

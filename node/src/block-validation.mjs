@@ -117,7 +117,7 @@ export class BlockValidation {
         await this.#validateLegitimacy(block, node.vss);
 
 		// VALIDATE BLOCK DIFFICULTY EQUAL TO EXPECTED
-        const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node);
+        const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node, true);
         if (block.difficulty !== newDifficulty) throw new Error(failureErrorMessages.invalidDifficulty(block.difficulty, newDifficulty));
         
 		// VALIDATE BLOCK POW HASH AGAINST DIFFICULTY
@@ -203,8 +203,6 @@ export class BlockValidation {
 			const fee = specialTx ? 0 : TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
 			TxValidation.controlTransactionOutputsRulesConditions(tx);
 			TxValidation.controlAddressesOwnership(node, involvedUTXOs, tx, specialTx, involvedIdentities);
-			//const r = TxValidation.transactionValidation(node, involvedUTXOs, tx, specialTx, involvedIdentities);
-			//if (!r.success) throw new Error(`Invalid transaction: ${block.index}:${i}`);
         }
 
 		// DEPRECATED === DISPATCH WORKERS FOR ADDRESS DERIVATION VALIDATION => NOW CHECKED in "transactionValidation()"

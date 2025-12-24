@@ -81,7 +81,7 @@ class StorageRoot {
 
 		for (const filePath of filePaths)
 			if (!fs.existsSync(filePath)) continue;
-			else { fs.unlinkSync(filePath); console.log(`${filePath} removed.`) }
+			else { fs.rmSync(filePath); console.log(`${filePath} removed.`) }
 
 		this.#init();
 	}
@@ -99,7 +99,25 @@ export class ContrastStorage extends StorageRoot {
 		try {
 			const d = directoryPath || this.PATH.STORAGE;
 			if (!skipMkdir) fs.mkdirSync(d, { recursive: true });
+
 			fs.writeFileSync(path.join(d, `${fileName}.bin`), serializedData);
+		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
+		return true;
+	}
+	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
+	saveBinaryAtomic(fileName, serializedData, directoryPath, skipMkdir = false) {
+		try {
+			const d = directoryPath || this.PATH.STORAGE;
+			if (!skipMkdir) fs.mkdirSync(d, { recursive: true });
+
+			const tempFilePath = path.join(d, `${fileName}.bin.tmp`);
+			const finalFilePath = path.join(d, `${fileName}.bin`);
+			fs.writeFileSync(tempFilePath, serializedData);
+			
+			// On Linux: rename overwrites atomically
+			// On Windows: need to delete first
+			if (process.platform === 'win32' && fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
+			fs.renameSync(tempFilePath, finalFilePath);
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 		return true;
 	}
