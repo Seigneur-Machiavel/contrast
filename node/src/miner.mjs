@@ -202,12 +202,12 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
             
             const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
             for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
-            timings.workersUpdate = Date.now();
             
+            timings.workersUpdate = Date.now();
             for (let i = 0; i < readyWorkers; i++) {
                 const blockBet = this.bets?.[i] || 0;
 				const timeOffset = Date.now() - this.node.time;
-                await this.workers[i].updateInfo(rewardAddress, blockBet, timeOffset);
+                this.workers[i].updateInfo(rewardAddress, blockBet, timeOffset);
             }
             timings.updateInfo = Date.now();
 

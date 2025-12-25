@@ -139,7 +139,7 @@ export class MinerWorker {
 	}
 	
 	/** @param {string} rewardAddress @param {number} bet @param {number} timeOffset */
-	async updateInfo(rewardAddress, bet, timeOffset) {
+	updateInfo(rewardAddress, bet, timeOffset) {
 		if (this.terminate) return;
 		
 		const isSame = this.rewardAddress === rewardAddress && this.bet === bet && this.timeOffset === timeOffset;
@@ -149,8 +149,6 @@ export class MinerWorker {
 		this.bet = bet;
 		this.timeOffset = timeOffset;
 		this.worker.postMessage({ type: 'updateInfo', rewardAddress, bet, timeOffset });
-
-		return new Promise(resolve => setTimeout(resolve, 200));
 	}
 	/** @param {BlockCandidate} blockCandidate */
 	async updateCandidate(blockCandidate) {
@@ -162,7 +160,7 @@ export class MinerWorker {
 
 		await new Promise(resolve => setTimeout(resolve, 200));
 	}
-	async mineUntilValid() {
+	mineUntilValid() {
 		if (this.terminate) return;
 		if (this.isWorking) return;
 		

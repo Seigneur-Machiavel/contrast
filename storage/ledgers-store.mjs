@@ -48,16 +48,15 @@ class AddressChanges {
 	/** @param {'in' | 'out'} direction @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
 	add(direction, height, txIndex, vout, amount, rule) {
 		const serializedUtxo = serializer.serialize.ledgerUtxo(height, txIndex, vout, amount, rule);
+		const txId = `${height}:${txIndex}`;
+		if (!this.historyTxIds.has(txId)) this.historyTxIds.add(txId);
 		if (direction === 'out') {
 			this.totalOutAmount += amount;
 			this.out.push(serializedUtxo);
-			return;
+		} else {
+			this.totalInAmount += amount;
+			this.in.push(serializedUtxo);
 		}
-		
-		this.totalInAmount += amount;
-		this.in.push(serializedUtxo);
-		const txId = `${height}:${txIndex}`;
-		if (!this.historyTxIds.has(txId)) this.historyTxIds.add(txId);
 	}
 }
 
@@ -76,16 +75,21 @@ export class LedgersStorage {
 		const dirsToCreate = new Set();
 		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
 		let applyCount = 0;
-		for (const address in changesByAddress)
-			dirsToCreate.add(this.#pathOfAddressLedgerDir(address));
-		
-		for (const dirPath of dirsToCreate)
-			fs.mkdirSync(dirPath, { recursive: true });
-
+		for (const address in changesByAddress) dirsToCreate.add(this.#pathOfAddressLedgerDir(address));
+		for (const dirPath of dirsToCreate) fs.mkdirSync(dirPath, { recursive: true });
 		for (const address in changesByAddress)
 			applyCount += this.#applyAddressChanges(address, changesByAddress[address], safeMode);
-		
+
 		return applyCount;
+	}
+	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
+	undoBlock(block, involvedUTXOs) { // UNDO WILL NOT BE PERFECT, UTXO ORDER MAY CHANGE
+		let undoCount = 0;
+		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
+		for (const address in changesByAddress)
+			undoCount += this.#reverseAddressChanges(address, changesByAddress[address], true, true);
+
+		return undoCount;
 	}
 	/** @param {string} address @param {boolean} [deserializeUtxosAndHistory] Default: true */
 	getAddressLedger(address, deserializeUtxosAndHistory = true) {
@@ -129,19 +133,14 @@ export class LedgersStorage {
 	/** @param {string} address @param {AddressChanges} changes @param {boolean} [safeMode] If enabled: check the history before writing, default: false */
 	#applyAddressChanges(address, changes, safeMode = false) {
 		const l = this.#readAddressLedger(address);
-		if (!l || !l.utxosBuffer || !l.historyBytes) throw new Error(`Ledger for address ${address} not found or corrupted`);
 
 		// PREPARE HISTORY TO ADD & CONTROL FOR SAFE MODE
-		const hw = new BinaryWriter(6 * changes.historyTxIds.size);
-		for (const txId of changes.historyTxIds) {
-			const { height, txIndex } = serializer.parseTxId(txId);
-			hw.writeBytes(this.converter.numberTo4Bytes(height));
-			hw.writeBytes(this.converter.numberTo2Bytes(txIndex));
+		const newHistoryBytes = serializer.serialize.txsIdsArray(changes.historyTxIds);
+		if (safeMode) { // CHECK IF ALREADY UPDATED => NO WRITE
+			if (l.historyBytes.length < newHistoryBytes.length) return 0;
+			const existingHistoryEnd = l.historyBytes.subarray(l.historyBytes.length - newHistoryBytes.length);
+			if (Buffer.from(existingHistoryEnd).compare(Buffer.from(newHistoryBytes)) === 0) return 0;
 		}
-
-		const newHistoryBytes = hw.getBytes();
-		if (safeMode) // CHECK IF ALREADY UPDATED => NO WRITE
-			if (Buffer.from(l.historyBytes).indexOf(newHistoryBytes) !== -1) return 0;
 
 		// PREPARE NEW LEDGER VALUES
 		const newNbUtxos = l.nbUtxos + changes.in.length - changes.out.length;
@@ -169,10 +168,62 @@ export class LedgersStorage {
 		w.writeBytes(l.historyBytes);
 		w.writeBytes(newHistoryBytes);
 
+		// IF EVERYTHING OK => SAVE
 		const dirPath = this.#pathOfAddressLedgerDir(address);
 		if (w.isWritingComplete) this.storage.saveBinaryAtomic(address, w.getBytes(), dirPath, true);
 		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 	
+		return 1;
+	}
+	/** @param {string} address @param {AddressChanges} changes @param {boolean} [safeMode] If enabled: check the history before writing, default: false @param {boolean} [cleanupEmpty] delete the ledger file if empty, default: true */
+	#reverseAddressChanges(address, changes, safeMode = false, cleanupEmpty = true) {
+		const l = this.#readAddressLedger(address);
+
+		// PREPARE HISTORY TO ADD & CONTROL FOR SAFE MODE
+		const newHistoryBytes = serializer.serialize.txsIdsArray(changes.historyTxIds);
+		if (safeMode) { // CHECK IF END HISTORY DOESN'T MATCH => NO WRITE (unable to undo)
+			if (l.historyBytes.length < newHistoryBytes.length) return 0;
+			const existingHistoryEnd = l.historyBytes.subarray(l.historyBytes.length - newHistoryBytes.length);
+			if (Buffer.from(existingHistoryEnd).compare(Buffer.from(newHistoryBytes)) !== 0) return 0;
+		}
+
+		// PREPARE NEW LEDGER VALUES
+		const newNbUtxos = l.nbUtxos - changes.in.length + changes.out.length;
+		const newNbHistory = l.nbHistory - changes.historyTxIds.size;
+		l.balance -= (changes.totalInAmount - changes.totalOutAmount);
+		l.totalSent -= changes.totalOutAmount;
+		l.totalReceived -= changes.totalInAmount;
+
+		// IF EMPTY & CLEANUP ACTIVE => DELETE FILE AND RETURN
+		const dirPath = this.#pathOfAddressLedgerDir(address);
+		const isEmpty = (newNbUtxos === 0 && newNbHistory === 0 && l.balance === 0);
+		if (isEmpty && cleanupEmpty) {
+			fs.rmSync(path.join(dirPath, `${address}.bin`), { force: true });
+			return 1;
+		}
+
+		const w = new BinaryWriter(6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
+		w.writeBytes(this.converter.numberTo6Bytes(l.balance));
+		w.writeBytes(this.converter.numberTo6Bytes(l.totalSent));
+		w.writeBytes(this.converter.numberTo6Bytes(l.totalReceived));
+		w.writeBytes(this.converter.numberTo4Bytes(newNbUtxos));
+		w.writeBytes(this.converter.numberTo4Bytes(newNbHistory));
+		
+		// WRITE KEPT UTXOS
+		const indexesToSkip = this.#extractIndexesOfMatches(l.utxosBuffer, changes.in);
+		for (let i = 0; i < l.nbUtxos * 15; i += 15)
+			if (!indexesToSkip.has(i)) w.writeBytes(l.utxosBuffer.subarray(i, i + 15));
+
+		// WRITE NEW UTXOS
+		for (const entryBytes of changes.out) w.writeBytes(entryBytes);
+
+		// WRITE HISTORY TXIDS
+		w.writeBytes(l.historyBytes.subarray(0, l.historyBytes.length - newHistoryBytes.length));
+
+		// IF EVERYTHING OK => SAVE
+		if (w.isWritingComplete) this.storage.saveBinaryAtomic(address, w.getBytes(), dirPath, true);
+		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		
 		return 1;
 	}
 	/** @param {string} address */
@@ -186,7 +237,7 @@ export class LedgersStorage {
 		const nbHistory = 	this.converter.bytes4ToNumber(r.read(4)); // don't update before reading history
 		const utxosBuffer = Buffer.from(r.read(nbUtxos * 15));
 		const historyBytes= r.read(nbHistory * 6);
-		if (!r.isReadingComplete) this.logger.log(`Ledger for address ${address} is corrupted`, (m, c) => console.error(m, c));
+		if (!r.isReadingComplete) throw new Error(`Ledger for address ${address} reading incomplete: read ${r.cursor} of ${r.view.length} bytes`);
 		return { balance, totalSent, totalReceived, nbUtxos, nbHistory, utxosBuffer, historyBytes };
 	}
 	/** @param {Buffer} buffer @param {Uint8Array[]} entriesToSkip */

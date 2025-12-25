@@ -33,41 +33,28 @@ export class IdentityStore {
 	/** Create the new identities entries for the addresses involved in the block (pointers)
 	 * @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
 	digestBlock(block, involvedUTXOs) {
-		// Starting from txIndex = 1 to skip coinbase
-		const treatedAddresses = new Set();
-		const discoveryAddresses = [];
-		for (let txIndex = 1; txIndex < block.Txs.length; txIndex++)
-			for (const input of block.Txs[txIndex].inputs) {
-				const address = txIndex === 1 // validator tx
-					? input.split(':')[0] // Validator: address is in the input
-					: involvedUTXOs[input]?.address; // Normal tx: address is in the UTXO
+		const discovery = this.#extractDiscovery(block, involvedUTXOs).discovery;
+		for (const [address, txId] of discovery) this.#register(address, txId);
+		return discovery;
+	}
+	/** Undo the identities entries for the addresses involved in the block (pointers)
+	 * @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
+	undoBlock(block, involvedUTXOs) {
+		const { discovery, known } = this.#extractDiscovery(block, involvedUTXOs);
+		if (discovery.size > 0) throw new Error(`IdentityStore.undoBlock: corrupted state - found ${discovery.size} unregistered identities in block ${block.index} (should be empty)`);
 
-				if (!address) throw new Error(`Unable to find address to verify for input: ${input}`);
-				if (treatedAddresses.has(address)) continue;
-
-				treatedAddresses.add(address); // Mark as treated
-				if (this.get(address)) continue; // EXISTING => SKIP
-
-				// NEW IDENTITY => REGISTER
-				this.#register(address, `${block.index}:${txIndex}`);
-				discoveryAddresses.push(address);
-			}
-		
-		return discoveryAddresses;
+		for (const [address, blockIndex] of known)
+			if (blockIndex === block.index) this.#unregister(address);
 	}
 	/** Return the pubkeys associated with an address @param {string} address */
 	get(address) {
 		if (!ADDRESS.checkConformity(address)) return null;
 
-		// READ ENTRY
-		const a = ADDRESS.fromString(address);
-		const handler = this.handlers[a.prefix];
-		const entryBytes = handler.read(a.uint32 * ENTRY_BYTES, ENTRY_BYTES);
-		if (entryBytes.every(b => b === 0)) return null; // EMPTY ENTRY
+		// RETRIEVE POINTER
+		const { blockIndex, txIndex } = this.#getPointer(address) || {};
+		if (blockIndex === undefined || txIndex === undefined) return null; // UNKNOWN ADDRESS
 
 		// RETRIEVE TX
-		const blockIndex = serializer.converter.bytes4ToNumber(entryBytes.subarray(0, 4));
-		const txIndex = serializer.converter.bytes2ToNumber(entryBytes.subarray(4, 6));
 		const tx = this.bcStorage.getTransaction(`${blockIndex}:${txIndex}`);
 		if (!tx) throw new Error(`IdentityStore.get: unable to retrieve transaction at ${blockIndex}:${txIndex} for address ${address}`);
 
@@ -82,18 +69,61 @@ export class IdentityStore {
 		fs.mkdirSync(this.basePath);
 
 		for (const prefix of ADDRESS.AUTHORIZED_PREFIXES)
-			if (this.handlers[prefix]) continue;
-			else this.#createHandlerForPrefix(prefix);
+			if (!this.handlers[prefix]) this.#createHandlerForPrefix(prefix);
 	}
 
 	// INTERNAL METHODS
-	/** @param {string} address @param {TxId} txId */
+	/** Extract discovery information from block
+	 * @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
+	#extractDiscovery(block, involvedUTXOs) {
+		/** Key: address, value: TxId(pointer) @type {Map<string, TxId>} */
+		const discovery = new Map();
+		/** Key: address, value: blockIndex @type {Map<string, number>} */
+		const known = new Map();
+
+		// Starting from txIndex = 1 to skip coinbase
+		for (let txIndex = 1; txIndex < block.Txs.length; txIndex++)
+			for (const input of block.Txs[txIndex].inputs) {
+				const address = txIndex === 1 // validator tx
+					? input.split(':')[0] // Validator: address is in the input
+					: involvedUTXOs[input]?.address; // Normal tx: address is in the UTXO
+
+				if (!address) throw new Error(`Unable to find address to verify for input: ${input}`);
+				if (discovery.has(address) || known.has(address)) continue;
+
+				const pointer = this.#getPointer(address);
+				if (pointer) known.set(address, pointer.blockIndex);
+				else discovery.set(address, `${block.index}:${txIndex}`);
+			}
+		
+		return { discovery, known };
+	}
+	/** Return the pointer for an address @param {string} address */
+	#getPointer(address) {
+		// READ ENTRY
+		const a = ADDRESS.fromString(address);
+		const handler = this.handlers[a.prefix];
+		const entryBytes = handler.read(a.uint32 * ENTRY_BYTES, ENTRY_BYTES);
+		if (entryBytes.every(b => b === 0)) return null; // EMPTY ENTRY
+
+		const blockIndex = serializer.converter.bytes4ToNumber(entryBytes.subarray(0, 4));
+		const txIndex = serializer.converter.bytes2ToNumber(entryBytes.subarray(4, 6));
+		return { blockIndex, txIndex };
+	}
+	/** Write the pointer for an address @param {string} address @param {TxId} txId */
 	#register(address, txId) {
 		if (!ADDRESS.checkConformity(address)) throw new Error(`IdentityStore.register: invalid address format: ${address}`);
 		const a = ADDRESS.fromString(address);
 		const handler = this.handlers[a.prefix];
 		const entryBytes = serializer.serialize.txsIdsArray([txId]);
 		handler.write(entryBytes, a.uint32 * ENTRY_BYTES);
+	}
+	/** Write an empty pointer for an address @param {string} address */
+	#unregister(address) {
+		if (!ADDRESS.checkConformity(address)) throw new Error(`IdentityStore.unregister: invalid address format: ${address}`);
+		const a = ADDRESS.fromString(address);
+		const handler = this.handlers[a.prefix];
+		handler.write(new Uint8Array(ENTRY_BYTES), a.uint32 * ENTRY_BYTES);
 	}
 	#createHandlerForPrefix(prefix = 'C') {
 		if (this.handlers[prefix]) this.handlers[prefix].close();

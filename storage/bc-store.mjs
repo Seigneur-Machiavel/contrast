@@ -48,7 +48,6 @@ export class BlockchainStorage {
 	/** @param {BlockFinalized} block @param {TxAnchor[]} involvedAnchors */
     addBlock(block, involvedAnchors) {
 		if (block.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${block.index}`);
-		if (!this.#consumeUtxos(involvedAnchors)) throw new Error('Unable to consume UTXOs for the new block');
 
 		// PREPARE DATA TO WRITE
 		const utxosStates = BlockUtils.buildUtxosStatesOfFinalizedBlock(block);
@@ -64,6 +63,9 @@ export class BlockchainStorage {
 		this.idxsHandler.write(indexesBytes);
 		blockchainHandler.write(blockBytes);
 		blockchainHandler.write(utxosStatesBytes);
+
+		// MARK UTXOS AS SPENT
+		if (!this.#digestUtxos(involvedAnchors, 'consume')) throw new Error('Unable to consume UTXOs for the new block');
 		this.lastBlockIndex++;
     }
     getBlockBytes(height = 0, includeUtxosStates = false) {
@@ -138,9 +140,13 @@ export class BlockchainStorage {
 
 		return utxos;
 	}
-    undoBlock() {
+	/** Undo the last block added to the blockchain @param {TxAnchor[]} [involvedAnchors] If missing: will erase block without restoring UTXOs */
+    undoBlock(involvedAnchors) {
         const offset = this.#getOffsetOfBlockData(this.lastBlockIndex);
-		if (!offset) return false;
+		if (!offset) throw new Error('Blockchain.undoBlock: unable to retrieve last block offset.');
+
+		// RESTORE UTXOs TO UNSPENT
+		if (involvedAnchors && !this.#digestUtxos(involvedAnchors, 'restore')) throw new Error('Unable to restore UTXOs for the undone block');
 
 		// TRUNCATE INDEXES, AND BLOCKCHAIN FILE
 		const blockchainHandler = this.#getBlockchainHandler(this.lastBlockIndex);
@@ -165,11 +171,11 @@ export class BlockchainStorage {
     }
 
 	// INTERNAL METHODS
-	/** @param {TxAnchor[]} anchors */
-	#consumeUtxos(anchors) {
+	/** @param {TxAnchor[]} anchors @param {'consume' | 'restore'} mode Default: 'consume' */
+	#digestUtxos(anchors, mode = 'consume') {
 		if (anchors.length === 0) return true;
 
-		const u = new Uint8Array(1); u[0] = 1; // spent state
+		const u = new Uint8Array(1); u[0] = (mode === 'consume' ? 1 : 0);
 		const search = this.#getUtxosSearchPattern(anchors);
 		for (const height of search.keys()) {
 			if (height > this.lastBlockIndex) return false;
@@ -188,9 +194,13 @@ export class BlockchainStorage {
 					searchPattern.set(serializer.voutIdEncoder.encode(voutIndex), 2);
 					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
 					if (stateOffset === -1) throw new Error(`UTXO not found (anchor: ${height}:${txIndex}:${voutIndex})`);
-					if (utxosStatesBytes[stateOffset + 4] === 1) throw new Error(`UTXO already spent (anchor: ${height}:${txIndex}:${voutIndex})`);
-					
-					// MARK UTXO AS SPENT
+
+					// CHECK CURRENT STATE
+					const state = utxosStatesBytes[stateOffset + 4];
+					if (state === 1 && mode === 'consume') throw new Error(`UTXO already spent (anchor: ${height}:${txIndex}:${voutIndex})`);
+					if (state === 0 && mode === 'restore') throw new Error(`UTXO already restored (anchor: ${height}:${txIndex}:${voutIndex})`);
+
+					// MARK UTXO AS SPENT OR RESTORED
 					blockchainHandler.write(u, utxosStatesBytesStart + stateOffset + 4);
 				}
 			}

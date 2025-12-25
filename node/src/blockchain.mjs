@@ -44,7 +44,7 @@ export class Blockchain {
 	 * @param {TxAnchor[]} involvedAnchors - The list of UTXO anchors involved in the block.
 	 * @param {Object<string, UTXO>} involvedUTXOs - The list of UTXO anchors involved in the block */
     addBlock(block, involvedAnchors, involvedUTXOs) {
-		// SAVE IN ORDER: BLOCK_IDX, BLOCK_DATA, IDENTITIES, LEDGERS
+		// SAVE IN ORDER: BLOCK_IDX, BLOCK_DATA, UTXO CHANGES, IDENTITIES, LEDGERS
 		this.blockStorage.addBlock(block, involvedAnchors);
 		// CRASH DURING SAVING OPERATION (TEST PURPOSES)
 		//if (block.index === 5) throw new Error('Test error on block 5 saving');
@@ -62,9 +62,17 @@ export class Blockchain {
 		return this.blockStorage.getUtxos(anchors, breakOnSpent);
 	}
 	undoBlock() {
-		// TODO: undo Ledgers first
-		this.blockStorage.undoBlock();
+		const block = this.lastBlock;
+		if (!block) throw new Error('Blockchain.undoBlock: no block to undo.');
+		if (block.index !== this.currentHeight) throw new Error('Blockchain.undoBlock: last block index mismatch.');
+		
+		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
+		const involvedUTXOs = this.getUtxos(involvedAnchors, false);
+		if (!involvedUTXOs) throw new Error('Blockchain.undoBlock: unable to retrieve all involved UTXOs for the last block.');
 
+		this.ledgersStorage.undoBlock(block, involvedUTXOs);
+		this.identityStore.undoBlock(block, involvedUTXOs);
+		this.blockStorage.undoBlock(involvedAnchors);
 		if (this.currentHeight === -1) this.reset();
 		else this.lastBlock = this.getBlock() || null;
 	}
@@ -81,21 +89,28 @@ export class Blockchain {
 		// FIRST: CHECK BLOCKCHAIN FILE LENGTH MATCHES THE LAST INDEXED BLOCK OFFSET
 		// IF: IDX = OK, BLOCKCHAIN = BAD => RESIZE BLOCKCHAIN AND UNDO IDX. (LEDGERS AND IDENTITIES SHOULD BE GOOD)
 		const isLastBlockConsistent = this.blockStorage.checkBlockchainBytesLengthConsistency();
-		if (!isLastBlockConsistent) { this.blockStorage.undoBlock(); return; }
+		if (!isLastBlockConsistent) {
+			const block = this.getBlock(this.currentHeight);
+			const involvedAnchors = block ? BlockUtils.extractInvolvedAnchors(block, 'blockFinalized').involvedAnchors : undefined;
+			this.blockStorage.undoBlock(involvedAnchors);
+			if (!involvedAnchors) this.miniLogger.log('Critical: blockchain truncated without UTXO restoration', (m, c) => console.error(m, c));
+        	else this.miniLogger.log('Blockchain file repaired', (m, c) => console.warn(m, c));
+			return;
+		}
 
 		// SECOND: ENSURE IDENTITIES CONSISTENCY
 		const block = this.getBlock(this.currentHeight);
-		if (!block) throw new Error('Blockchain consistency check failed: unable to retrieve last block.');
+    	if (!block) throw new Error('Blockchain consistency check failed: unable to retrieve last block.');
 
 		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
-		if (repeatedAnchorsCount > 0) throw new Error('Blockchain consistency check failed: repeated UTXO anchors found in the last block.');
+		if (repeatedAnchorsCount > 0) throw new Error('Blockchain consistency check failed: repeated UTXO anchors found.');
 
 		const involvedUTXOs = this.getUtxos(involvedAnchors, false);
 		if (!involvedUTXOs) throw new Error('Blockchain consistency check failed: unable to retrieve all involved UTXOs for the last block.');
 		
-		const discoveryAddresses = this.identityStore.digestBlock(block, involvedUTXOs);
-		if (discoveryAddresses.length === 0) this.miniLogger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
-		else this.miniLogger.log(`Blockchain identities check: ${discoveryAddresses.length} new identities patch`, (m, c) => console.info(m, c));
+		const discovery = this.identityStore.digestBlock(block, involvedUTXOs);
+		if (discovery.size === 0) this.miniLogger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
+		else this.miniLogger.log(`Blockchain identities check: ${discovery.size} new identities patch`, (m, c) => console.info(m, c));
 		
 		// THIRD: ENSURE LEDGERS CONSISTENCY
 		const applyCount = this.ledgersStorage.digestBlock(block, involvedUTXOs, true);

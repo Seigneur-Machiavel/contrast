@@ -26,21 +26,6 @@ parentPort.on('message', async (task) => {
 				response.error = error.message;
 			}
 			break;
-		case 'linkValidation':
-			abortOperationRequested = false; // Reset for new task
-			try {
-				/** @type {Array<{address: string, pubKey: string}>} */
-				const batchOfLinks = task.batchOfLinks;
-				for (const link of batchOfLinks) {
-					if (abortOperationRequested) return;
-					//await TxValidation.controlAddressDerivation(link.address, link.pubKey);
-				}
-			} catch (/**@type {any}*/ error) {
-				console.error(`[VALIDATION_WORKER ${task.id}] linkValidation error: ${error.message}`);
-				abortOperationRequested = false;
-				response.error = error.message;
-			}
-			break;
 		case 'abortOperation':
 			abortOperationRequested = true;
 			return;

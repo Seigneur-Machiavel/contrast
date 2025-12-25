@@ -45,6 +45,8 @@ export class ContrastNode {
 	rewardAddresses = { validator: null, miner: null };
 	/** @type {Object<string, import("./websocketCallback.mjs").WebSocketCallBack>} */
     wsCallbacks = {};
+	/** @type {Object<string, Function>} */
+	callbacks = {};
 	mainStorage;
 	blockchain;
 	memPool;
@@ -86,6 +88,7 @@ export class ContrastNode {
         const state = this.info.state;
         if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) return;
         this.info.state = newState;
+		this.callbacks.onStateUpdate?.(newState);
 		this.wsCallbacks.onStateUpdate?.execute(newState, undefined);
     }
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
@@ -128,6 +131,7 @@ export class ContrastNode {
 			if (!updated) throw new Error('The miner rejected the created block candidate');
 	
 			this.p2p.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
+			this.callbacks.onBroadcastNewCandidate?.(myCandidate);
 			this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getCandidateBlockHeader(myCandidate), undefined);
 		} catch (/** @type {any} */ error) { this.logger.log(error.stack, (m, c) => console.error(m, c)); }
 		
@@ -159,22 +163,27 @@ export class ContrastNode {
         this.blockchain.addBlock(block, involvedAnchors, involvedUTXOs);
 		this.vss.newStakes(newStakesOutputs, 'persist');
         this.memPool.removeFinalizedBlocksTransactions(block);
+    
+        const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
+        const [minerAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
+        this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorAddress} | miner: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+		this.updateState("idle", "applying finalized block");
+        
+		// NOTIFY CALLBACKS
+		this.callbacks.onBlockConfirmed?.(block);
         if (this.wsCallbacks.onBlockConfirmed) {
 			const blockInfo = BlockUtils.getFinalizedBlockInfo(involvedUTXOs, block);
 			this.wsCallbacks.onBlockConfirmed.execute(blockInfo, undefined);
 		}
-    
-        //this.logger.log(`${statePrefix}#${finalizedBlock.index} -> blockBytes: ${blockBytes} | Txs: ${finalizedBlock.Txs.length}`, (m, c) => console.info(m, c));
-        const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
-        const [minerAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
-        this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorAddress} | miner: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
-        
-        this.updateState("idle", "applying finalized block");
+
         if (!broadcastNewCandidate || isSync) return;
 		const d = Math.round(BLOCKCHAIN_SETTINGS.targetBlockTime / 12);
 		this.timeouts.createAndShareBlockCandidate = setTimeout(() => this.createAndShareMyBlockCandidate(), d);
     }
-
+	/** Register a websocket callback. @param {'onBlockConfirmed' | 'onStateUpdate' | 'onBroadcastNewCandidate'} event @param {Function} callback */
+	on(event, callback) {
+		this.callbacks[event] = callback;
+	}
 	// GETTERS
 	
 	// INTERNALS ------------------------------------------------------------------------

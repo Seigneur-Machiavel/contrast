@@ -229,11 +229,12 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`miniUTXOs array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-		/** @param {TxId[]} txsIds ex: blockHeight:txIndex */
+		/** @param {TxId[] | Set<TxId>} txsIds ex: blockHeight:txIndex */
         txsIdsArray(txsIds) {
-			const w = new BinaryWriter(txsIds.length * lengths.txId.bytes);
-            for (let j = 0; j < txsIds.length; j++) {
-				const { height, txIndex } = serializer.parseTxId(txsIds[j]);
+			const count = txsIds instanceof Set ? txsIds.size : txsIds.length;
+			const w = new BinaryWriter(count * lengths.txId.bytes);
+			for (const txId of txsIds) {
+				const { height, txIndex } = serializer.parseTxId(txId);
 				w.writeBytes(converter.numberTo4Bytes(height));
 				w.writeBytes(converter.numberTo2Bytes(txIndex))
             };

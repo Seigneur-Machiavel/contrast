@@ -47,7 +47,6 @@ class WorkerDispatcher {
 
 	/** @param {BlockFinalized} block */
 	async dispatchJobAndWaitResult(block) {
-
 		let batch = [];
         const batchSize = Math.ceil(block.Txs.length / this.workers.length);
 		for (const tx of block.Txs) {
@@ -64,7 +63,6 @@ class WorkerDispatcher {
 		// WAIT FOR ALL WORKERS TO COMPLETE (OR ABORT ON ERROR)
 		try { await Promise.all(this.promises); return true; }
 		catch (error) { for (const worker of this.workers) worker.abortOperation(); }
-
 		return false;
 	}
 }
@@ -192,7 +190,7 @@ export class BlockValidation {
 		const workerDispatcher = new WorkerDispatcher(node.workers.validations || []);
 		if ((node.workers.validations || []).length === 0) throw new Error('No validation workers available');
 		
-		// PROCESS ALL TXs
+		// PROCESS ALL TXs -EXCEPT SIGNATURE VERIFICATION
 		/** Key: Address, Value: PubKeys @type {Map<string, Set<string>>} */
 		const involvedIdentities = new Map(); // used to avoid re-fetching identities
         const validationStart = Date.now();
@@ -205,7 +203,7 @@ export class BlockValidation {
 			TxValidation.controlAddressesOwnership(node, involvedUTXOs, tx, specialTx, involvedIdentities);
         }
 
-		// DEPRECATED === DISPATCH WORKERS FOR ADDRESS DERIVATION VALIDATION => NOW CHECKED in "transactionValidation()"
+		// SIGNATURE VERIFICATION (MULTI-THREADING)
 		const dispatchedSuccessfully = await workerDispatcher.dispatchJobAndWaitResult(block);
 		if (!dispatchedSuccessfully) throw new Error(failureErrorMessages.discoveredDerivationFailure);
 

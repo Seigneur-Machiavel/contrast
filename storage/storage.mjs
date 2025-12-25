@@ -114,8 +114,7 @@ export class ContrastStorage extends StorageRoot {
 			const finalFilePath = path.join(d, `${fileName}.bin`);
 			fs.writeFileSync(tempFilePath, serializedData);
 			
-			// On Linux: rename overwrites atomically
-			// On Windows: need to delete first
+			// On Linux: rename overwrites atomically | On Windows: need to delete first
 			if (process.platform === 'win32' && fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
 			fs.renameSync(tempFilePath, finalFilePath);
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
@@ -138,6 +137,21 @@ export class ContrastStorage extends StorageRoot {
 			const d = directoryPath || this.PATH.STORAGE;
 			if (!fs.existsSync(d)) fs.mkdirSync(d);
 			await fs.promises.writeFile(path.join(d, `${fileName}.bin`), serializedData);
+		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
+	}
+	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
+	async saveBinaryAsyncAtomic(fileName, serializedData, directoryPath) {
+		try {
+			const d = directoryPath || this.PATH.STORAGE;
+			if (!fs.existsSync(d)) fs.mkdirSync(d);
+			
+			const tempFilePath = path.join(d, `${fileName}.bin.tmp`);
+			const finalFilePath = path.join(d, `${fileName}.bin`);
+			await fs.promises.writeFile(tempFilePath, serializedData);
+
+			// On Linux: rename overwrites atomically | On Windows: need to delete first
+			if (process.platform === 'win32' && fs.existsSync(finalFilePath)) await fs.promises.unlink(finalFilePath);
+			await fs.promises.rename(tempFilePath, finalFilePath);
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 	}
 	/** @param {string} fileName @param {string} directoryPath @returns {Promise<Uint8Array | null>} */
