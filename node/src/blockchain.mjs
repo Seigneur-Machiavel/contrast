@@ -51,6 +51,7 @@ export class Blockchain {
 		this.identityStore.digestBlock(block, involvedUTXOs);
 		this.ledgersStorage.digestBlock(block, involvedUTXOs);
 		this.lastBlock = block;
+		this.ledgersStorage.cache.clear();
 		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
     }
 	getBlock(height = this.currentHeight) {
@@ -73,6 +74,7 @@ export class Blockchain {
 		this.ledgersStorage.undoBlock(block, involvedUTXOs);
 		this.identityStore.undoBlock(block, involvedUTXOs);
 		this.blockStorage.undoBlock(involvedAnchors);
+		this.ledgersStorage.cache.clear();
 		if (this.currentHeight === -1) this.reset();
 		else this.lastBlock = this.getBlock() || null;
 	}
@@ -116,5 +118,6 @@ export class Blockchain {
 		const applyCount = this.ledgersStorage.digestBlock(block, involvedUTXOs, true);
 		if (applyCount === 0) this.miniLogger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
 		else this.miniLogger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
+		this.ledgersStorage.cache.clear();
 	}
 }

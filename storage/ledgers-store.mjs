@@ -61,6 +61,8 @@ class AddressChanges {
 }
 
 export class LedgersStorage {
+	/** @type {Map<string, Uint8Array>} */
+	cache = new Map(); // clear on new block & undo block
 	storage;
 	get logger() { return this.storage.miniLogger; }
 	converter = new HiveP2P.Converter();
@@ -170,7 +172,7 @@ export class LedgersStorage {
 
 		// IF EVERYTHING OK => SAVE
 		const dirPath = this.#pathOfAddressLedgerDir(address);
-		if (w.isWritingComplete) this.storage.saveBinaryAtomic(address, w.getBytes(), dirPath, true);
+		if (w.isWritingComplete) this.storage.saveBinary(address, w.getBytes(), dirPath, true);
 		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 	
 		return 1;
@@ -221,7 +223,7 @@ export class LedgersStorage {
 		w.writeBytes(l.historyBytes.subarray(0, l.historyBytes.length - newHistoryBytes.length));
 
 		// IF EVERYTHING OK => SAVE
-		if (w.isWritingComplete) this.storage.saveBinaryAtomic(address, w.getBytes(), dirPath, true);
+		if (w.isWritingComplete) this.storage.saveBinary(address, w.getBytes(), dirPath, true);
 		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		
 		return 1;
@@ -229,7 +231,9 @@ export class LedgersStorage {
 	/** @param {string} address */
 	#readAddressLedger(address) {
 		const dirPath = this.#pathOfAddressLedgerDir(address);
-		const r = new BinaryReader(this.storage.loadBinary(address, dirPath, false) || new Uint8Array(6 + 6 + 6 + 4 + 4));
+		const r = new BinaryReader(this.cache.get(address)		// Try cache first
+			|| this.storage.loadBinary(address, dirPath, false) // Then storage
+			|| new Uint8Array(6 + 6 + 6 + 4 + 4)); 				// Else empty ledger
 		let balance = 		this.converter.bytes6ToNumber(r.read(6));
 		let totalSent = 	this.converter.bytes6ToNumber(r.read(6));
 		let totalReceived = this.converter.bytes6ToNumber(r.read(6));
@@ -238,6 +242,7 @@ export class LedgersStorage {
 		const utxosBuffer = Buffer.from(r.read(nbUtxos * 15));
 		const historyBytes= r.read(nbHistory * 6);
 		if (!r.isReadingComplete) throw new Error(`Ledger for address ${address} reading incomplete: read ${r.cursor} of ${r.view.length} bytes`);
+		this.cache.set(address, r.view); // CACHE THE RAW BYTES
 		return { balance, totalSent, totalReceived, nbUtxos, nbHistory, utxosBuffer, historyBytes };
 	}
 	/** @param {Buffer} buffer @param {Uint8Array[]} entriesToSkip */

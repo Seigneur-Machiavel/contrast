@@ -1,3 +1,4 @@
+// @ts-check
 // THIS FILE IS USED TO START NODE STANDALONE (WITHOUT ELECTRON APP WRAPPER)
 //process.on('uncaughtException', (error) => { console.error('Uncatched exception:', error.stack); });
 //process.on('unhandledRejection', (reason, promise) => { console.error('Promise rejected:', promise, 'reason:', reason); });
@@ -8,7 +9,8 @@ const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const observerPort = args.includes('-op') ? parseInt(nextArg('-op')) : 27270;
 const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
-const clearOnStart = false;
+const clearOnStart = false;		// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
+const transactionTest = false; 	// ENABLE TRANSACTION TESTING MODE - FOR TEST PURPOSES ONLY!
 
 import HiveP2P from "hive-p2p";
 import { Wallet } from '../src/wallet.mjs';
@@ -24,15 +26,16 @@ const bootstrapWallet = new Wallet(bootstrapSeed);
 await bootstrapWallet.deriveAccounts(2, 'C', bootstrapStorage);
 
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
+// @ts-ignore
 const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
 await bootstrapNode.start(bootstrapWallet);
 
 // CLIENT NODES
-const bootstraps = [bootstrapNode.p2p.publicUrl];
+const bootstraps = bootstrapNode.p2p.publicUrl ? [bootstrapNode.p2p.publicUrl] : [];
 const clientSeeds = [
 	'0000000000000000000000000000000000000000000000000000000000000003',
 ]
-async function createClientNode(seed) {
+async function createClientNode(seed = 'toto') {
 	const clientStorage = new ContrastStorage(seed);
 	if (clearOnStart) clientStorage.clear(); // start fresh
 	const clientWallet = new Wallet(seed);
@@ -50,40 +53,22 @@ for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 // -------------------------------------------------------------------------------------
 // TESTS
 // -------------------------------------------------------------------------------------
-let lastHeight = -1;
-while(true) {
-	await new Promise((resolve) => setTimeout(resolve, 1_000));
-	if (bootstrapNode.blockchain.currentHeight < 2) continue;
-	if (lastHeight === bootstrapNode.blockchain.currentHeight) continue;
-	lastHeight = bootstrapNode.blockchain.currentHeight;
-
-	// TEST: getBlock time
-	const getBlockStart = performance.now();
-	const block = bootstrapNode.blockchain.getBlock(0);
-	const getBlockTime = performance.now() - getBlockStart;
-	console.log(`Genesis block (served in ${getBlockTime.toFixed(5)} ms):`, block);
-
-	// TEST: get utxos time
-	//const anchors = ['0:0:0', '0:1:0', '1:0:0', '1:1:0', '2:0:0', '2:1:0', '3:0:0', '3:1:0', '4:0:0', '4:1:0'];
-	const anchors = [];
-	for (let i = 0; i < bootstrapNode.blockchain.currentHeight + 1; i++) anchors.push(`${i}:1:0`);
-	const getUtxosStart = performance.now();
-	const utxos = bootstrapNode.blockchain.getUtxos(anchors, false);
-	const getUtxosTime = performance.now() - getUtxosStart;
-	console.log(`${anchors.length} Utxos served in ${getUtxosTime.toFixed(5)} ms`);
+/** @param {import("../src/blockchain.mjs").BlockFinalized} block */
+const onBlockConfirmed = (block) => {
+	if (!transactionTest) return;
 
 	// TEST: create transaction
-	if (!utxos) continue; // wait for utxos
-
 	const a = bootstrapWallet.accounts[0];
 	const receipient = bootstrapWallet.accounts[1].address;
 	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
+	if (!ledger.ledgerUtxos) return;
 	a.ledgerUtxos = ledger.ledgerUtxos;
 	const tx = Transaction_Builder.createAndSignTransaction(a, 10, receipient)?.signedTx;
-	if (!tx) continue; // failed to create tx
+	if (!tx) return; // failed to create tx
 
 	// TEST: push transaction
 	console.log(`Pushing transaction spending: ${tx.inputs.join(', ')}`);
 	try { bootstrapNode.memPool.pushTransaction(bootstrapNode,tx); }
-	catch (error) { console.error('Failed to push transaction to mempool:', error.message); }
+	catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
 }
+bootstrapNode.on('onBlockConfirmed', onBlockConfirmed);

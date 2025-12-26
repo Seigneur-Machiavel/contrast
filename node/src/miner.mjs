@@ -140,6 +140,8 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         this.powBroadcastState.foundHeight = block.index;
         this.powBroadcastState.sentTryCount++;
 
+		// Ensure the block timestamp is not in the future
+		if (block.timestamp > this.node.time + 990) await new Promise((resolve) => setTimeout(resolve, block.timestamp - this.node.time));
         if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorAddress} | miner: ${minerAddress}
 (Height: ${block.index}) | Diff = ${block.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));
         if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorAddress} | M:${minerAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
