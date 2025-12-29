@@ -114,6 +114,7 @@ async function prepareBlockCandidateBeforeMining() {
 
 	const signatureHex = await BlockUtils.getBlockSignature(clonedCandidate);
 	const nonce = `${headerNonce}${coinbaseNonce}`;
+	//console.log(`${ signatureHex}:${nonce}`);
 	//console.log(`getBlockSignature: ${performance.now() - time}ms`); time = performance.now();
 
 	return { signatureHex, nonce, clonedCandidate };

@@ -73,6 +73,7 @@ export class BlockUtils {
         const headerNonce = block.nonce;
         const coinbaseNonce = block.Txs[0].inputs[0];
         const nonce = `${headerNonce}${coinbaseNonce}`;
+		//console.log(`%c${signatureHex}:${nonce}`, 'color: orange;');
         const argon2Fnc = HashFunctions.Argon2;
         const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
         if (!blockHash) throw new Error('Invalid block hash');
@@ -127,17 +128,6 @@ export class BlockUtils {
 		const { index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, powReward } = parsed;
 		return new BlockCandidate(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, powReward);
 	}
-	/** @param {string} blockDataJSON */
-	static finalizedBlockFromJSON(blockDataJSON) {
-		if (!blockDataJSON || typeof blockDataJSON !== 'string') throw new Error('Invalid blockDataJSON');
-		const parsed = JSON.parse(blockDataJSON);
-		const { index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce } = parsed;
-		return new BlockFinalized(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce);
-	}
-    /** @param {BlockFinalized} block */
-    static cloneBlockFinalized(block) {
-        return this.finalizedBlockFromJSON(this.dataAsJSON(block));
-    }
     /** @param {BlockCandidate} block */
     static cloneBlockCandidate(block) {
         return this.candidateBlockFromJSON(this.dataAsJSON(block));
@@ -199,7 +189,7 @@ export class BlockUtils {
 		// THIS PART SHOULD BE SEPARATED
 		let maxLegitimacyToBroadcast = vss.maxLegitimacyToBroadcast;
 		/*if (roles.includes('miner') && miner.bestCandidateIndex() === blockchain.lastBlock.index + 1)
-			maxLegitimacyToBroadcast = Math.min(maxLegitimacyToBroadcast, miner.bestCandidateLegitimacy());
+			maxLegitimacyToBroadcast = Math.min(maxLegitimacyToBroadcast, miner.bestCandidateLegitimacy);
 		
 		if (myLegitimacy > maxLegitimacyToBroadcast) return null;*/
 		// END OF PART THAT SHOULD BE SEPARATED

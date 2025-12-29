@@ -1,6 +1,6 @@
 {
     "maxHistory": "100",
-    "allActive": true,
+    "allActive": false,
     "activeCategories": {
         "global": true,
         "main": true,
@@ -12,7 +12,7 @@
         "blockchain": true,
         "node": true,
         "sync": true,
-        "validation": true,
+        "validation": false,
         "wallet": true,
         "dashboard": true,
         "storage": true,
@@ -25,6 +25,7 @@
 		"node": "color: deepskyblue; font-weight: bold",
 		"storage": "color: white",
 		"validation": "color: green",
-		"wallet": "color: yellow"
+		"wallet": "color: yellow",
+		"sync": "color: fuchsia"
 	}
 }

@@ -1,15 +1,16 @@
 // @ts-check
 import HiveP2P from "hive-p2p";
 import { Vss } from './vss.mjs';
+import { Sync } from './sync.mjs';
 import { Miner } from './miner.mjs';
 import { MemPool } from './mempool.mjs';
 import { BlockUtils } from './block.mjs';
+import { TaskQueue } from './task-queue.mjs';
 import { Blockchain } from './blockchain.mjs';
-import { MESSAGE } from '../../types/messages.mjs';
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/workers-classes.mjs';
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
+import { serializer } from "../../utils/serializer.mjs";
 
 /**
 * @typedef {import("./wallet.mjs").Account} Account
@@ -38,7 +39,7 @@ export async function createContrastNode(options = { bootstraps: [] }) {
 }
 
 export class ContrastNode {
-	syncAndReady = false;
+	running = true;
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
 	/** @type {{ validator: string | null, miner: string | null }} */
@@ -47,16 +48,14 @@ export class ContrastNode {
     wsCallbacks = {};
 	/** @type {Object<string, Function>} */
 	callbacks = {};
-	mainStorage;
-	blockchain;
-	memPool;
-	p2p;
+
+	mainStorage; blockchain;
+	taskQueue; memPool; p2p;
+	vss; miner; sync;
 	verb;
 
 	/** @type {Account | undefined} */
 	account;
-	vss = new Vss();
-	miner = new Miner(this);
 	workers = {
 		nbOfValidationWorkers: 4,
 		/** @type {ValidationWorker[]} */		validations: [],
@@ -70,12 +69,16 @@ export class ContrastNode {
 	constructor(p2pNode, storage, verb = 2) {
 		this.blockchain = new Blockchain(storage);
 		this.memPool = new MemPool(this.blockchain);
+		this.taskQueue = new TaskQueue();
 		this.mainStorage = storage;
-		this.p2p = p2pNode;
 		this.verb = verb;
-		
-		this.miner.startWithWorker();
-		this.p2p.onPeerConnect(() => this.logger.log('Peer connected to Contrast node', (m, c) => console.log(m, c)));
+		this.p2p = p2pNode;
+		this.vss = new Vss();
+		this.miner = new Miner(this);
+		this.sync = new Sync(this);
+
+		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
+		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 	}
 
 	// GETTERS --------------------------------------------------------------------------
@@ -83,6 +86,8 @@ export class ContrastNode {
 	get neighborsCount() { return this.p2p.peerStore.neighborsList.length; }
 
 	// API ------------------------------------------------------------------------------
+	/** Register a websocket callback. @param {'onBlockConfirmed' | 'onStateUpdate' | 'onBroadcastNewCandidate'} event @param {Function} callback */
+	on(event, callback) { this.callbacks[event] = callback; }
 	/** Update the node state and notify websocket clients. @param {string} newState @param {string} [onlyFrom] Updates only if current state matches */
 	updateState(newState, onlyFrom) {
         const state = this.info.state;
@@ -96,15 +101,16 @@ export class ContrastNode {
 		this.logger.log(`Starting Contrast node...`, (m, c) => console.log(m, c)); // control the clock
 		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
-
-		if (!this.p2p.started) { // START P2P NODE IF NOT
+		
+		if (!this.p2p.started) { 		// START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
 			await this.p2p.start();
 		}
-
-		// TODO: SYNC BLOCKCHAIN FROM NETWORK
-
+		
+		this.#startStackExecution();
 		await this.createAndShareMyBlockCandidate();
+		if (this.blockchain.lastBlock) // SHARE MY STATUS IF ANY BLOCK EXISTS
+			this.sync.setAndshareMyStatus(this.blockchain.lastBlock);
 	}
 	async stop() {
 		if (this.verb >= 1) this.logger.log(`Stopping Contrast node...`, (m, c) => console.log(m, c));
@@ -129,63 +135,46 @@ export class ContrastNode {
 
 			const updated = this.miner.updateBestCandidate(myCandidate);
 			if (!updated) throw new Error('The miner rejected the created block candidate');
-	
-			this.p2p.broadcast(new MESSAGE.BLOCK_CANDIDATE_MSG(myCandidate));
+			
+			const serialized = serializer.serialize.block(myCandidate, 'candidate');
+			this.p2p.broadcast(serialized, { topic: 'block_candidate' });
 			this.callbacks.onBroadcastNewCandidate?.(myCandidate);
 			this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getCandidateBlockHeader(myCandidate), undefined);
 		} catch (/** @type {any} */ error) { this.logger.log(error.stack, (m, c) => console.error(m, c)); }
 		
 		this.updateState("idle", "creating block candidate");
 	}
-	/** Digest and apply a finalized block to the blockchain.
-     * @param {BlockFinalized} block
-     * @param {Object} [options] - Configuration options for the blockchain.
-     * @param {boolean} [options.broadcastNewCandidate] - default: true
-     * @param {boolean} [options.isSync] - default: false */
-    async digestFinalizedBlock(block, options = {}) {
-		const startTime = performance.now();
-        const statePrefix = options.isSync ? '(syncing) ' : '';
-        this.updateState(`${statePrefix}finalized block #${block.index}`);
-
-        const { broadcastNewCandidate = true, isSync = false } = options;
-        //if (!finalizedBlock || (this.syncHandler.isSyncing && !isSync))
-            //throw new Error(!finalizedBlock ? 'Invalid block candidate' : "Node is syncing, can't process block");
-        this.updateState(`${statePrefix}block-validation #${block.index}`);
-        const validationResult = await BlockValidation.validateBlockProposal(this, block);
-        const { hashConfInfo, involvedAnchors, involvedUTXOs } = validationResult;
-        if (!(hashConfInfo?.conform)) throw new Error('Failed to validate block');
-
-		const newStakesOutputs = BlockUtils.extractNewStakesFromFinalizedBlock(block);
-		if (!this.vss.newStakes(newStakesOutputs, 'control')) throw new Error('VSS: Max supply reached during applyBlock().');
-
-        this.updateState(`${statePrefix}applying finalized block #${block.index}`);
-        
-        this.blockchain.addBlock(block, involvedAnchors, involvedUTXOs);
-		this.vss.newStakes(newStakesOutputs, 'persist');
-        this.memPool.removeFinalizedBlocksTransactions(block);
-    
-        const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
-        const [minerAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
-        this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorAddress} | miner: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
-		this.updateState("idle", "applying finalized block");
-        
-		// NOTIFY CALLBACKS
-		this.callbacks.onBlockConfirmed?.(block);
-        if (this.wsCallbacks.onBlockConfirmed) {
-			const blockInfo = BlockUtils.getFinalizedBlockInfo(involvedUTXOs, block);
-			this.wsCallbacks.onBlockConfirmed.execute(blockInfo, undefined);
-		}
-
-        if (!broadcastNewCandidate || isSync) return;
-		const d = Math.round(BLOCKCHAIN_SETTINGS.targetBlockTime / 12);
-		this.timeouts.createAndShareBlockCandidate = setTimeout(() => this.createAndShareMyBlockCandidate(), d);
-    }
-	/** Register a websocket callback. @param {'onBlockConfirmed' | 'onStateUpdate' | 'onBroadcastNewCandidate'} event @param {Function} callback */
-	on(event, callback) {
-		this.callbacks[event] = callback;
-	}
-	// GETTERS
 	
 	// INTERNALS ------------------------------------------------------------------------
+	async #startStackExecution() {
+		while (this.running) {
+			await this.#executeNextTask();
+			await this.miner.tick();
+			await new Promise(r => setTimeout(r, 10));
+		}
+	}
+	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
+	#onBlockCandidate = async (senderId, data, HOPS) => {
+		try { // ignore block candidates that are not the next block
+			const block = serializer.deserialize.blockCandidate(data);
+			if (this.blockchain.currentHeight + 1 !== block.index) return;
+			const isLegitimate = await BlockValidation.validateLegitimacy(block, this.vss, 'candidate');
+			if (isLegitimate) this.taskQueue.push('NewCandidate', block);
+		} catch (/** @type {any} */ error) { this.logger.log(`[SYNC] -onBlockCandidate- Error deserializing block candidate from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	};
+	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
+	#onBlockFinalized = (senderId, data, HOPS) => {
+		this.taskQueue.push('DigestBlock', data);
+	};
+	#executeNextTask = async () => {
+		const task = this.taskQueue.nextTask;
+		if (!task) { this.miner.canProceedMining = true; return; } // no task to process
 
+		if (task.type === 'PushTxs') 			// as batch of transactions
+			for (const tx of task.data) this.memPool.pushTransaction(this, tx);
+		else if (task.type === 'NewCandidate') 	//@ts-ignore: task.data = BlockCandidate
+			this.miner.updateBestCandidate(task.data);
+		else if (task.type === 'DigestBlock') 	//@ts-ignore: task.data = BlockFinalizedSerialized
+			await this.blockchain.digestFinalizedBlock(this, task.data);
+	}
 }

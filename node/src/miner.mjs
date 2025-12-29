@@ -1,13 +1,13 @@
+// @ts-check
 import { BlockUtils } from './block.mjs';
-import { BLOCK_FINALIZED_MSG } from '../../types/messages.mjs';
-import { MinerWorker } from '../workers/workers-classes.mjs';
-import { mining } from '../../utils/mining-functions.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
+import { serializer } from '../../utils/serializer.mjs';
+import { mining } from '../../utils/mining-functions.mjs';
+import { MinerWorker } from '../workers/workers-classes.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
- * @typedef {import("./OpStack.mjs").OpStack} OpStack
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack */
@@ -20,15 +20,15 @@ export class Miner {
 	terminated = false;
 	useBetTimestamp = true;
 	logger = new MiniLogger('miner');
-	addressOfCandidatesBroadcasted = [];
 	
+	/** @type {string[]} */								addressOfCandidatesBroadcasted = [];
 	/** @type {Object<string, WebSocketCallBack>} */	wsCallbacks = {};
 	/** @type {BlockCandidate | null} */				bestCandidate = null;
 	/** @type {MinerWorker[]} */						workers = [];
 	/** @type {number[]} */								bets = [];
 	/** @type {{min: number, max: number}} will bet between 70% and 90% of the expected blockTime */
 	betRange = { min: .7, max: .9 };
-	powBroadcastState = { foundHeight: -1, sentTryCount: 0, maxTryCount: 3 };
+	powBroadcastState = { foundHeight: -1, sentTryCount: 0, maxTryCount: 1 };
 	canProceedMining = true;
 	hashPeriodStart = 0;
 	hashCount = 0;
@@ -40,15 +40,16 @@ export class Miner {
         this.address = node.rewardAddresses.miner;
     }
 
-    bestCandidateIndex() { return this.bestCandidate ? this.bestCandidate.index : -1; }
-    bestCandidateLegitimacy() { return this.bestCandidate ? this.bestCandidate.legitimacy : 0; }
+    get bestCandidateIndex() { return this.bestCandidate ? this.bestCandidate.index : -1; }
+    get bestCandidateLegitimacy() { return this.bestCandidate ? this.bestCandidate.legitimacy : 0; }
 
+	// API METHODS
     /** @param {BlockCandidate} block */
     updateBestCandidate(block) {
 		if (!block) return false;
 		
         const posAddress = block.Txs[0].inputs[0].split(':')[0];
-        const isMyBlock = posAddress === this.node.account.address;
+        const isMyBlock = posAddress === this.node.account?.address;
         const posReward = block.Txs[0].outputs[0].amount;
         const powReward = block.powReward;
         if (!posReward || !powReward) {
@@ -77,8 +78,8 @@ export class Miner {
             if (newCandidateFinalDiff > bestCandidateFinalDiff) return false;
             if (newCandidateFinalDiff < bestCandidateFinalDiff) reasonChange = `(easier block: ${newCandidateFinalDiff} < ${bestCandidateFinalDiff})`;
             // if everything is the same, then check the powReward to decide
-            if (reasonChange === 'none' && powReward > this.bestCandidate.powReward )
-                reasonChange = ` (higher powReward: ${powReward} > ${this.bestCandidate.powReward})`;
+            if (reasonChange === 'none' && powReward > (this.bestCandidate?.powReward || 0))
+                reasonChange = ` (higher powReward: ${powReward} > ${this.bestCandidate?.powReward || 0})`;
             
             // preserve the current best candidate, but update considered as true to encourage re-bradcasting
             if (reasonChange === 'none') return true;
@@ -92,13 +93,70 @@ from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestC
 to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`, (m, c) => console.info(m, c));
         
         // if block is different than the highest block index, then reset the addressOfCandidatesBroadcasted
-        if (block.index !== this.bestCandidateIndex()) this.addressOfCandidatesBroadcasted = [];
+        if (block.index !== this.bestCandidateIndex) this.addressOfCandidatesBroadcasted = [];
         this.bestCandidate = block;
         
         this.#prepareBets();
         if (this.wsCallbacks.onBestBlockCandidateChange) this.wsCallbacks.onBestBlockCandidateChange.execute(block);
         return true;
     }
+	async tick() {
+		if (this.terminated) return;
+
+		const rewardAddress = this.node.rewardAddresses.miner;
+		const blockCandidate = this.bestCandidate;
+		if (!rewardAddress || !blockCandidate) return;
+		if (blockCandidate.index !== this.bestCandidateIndex) {
+			if (this.node.verb > 2) this.logger.log(`[MINER] Block candidate is not the highest block candidate: #${blockCandidate.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
+			return;
+		}
+
+		this.#togglePausedWorkers();
+		await this.#terminateUnusedWorkers();
+		const readyWorkers = await this.#createMissingWorkers(rewardAddress);
+		this.hashRate = this.#getAverageHashrate();
+		
+		const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
+		for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
+		
+		timings.workersUpdate = Date.now();
+		for (let i = 0; i < readyWorkers; i++) {
+			if (!this.node.time) return;
+			const blockBet = this.bets?.[i] || 0;
+			const timeOffset = Date.now() - this.node.time;
+			this.workers[i].updateInfo(rewardAddress, blockBet, timeOffset);
+		}
+		timings.updateInfo = Date.now();
+
+		for (let i = 0; i < readyWorkers; i++) {
+			const worker = this.workers[i];
+			if (worker.isWorking) continue;
+			if (worker.result !== null) {
+				const finalizedBlock = worker.getResultAndClear();
+				if (this.node.verb > 2) this.logger.log(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`, (m, c) => console.info(m, c));
+				await this.broadcastFinalizedBlock(finalizedBlock);
+			}
+
+			if (!this.canProceedMining) continue;
+			worker.mineUntilValid();
+		}
+		
+		const endTimestamp = Date.now();
+		const timeSpent = endTimestamp - timings.start;
+		if (timeSpent < 1000) return;
+
+		if (this.node.verb > 1) this.logger.log(`[MINER] Abnormal time spent: ${timeSpent}ms
+		- workersUpdate: ${timings.workersUpdate - timings.start}ms
+		- updateInfo: ${timings.updateInfo - timings.workersUpdate}ms`, (m, c) => console.info(m, c));
+    }
+    async terminateAsync() {
+        const promises = [];
+        for (const worker of this.workers) { promises.push(worker.terminateAsync()); }
+        await Promise.all(promises);
+        this.terminated = true;
+    }
+
+	// INTERNAL METHODS
     #prepareBets(nbOfBets = 32) {
         if (!this.useBetTimestamp) { this.bets = []; return }
 
@@ -116,8 +174,8 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
     /** @param {BlockFinalized} block */
     async broadcastFinalizedBlock(block) {
         // Avoid sending the block pow if a higher block candidate is available to be mined
-        if (this.bestCandidateIndex() > block.index) {
-            if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized is not the highest block candidate: #${block.index} < #${this.bestCandidateIndex()}`, (m, c) => console.info(m, c));
+        if (this.bestCandidateIndex > block.index) {
+            if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized is not the highest block candidate: #${block.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
             return;
         }
         
@@ -141,20 +199,28 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         this.powBroadcastState.sentTryCount++;
 
 		// Ensure the block timestamp is not in the future
-		if (block.timestamp > this.node.time + 990) await new Promise((resolve) => setTimeout(resolve, block.timestamp - this.node.time));
+		const t = this.node.time || Date.now();
+		if (block.timestamp > t + 990) await new Promise((resolve) => setTimeout(resolve, block.timestamp - (t + 990)));
         if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorAddress} | miner: ${minerAddress}
-(Height: ${block.index}) | Diff = ${block.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));
-        if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorAddress} | M:${minerAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
-
+			(Height: ${block.index}) | Diff = ${block.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));
+			if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorAddress} | M:${minerAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
+		
+		// THEN SHARE THE FINALIZED BLOCK
+		const serialized = serializer.serialize.block(block, 'finalized');
+        this.node.p2p.broadcast(serialized, { topic: 'block_finalized' });
+		//console.log(`[MINER:${minerAddress}] Broadcasted #${block.index}`); // DEBUG
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
-        this.node.p2p.broadcast(new BLOCK_FINALIZED_MSG(block));
-		this.node.digestFinalizedBlock(block);
+		//const deserializedBlock = serializer.deserialize.blockFinalized(serialized); // DEBUG
+		this.node.taskQueue.pushFirst('DigestBlock', serialized);
         if (this.wsCallbacks.onBroadcastFinalizedBlock) this.wsCallbacks.onBroadcastFinalizedBlock.execute(BlockUtils.getFinalizedBlockHeader(block));
     }
+	/** @param {string} rewardAddress */
     async #createMissingWorkers(rewardAddress) {
+		if (!this.node.time) return 0;
+
         const missingWorkers = this.nbOfWorkers - this.workers.length;
         let readyWorkers = this.workers.length;
-        if (missingWorkers <= 0) return readyWorkers
+        if (missingWorkers <= 0) return readyWorkers;
 
         for (let i = 0; i < missingWorkers; i++) {
             const workerIndex = readyWorkers + i;
@@ -174,73 +240,10 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         for (let i = 0; i < this.nbOfWorkers; i++)
             if (this.workers[i]?.paused === true) this.workers[i].resume();
     }
-
     async #terminateUnusedWorkers() {
-        for (let i = this.nbOfWorkers; i < this.workers.length; i++) this.workers[i].terminateAsync();
+		if (this.workers.length <= this.nbOfWorkers) return;
+        for (let i = this.nbOfWorkers; i < this.workers.length; i++)
+			await this.workers[i].terminateAsync();
         this.workers = this.workers.slice(0, this.nbOfWorkers);
-    }
-    /** DON'T AWAIT THIS FUNCTION */
-    async startWithWorker() {
-        const delayBetweenUpdate = 10; // previously 100ms
-        let countBeforeCleaning = 0;
-        while (!this.terminated) {
-            await new Promise((resolve) => setTimeout(resolve, delayBetweenUpdate));
-			const rewardAddress = this.node.rewardAddresses.miner;
-			const blockCandidate = this.bestCandidate;
-            if (!rewardAddress || !blockCandidate) continue;
-            if (blockCandidate.index !== this.bestCandidateIndex()) {
-                if (this.node.verb > 2) this.logger.log(`[MINER] Block candidate is not the highest block candidate: #${blockCandidate.index} < #${this.bestCandidateIndex()}`, (m, c) => console.info(m, c));
-				continue;
-            }
-
-            this.#togglePausedWorkers();
-            if (countBeforeCleaning > 0) countBeforeCleaning--;
-            if (countBeforeCleaning <= 0) {
-                await this.#terminateUnusedWorkers();
-                countBeforeCleaning = 200;
-            }
-            const readyWorkers = await this.#createMissingWorkers(rewardAddress);
-            this.hashRate = this.#getAverageHashrate();
-            
-            const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
-            for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
-            
-            timings.workersUpdate = Date.now();
-            for (let i = 0; i < readyWorkers; i++) {
-                const blockBet = this.bets?.[i] || 0;
-				const timeOffset = Date.now() - this.node.time;
-                this.workers[i].updateInfo(rewardAddress, blockBet, timeOffset);
-            }
-            timings.updateInfo = Date.now();
-
-            for (let i = 0; i < readyWorkers; i++) {
-                const worker = this.workers[i];
-                if (worker.isWorking) continue;
-                if (worker.result !== null) {
-                    const finalizedBlock = worker.getResultAndClear();
-                    if (this.node.verb > 2) this.logger.log(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`, (m, c) => console.info(m, c));
-                    await this.broadcastFinalizedBlock(finalizedBlock);
-                }
-
-                if (!this.canProceedMining) continue;
-                worker.mineUntilValid();
-            }
-            
-            const endTimestamp = Date.now();
-            const timeSpent = endTimestamp - timings.start;
-            if (timeSpent < 1000) continue;
-
-            if (this.node.verb > 1) this.logger.log(`[MINER] Abnormal time spent: ${timeSpent}ms
-            - workersUpdate: ${timings.workersUpdate - timings.start}ms
-            - updateInfo: ${timings.updateInfo - timings.workersUpdate}ms`, (m, c) => console.info(m, c));
-        }
-
-        if (this.node.verb > 1) this.logger.log(`[MINER] Stopped`, (m, c) => console.info(m, c));
-    }
-    async terminateAsync() {
-        const promises = [];
-        for (const worker of this.workers) { promises.push(worker.terminateAsync()); }
-        await Promise.all(promises);
-        this.terminated = true;
     }
 }

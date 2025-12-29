@@ -17,7 +17,7 @@ export class BlockCandidateHeader {
 }
 
 export class BlockFinalizedHeader extends BlockCandidateHeader {
-	/** @param {number} index - The block height @param {number} supply - The total supply before the coinbase reward @param {number} coinBase - The coinbase reward @param {number} difficulty - The difficulty of the block @param {number} legitimacy - The legitimacy of the validator who created the block candidate @param {string} prevHash - The hash of the previous block @param {number} posTimestamp - The timestamp of the block creation @param {number} timestamp - The timestamp of the block @param {string} hash - The hash of the block @param {number} nonce - The nonce of the block */
+	/** @param {number} index - The block height @param {number} supply - The total supply before the coinbase reward @param {number} coinBase - The coinbase reward @param {number} difficulty - The difficulty of the block @param {number} legitimacy - The legitimacy of the validator who created the block candidate @param {string} prevHash - The hash of the previous block @param {number} posTimestamp - The timestamp of the block creation @param {number} timestamp - The timestamp of the block @param {string} hash - The hash of the block @param {string} nonce - The nonce of the block */
 	constructor(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce) {
 		super(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp);
 		this.timestamp = timestamp;
@@ -36,7 +36,7 @@ export class BlockCandidate extends BlockCandidateHeader {
 }
 
 export class BlockFinalized extends BlockFinalizedHeader {
-	/** @param {number} index - The block height @param {number} supply - The total supply before the coinbase reward @param {number} coinBase - The coinbase reward @param {number} difficulty - The difficulty of the block @param {number} legitimacy - The legitimacy of the validator who created the block candidate @param {string} prevHash - The hash of the previous block @param {import('./transaction.mjs').Transaction[]} Txs - The transactions in the block @param {number} posTimestamp - The timestamp of the block creation @param {number} timestamp - The timestamp of the block @param {string} hash - The hash of the block @param {number} nonce - The nonce of the block */
+	/** @param {number} index - The block height @param {number} supply - The total supply before the coinbase reward @param {number} coinBase - The coinbase reward @param {number} difficulty - The difficulty of the block @param {number} legitimacy - The legitimacy of the validator who created the block candidate @param {string} prevHash - The hash of the previous block @param {import('./transaction.mjs').Transaction[]} Txs - The transactions in the block @param {number} posTimestamp - The timestamp of the block creation @param {number} timestamp - The timestamp of the block @param {string} hash - The hash of the block @param {string} nonce - The nonce of the block */
 	constructor(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, timestamp, hash, nonce) {
 		super(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
 		this.Txs = Txs;

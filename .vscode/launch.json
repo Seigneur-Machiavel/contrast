@@ -28,6 +28,14 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Test Sync",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/tests/test_sync.mjs",
+			"args": ["--max-old-space-size=16384"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Test storage",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/storage/storage.mjs",

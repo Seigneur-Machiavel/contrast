@@ -1,5 +1,5 @@
 // @ts-check
-// THIS FILE IS USED TO START NODE STANDALONE (WITHOUT ELECTRON APP WRAPPER)
+// THIS FILE IS USED TO TEST SYNC PROCESS DURING HORRIBLE NETWORK/VALIDATION CONDITIONS
 //process.on('uncaughtException', (error) => { console.error('Uncatched exception:', error.stack); });
 //process.on('unhandledRejection', (reason, promise) => { console.error('Promise rejected:', promise, 'reason:', reason); });
 
@@ -33,14 +33,15 @@ const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstr
 // @ts-ignore
 const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
 await bootstrapNode.start(bootstrapWallet);
+bootstrapNode.blockchain.simulateFailureRate = 0.1; // for testing purposes
 
 // CLIENT NODES
 const bootstraps = bootstrapNode.p2p.publicUrl ? [bootstrapNode.p2p.publicUrl] : [];
 const clientSeeds = [
 	'0000000000000000000000000000000000000000000000000000000000000003',
-	/*'0000000000000000000000000000000000000000000000000000000000000004',
+	'0000000000000000000000000000000000000000000000000000000000000004',
 	'0000000000000000000000000000000000000000000000000000000000000005',
-	'0000000000000000000000000000000000000000000000000000000000000006',*/
+	'0000000000000000000000000000000000000000000000000000000000000006',
 ]
 async function createClientNode(seed = 'toto') {
 	const clientStorage = new ContrastStorage(seed);
@@ -51,6 +52,7 @@ async function createClientNode(seed = 'toto') {
 	const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
 	const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps });
 	await clientNode.start(clientWallet);
+	clientNode.blockchain.simulateFailureRate = 0.1; // for testing purposes
 	return clientNode;
 }
 

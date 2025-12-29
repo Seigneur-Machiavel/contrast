@@ -9,22 +9,13 @@ import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_
 * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../types/transaction.mjs").TxId} TxId
 * @typedef {import("../types/transaction.mjs").UtxoState} UtxoState
+* @typedef {import("../types/sync.mjs").BlockHeightHash} BlockHeightHash
 *
 * @typedef {Object} NodeSetting
 * @property {string} privateKey
 * @property {string} validatorRewardAddress
 * @property {string} minerAddress
-* @property {number} minerThreads
-* 
-* @typedef {Object} CheckpointInfo
-* @property {number} height
-* @property {string} hash
-* 
-* @typedef {Object} SyncStatus
-* @property {number} currentHeight
-* @property {string} latestBlockHash
-* @property {CheckpointInfo} checkpointInfo
-*/
+* @property {number} minerThreads */
 
 const converter = new Converter();
 const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
@@ -334,14 +325,14 @@ export const serializer = {
 			w.writeBytes(converter.numberTo6Bytes(blockData.posTimestamp));	// posTimestamp
 			
 			if (mode === 'finalized' && 'timestamp' in blockData)
-				w.writeBytes(converter.numberTo6Bytes(blockData.timestamp || 0)); 	// timestamp
+				w.writeBytes(converter.numberTo6Bytes(blockData.timestamp)); // timestamp
 			if (mode === 'candidate' && 'powReward' in blockData)
-				w.writeBytes(converter.numberTo6Bytes(blockData.powReward || 0)); 	// powReward
+				w.writeBytes(converter.numberTo6Bytes(blockData.powReward || 0)); // powReward
 
 			if (mode === 'finalized' && 'hash' in blockData)
-				w.writeBytes(converter.hexToBytes(blockData.hash || '00'.repeat(32))); // hash
+				w.writeBytes(converter.hexToBytes(blockData.hash)); 	// hash
 			if (mode === 'finalized' && 'nonce' in blockData)
-				w.writeBytes(converter.numberTo4Bytes(blockData.nonce || 0)); 		// nonce
+				w.writeBytes(converter.hexToBytes(blockData.nonce));	// nonce
             
             // POINTERS & TXS -> This specific traitment offer better reading performance:
             // no need to deserialize the whole block to read the txs
@@ -356,6 +347,13 @@ export const serializer = {
             if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Block serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
+		/** @param {number} blockHeight @param {string} blockHash */
+		blockHeightHash(blockHeight, blockHash) {
+			const w = new BinaryWriter(4 + lengths.hash.bytes);
+			w.writeBytes(converter.numberTo4Bytes(blockHeight));
+			w.writeBytes(converter.hexToBytes(blockHash));
+			return w.getBytes();
+		},
 		/** @param {number} start @param {number} blockBytes @param {number} utxosStatesBytes */
 		blockIndexEntry(start, blockBytes, utxosStatesBytes) {
 			const w = new BinaryWriter(12);
@@ -516,7 +514,7 @@ export const serializer = {
 			let hash, nonce;
 			if (mode === 'finalized') {
 				hash = converter.bytesToHex(r.read(32));
-				nonce = converter.bytes4ToNumber(r.read(4));
+				nonce = converter.bytesToHex(r.read(4));
 			}
 
 			// POINTERS & TXS -> This specific traitment offer better reading performance:
@@ -545,6 +543,14 @@ export const serializer = {
 			const { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce } = this.blockData(serializedBlock, 'finalized');
 			if (typeof hash === 'undefined' || typeof timestamp === 'undefined' || typeof nonce === 'undefined') throw new Error('Finalized block is missing data');
 			return new BlockFinalized(index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce);
+		},
+		/** @param {Uint8Array} serializedBlockHeightHash */
+		blockHeightHash(serializedBlockHeightHash) {
+			const r = new BinaryReader(serializedBlockHeightHash);
+			const blockHeight = converter.bytes4ToNumber(r.read(4));
+			const blockHash = converter.bytesToHex(r.read(lengths.hash.bytes));
+			if (r.isReadingComplete) return { blockHeight, blockHash };
+			else throw new Error(`BlockHeightHash is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {Uint8Array} entry */
 		blockIndexEntry(entry) {

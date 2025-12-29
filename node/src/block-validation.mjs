@@ -17,14 +17,14 @@ import { serializer } from '../../utils/serializer.mjs';
 const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {
 	// others can goes up in there but i'm tired now...
-	invalidDifficulty: (diff = 0, expected = 0) => `!banBlock! !applyOffense! Invalid difficulty: ${diff} - expected: ${expected}`,
-	invalidPowHash: (diff = 0, h = '', msg = '') => `!banBlock! !applyOffense! Invalid pow hash (difficulty: ${diff}): ${h} -> ${msg}`,
-	invalidCoinbase: (index = 0, coinBase = 0, expected = 0) => `!banBlock! !applyOffense! Invalid #${index} coinbase: ${coinBase} - expected: ${expected}`,
-	repeatedAnchors: '!banBlock! !applyOffense! Repeated UTXO anchors detected in block',
-	missingUtxo: '!banBlock! !applyOffense! At least one UTXO not found or spent in blockchain during block validation',
-	invalidReward: '!banBlock! !applyOffense! Invalid rewards',
-	doubleSpending: '!banBlock! !applyOffense! Double spending detected',
-	discoveredDerivationFailure: '!banBlock! !applyOffense! Address derivation control failed during block validation',
+	invalidDifficulty: (diff = 0, expected = 0) => `!applyOffense! Invalid difficulty: ${diff} - expected: ${expected}`,
+	invalidPowHash: (diff = 0, h = '', msg = '') => `!applyOffense! Invalid pow hash (difficulty: ${diff}): ${h} -> ${msg}`,
+	invalidCoinbase: (index = 0, coinBase = 0, expected = 0) => `!applyOffense! Invalid #${index} coinbase: ${coinBase} - expected: ${expected}`,
+	repeatedAnchors: '!applyOffense! Repeated UTXO anchors detected in block',
+	missingUtxo: '!applyOffense! At least one UTXO not found or spent in blockchain during block validation',
+	invalidReward: '!applyOffense! Invalid rewards',
+	doubleSpending: '!applyOffense! Double spending detected',
+	discoveredDerivationFailure: '!applyOffense! Address derivation control failed during block validation',
 }
 
 class WorkerDispatcher {
@@ -69,50 +69,26 @@ class WorkerDispatcher {
 
 export class BlockValidation {
 	// PUBLIC STATIC METHODS
-    /** @param {number} powReward @param {number} posReward @param {BlockFinalized} block */
-    static #areExpectedRewards(powReward, posReward, block) {
-		const isValid = block.Txs[0].outputs[0].amount === powReward && block.Txs[1].outputs[0].amount === posReward;
-        if (isValid) return; // PASS
-		// LOG & THROW ERROR
-		if (block.Txs[0].outputs[0].amount !== powReward) validationMiniLogger.log(`Invalid PoW reward: ${block.Txs[0].outputs[0].amount} - expected: ${powReward}`, (m, c) => console.warn(m, c));
-        if (block.Txs[1].outputs[0].amount !== posReward) validationMiniLogger.log(`Invalid PoS reward: ${block.Txs[1].outputs[0].amount} - expected: ${posReward}`, (m, c) => console.warn(m, c));
-		throw new Error(failureErrorMessages.invalidReward);
-	}
-	/** @param {ContrastNode} node @param {BlockFinalized} block */
-    static async validateBlockProposal(node, block) {
+	/** @param {ContrastNode} node @param {BlockFinalized} block @param {Uint8Array} serializedBlock */
+    static async validateBlockProposal(node, block, serializedBlock) {
 		if (typeof node.time !== 'number') throw new Error('Node time is missing');
 
-		// VALIDATE BLOCK INDEX
-		if (typeof block.index !== 'number') throw new Error('!banBlock! Invalid block index type');
-		if (Number.isInteger(block.index) === false) throw new Error('!banBlock! Invalid block index value');
-
-		// VALIDATE BLOCK SIGNATURE (CONFORMITY OF THE DATAS USING SERIALIZER)
-		const serializedBlock = serializer.serialize.block(block);
-		const deserializedBlock = serializer.deserialize.blockFinalized(serializedBlock);
-		const blockSignature = await BlockUtils.getBlockSignature(block);
-		const deserializedSignature = await BlockUtils.getBlockSignature(deserializedBlock);
-		if (blockSignature !== deserializedSignature) throw new Error('Block signature mismatch');
+		// COMPARE BLOCK INDEX TO CURRENT HEIGHT => AVOID HARD HASH COMPUTE IN MANY CASES
+		const { lastBlock, currentHeight } = node.blockchain;
+		if (block.index <= currentHeight) throw new Error(`Rejected: #${block.index} <= #${currentHeight}(outdated)`);
+		if (block.index > currentHeight + 1) throw new Error(`Rejected: #${block.index} > #${currentHeight + 1}(last+1)`);
 
 		// VALIDATE BLOCK HASH
         const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(block);
-        if (block.hash !== hex) throw new Error(`!banBlock! !applyOffense! Invalid pow hash (not corresponding): ${block.hash} - expected: ${hex}`);
-
-		// COMPARE BLOCK INDEX TO CURRENT HEIGHT
-		const currentHeight = node.blockchain.currentHeight;
-		if (block.index > currentHeight + 9) throw new Error(`!ignore! Rejected: #${block.index} > #${currentHeight + 9}(+9)`);
-        if (block.index > currentHeight + 1) throw new Error(`!store! !reorg! #${block.index} > #${currentHeight + 1}(last+1)`);
-        if (block.index <= currentHeight) throw new Error(`!store! Rejected: #${block.index} <= #${currentHeight}(outdated)`);
+        if (block.hash !== hex) throw new Error(`!applyOffense! Invalid pow hash (not corresponding): ${block.hash} - expected: ${hex}`);
 
 		// VALIDATE BLOCK PREVHASH
-		const lastBlock = node.blockchain.lastBlock || null;
-		const lastBlockHash = lastBlock ? lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
-		if (typeof block.prevHash !== 'string') throw new Error('!banBlock! Invalid prevHash type!');
-        if (typeof lastBlockHash !== 'string') throw new Error('!banBlock! Invalid lastBlockHash type!');
-        if (lastBlockHash !== block.prevHash) throw new Error(`!store! !reorg! #${block.index} Rejected -> invalid prevHash: ${block.prevHash.slice(0, 10)} - expected: ${lastBlockHash.slice(0, 10)}`);
+		const lastBlockHash = lastBlock?.hash || '0000000000000000000000000000000000000000000000000000000000000000';
+        if (lastBlockHash !== block.prevHash) throw new Error(`#${block.index} Rejected -> invalid prevHash: ${block.prevHash.slice(0, 4)}... - expected: ${lastBlockHash.slice(0, 4)}...`);
 
 		// VALIDATE BLOCK TIMESTAMPS && LEGITIMACY
 		this.#validateTimestamps(block, lastBlock, node.time);
-        await this.#validateLegitimacy(block, node.vss);
+        await this.validateLegitimacy(block, node.vss);
 
 		// VALIDATE BLOCK DIFFICULTY EQUAL TO EXPECTED
         const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node, true);
@@ -130,7 +106,7 @@ export class BlockValidation {
 		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
 		if (repeatedAnchorsCount > 0) throw new Error(failureErrorMessages.repeatedAnchors);
 
-		const involvedUTXOs = node.blockchain.getUtxos(involvedAnchors, true);
+		const involvedUTXOs = node.blockchain.getUtxos(involvedAnchors, true); // early return null if at least one UTXO is missing/spent
 		if (involvedUTXOs === null) throw new Error(failureErrorMessages.missingUtxo);
         
 		// FULL BLOCK TXs VALIDATION we finish with the harder function
@@ -141,28 +117,11 @@ export class BlockValidation {
 		await this.#fullBlockTxsValidation(node, block, involvedUTXOs);
         return { hashConfInfo, powReward, posReward, totalFees, involvedAnchors, involvedUTXOs, size: serializedBlock.length };
     }
-
-	// PRIVATE STATIC METHODS
-    /** @param {BlockFinalized} block @param {BlockFinalized | null} lastBlock @param {number} currentTime */
-    static #validateTimestamps(block, lastBlock, currentTime) {
-        // verify the POS timestamp
-        if (typeof block.posTimestamp !== 'number') throw new Error('!banBlock! !applyOffense! Invalid block timestamp');
-        if (Number.isInteger(block.posTimestamp) === false) throw new Error('!banBlock! !applyOffense! Invalid block timestamp');
-        const timeDiffPos = lastBlock === null ? 1 : block.posTimestamp - lastBlock.timestamp;
-        if (timeDiffPos <= 0) throw new Error(`Rejected: #${block.index} -> time difference (${timeDiffPos}) must be greater than 0`);
-
-        // verify final timestamp
-        if (typeof block.timestamp !== 'number') throw new Error('!banBlock! !applyOffense! Invalid block timestamp');
-        if (Number.isInteger(block.timestamp) === false) throw new Error('!banBlock! !applyOffense! Invalid block timestamp');
-        
-        const timeDiffFinal = block.timestamp - currentTime;
-        if (timeDiffFinal > 1000) throw new Error(`!applyMinorOffense! Rejected: #${block.index} -> ${timeDiffFinal} > timestamp_diff_tolerance: 1000`);
-    }
-    /** @param {BlockFinalized} block @param {import("./vss.mjs").Vss} vss */
-    static async #validateLegitimacy(block, vss, isCandidateBlock = false) {
+	/** @param {BlockFinalized | BlockCandidate} block @param {import("./vss.mjs").Vss} vss @param {'finalized' | 'candidate'} mode */
+    static async validateLegitimacy(block, vss, mode = 'finalized') {
         //await vss.calculateRoundLegitimacies(block.prevHash);
         const txs = block.Txs;
-        const validatorTx = isCandidateBlock ? txs[0] : txs[1];
+        const validatorTx = mode === 'candidate' ? txs[0] : txs[1];
         if (!validatorTx) throw new Error('Validator transaction not found');
 
         const validatorAddress = validatorTx.inputs[0].split(':')[0];
@@ -172,6 +131,32 @@ export class BlockValidation {
         if (validatorLegitimacy === block.legitimacy) return true;
         else throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - expected: ${validatorLegitimacy}`);
     }
+
+	// PRIVATE STATIC METHODS
+    /** @param {BlockFinalized} block @param {BlockFinalized | null} lastBlock @param {number} currentTime */
+    static #validateTimestamps(block, lastBlock, currentTime) {
+        // verify the POS timestamp
+        if (typeof block.posTimestamp !== 'number') throw new Error('!applyOffense! Invalid block timestamp');
+        if (Number.isInteger(block.posTimestamp) === false) throw new Error('!applyOffense! Invalid block timestamp');
+        const timeDiffPos = lastBlock === null ? 1 : block.posTimestamp - lastBlock.timestamp;
+        if (timeDiffPos <= 0) throw new Error(`Rejected: #${block.index} -> time difference (${timeDiffPos}) must be greater than 0`);
+
+        // verify final timestamp
+        if (typeof block.timestamp !== 'number') throw new Error('!applyOffense! Invalid block timestamp');
+        if (Number.isInteger(block.timestamp) === false) throw new Error('!applyOffense! Invalid block timestamp');
+        
+        const timeDiffFinal = block.timestamp - currentTime;
+        if (timeDiffFinal > 1000) throw new Error(`!applyMinorOffense! Rejected: #${block.index} -> ${timeDiffFinal} > timestamp_diff_tolerance: 1000`);
+    }
+	/** @param {number} powReward @param {number} posReward @param {BlockFinalized} block */
+    static #areExpectedRewards(powReward, posReward, block) {
+		const isValid = block.Txs[0].outputs[0].amount === powReward && block.Txs[1].outputs[0].amount === posReward;
+        if (isValid) return; // PASS
+		// LOG & THROW ERROR
+		if (block.Txs[0].outputs[0].amount !== powReward) validationMiniLogger.log(`Invalid PoW reward: ${block.Txs[0].outputs[0].amount} - expected: ${powReward}`, (m, c) => console.warn(m, c));
+        if (block.Txs[1].outputs[0].amount !== posReward) validationMiniLogger.log(`Invalid PoS reward: ${block.Txs[1].outputs[0].amount} - expected: ${posReward}`, (m, c) => console.warn(m, c));
+		throw new Error(failureErrorMessages.invalidReward);
+	}
     /** @param {BlockFinalized} block */
     static #isFinalizedBlockDoubleSpending(block) {
         const utxoSpent = new Set();

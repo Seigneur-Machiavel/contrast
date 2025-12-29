@@ -65,36 +65,38 @@ export class MemPool {
 	constructor(blockchain) { this.blockchain = blockchain; }
 
     /** @param {ContrastNode} node @param {Transaction} tx */
-    pushTransaction(node, tx, replaceConflicting = false) {
-		// CHECK CONFORMITY & SPENDABILITY
-        TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
-		const { involvedAnchors, repeatedAnchorsCount } = Transaction_Builder.extractInvolvedAnchors(tx, true);
-		if (repeatedAnchorsCount > 0) throw new Error('Transaction has repeated anchors');
-		
-		const involvedUTXOs = this.blockchain.getUtxos(involvedAnchors, true);
-		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for transaction, spent or missing UTXO detected');
-        TxValidation.isConformTransaction(involvedUTXOs, tx); // throw if not conform/spendable
-		
-		// CHECK CONFLICTS
-        const colliding = this.#caughtTransactionsAnchorsCollision(tx);
-        if (colliding?.tx && !replaceConflicting) throw new Error(`Conflicting UTXOs anchor: ${colliding?.anchor}`);
-		
-        const serialized = serializer.serialize.transaction(tx);
-		if (serialized.byteLength >= BLOCKCHAIN_SETTINGS.maxTransactionSize)
-			throw new Error(`Transaction size too big: ${serialized.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
+    pushTransaction(node, tx) {
+		try {
+			// CHECK CONFORMITY & SPENDABILITY
+			TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
+			const { involvedAnchors, repeatedAnchorsCount } = Transaction_Builder.extractInvolvedAnchors(tx, true);
+			if (repeatedAnchorsCount > 0) throw new Error('Transaction has repeated anchors');
 			
-		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
-        const result = TxValidation.transactionValidation(node, involvedUTXOs, tx);
-		if (!result.success) throw new Error('Transaction validation failed: succes === false');
-        
-		tx.byteWeight = serialized.byteLength;
-        tx.feePerByte = result.fee / tx.byteWeight;
-		if (tx.feePerByte <= (colliding?.tx?.feePerByte || 0)) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${(colliding?.tx?.feePerByte || 0)} >= ${tx.feePerByte}`);
-        
-		// ADD TRANSACTION TO MEMPOOL
-		if (colliding?.tx) this.#removeMempoolTransaction(colliding.tx);
-		this.organizer.addTransaction(tx, tx.feePerByte || 0);
-        for (const input of tx.inputs) this.byAnchor.set(input, tx);
+			const involvedUTXOs = this.blockchain.getUtxos(involvedAnchors, true);
+			if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for transaction, spent or missing UTXO detected');
+			TxValidation.isConformTransaction(involvedUTXOs, tx); // throw if not conform/spendable
+			
+			// CHECK CONFLICTS
+			const colliding = this.#caughtTransactionsAnchorsCollision(tx);
+			if (colliding?.tx) throw new Error(`Conflicting UTXOs anchor: ${colliding?.anchor}`);
+			
+			const serialized = serializer.serialize.transaction(tx);
+			if (serialized.byteLength >= BLOCKCHAIN_SETTINGS.maxTransactionSize)
+				throw new Error(`Transaction size too big: ${serialized.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
+				
+			// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
+			const result = TxValidation.transactionValidation(node, involvedUTXOs, tx);
+			if (!result.success) throw new Error('Transaction validation failed: succes === false');
+			
+			tx.byteWeight = serialized.byteLength;
+			tx.feePerByte = result.fee / tx.byteWeight;
+			if (tx.feePerByte <= (colliding?.tx?.feePerByte || 0)) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${(colliding?.tx?.feePerByte || 0)} >= ${tx.feePerByte}`);
+			
+			// ADD TRANSACTION TO MEMPOOL
+			if (colliding?.tx) this.#removeMempoolTransaction(colliding.tx);
+			this.organizer.addTransaction(tx, tx.feePerByte || 0);
+			for (const input of tx.inputs) this.byAnchor.set(input, tx);
+		} catch (/** @type {any} */ error) { return error.message; }
     }
 	/** @param {BlockFinalized} block */
     removeFinalizedBlocksTransactions(block) {

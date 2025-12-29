@@ -1,11 +1,13 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
 import { serializer } from '../../utils/serializer.mjs';
+import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 //import { BlockchainStorage, AddressesTxsRefsStorage } from '../../storage/storage.mjs';
 import { BlockchainStorage } from '../../storage/bc-store.mjs';
 import { IdentityStore } from "../../storage/identity-store.mjs";
 import { LedgersStorage } from '../../storage/ledgers-store.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
 * @typedef {import("./mempool.mjs").MemPool} MemPool
@@ -20,10 +22,11 @@ import { LedgersStorage } from '../../storage/ledgers-store.mjs';
 export class Blockchain {
 	/** @type {BlockFinalized | null} */	lastBlock = null;
 	get currentHeight() { return this.blockStorage.lastBlockIndex; }
-    miniLogger = new MiniLogger('blockchain');
+    logger = new MiniLogger('blockchain');
 	blockStorage;
 	identityStore;
 	ledgersStorage;
+	simulateFailureRate = 0; // for testing purposes (0 === no failure, 1 === always fail)
 
 	/** @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
 	constructor(storage) {
@@ -38,6 +41,64 @@ export class Blockchain {
 	}
 
 	// API METHODS
+	/** Digest and apply a finalized block to the blockchain.
+	 * @param {ContrastNode} node @param {Uint8Array} serializedBlock - The serialized finalized block.
+     * @param {Object} [options] - Configuration options for the blockchain.
+     * @param {boolean} [options.broadcastNewCandidate] - default: true
+     * @param {boolean} [options.isSync] - default: false */
+    async digestFinalizedBlock(node, serializedBlock, options = {}) {
+		const startTime = performance.now();
+		const statePrefix = options.isSync ? '(syncing) ' : '';
+		const { broadcastNewCandidate = true, isSync = false } = options;
+
+		if (this.currentHeight > 10 && Math.random() < this.simulateFailureRate)
+			return console.log(`%c[DEBUG] Simulated failure of digestFinalizedBlock #${this.currentHeight}`, 'color: orange;');
+
+		try {
+			// VALIDATE BLOCK
+			const block = serializer.deserialize.blockFinalized(serializedBlock);
+			node.updateState(`${statePrefix}block-validation #${block.index}`);
+			const validationResult = await BlockValidation.validateBlockProposal(node, block, serializedBlock);
+			const { hashConfInfo, involvedAnchors, involvedUTXOs } = validationResult;
+			if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
+	
+			const newStakesOutputs = BlockUtils.extractNewStakesFromFinalizedBlock(block);
+			if (!node.vss.newStakes(newStakesOutputs, 'control')) throw new Error('VSS unable to control new stakes from block');
+	
+			// APPLY BLOCK
+			node.updateState(`${statePrefix}applying finalized block #${block.index}`);
+			this.addBlock(block, involvedAnchors, involvedUTXOs);
+			node.vss.newStakes(newStakesOutputs, 'persist');
+			node.memPool.removeFinalizedBlocksTransactions(block);
+			
+			const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
+			const [minerAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
+			this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorAddress} | miner: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+			node.updateState("idle", "applying finalized block");
+			
+			// UPDATE STATUS & NOTIFY CALLBACKS
+			node.sync.setAndshareMyStatus(block);
+			node.callbacks.onBlockConfirmed?.(block);
+			if (node.wsCallbacks.onBlockConfirmed) {
+				const blockInfo = BlockUtils.getFinalizedBlockInfo(involvedUTXOs, block);
+				node.wsCallbacks.onBlockConfirmed.execute(blockInfo, undefined);
+			}
+		} catch (/** @type {any} */ error) {
+			const isOffense = error.message.startsWith('!applyOffense!');
+			if (isOffense) this.logger.log(`!!! Offense detected while digesting finalized block: ${error.message}`, (m, c) => console.warn(m, c));
+			else if (!isSync) await node.sync.catchUpWithNetwork();
+			//this.logger.log(`Failed to digest finalized block: ${error.message}`, (m, c) => console.error(m, c));
+			return false;
+		}
+
+		// CREATE AND SHARE NEW CANDIDATE AFTER A SHORT DELAY
+		if (broadcastNewCandidate && !isSync) {
+			const delay = Math.round(BLOCKCHAIN_SETTINGS.targetBlockTime / 12);
+			node.timeouts.createAndShareBlockCandidate = setTimeout(() => node.createAndShareMyBlockCandidate(), delay);
+		}
+
+		return true;
+    }
 	/** Adds a new confirmed block to the blockchain.
 	 * - Everything should be roughly validated before calling this method.
 	 * @param {BlockFinalized} block - The block to add.
@@ -52,7 +113,7 @@ export class Blockchain {
 		this.ledgersStorage.digestBlock(block, involvedUTXOs);
 		this.lastBlock = block;
 		this.ledgersStorage.cache.clear();
-		//this.miniLogger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
+		//this.logger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
     }
 	getBlock(height = this.currentHeight) {
 		const blockBytes = this.blockStorage.getBlockBytes(height)?.blockBytes;
@@ -79,10 +140,12 @@ export class Blockchain {
 		else this.lastBlock = this.getBlock() || null;
 	}
 	reset() {
+		this.logger.log('RESETTING BLOCKCHAIN...', (m, c) => console.warn(m, c));
         this.blockStorage.reset();
         this.ledgersStorage.reset();
 		this.identityStore.reset();
-        this.miniLogger.log('Blockchain & Ledgers erased', (m, c) => console.info(m, c));
+		this.lastBlock = null;
+        this.logger.log('BLOCKCHAIN RESET COMPLETE.', (m, c) => console.warn(m, c));
     }
 
 	// INTERNAL METHODS
@@ -95,8 +158,8 @@ export class Blockchain {
 			const block = this.getBlock(this.currentHeight);
 			const involvedAnchors = block ? BlockUtils.extractInvolvedAnchors(block, 'blockFinalized').involvedAnchors : undefined;
 			this.blockStorage.undoBlock(involvedAnchors);
-			if (!involvedAnchors) this.miniLogger.log('Critical: blockchain truncated without UTXO restoration', (m, c) => console.error(m, c));
-        	else this.miniLogger.log('Blockchain file repaired', (m, c) => console.warn(m, c));
+			if (!involvedAnchors) this.logger.log('Critical: blockchain truncated without UTXO restoration', (m, c) => console.error(m, c));
+        	else this.logger.log('Blockchain file repaired', (m, c) => console.warn(m, c));
 			return;
 		}
 
@@ -111,13 +174,13 @@ export class Blockchain {
 		if (!involvedUTXOs) throw new Error('Blockchain consistency check failed: unable to retrieve all involved UTXOs for the last block.');
 		
 		const discovery = this.identityStore.digestBlock(block, involvedUTXOs);
-		if (discovery.size === 0) this.miniLogger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
-		else this.miniLogger.log(`Blockchain identities check: ${discovery.size} new identities patch`, (m, c) => console.info(m, c));
+		if (discovery.size === 0) this.logger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
+		else this.logger.log(`Blockchain identities check: ${discovery.size} new identities patch`, (m, c) => console.info(m, c));
 		
 		// THIRD: ENSURE LEDGERS CONSISTENCY
 		const applyCount = this.ledgersStorage.digestBlock(block, involvedUTXOs, true);
-		if (applyCount === 0) this.miniLogger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
-		else this.miniLogger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
+		if (applyCount === 0) this.logger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
+		else this.logger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
 		this.ledgersStorage.cache.clear();
 	}
 }
