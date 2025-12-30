@@ -9,15 +9,19 @@ const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const observerPort = args.includes('-op') ? parseInt(nextArg('-op')) : 27270;
 const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
-const clearOnStart = false; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
+const clearOnStart = true; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 
-import HiveP2P from "hive-p2p";
 import { Wallet } from '../src/wallet.mjs';
 import { createContrastNode } from '../src/node.mjs';
 import { Transfer } from "../../types/transaction.mjs";
 import { serializer } from "../../utils/serializer.mjs";
 import { ContrastStorage } from '../../storage/storage.mjs';
 import { Transaction_Builder } from "../src/transaction.mjs";
+
+// IMPORT HIVE_P2P & PATCH CONFIG
+import HiveP2P from "hive-p2p";
+import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
+HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 // TEST CONFIG
 const nbReceipients = 4800;	// Number of receipient addresses in multi output transaction

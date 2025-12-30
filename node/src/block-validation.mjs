@@ -12,7 +12,7 @@ import { serializer } from '../../utils/serializer.mjs';
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker */
+ * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
 
 const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {

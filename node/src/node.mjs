@@ -7,10 +7,10 @@ import { MemPool } from './mempool.mjs';
 import { BlockUtils } from './block.mjs';
 import { TaskQueue } from './task-queue.mjs';
 import { Blockchain } from './blockchain.mjs';
+import { serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { ValidationWorker } from '../workers/workers-classes.mjs';
-import { serializer } from "../../utils/serializer.mjs";
+import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 
 /**
 * @typedef {import("./wallet.mjs").Account} Account

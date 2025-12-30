@@ -4,11 +4,11 @@
 import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
@@ -16,7 +16,7 @@ import { serializer } from '../../utils/serializer.mjs';
  * @typedef {import("../../types/transaction.mjs").TxOutput} TxOutput
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger
- * @typedef {import("../workers/workers-classes.mjs").ValidationWorker} ValidationWorker */
+ * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
 
 const validationMiniLogger = new MiniLogger('validation');
 export class TxValidation {

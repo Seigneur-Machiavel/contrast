@@ -300,8 +300,6 @@ export const serializer = {
         },
 		/** @param {BlockFinalized | BlockCandidate} blockData @param {'finalized' | 'candidate'} [mode] default: finalized */
         block(blockData, mode = 'finalized') {
-			if (mode === 'candidate' && blockData.Txs.length !== 1) throw new Error('Candidate block must have exactly one transaction (the validator tx)');
-
             /** @type {Uint8Array<ArrayBuffer>[]} */
             const serializedTxs = [];
 			let totalTxsBytes = 0;

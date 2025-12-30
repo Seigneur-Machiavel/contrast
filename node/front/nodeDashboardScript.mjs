@@ -35,7 +35,6 @@ const ACTIONS = {
     SET_MINER_ADDRESS: 'set_miner_address'
 };
 
-
 function connectWS() {
     ws = new WebSocket(`${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
     //console.log(`Connecting to ${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
@@ -546,7 +545,7 @@ function closeModal() {
 }
 
 // EVENT LISTENERS
-document.addEventListener('submit', function(event) { event.preventDefault(); });
+document.addEventListener('submit', (event) => event.preventDefault());
 document.addEventListener('input', async (event) => {
     if (event.target.classList.contains('amountInput')) {
         event.target.value = event.target.value.replace(/[^\d.]/g, '');
