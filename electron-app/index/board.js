@@ -108,7 +108,7 @@ ipcRenderer.on('copy-clipboard', (event, ...args) => {
 
 const infoManager = new InfoManager();
 const windowsWrap = document.getElementById('board-windows-wrap');
-const bottomButtonsBar = document.getElementById('board-bottom-buttons-bar');
+const bottomButtonsBar = document.getElementById('board-apps-buttons-bar');
 const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
 const settingsMenuElement = document.getElementById('board-settings-menu');
 const settingsManager = new SettingsManager(settingsMenuElement);

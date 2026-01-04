@@ -7,27 +7,22 @@
         default-src 'self';
         style-src 'self' 'unsafe-inline';
         frame-src http://localhost:27270 http://localhost:27271 http://pinkparrot.science:27280 https://www.contrast.science;
-        connect-src ws://localhost:27270 ws://localhost:27271 file:;
-    "> <!-- removed: worker-src 'self' blob:; -->
+		">
+    <!--
+	connect-src ws://localhost:27270 ws://localhost:27271 file:;
+	-->
     <title>Contrast</title>
-    <link rel="stylesheet" href="../../styles/contrast-style.css">
+    <link rel="stylesheet" href="./contrast-style.css">
     <link rel="stylesheet" href="./board-style.css">
     <!-- SHARED FRONT SCRIPTS -->
     <script src="../../libs/bip39-3.1.0.js"></script>
     <script src="../../libs/anime.min.js"></script>
-    <script src="./modulesLoader.mjs" type="module"></script>
-
-    <!-- APPS FRONT SCRIPTS -->
-    <!--<script src="../../apps/chat/front-scripts/chat-renderer.js"></script>
-    <script src="../../apps/vault/front-scripts/vault-renderer.js" defer></script>-->
-    <!-- INDEX SCRIPTS -->
-     <!--<script src="./board.mjs" type="module"></script>-->
-    <script src="./board.js" type="module"></script>
+    <script src="./board.mjs" type="module"></script>
 </head>
 <body>
     <div class="titlebar">
+        <div id="board-title">CONTRAST<span id="board-version">v0.0.0</span></div>
         <span id="connexion-resume">Connecting network 🔴</span>
-        <span>CONTRAST</span><span id="board-version">v0.0.0</span>
         <div class="window-controls">
             <button id="minimize-btn">─</button>
             <button id="maximize-btn">▭</button>
@@ -40,7 +35,7 @@
         <span class="slider"></span>
     </label>
     <button id="board-settings-button">
-        <img src="../img/settings64.png">
+        <img src="assets/settings64.png">
         <div class="tooltip">Settings</div>
     </button>
     <div id="board-settings-menu">
@@ -53,7 +48,7 @@
 
     <div id="board-windows-wrap"></div>
     <button id="board-info-panel-button" data-infokey="infoButton">
-        <img src="../img/info64.png">
+        <img src="assets/info64.png">
         <div class="tooltip">Info panel</div>
     </button>
     <div id="board-info-panel">

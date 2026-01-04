@@ -1,4 +1,4 @@
-const { AppConfig, appsConfig, buildAppsConfig } = require('../../apps/apps-config.js');
+import { AppConfig, appsConfig, buildAppsConfig } from '../../apps/apps-config.js';
 
 /**
  * @param {string} tag
@@ -12,13 +12,9 @@ function newElement(tag, classes, innerText, parent, url_or_file) {
     element.classList.add(...classes);
 
     if (url_or_file && url_or_file.includes('.html')) {
-        fetch(url_or_file).then(res => res.text()).then(html => {
-            element.innerHTML = html;
-        });
+        fetch(url_or_file).then(res => res.text()).then(html => element.innerHTML = html);
     } else if (url_or_file) {
         const iframe = document.createElement('iframe');
-		// test with webview
-		//const iframe = document.createElement('webview');
         iframe.src = url_or_file;
         iframe.style.width = '100%';
         iframe.style.height = '100%';
@@ -268,7 +264,7 @@ class SubWindow {
 	}
 }
 
-class AppsManager {
+export class AppsManager {
 	state = 'locked';
 	appsConfig = buildAppsConfig(appsConfig);
 	windowsWrap;
@@ -537,5 +533,3 @@ class AppsManager {
 		}
 	}
 }
-
-module.exports = { AppsManager, AppConfig, appsConfig };

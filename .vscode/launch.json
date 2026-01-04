@@ -3,9 +3,9 @@
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Run Node",
+			"name": "Board Service",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/run.mjs",
+			"program": "${workspaceFolder}/board-service.mjs",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{

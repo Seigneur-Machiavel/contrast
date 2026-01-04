@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="16x16" href="../../styles/contrast16.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="../../styles/contrast32.png">
+    <link rel="icon" type="image/png" sizes="48x48" href="../../styles/contrast48.png">
+    <title>Contrast Node Dashboard</title>
+    <script src="/libs/anime.min.js"></script>
+    <script src="./dashboard/nodeDashboardScript.mjs" type="module"></script>
+    <link rel="stylesheet" href="./dashboard/nodeDashboard.css">
+</head>
+
+<body>
+    <div style="width: 100%;">
+        <div id="cbe-contrastBlocksWidget"></div>
+    </div>
+    
+    <div class="containers-wrap">
+        <div class="container">
+            <div class="container-header">
+                <h1>Node</h1>
+                <h2>#<span id="validatorHeight">0</span></h2>
+            </div>
+            <div class="spacedText">
+                <h3>State</h3>
+                <h3 id="nodeState">Sync/Idle/Digest</h3>
+            </div>
+            <div class="spacedText" data-infokey="myLastLegitimacy">
+                <h3>My Last Legitimacy</h3>
+                <h3 id="lastLegitimacy">N/A</h3>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="container-header">
+                <h1>Miner</h1>
+                <h2><span id="minerLegitimacy" data-infokey="minerLegitimacy">Legitimacy 0</span> | #<span id="minerHeight">0</span></h2>
+            </div>
+            <div class="spacedText" data-infokey="globalHashRate">
+                <h3>Est. global hashrate</h3>
+                <h3>~ <span id="globalHashRate"></span> H/s</h3>
+            </div>
+            <div class="spacedText" data-infokey="hashRate">
+                <h3>HashRate</h3>
+                <h3><span id="hashRate"></span> H/s</h3>
+            </div>
+            <div class="spacedText" data-infokey="miningDailyReward">
+                <h3>My daily reward</h3>
+                <h3>~ <span id="miningDailyReward"></span></h3>
+            </div>
+            <div class="spacedText">
+                <h3>Threads (mining intensity)</h3>
+                <div id="minerThreadsIncrementalInput" class="incrementalInput">
+                    <button>-</button>
+                    <input type="number" value="1"> <!-- min="1" max="4"> (managed with js) -->
+                    <button>+</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="container-header">
+                <h1>Addresses</h1>
+            </div>
+            <div class="spacedText" data-infokey="publicAddress">
+                <h3>Public Address</h3>
+                <h3 id="validatorAddress"></h3>
+            </div>
+            <div class="spacedText" data-infokey="miningRewardAddress">
+                <h3>Mining reward</h3>
+                <h3 class="editable-address-wrap">
+                    <div class="link-to-amount">]</div>
+                    <span id="minerAddress"></span>
+                    <div id="minerAddressEditBtn" class="editButton">✎</div>
+                </h3>
+            </div>
+            <div class="spacedText" data-infokey="balance">
+                <h3>Balance</h3>
+                <h3 id="minerBalance">0.000000</h3>
+            </div>
+            <div class="spacedText" data-infokey="validationRewardAddress">
+                <h3>Validation reward</h3>
+                <h3 class="editable-address-wrap">
+                    <div class="link-to-amount">]</div>
+                    <div class="link-to-amount">]</div>
+                    <span id="validatorRewardAddress"></span>
+                    <div id="validatorAddressEditBtn" class="editButton">✎</div>
+                </h3>
+            </div>
+            <div class="spacedText" data-infokey="balance">
+                <h3>Balance</h3>
+                <h3 id="validatorBalance">0.000000</h3>
+            </div>
+            <div class="spacedText" data-infokey="stakedBalance">
+                <h3>Staked</h3>
+                <h3 id="staked">0.000000</h3>
+            </div>
+            <div class="spacedText end" style="display: none;">
+                <h3>Staking</h3>
+                <div id="stakeInputWrap">
+                    <input type="text" class="amountInput" min="0" placeholder="Amount">
+                    <button>Stake!</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="container">
+            <div class="container-header">
+                <h1>Detailed view (dev)</h1>
+            </div>
+            <div id="ignoreBlocksWrap" class="toggleWrap flex justify-between items-center mb-2">
+                <span class="text-gray-300">Ignore Incoming Blocks</span>
+                <div class="flex items-center gap-2">
+                    <button id="ignoreBlocksToggle" class="toggleButton relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out bg-gray-600" role="switch" aria-checked="false">
+                        <span aria-hidden="true" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0"></span>
+                    </button>
+                    <span id="ignoreBlocksStatus" class="toggleSpan text-sm">OFF</span>
+                </div>
+            </div>
+            <div id="disabledSyncWrap" class="toggleWrap flex justify-between items-center mb-2">
+                <span class="text-gray-300">Disable Sync</span>
+                <div class="flex items-center gap-2">
+                    <button id="disabledSyncToggle" class="toggleButton relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out bg-gray-600" role="switch" aria-checked="false">
+                        <span aria-hidden="true" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out translate-x-0"></span>
+                    </button>
+                    <span id="disabledSyncStatus" class="toggleSpan text-sm">OFF</span>
+                </div>
+            </div>
+            <div class="spacedText">
+                <h3>Client Version</h3>
+                <h3 id="clientVersion">v?.?.?</h3> 
+            </div>
+    
+            <div class="spacedText">
+                <h3>Last Block Info</h3>
+                <h3 id="lastBlockInfo">N/A</h3>
+            </div>
+    
+            <div class="spacedText">
+                <h3>Tx in Mempool</h3>
+                <h3 id="txInMempool">0</h3>
+            </div>
+            
+            <div class="spacedText">
+                <h3>Average Block Time</h3>
+                <h3 id="averageBlockTime">0 seconds</h3>
+            </div>
+            <div class="spacedText">
+                <h2>Network</h2>
+            </div>
+            
+            <div class="spacedText">
+                <h3>Peer ID</h3>
+                <h3 id="peerId">N/A</h3>
+            </div>
+            <div class="spacedText column">
+                <h3>Listening on</h3>
+                <h3 id="listenAddress">N/A</h3>
+            </div>
+    
+            <div class="spacedText">
+                <h3>Peers Connected</h3>
+                <h3 id="peersConnected">0</h3>
+            </div>
+            
+            <div class="spacedText">
+                <h3>Connected Peers</h3>
+                <ul id="peersConnectedList" class="network-list">
+                </ul>
+            </div>
+    
+            <div class="spacedText">
+                <h3>Reputation Scores</h3>
+                <ul id="repScoreList" class="network-list">
+                </ul>
+            </div>
+    
+            <div class="spacedText">
+                <h3>Peers Heights</h3>
+                <ul id="peersHeightList" class="network-list"></ul>
+            </div>
+        </div>
+        
+        <div class="modalsWrap hidden fold">
+            <div class="modalsWrapBackground"></div>
+            
+            <div class="modalWrap hidden" id="unifiedModalWrap">
+                <div class="modal">
+                    <form id="unifiedModalForm">
+                        <div class="spacedText">
+                            <p id="modalMessage">Are you sure?</p>
+                        </div>
+                        <div class="spacedText" id="modalInputSection">
+                            <h3 id="modalInputLabel">Input</h3>
+                            <div id="modalInputWrap">
+                                <input type="password" id="modalInput" placeholder="">
+                                <button type="button" id="toggleModalInput">Show</button>
+                            </div>
+                        </div>
+                        <div class="spacedText">
+                            <button type="button" id="modalCancelBtn">Cancel</button>
+                            <button type="button" id="modalConfirmBtn">Confirm</button> 
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

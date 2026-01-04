@@ -7,14 +7,11 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
 const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const observerPort = args.includes('-op') ? parseInt(nextArg('-op')) : 27270;
-const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
 const clearOnStart = true; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 
 import { Wallet } from '../src/wallet.mjs';
 import { createContrastNode } from '../src/node.mjs';
 import { Transfer } from "../../types/transaction.mjs";
-import { serializer } from "../../utils/serializer.mjs";
 import { ContrastStorage } from '../../storage/storage.mjs';
 import { Transaction_Builder } from "../src/transaction.mjs";
 
