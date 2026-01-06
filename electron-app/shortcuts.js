@@ -5,7 +5,7 @@ const shortcutsLogger = new MiniLogger('shortcuts');
 
 const shortcutsKeys = {
     reload: { key: "F5", enabled: true, devOnly: false },
-    nodeDashboard: { key: "F6", enabled: true, devOnly: false },
+    dashboard: { key: "F6", enabled: true, devOnly: false },
     toggleLoggerSettingsMenu: { key: "F9", enabled: true, devOnly: false },
     toggleDevTools: { key: "F10", enabled: true, devOnly: false },
 };
@@ -19,11 +19,11 @@ function setShortcuts(windows, dev = true) {
         if (!BrowserWindow.getFocusedWindow()) return;
         BrowserWindow.getFocusedWindow().webContents.toggleDevTools();
     });
-    // TOOGLE NODE DASHBOARD
-    /*if (shortcutsKeys.nodeDashboard.enabled) globalShortcut.register(shortcutsKeys.nodeDashboard.key, () => {
-        shortcutsLogger.log(`Node dashboard shortcut pressed (${shortcutsKeys.nodeDashboard.key})`, (m, c) => console.info(m, c));
-        const nodeDashboardWindowVisible = windows.nodeDashboard.isVisible();
-        if (!nodeDashboardWindowVisible) { windows.nodeDashboard.show(); windows.nodeDashboard.reload(); } else { windows.nodeDashboard.hide(); }
+    // TOOGLE DASHBOARD
+    /*if (shortcutsKeys.dashboard.enabled) globalShortcut.register(shortcutsKeys.dashboard.key, () => {
+        shortcutsLogger.log(`Dashboard shortcut pressed (${shortcutsKeys.dashboard.key})`, (m, c) => console.info(m, c));
+        const dashboardWindowVisible = windows.dashboard.isVisible();
+        if (!dashboardWindowVisible) { windows.dashboard.show(); windows.dashboard.reload(); } else { windows.dashboard.hide(); }
     });*/
     // RELOAD
     if (shortcutsKeys.reload.enabled) globalShortcut.register(shortcutsKeys.reload.key, () => {

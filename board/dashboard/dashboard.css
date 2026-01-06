@@ -1,17 +1,18 @@
 :root {
     --cbe-widget-margin: 0 10px;
 }
-html {
+/*html {
     transition: transform 0.3s ease;
     transform-origin: top;
     transform: scale(.6);
     height: 60%;
-}
-body {
+}*/
+#dashboard-wrapper {
     display: flex;
     flex-direction: column;
     align-items: center;
-
+	overflow-y: auto;
+	height: 100%;
     background-color: var(--color1);
     color: var(--color2);
     transition: background-color .2s, color .2s;
@@ -303,17 +304,4 @@ h3 {
 }
 .toggleButton.active::after {
     transform: translateX(20px);
-}
-
-@media (min-width: 768px) {
-    html {
-        transform: scale(.75);
-        height: 75%;
-    }
-}
-@media (min-width: 1200px) {
-    html {
-        transform: scale(.9);
-        height: 90%;
-    }
 }

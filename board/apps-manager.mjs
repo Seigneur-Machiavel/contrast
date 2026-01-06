@@ -18,17 +18,14 @@ export class AppsManager {
 	constructor(windowsWrap, buttonsBarElement) {
 		this.windowsWrap = windowsWrap;
 		this.buttonsBar = new ButtonsBar(buttonsBarElement);
-	}
-
-	updateCssAnimationsDuration() {
-		document.documentElement.style.setProperty('--windows-animation-duration', this.transitionsDuration + 'ms');
-	}
-	initApps() {
-		this.buttonsBar.element.innerHTML = '';
 		for (const app in this.appsConfig) {
 			this.buttonsBar.addButton(app, this.appsConfig[app], this.appsConfig[app].disableOnLock);
 			if (this.appsConfig[app].preload) this.loadApp(app);
 		}
+	}
+
+	updateCssAnimationsDuration() {
+		document.documentElement.style.setProperty('--windows-animation-duration', this.transitionsDuration + 'ms');
 	}
 	/** @param {string} appName, @param {boolean} [startHidden] Default: false */
 	loadApp(appName, startHidden = false) {
@@ -164,24 +161,18 @@ export class AppsManager {
 
 		// if click in a window (anywhere), bring it to front
 		// trough parents of the clicked element until find the window
-		let target = e.target;
-		while(target && target !== document.body) {
-			if (target.classList.contains('window')) { break; }
-			target = target.parentElement;
-		}
-
-		const { appName } = this.#getElementParentWindow(e);
+		const { appName } = this.#getElementParentWindow(e.target);
 		if (appName) this.setFrontWindow(appName);
 	}
 	dlbClickTitleBarHandler(e) {
 		if (!e.target.classList.contains('title-bar')) return;
 
-		const { subWindow } = this.#getElementParentWindow(e);
+		const { subWindow } = this.#getElementParentWindow(e.target);
 		if (subWindow.isFullScreen) subWindow.unsetFullScreen(this.transitionsDuration);
 		else subWindow.setFullScreen(this.#boardSize, this.transitionsDuration);
 	}
 	grabWindowHandler(e) {
-		const { appName, subWindow } = this.#getElementParentWindow(e);
+		const { appName, subWindow } = this.#getElementParentWindow(e.target);
 		if (!appName || !subWindow || subWindow.isFullScreen) return;
 
 		this.setFrontWindow(appName);
@@ -252,9 +243,17 @@ export class AppsManager {
 	get #boardSize() {
 		return { width: this.windowsWrap.offsetWidth, height: this.windowsWrap.offsetHeight };
 	}
-	#getElementParentWindow(e) {
+	/** @param {HTMLElement} element */
+	#getElementParentWindow(element) {
+		// GO UP THROUGH PARENTS UNTIL FIND THE WINDOW (or abort on document.body)
+		let target = element;
+		while(target && target !== document.body) {
+			if (target.classList.contains('window')) break;
+			target = target.parentElement;
+		}
+
 		/** @type {string | null} */
-		const appName = e.target.parentElement?.dataset.appName || null;
+		const appName = target.dataset.appName || null;
 		const subWindow = appName ? this.windows[appName] : null;
 		return { appName, subWindow };
 	}

@@ -1,10 +1,9 @@
 // @ts-check
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { mining } from '../../utils/mining-functions.mjs';
+import { mining } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { BlockUtils } from './block.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode

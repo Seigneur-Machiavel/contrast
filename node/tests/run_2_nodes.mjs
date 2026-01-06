@@ -32,8 +32,10 @@ const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstr
 const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
 await bootstrapNode.start(bootstrapWallet);
 
-// CLIENT NODES
 const bootstraps = bootstrapNode.p2p.publicUrl ? [bootstrapNode.p2p.publicUrl] : [];
+console.log('Bootstrap node public URL:', bootstraps);
+
+// CLIENT NODES
 const clientSeeds = [
 	'0000000000000000000000000000000000000000000000000000000000000003',
 	/*'0000000000000000000000000000000000000000000000000000000000000004',

@@ -1,7 +1,7 @@
 import { parentPort } from 'worker_threads';
-import { mining } from '../../utils/mining-functions.mjs';
-import { HashFunctions } from '../src/conCrypto.mjs';
 import { BlockUtils } from '../src/block.mjs';
+import { HashFunctions } from '../src/conCrypto.mjs';
+import { mining } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 
 /**

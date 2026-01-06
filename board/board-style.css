@@ -123,11 +123,12 @@ body {
 
 /* SETTINGS */
 #board-settings-button {
+	user-select: none;
     z-index: 11;
     position: fixed;
-    left: 6px;
+    left: 8px;
     bottom: 32px;
-    width: calc(var(--buttons-bar-width) - 12px);
+    width: calc(var(--buttons-bar-width) - 16px);
     background: none;
     opacity: .6;
 }
@@ -303,7 +304,7 @@ body {
     opacity: 0;
 }
 #board-apps-buttons-bar button.front {
-    box-shadow: inset 2px 0px 0px 3px var(--color2_3);
+    box-shadow: inset 1px 0px 0px 2px var(--color2_3);
 }
 #board-apps-buttons-bar button:hover {
     cursor: pointer;
@@ -316,6 +317,8 @@ body {
     transition: box-shadow .12s ease, background-position .12s ease, transform .06s ease, opacity .06s ease, aspect-ratio .06s ease, height .06s ease, border-radius .12s .06s ease;
 }
 #board-apps-buttons-bar button img {
+	user-select: none;
+	pointer-events: none;
     width: 70%;
     filter: invert(var(--dark-mode-boolean));
 }

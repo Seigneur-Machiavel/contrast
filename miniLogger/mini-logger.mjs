@@ -1,8 +1,7 @@
 // @ts-ignore
 // NODEJS VERSION OF THE MINI LOGGER
 
-const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
-let fs;
+const isNode = typeof self === 'undefined';let fs;
 let path;
 let __dirname;
 let basePath = __dirname;

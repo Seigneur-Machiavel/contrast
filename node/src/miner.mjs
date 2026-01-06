@@ -2,7 +2,7 @@
 import { BlockUtils } from './block.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { mining } from '../../utils/mining-functions.mjs';
+import { mining } from '../../utils/conditionals.mjs';
 import { MinerWorker } from '../workers/miner-worker-wrapper.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 

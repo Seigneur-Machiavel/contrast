@@ -3,9 +3,18 @@ if (false) { // For better completion
 	const ChatUI = require('../../apps/chat/front-scripts/chat-renderer.js');
 }
 
+/** @type {typeof import('hive-p2p')} */
+const HiveP2P = await import('./hive-p2p.min.js');
+import { Connector } from './connector.mjs';
 import { AppsManager } from './apps-manager.mjs';
 import { FrontStorage } from '../utils/front-storage.mjs';
+import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
 
+HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
+HiveP2P.CLOCK.proxyUrl = '/api/time';
+const bootstraps = ['ws://localhost:27260'];
+const hiveNode = await HiveP2P.createNode({ bootstraps });
+const connector = new Connector(hiveNode);
 const boardStorage = new FrontStorage('board');
 const darkModeState = boardStorage.load('darkModeState');
 if (darkModeState === true) document.body.classList.add('dark-mode');
@@ -20,9 +29,10 @@ if (darkModeState === false) document.body.classList.remove('dark-mode');
 //const infoManager = new InfoManager();
 const windowsWrap = document.getElementById('board-windows-wrap');
 const bottomButtonsBar = document.getElementById('board-apps-buttons-bar');
-const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
 const settingsMenuElement = document.getElementById('board-settings-menu');
-appsManager.initApps();
+const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
+window.hiveNode = hiveNode;
+window.connector = connector;
 window.appsManager = appsManager;
 
 // Implementation with less event listeners

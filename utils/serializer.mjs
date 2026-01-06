@@ -18,7 +18,7 @@ import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_
 * @property {number} minerThreads */
 
 const converter = new Converter();
-const isNode = typeof process !== 'undefined' && process.versions != null && process.versions.node != null;
+const isNode = typeof self === 'undefined';
 // @ts-expect-error - msgpack global added by browser script
 const msgpack = isNode ? (await import('../libs/msgpack.min.js')).default : window.msgpack;
 
