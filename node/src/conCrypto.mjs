@@ -1,6 +1,11 @@
-import { xxHash32, ed25519, Converter, Argon2Unified } from 'hive-p2p';
+// @ts-check
 //import * as crypto from 'crypto';
 
+/** @type {typeof import('hive-p2p')} */
+const HiveP2P = typeof window !== 'undefined' // @ts-ignore
+	? await import('../../hive-p2p.min.js')
+	: await import('hive-p2p');
+const { xxHash32, Converter, Argon2Unified, ed25519 } = HiveP2P;
 const argon2 = new Argon2Unified();
 const converter = new Converter();
 
@@ -9,12 +14,14 @@ export const argon2Hash = argon2.hash;
 export class HashFunctions {
     //static Argon2 = argon2Hash;
 	static Argon2 = argon2.hash;
+	/** @param {string | Uint8Array} input @param {number} minLength */
     static xxHash32 = (input, minLength = 8) => {
         const hashNumber = xxHash32(input);
         const hashHex = hashNumber.toString(16);
         const padding = '0'.repeat(minLength - hashHex.length);
         return `${padding}${hashHex}`;
     };
+	/** @param {string} message */
     static async SHA256(message) {
 		const messageUint8 = converter.stringToBytes(message);
         const arrayBuffer = await crypto.subtle.digest('SHA-256', messageUint8);

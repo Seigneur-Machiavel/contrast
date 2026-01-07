@@ -1,16 +1,4 @@
-/** Create a new HTML element
- * @param {string} tag @param {string[]} classes
- * @param {string} [innerText] - The optional inner text
- * @param {HTMLElement} [parent] - The optional parent to append the element to */
-function newElement(tag, classes, innerText, parent) {
-	const element = document.createElement(tag);
-	if (innerText) element.innerText = innerText;
-	element.classList.add(...classes);
-
-	// Append to parent if provided
-	if (parent) parent.appendChild(element);
-	return element;
-}
+import { createElement } from './generic-helpers.mjs';
 
 export class ButtonsBar {
 	/** @type {HTMLElement} */					element;
@@ -20,14 +8,14 @@ export class ButtonsBar {
 	constructor(element) { this.element = element; }
 	
 	addButton(appName, app, disabled = true) {
-		const button = newElement('button', ['app-button'], '', this.element);
+		const button = createElement('button', ['app-button'], this.element);
 		button.dataset.appName = appName;
 		
-		const img = newElement('img', [], '', button);
+		const img = createElement('img', [], button);
 		img.src = app.iconSrc;
 		img.style.width = app.iconWidth;
 		
-		newElement('div', ['tooltip'], app.tooltip, button);
+		createElement('div', ['tooltip'], button);
 		
 		this.buttons.push(button);
 		this.buttonsByAppNames[appName] = button;
@@ -84,10 +72,10 @@ export class SubWindow {
 		this.titleBar = 	titleBar;
 		this.foldButton = 	foldButton;
 		this.expandButton = expandButton || null;
-		this.element = newElement('div', windowClasses, '', parentElement);
+		this.element = createElement('div', windowClasses, parentElement);
 		this.element.dataset.appName = this.appName;
 		this.element.appendChild(titleBar);
-		this.contentElement = newElement('div', ['content'], '', this.element);
+		this.contentElement = createElement('div', ['content'], this.element);
 		if (!this.contentElement) { console.error('Content cannot be build for:', this.url_or_file); return; }
 
 		// Inner HTML or iframe injection
@@ -105,7 +93,11 @@ export class SubWindow {
 		}
 
 		if (this.autoSized) this.contentElement.style.position = 'relative';
-		else newElement('div', ['resize-button'], '||', this.element).dataset.appName = this.appName;
+		else {
+			const resizeButton = createElement('div', ['resize-button'], this.element);
+			resizeButton.dataset.appName = this.appName;
+			resizeButton.innerText = '||';
+		}
 
 		this.element.style.minWidth = this.minSize.width ? `${this.minSize.width}px` : 'auto';
 		this.element.style.minHeight = this.minSize.height ? `${this.minSize.height}px` : 'auto';
@@ -140,28 +132,28 @@ export class SubWindow {
 	}
 	/** @param {string} title @param {boolean} expandable Default: true @param {boolean} isUrl Default: false */
 	newTitleBar(title, expandable = true, isUrl = false) {
-		const titleBar = newElement('div', ['title-bar'], '');
-		newElement('div', ['background'], '', titleBar);
-		const titleElement = newElement('div', ['title-text'], title, titleBar);
-		titleElement.innerHTML = title; // apply title decorations
+		const titleBar = createElement('div', ['title-bar']);
+		createElement('div', ['background'], titleBar);
 
-		const buttonsWrap = newElement('div', ['buttons-wrap'], '', titleBar);
+		const titleElement = createElement('div', ['title-text'], titleBar);
+		titleElement.innerHTML = title; // innerHTML to apply title decorations
 
+		const buttonsWrap = createElement('div', ['buttons-wrap'], titleBar);
 		if (isUrl) {
-			const refreshButton = newElement('img', ['refresh-button'], '', buttonsWrap);
+			const refreshButton = createElement('img', ['refresh-button'], buttonsWrap);
 			refreshButton.dataset.appName = this.appName;
 			refreshButton.dataset.action = 'refresh';
 			refreshButton.src = 'assets/refresh_64.png';
 		}
 
-		const foldButton = newElement('img', ['fold-button'], '', buttonsWrap);
+		const foldButton = createElement('img', ['fold-button'], buttonsWrap);
 		foldButton.dataset.appName = this.appName;
 		foldButton.dataset.action = 'fold';
 		foldButton.src = 'assets/fold_64.png';
 
 		if (!expandable) return { titleBar, expandButton: null, foldButton };
 		
-		const expandButton = newElement('img', ['expand-button'], '', buttonsWrap);
+		const expandButton = createElement('img', ['expand-button'], buttonsWrap);
 		expandButton.dataset.appName = this.appName;
 		expandButton.dataset.action = 'expand';
 		expandButton.src = 'assets/expand_64.png';

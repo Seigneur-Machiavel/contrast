@@ -4,6 +4,10 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockHeightHash } from '../../types/sync.mjs';
 
 /**
+ * @typedef {Object} MinimalContrastNode
+ * @property {import('hive-p2p').Node} p2p
+ * @property {undefined} [blockchain]
+ * 
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
@@ -47,7 +51,7 @@ export class Sync {
 	peersByBHH = {}; // NOT INCLUDE SELF
 	node;
 
-	/** @param {ContrastNode} node */
+	/** @param {ContrastNode | MinimalContrastNode} node */
 	constructor(node) {
 		this.node = node;
 		node.p2p.gossip.on('sync_status', this.#onSyncStatus);
@@ -62,11 +66,13 @@ export class Sync {
 	* - Stop when consensus is reached or max attempts reached
 	* @param {number} [maxAttempts] Default: 10 */
 	async catchUpWithNetwork(maxAttempts = 10) {
+		if (!this.node.blockchain) return;
+
 		const bc = this.node.blockchain;
 		let attempts = 0;
 		do {
 			// UPDATE CONSENSUS STATUS
-			const c = this.#getConsensus();
+			const c = this.getConsensus();
 			if (c.equality || c.count === 0) return; // No clear consensus
 			if (c.blockHash === bc.lastBlock?.hash) return; // We are in consensus
 			if (bc.currentHeight === c.blockHeight + 1) return; // We are just ahead
@@ -89,7 +95,7 @@ export class Sync {
 				}
 
 				this.logger.log(`Fetching block #${nextHeight} from peer ${peerId}`, (m, c) => console.log(m, c));
-				const blockBytes = await this.#fetchBlockFromPeer(peerId, nextHeight);
+				const blockBytes = await this.fetchBlockFromPeer(peerId, nextHeight);
 				if (!blockBytes) this.logger.log(`Failed to fetch block #${nextHeight} from peer ${peerId}`, (m, c) => console.error(m, c));
 				
 				const success = blockBytes ? await bc.digestFinalizedBlock(this.node, blockBytes, { isSync: true }) : false;
@@ -102,15 +108,7 @@ export class Sync {
 			attempts++;
 		} while (attempts < maxAttempts);
 	}
-	/** @param {BlockFinalized} block */
-	setAndshareMyStatus(block) {
-		const s = serializer.serialize.blockHeightHash(block.index, block.hash);
-		this.node.p2p.broadcast(s, { topic: 'sync_status' });
-		this.peersStatus[this.node.p2p.id] = BlockHeightHash.toString(block.index, block.hash);
-	}
-
-	// INTERNAL METHODS
-	#getConsensus() {
+	getConsensus() {
 		/** @type {Object<BlockHeightHashStr, number>} */
 		const occurences = {};
 		for (const peerId in this.peersStatus) {
@@ -118,8 +116,8 @@ export class Sync {
 			occurences[bhh] = (occurences[bhh] || 0) + 1;
 		}
 
-		const myBHH = this.peersStatus[this.node.p2p.id];
-		const myBhhObj = BlockHeightHash.fromString(myBHH);
+		const myBHH = this.peersStatus[this.node?.p2p.id];
+		const myBhhObj = myBHH ? BlockHeightHash.fromString(myBHH) : null;
 		const result = { blockHeight: -1, blockHash: '', count: 0, equality: false };
 		for (const bhh in occurences) {
 			if (occurences[bhh] < result.count) continue;
@@ -131,8 +129,8 @@ export class Sync {
 
 			// PREFER OWN CHAIN IN CASE OF SAME HEIGHT TIE
 			const sameHeight = bhhObj.blockHeight === result.blockHeight;
-			if (sameHeight && myBhhObj.blockHeight === bhhObj.blockHeight)
-				if (myBhhObj.blockHash !== bhhObj.blockHash) continue; // prefer own status in case of tie
+			if (sameHeight && myBhhObj?.blockHeight === bhhObj.blockHeight)
+				if (myBhhObj?.blockHash !== bhhObj.blockHash) continue; // prefer own status in case of tie
 			
 			result.blockHeight = bhhObj.blockHeight;
 			result.blockHash = bhhObj.blockHash;
@@ -142,16 +140,8 @@ export class Sync {
 
 		return result;
 	}
-	/** @param {number} blockHeight @param {string} blockHash */
-	#getPeersToAskList(blockHeight, blockHash) {
-		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
-		const peersToAsk = []; // All consensus peers except self
-		for (const peerId of this.peersByBHH[bhh] || new Set())
-			if (peerId !== this.node.p2p.id) peersToAsk.push(peerId);
-		return peersToAsk;
-	}
 	/** @param {string} peerId @param {number} height */
-	async #fetchBlockFromPeer(peerId, height, timeout = 3000) {
+	async fetchBlockFromPeer(peerId, height, timeout = 3000) {
 		try {
 			this.pendingRequest = new PendingRequest(peerId, 'Block', timeout);
 			const heightInt32 = serializer.converter.numberTo4Bytes(height);
@@ -160,6 +150,22 @@ export class Sync {
 			return serializedBlock;
 		} catch (error) {}
 		this.pendingRequest = null;
+	}
+	/** @param {BlockFinalized} block */
+	setAndshareMyStatus(block) {
+		const s = serializer.serialize.blockHeightHash(block.index, block.hash);
+		this.node.p2p.broadcast(s, { topic: 'sync_status' });
+		this.peersStatus[this.node.p2p.id] = BlockHeightHash.toString(block.index, block.hash);
+	}
+
+	// INTERNAL METHODS
+	/** @param {number} blockHeight @param {string} blockHash */
+	#getPeersToAskList(blockHeight, blockHash) {
+		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
+		const peersToAsk = []; // All consensus peers except self
+		for (const peerId of this.peersByBHH[bhh] || new Set())
+			if (peerId !== this.node.p2p.id) peersToAsk.push(peerId);
+		return peersToAsk;
 	}
 
 	// HANDLERS
@@ -181,6 +187,7 @@ export class Sync {
 	}
 	/** @param {string} senderId @param {Uint8Array} data */
 	#onBlockRequest = async (senderId, data) => {
+		if (!this.node.blockchain) return;
 		if (!(data instanceof Uint8Array) || data.length !== 4) return; // invalid request
 		const height = serializer.converter.bytes4ToNumber(data);
 		const b = this.node.blockchain.blockStorage.getBlockBytes(height, false)?.blockBytes;

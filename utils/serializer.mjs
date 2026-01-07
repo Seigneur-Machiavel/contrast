@@ -1,8 +1,13 @@
 // @ts-check
-import { Converter } from 'hive-p2p';
 import { ADDRESS } from '../types/address.mjs';
 import { BlockFinalized, BlockCandidate } from '../types/block.mjs';
 import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from '../types/transaction.mjs';
+
+/** @type {typeof import('hive-p2p')} */
+const HiveP2P = typeof window !== 'undefined' // @ts-ignore
+	? await import('../hive-p2p.min.js')
+	: await import('hive-p2p');
+const { Converter } = HiveP2P;
 
 /**
  * @typedef {import("../types/transaction.mjs").UTXO} UTXO

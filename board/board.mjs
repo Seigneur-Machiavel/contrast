@@ -7,6 +7,7 @@ if (false) { // For better completion
 const HiveP2P = await import('./hive-p2p.min.js');
 import { Connector } from './connector.mjs';
 import { AppsManager } from './apps-manager.mjs';
+import { Explorer } from './explorer/explorer.mjs';
 import { FrontStorage } from '../utils/front-storage.mjs';
 import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
 
@@ -15,10 +16,11 @@ HiveP2P.CLOCK.proxyUrl = '/api/time';
 const bootstraps = ['ws://localhost:27260'];
 const hiveNode = await HiveP2P.createNode({ bootstraps });
 const connector = new Connector(hiveNode);
+const explorer = new Explorer(connector);
 const boardStorage = new FrontStorage('board');
-const darkModeState = boardStorage.load('darkModeState');
-if (darkModeState === true) document.body.classList.add('dark-mode');
-if (darkModeState === false) document.body.classList.remove('dark-mode');
+
+if (boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
+else document.body.classList.remove('dark-mode');
 
 //const { ipcRenderer } = require('electron');
 //window.ipcRenderer = ipcRenderer;

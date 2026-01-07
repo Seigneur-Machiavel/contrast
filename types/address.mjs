@@ -1,5 +1,8 @@
-// @ts-check
-import { xxHash32, Converter } from 'hive-p2p';
+/** @type {typeof import('hive-p2p')} */
+const HiveP2P = typeof window !== 'undefined' // @ts-ignore
+	? await import('../hive-p2p.min.js')
+	: await import('hive-p2p');
+const { xxHash32, Converter } = HiveP2P;
 const converter = new Converter();
 
 /** @type {Record<string, {name: string, description: string, multiSig: boolean} | undefined>} */

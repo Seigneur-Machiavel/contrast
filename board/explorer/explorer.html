@@ -1,20 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!--<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'">-->
-    <title>Contrast Explorer v1.0</title>
-    <script src="/libs/anime.min.js"></script>
-    <script src="/libs/plotly-3.0.1.min.js"></script>
-    <script src="/libs/d3.v7.min.js"></script>
-    <script src="./explorer/explorerScript.mjs" type="module"></script>
-    <link rel="stylesheet" href="./explorer/explorer.css">
-</head>
-
 <div style="height: 100%; overflow-y: auto;">
-    <div id="cbe-contrastBlocksWidget"></div>
+    <div id="cbe-contrastBlocks"></div>
 
     <div id="cbe-contrastChainExplorer">
         <div class="cbe-container">
@@ -25,7 +10,7 @@
 
             <div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockTime">
                 <h3>Target blockTime</h3>
-                <h3 id="cbe-targetBlocktime">120</h3>
+                <h3 id="cbe-targetBlocktime">120s</h3>
             </div>
             <div class="cbe-spacedText" data-infokey="lastBlocktime">
                 <h3>Last blockTime</h3>

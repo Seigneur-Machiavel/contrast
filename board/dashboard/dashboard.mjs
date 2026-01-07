@@ -1,6 +1,5 @@
 import { Transaction_Builder, UTXO } from '../src/transaction.mjs';
 import { convert } from '../../utils/converters.mjs';
-//import { BlockExplorerWidget } from './explorerScript.mjs';
 
 /**
  * @typedef {import("../src/block-classes.mjs").BlockData} BlockData

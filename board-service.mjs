@@ -2,7 +2,6 @@ import fs from 'fs';
 import express from 'express';
 import { CLOCK } from 'hive-p2p';
 await CLOCK.sync(); // Start time synchronization
-console.log(`${Date.now()} !== ${CLOCK.time}`);
 
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2);
@@ -34,7 +33,10 @@ app.use((req, res, next) => { // CSP Middleware
 app.get('/api/time', (req, res) => res.json({ time: CLOCK.time }));
 app.use('/', express.static('board'));
 app.use('/libs', express.static('libs'));
+app.use('/node', express.static('node'));
+app.use('/types', express.static('types'));
 app.use('/utils', express.static('utils'));
+app.use('/miniLogger', express.static('miniLogger'));
 app.get('/', (req, res) => res.sendFile('board.html', { root: 'board' }));
 app.get('/hive-p2p.min.js', (req, res) => res.sendFile('./node_modules/hive-p2p/dist/browser/hive-p2p.min.js', { root: '.' }));
 
