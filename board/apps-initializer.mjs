@@ -15,7 +15,8 @@ export class ButtonsBar {
 		img.src = app.iconSrc;
 		img.style.width = app.iconWidth;
 		
-		createElement('div', ['tooltip'], button);
+		const tooltip = createElement('div', ['tooltip'], button);
+		tooltip.textContent = app.tooltip;
 		
 		this.buttons.push(button);
 		this.buttonsByAppNames[appName] = button;

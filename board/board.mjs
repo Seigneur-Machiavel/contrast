@@ -36,6 +36,7 @@ const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
 window.hiveNode = hiveNode;
 window.connector = connector;
 window.appsManager = appsManager;
+window.explorer = explorer;
 
 // Implementation with less event listeners
 async function clickTitleBarButtonsHandler(e) {

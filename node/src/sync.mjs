@@ -45,6 +45,8 @@ export class Sync {
 	logger = new MiniLogger('sync');
 	/** @type {PendingRequest | null} */
 	pendingRequest = null;
+	/** @type {Uint8Array | null} */
+	myStatusSerialized = null;
 	/** Key: peerId, value: BHH @type {Object<string, BlockHeightHashStr>} */
 	peersStatus = {};
 	/** Key: BHH, value: peerId @type {Object<string, Set<string>>} */
@@ -54,6 +56,8 @@ export class Sync {
 	/** @param {ContrastNode | MinimalContrastNode} node */
 	constructor(node) {
 		this.node = node;
+		// @ts-ignore
+		node.p2p.onPeerConnect(() => setTimeout(() => this.shareMyStatus(1), 500));
 		node.p2p.gossip.on('sync_status', this.#onSyncStatus);
 		node.p2p.messager.on('block_request', this.#onBlockRequest);
 		node.p2p.messager.on('block', this.#onBlock);
@@ -78,7 +82,7 @@ export class Sync {
 			if (bc.currentHeight === c.blockHeight + 1) return; // We are just ahead
 
 			// ROLLBACK UNTIL CONSENSUS BLOCK AND CATCH UP
-			const peersToAsk = this.#getPeersToAskList(c.blockHeight, c.blockHash);
+			const peersToAsk = this.getPeersToAskList(c.blockHeight, c.blockHash);
 			if (!attempts) this.logger.log(`Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
 			bc.undoBlock(); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
 			while (bc.currentHeight > c.blockHeight) bc.undoBlock();
@@ -140,6 +144,14 @@ export class Sync {
 
 		return result;
 	}
+	/** @param {number} blockHeight @param {string} blockHash */
+	getPeersToAskList(blockHeight, blockHash) {
+		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
+		const peersToAsk = []; // All consensus peers except self
+		for (const peerId of this.peersByBHH[bhh] || new Set())
+			if (peerId !== this.node.p2p.id) peersToAsk.push(peerId);
+		return peersToAsk;
+	}
 	/** @param {string} peerId @param {number} height */
 	async fetchBlockFromPeer(peerId, height, timeout = 3000) {
 		try {
@@ -153,22 +165,19 @@ export class Sync {
 	}
 	/** @param {BlockFinalized} block */
 	setAndshareMyStatus(block) {
-		const s = serializer.serialize.blockHeightHash(block.index, block.hash);
-		this.node.p2p.broadcast(s, { topic: 'sync_status' });
+		this.myStatusSerialized = serializer.serialize.blockHeightHash(block.index, block.hash);
 		this.peersStatus[this.node.p2p.id] = BlockHeightHash.toString(block.index, block.hash);
+		this.shareMyStatus();
+	}
+	/** @param {number} [HOPS] */
+	shareMyStatus(HOPS) {
+		if (!this.myStatusSerialized) return;
+		const options = { topic: 'sync_status' }; // @ts-ignore
+		if (HOPS) options.HOPS = HOPS;
+		this.node.p2p.broadcast(this.myStatusSerialized, options);
 	}
 
-	// INTERNAL METHODS
-	/** @param {number} blockHeight @param {string} blockHash */
-	#getPeersToAskList(blockHeight, blockHash) {
-		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
-		const peersToAsk = []; // All consensus peers except self
-		for (const peerId of this.peersByBHH[bhh] || new Set())
-			if (peerId !== this.node.p2p.id) peersToAsk.push(peerId);
-		return peersToAsk;
-	}
-
-	// HANDLERS
+	// INTERNAL HANDLERS
 	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
 	#onSyncStatus = (senderId, data, HOPS) => {
 		try {

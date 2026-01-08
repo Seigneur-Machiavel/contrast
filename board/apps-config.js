@@ -59,7 +59,7 @@ export const appsConfig = {
 		url_or_file: './assistant/assistant.html',
 	},
 	explorer: {
-		preload: false,
+		preload: true,
 		fullScreen: false,
 		disableOnLock: false,
 		minWidth: 860,
