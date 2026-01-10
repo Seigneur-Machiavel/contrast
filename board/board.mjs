@@ -33,10 +33,12 @@ const windowsWrap = document.getElementById('board-windows-wrap');
 const bottomButtonsBar = document.getElementById('board-apps-buttons-bar');
 const settingsMenuElement = document.getElementById('board-settings-menu');
 const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
-window.hiveNode = hiveNode;
-window.connector = connector;
-window.appsManager = appsManager;
-window.explorer = explorer;
+if (true) { // WINDOW EXPOSURE FOR DEBUGGING
+	window.appsManager = appsManager;
+	window.hiveNode = hiveNode;
+	window.connector = connector;
+	window.explorer = explorer;
+}
 
 // Implementation with less event listeners
 async function clickTitleBarButtonsHandler(e) {
@@ -51,18 +53,18 @@ async function clickTitleBarButtonsHandler(e) {
 		}
 	} catch (error) {}
 }
-window.addEventListener('click', (e) => {
-	//infoManager.clickInfoButtonHandler(e);
+document.addEventListener('click', (e) => {
 	clickTitleBarButtonsHandler(e);
-	appsManager.clickAppButtonsHandler(e);
-	appsManager.clickWindowHandler(e);
+	appsManager.clickHandler(e);
+	explorer.clickHandler(e);
+	//infoManager.clickInfoButtonHandler(e);
 	//settingsManager.clickSettingsButtonHandler(e);
 });
-window.addEventListener('mouseover', (e) => { appsManager.hoverAppButtonsHandler(e); });
+document.addEventListener('mouseover', (e) => appsManager.hoverAppButtonsHandler(e));
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
-document.addEventListener('mousedown', (e) => { appsManager.grabWindowHandler(e); });
+document.addEventListener('mousedown', (e) => appsManager.grabWindowHandler(e));
 document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); appsManager.moveResizeHandler(e); });
-document.addEventListener('mouseup', (e) => { appsManager.releaseWindowHandler(e); });
+document.addEventListener('mouseup', (e) => appsManager.releaseWindowHandler(e));
 document.addEventListener('change', (event) => {
 	switch(event.target.id) {
 		case 'dark-mode-toggle':

@@ -7,10 +7,11 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 //import { StakeReference } from '../src/vss.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 //import { UTXO } from '../../types/transaction.mjs';
+import { eHTML_STORE } from '../board-helpers.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
-import { createElement } from '../generic-helpers.mjs';
-import { Transaction_Builder } from '../../node/src/transaction.mjs';
+import { ModalComponent } from './modal-component.mjs';
+import { BlockchainComponent } from './blockchain-component.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
@@ -29,39 +30,44 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 * @typedef {Object<string, StakeReference | undefined>} Spectrum
 */
 
-const CONFIG = {
-	MAX_BLOCKS_FILLED: 2,
-}
+const eHTML = new eHTML_STORE('cbe-', 'maxSupply');
+export class Navigator {
+	/** @type {string | null} */	blockHash = null;
+	/** @type {number | null} */	blockIndex = null;
+	/** @type {number | null} */	txIndex = null;
+	/** @type {number | null} */	outputIndex = null;
+	/** @type {string | null} */	address = null;
+	/** @type {any} */				lastUsed = null;
 
-function getTimeSinceBlockConfirmedString(timestamp = 0) {
-    const minuteSince = Math.floor((Date.now() - timestamp) / 60000);
-    if (minuteSince >= 1) return `~${minuteSince} min ago`;
-
-    const secondsSince = Math.floor((Date.now() - timestamp) / 1000);
-    return `~${secondsSince} s ago`;
-}
-
-class eHTML {
-	/** @type {Object<string, HTMLElement>} */
-	static elements = {};
-	static get isReady() { return !!document.getElementById('cbe-maxSupply'); }
-
-	/** @param {string} id */
-	static get(id, prefix = 'cbe-') {
-		const e = this.elements[id] || document.getElementById(prefix + id);
-		if (!e) throw new Error(`Element with id "${id}" not found`);
-		this.elements[id] = e; // store for future use
-		return e;
+	get correspondToLastUsed() {
+		if (!this.lastUsed) return false;
+		if (this.blockHash !== this.lastUsed.blockHash) return false;
+		if (this.blockIndex !== this.lastUsed.blockIndex) return false;
+		if (this.txIndex !== this.lastUsed.txIndex) return false;
+		if (this.outputIndex !== this.lastUsed.outputIndex) return false;
+		if (this.address !== this.lastUsed.address) return false;
+		return true;
 	}
-	/** @param {HTMLElement} element @param {string} id */
-	static add(element, id) {
-		element.id = id;
-		this.elements[id] = element;
+	getValuesAndReset() {
+		const { blockHash, blockIndex, txIndex, outputIndex, address } = this;
+		this.lastUsed = { blockHash, blockIndex, txIndex, outputIndex, address };
+		this.reset();
+		return { blockHash, blockIndex, txIndex, outputIndex, address };
+	}
+	reset() {
+		this.blockHash = null;
+		this.blockIndex = null;
+		this.txIndex = null;
+		this.outputIndex = null;
+		this.address = null;
 	}
 }
 
 export class Explorer {
-	bcElmtsManager = new BlockChainElementsManager();
+	bc = new BlockchainComponent();
+	modal = new ModalComponent();
+	navigator = new Navigator();
+	connector;
 
 	/** @param {import('../connector.mjs').Connector} connector */
 	constructor(connector) {
@@ -69,12 +75,13 @@ export class Explorer {
 		this.#init();
 	}
 
+	// INTERNAL METHODS
 	async #init() {
 		if (!eHTML.isReady) console.log('Explorer awaiting DOM elements...');
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
 
 		console.log('Explorer DOM elements ready');
-		this.bcElmtsManager.createChainOfEmptyBlocksUntilFillTheDiv();
+		this.bc.createEmptyBlocksUntilFillTheDiv();
 		eHTML.get('maxSupply').textContent = CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply);
 		eHTML.get('targetBlocktime').textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
 		this.#setupListeners();
@@ -101,16 +108,16 @@ export class Explorer {
 		eHTML.get('lastBlocktime').textContent = `${readableLocalDate} (${agoText})`;
 
 		const weight = this.connector.blockWeightByHash[block.hash] || 0;
-		if (!this.bcElmtsManager.appendBlockIfCorresponding(block, weight))
-			this.bcElmtsManager.reset();
+		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation
 		await this.#fillBlocksFromLastUntilEnough();
 	}
 	async #fillBlocksFromLastUntilEnough() {
-		while(!this.bcElmtsManager.isEnoughBlocksFilled) {
-			const firstBlock = this.bcElmtsManager.firstFilledBlock;
+		console.log('Explorer: Filling previous blocks until enough...');
+		while(!this.bc.isEnoughBlocksFilled) {
+			const firstBlock = this.bc.firstFilledBlock;
 			if (!firstBlock?.prevHash) break;
 
 			let prevBlock = this.connector.blocks.finalized[firstBlock.prevHash];
@@ -124,192 +131,104 @@ export class Explorer {
 			}
 
 			const weight = this.connector.blockWeightByHash[prevBlock.hash] || 0;
-			if (!this.bcElmtsManager.setPreviousBlockIfCorresponding(prevBlock, weight)) break;
+			if (!this.bc.setPreviousBlockIfCorresponding(prevBlock, weight)) break;
 		}
 	}
-}
 
-class BlockComponent {
-	wrap; blockSquare; miniHash; blockIndex;
-	weight; timeAgo; nbTx;
-	
-	isFilled = false;
-	/** @type {string | null} */ prevHash = null;
-	/** @type {string | null} */ hash = null;
-	/** @type {number | null} */ index = null;
-	/** @type {number | null} */ timestamp = null;
+	// HANDLERS METHODS
+	// @ts-ignore
+	clickHandler(e) {
+		console.log('Explorer clickHandler:', e);
+		if (!e.target.dataset.action) return;
 
-	constructor() {
-		this.wrap = createElement('div', ['cbe-blockWrap']);
-		this.blockSquare = createElement('div', ['cbe-blockSquare'], this.wrap);
-		this.miniHash = createElement('div', ['cbe-blockMiniHash'], this.blockSquare);
-		this.blockIndex = createElement('div', ['cbe-blockIndex'], this.blockSquare);
-		this.weight = createElement('div', ['cbe-weight'], this.blockSquare);
-		this.timeAgo = createElement('div', ['cbe-timeAgo'], this.blockSquare);
-		this.nbTx = createElement('div', ['cbe-nbTx'], this.blockSquare);
-
-		this.miniHash.textContent = this.#splitHash('................................................................', 16).join(' ');
-		this.blockIndex.textContent = '#...';
-		this.weight.textContent = '... KB';
-		this.timeAgo.textContent = `...`;
-		this.nbTx.textContent = '... transactions';
-	}
-
-	/** @param {BlockFinalized} block @param {number} weight */
-	fill(block, weight = 0) {
-		this.prevHash = block.prevHash;
-		this.hash = block.hash;
-		this.index = block.index;
-		this.timestamp = block.timestamp;
-		this.miniHash.textContent = this.#splitHash(block.hash, 16).join(' ');
-		this.blockIndex.textContent = `#${block.index}`;
-		this.weight.textContent = `${(weight / 1024).toFixed(2)} KB`;
-		this.timeAgo.textContent = getTimeSinceBlockConfirmedString(block.timestamp);
-		this.nbTx.textContent = `${block.Txs.length} transactions`;
-		this.blockSquare.classList.add('filled');
-		this.isFilled = true;
-		return true;
-	}
-	updateTimeAgo() {
-		if (!this.timestamp) return;
-		this.timeAgo.textContent = getTimeSinceBlockConfirmedString(this.timestamp);
-	}
-	/** @param {string} hash @param {number} nbOfCharsPerLine Default: 16 */
-    #splitHash(hash, nbOfCharsPerLine = 16) {
-        const hashSplitted = [];
-        for (let i = 0; i < hash.length; i += nbOfCharsPerLine)
-            hashSplitted.push(hash.slice(i, i + nbOfCharsPerLine));
-
-        return hashSplitted;
-    }
-}
-
-class BlockChainElementsManager {
-	/** @type {BlockComponent[]} */				blocks = [];
-	/** @type {anime.AnimeInstance | null} */	firstBlockAnimation = null;
-	/** @type {anime.AnimeInstance | null} */	chainWrapAnimation = null;
-	timeAgoUpdatesInterval = setInterval(() => {
-		for (const blockComponent of this.blocks) blockComponent.updateTimeAgo();
-	}, 1000); // every second
-
-	get numberOfFilledBlocks() { return this.blocks.filter(block => block.isFilled).length; }
-	get firstFilledBlock() { return this.blocks.find(block => block.isFilled) || null; }
-	get firstEmptyBlock() { return this.blocks.find(block => !block.isFilled) || null; }
-	get lastFilledBlock() { return [...this.blocks].reverse().find(block => block.isFilled) || null; }
-	get lastEmptyBlock() { return [...this.blocks].reverse().find(block => !block.isFilled) || null; }
-	get isEnoughBlocksFilled() { return this.numberOfFilledBlocks >= CONFIG.MAX_BLOCKS_FILLED; }
-
-    /** @param {number} maxNbBlocks */
-    createChainOfEmptyBlocksUntilFillTheDiv(maxNbBlocks = 16) {
-        for (let i = 0; i < maxNbBlocks; i++) if (!this.#addEmptyBlockAtEndIfNeeded()) break;
-    }
-	/** @param {BlockFinalized} block */
-    appendBlockIfCorresponding(block, weight = 0) {
-		const lastFilled = this.lastFilledBlock;
-		const isNextOfLast = lastFilled?.hash === block.prevHash;
-		if (lastFilled && !isNextOfLast) return false;
-
-		const filled = lastFilled
-			? this.blocks[CONFIG.MAX_BLOCKS_FILLED]?.fill(block, weight)
-			: this.blocks[CONFIG.MAX_BLOCKS_FILLED - 1]?.fill(block, weight);
-		if (!filled) return false;
-		
-		this.#pruneBlockIfNeeded();
-		return true;
-    }
-	/** @param {BlockFinalized} block */
-	setPreviousBlockIfCorresponding(block, weight = 0) {
-		console.log('Trying to set previous block:', block);
-		if (this.isEnoughBlocksFilled || !this.firstFilledBlock) return false;
-
-		const isPreviousOfFirst = this.firstFilledBlock.prevHash === block.hash;
-		if (!isPreviousOfFirst) return false;
-		console.log('Setting previous block:', block);
-		return this.firstEmptyBlock?.fill(block, weight);
-	}
-    getCorrespondingBlockElement(blockHeight = 0) {
-		for (const blockComponent of this.blocks) {
-			const blockIndexText = blockComponent.blockIndex.textContent;
-			if (blockIndexText === `#${blockHeight}`) return blockComponent;
+		switch(e.target.dataset.action) {
+			case 'display_block_details':
+				this.displayBlockDetails(e.target);
+				break;
+			case 'hide_modal':
+				this.modal.hide();
+				break;
 		}
 	}
-    getNumberOfConfirmedBlocksShown() {
-		let count = 0;
-		for (const blockComponent of this.blocks)
-			if (blockComponent.blockIndex.textContent !== '#...') count++;
-		return count;
-	}
-	reset() {
-		console.log('Resetting BlockChainElementsManager...');
-		// REMOVE ALL BLOCK ELEMENTS
-		for (const blockComponent of this.blocks) blockComponent.wrap.remove();
-		this.blocks = [];
 
-		// RECREATE EMPTY BLOCKS
-		this.createChainOfEmptyBlocksUntilFillTheDiv();
-	}
+	// API METHODS
+	/** @param {HTMLElement} blockElement */
+	displayBlockDetails(blockElement) {
+		const hash = blockElement.dataset.hash;
+		const index = parseInt(blockElement.dataset.index || '-1');
+		if (!hash || index < 0) return;
 
-	#pruneBlockIfNeeded() {
-		// IF MORE THAN 3 BLOCKS ARE SHOWN, SUCK THE FIRST ONE, THEN ADD A NEW EMPTY BLOCK AT THE END
-		if (this.numberOfFilledBlocks <= CONFIG.MAX_BLOCKS_FILLED) return;
-		this.#suckFirstBlockElement();
-	}
-	#addEmptyBlockAtEndIfNeeded() {
-		// ADD NEW EMPTY BLOCK AT THE END IF NEEDED
-		const parentRect = eHTML.get('chainWrap').parentElement?.parentElement?.getBoundingClientRect();
-		if (!parentRect) return;
+		const blockRect = blockElement.getBoundingClientRect();
+        const blockCenter = { x: blockRect.left + blockRect.width / 2, y: blockRect.top + blockRect.height / 2 };
+		this.navigator.blockHash = hash;
+		this.navigator.blockIndex = index;
 		
-		const lastEmptyBlockRight = this.lastEmptyBlock?.wrap.getBoundingClientRect().right || 0;
-		if (lastEmptyBlockRight >= parentRect.right) return;
+		if (!this.navigator.correspondToLastUsed) this.modal.destroy();
+		else return this.modal.show(); // Block is already shown in the modal => do not recreate it
 
-		const newBlock = new BlockComponent();
-		this.blocks.push(newBlock);
-		eHTML.get('chainWrap').appendChild(newBlock.wrap);
-		return true;
+		this.modal.newContainer();
+        this.modal.newContent(blockRect.width, blockRect.height, blockCenter);
+		this.navigateUntilTarget();
 	}
-    /** @param {number} duration */
-    #suckFirstBlockElement(duration = 1000) {
-		const chainWrap = eHTML.get('chainWrap');
-		if (!chainWrap) return;
+	async navigateUntilTarget() {
+        let modalContentCreated = false;
+
+        const { blockHash, blockIndex, txIndex, outputIndex, address } = this.navigator.getValuesAndReset();
+        if (!address && blockIndex === null) // no target specified => abort
+            { console.info('navigateUntilTarget => blockReference === null'); return }
+
+        if (address) console.info('navigateUntilTarget =>', address);
+        else console.info(`navigateUntilTarget => #${blockIndex}${txIndex !== null ? `:${txIndex}` : ''}${outputIndex !== null ? `:${outputIndex}` : ''}`);
+
+    	/* ???
+		const rebuildModal = txIndex !== null || outputIndex !== null || address;
+        if (rebuildModal && this.cbeHTML.modalContainer()) { //TODO: to test
+            this.cbeHTML.modalContainer().click();
+            await new Promise((resolve) => { setTimeout(() => { resolve(); }, this.modal.animations.modalDuration); });
+        }*/
+        if (!this.modal.contentReady) { // CREATE MODAL FROM THE SEARCH BUTTON
+			const searchMenuBtn = eHTML.get('searchMenuBtn');
+			if (!searchMenuBtn) { console.error('navigateUntilTarget => error: searchMenuBtn not found'); return; }
+			const searchMenuBtnRect = searchMenuBtn.getBoundingClientRect();
+			const searchMenuBtnCenter = { x: searchMenuBtnRect.left + searchMenuBtnRect.width / 2, y: searchMenuBtnRect.top + searchMenuBtnRect.height / 2 };
+			this.modal.newContainer();
+			this.modal.newContent(searchMenuBtnRect.width, searchMenuBtnRect.height, searchMenuBtnCenter);
+        }
+
+        // if address is set, fill the modal content with address data
+        //if (address) { this.#fillModalContentWithAddressData(address); return; }
+		if (address) return; // TODO: address handling not implemented yet
         
-        // suck the first block
-        this.firstBlockAnimation = anime({
-            targets: this.blocks[0].wrap,
-            translateX: '-100%',
-            filter: 'blur(6px)',
-            width: 0,
-            scale: 0.5,
-            opacity: 0,
-            duration,
-            easing: 'easeInOutQuad',
-            begin: () => {
-                chainWrap.style.width = `${chainWrap.getBoundingClientRect().width}px`; // lock the width of the wrap
-            },
-            complete: () => {
-                this.#removeFirstBlockElement();
-				this.#addEmptyBlockAtEndIfNeeded();
-                chainWrap.style.width = 'auto'; // unlock the width of the wrap
-            }
-        });
-        
-        // blur the wrap
-        this.chainWrapAnimation = anime({
-            targets: chainWrap,
-            filter: ['blur(.6px)', 'blur(.5px)', 'blur(.6px)'],
-            duration: duration - 200,
-            complete: () => { 
-                anime({
-                    targets: chainWrap,
-                    filter: 'blur(0px)',
-                    duration: 400,
-                    easing: 'easeInOutQuad',
-                });
-            }
-        });
-    }
-    #removeFirstBlockElement() {
-		if (!this.blocks.length) return;
-		this.blocks[0].wrap.remove();
-		this.blocks.shift();
+        // fill the modal content with the block data
+        if (blockHash === null || blockIndex === null) return;
+		const blockData = this.connector.blocks.finalized[blockHash] || await this.connector.getMissingBlock(blockIndex, blockHash);
+		if (!blockData) { console.info('navigateUntilTarget => error: blockData not found'); return; }
+
+        this.modal.fillContentWithBlock(blockData, this.connector.blockWeightByHash[blockHash] || 0);
+        return; // TODO: tx/output handling not implemented yet
+		/*if (!txId) return;
+
+        await new Promise((resolve) => { setTimeout(() => { resolve(); }, modalContentCreated ? 1000 : 200); });
+
+        // wait for txs table to be filled
+        await new Promise((resolve) => { setTimeout(() => { resolve(); }, 800); });
+        // scroll to the tx line
+        const modalContentWrap = this.cbeHTML.modalContentWrap();
+        const txRow = this.#getTxRowElement(txId, modalContentWrap);
+        if (!txRow) { console.error('navigateUntilTarget => error: txRow not found'); return; }
+
+        const scrollDuration = this.modal.animations.modalDuration * 2;
+        this.#scrollUntilVisible(txRow, modalContentWrap, scrollDuration);
+        this.#blinkElementScaleY(txRow, 200, scrollDuration, () => { 
+            txRow.click();
+            if (outputIndex === null) return;
+
+            const txDetails = this.cbeHTML.txDetails();
+            if (!txDetails) { console.error('navigateUntilTarget => error: txDetails not found'); return; }
+            const outputRow = txDetails.getElementsByClassName('cbe-TxOutput')[outputIndex];
+            if (!outputRow) { console.error('navigateUntilTarget => error: outputRow not found'); return; }
+            this.#scrollUntilVisible(outputRow, txDetails, scrollDuration);
+            this.#blinkElementScaleY(outputRow, 200, scrollDuration, () => { outputRow.style.fontWeight = 'bold'; });
+        });*/
     }
 }

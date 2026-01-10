@@ -41,6 +41,20 @@ export class BlockFinalized extends BlockFinalizedHeader {
 		super(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
 		this.Txs = Txs;
 	}
+
+	// HELPERS
+	/** @param {BlockFinalized} block */
+	static minerAddress(block) { return block.Txs[0].outputs[0].address; }
+	/** @param {BlockFinalized} block */
+	static validatorAddress(block) { return block.Txs[1].outputs[0].address; }
+	/** @param {BlockFinalized} block */
+	static calculateRewards(block) {
+		const powReward = block.Txs[0].outputs[0].amount; // Coinbase tx
+		const posReward = block.Txs[1].outputs[0].amount; // Validator tx
+		const totalReward = powReward + posReward;
+		const totalFees = totalReward - block.coinBase;
+		return { powReward, posReward, totalReward, totalFees };
+	}
 }
 
 export class BlockInfo {

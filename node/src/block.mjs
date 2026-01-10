@@ -14,6 +14,7 @@ import { Transaction, UTXO, UtxoState } from '../../types/transaction.mjs';
 */
 
 export class BlockUtils {
+	// PRIVATE STATIC METHODS
     /** @param {BlockCandidate | BlockFinalized} block @param {boolean} excludeCoinbaseAndPos */
     static async #getBlockTxsHash(block, excludeCoinbaseAndPos = false) {
 		const txsSignables = [];
@@ -54,6 +55,7 @@ export class BlockUtils {
 		block.powReward = powReward; // Reward for the miner
 	}
 
+	// PUBLIC STATIC METHODS
     /** Get the block signature used for mining
      * @param {BlockCandidate | BlockFinalized} block
      * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp

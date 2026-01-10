@@ -112,7 +112,11 @@ export class AppsManager {
 	}
 
 	// HANDLERS
-	clickAppButtonsHandler(e) {
+	clickHandler(e) {
+		this.#clickAppButtonsHandler(e);
+		this.#clickWindowHandler(e);
+	}
+	#clickAppButtonsHandler(e) {
 		const button = e.target.closest('.app-button');
 		if (!button) return;
 
@@ -142,7 +146,7 @@ export class AppsManager {
 		}
 		this.tempFrontAppName = app.appName;
 	}
-	clickWindowHandler(e) {
+	#clickWindowHandler(e) {
 		switch(e.target.dataset.action) {
 			case 'refresh':
 				this.windows[e.target.dataset.appName].refreshIframeSrc();

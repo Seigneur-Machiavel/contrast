@@ -16,6 +16,7 @@ body {
 }
 #board-title {
 	z-index: 1;
+	user-select: none;
     font-family: 'Contrast', sans-serif;
 	font-size: larger;
 	position: absolute;
@@ -32,6 +33,7 @@ body {
     margin-left: 2px;
 }
 #connexion-resume {
+	user-select: none;
     right: 128px;
     font-size: smaller;
     font-family: 'IBM Plex Mono';

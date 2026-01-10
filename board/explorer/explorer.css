@@ -281,6 +281,9 @@ button {
     inset 0px 0px 4px -2px var(--color2);
     transform: scale(1);
 }
+.cbe-blockSquare div {
+	pointer-events: none;
+}
 .cbe-blockSquare:not(.filled):first-child {
     animation: boxGlow .6s infinite alternate;
 }
@@ -388,17 +391,22 @@ button {
 }
 
 #cbe-modalContainer {
-    position: fixed;
-    font-size: calc(var(--cbe-inner-height, var(--cbe-inner-height-default))* .116);
+	pointer-events: none;
+    position: absolute;
+    font-size: calc(var(--cbe-inner-height, var(--cbe-inner-height-default)) * .116);
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     z-index: 100;
     /*background: transparent;*/
     background: radial-gradient(transparent, var(--color1) 150%);
     opacity: 0;
     transition: opacity .2s;
+}
+#cbe-modalContainer.show {
+	pointer-events: auto;
+	opacity: 1;
 }
 #cbe-modalContent {
     position: absolute;
@@ -439,7 +447,7 @@ button {
     -6px -6px 12px var(--color1),
     6px 6px 12px var(--color2);
 }
-/*#cbe-modalContent.blockDataContent {
+/*#cbe-modalContent.blockContent {
 }*/
 #cbe-modalContent .cbe-spacedText {
     display: flex;
@@ -481,7 +489,7 @@ button {
     border-radius: 20px;
     width: 44%;
 }
-#cbe-modalContent.blockDataContent .cbe-twoContainerWrap .cbe-spacedText {
+#cbe-modalContent.blockContent .cbe-twoContainerWrap .cbe-spacedText {
     padding: 4px 0;
 }
 

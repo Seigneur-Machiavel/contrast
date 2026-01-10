@@ -149,6 +149,7 @@ input.correct {
     box-shadow: 0 0 0 1px var(--correct-color), inset 0 0 0 1px var(--correct-color);
 }
 button {
+	user-select: none;
     cursor: pointer;
     border: none;
     background: var(--color2);
@@ -158,6 +159,9 @@ button {
     border-radius: 4px;
     padding: 4px 10px;
     font-size: .86em; /* same as h2 */
+}
+img {
+	user-select: none;
 }
 
 .hidden {

@@ -57,7 +57,7 @@ export class Sync {
 	constructor(node) {
 		this.node = node;
 		// @ts-ignore
-		node.p2p.onPeerConnect(() => setTimeout(() => this.shareMyStatus(1), 500));
+		node.p2p.onPeerConnect(() => setTimeout(() => this.shareMyStatus(1), 1_000));
 		node.p2p.gossip.on('sync_status', this.#onSyncStatus);
 		node.p2p.messager.on('block_request', this.#onBlockRequest);
 		node.p2p.messager.on('block', this.#onBlock);
