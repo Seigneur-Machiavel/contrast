@@ -1,5 +1,6 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
+import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { conditionnals } from '../../utils/conditionals.mjs';
@@ -25,7 +26,7 @@ export class Transaction_Builder {
         if (conditionnals.arrayIncludeDuplicates(anchors)) throw new Error('Duplicate UTXO anchors in UTXOs');
     }
     static createLighthouse() { // DEPRECATED
-        const lighthouseOutput = new TxOutput(0, 'lighthouse', 'Cv6XXKBTALRPSCzuU6k4');
+        const lighthouseOutput = new TxOutput(0, 'lighthouse', ADDRESS.SAMPLE);
         const inputs = ['00000000'];
         const outputs = [lighthouseOutput];
 		return new Transaction(inputs, outputs);
@@ -53,7 +54,7 @@ export class Transaction_Builder {
 		return new Transaction(inputs, outputs);
     }
     /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte // RANDOM IS TEMPORARY */
-    static createTransaction(senderAccount, transfers, feePerByte = Math.round(Math.random() * 10) + 1) {
+    static createTransaction(senderAccount, transfers, feePerByte = 1) {
         const senderAddress = senderAccount.address;
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
         const UTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
@@ -74,7 +75,7 @@ export class Transaction_Builder {
      * @param {Account} senderAccount @param {string} stakingAddress @param {number} amount
      * @param {number} feePerByte // RANDOM IS TEMPORARY
      * @param {boolean} useOnlyNecessaryUtxos - if true, the transaction will use only the necessary UTXOs to reach the amount */
-    static createStakingVss(senderAccount, stakingAddress, amount, feePerByte = Math.round(Math.random() * 10) + 1, useOnlyNecessaryUtxos = true) {
+    static createStakingVss(senderAccount, stakingAddress, amount, feePerByte = 1, useOnlyNecessaryUtxos = true) {
         if (amount < BLOCKCHAIN_SETTINGS.minStakeAmount) throw new Error(`Amount too low: ${amount} < ${BLOCKCHAIN_SETTINGS.minStakeAmount}`);
         const senderAddress = senderAccount.address;
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
@@ -97,13 +98,11 @@ export class Transaction_Builder {
     }
 	/** @param {UTXO[]} UTXOs @param {TxOutput[]} outputs @param {number} totalSpent @param {number} feePerByte @param {string} senderAddress @param {number} [feeSupplement] */
     static #estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, feeSupplement) {
-        const estimatedWeight = Transaction_Builder.simulateTxToEstimateWeight(UTXOs, outputs);
-        const { fee } = Transaction_Builder.calculateFeeAndChange(UTXOs, totalSpent, estimatedWeight, feePerByte, feeSupplement);
-        
-        const utxos = Transaction_Builder.extractNecessaryUtxosForAmount(UTXOs, totalSpent + fee);
-        const { change } = Transaction_Builder.calculateFeeAndChange(utxos, totalSpent, estimatedWeight, feePerByte, feeSupplement);
-
-        const changeOutput = change > BLOCKCHAIN_SETTINGS.unspendableUtxoAmount ? new TxOutput(change, 'sig', senderAddress) : undefined;
+        const estWeight 	= Transaction_Builder.simulateTxToEstimateWeight(UTXOs, outputs);
+        const { fee } 		= Transaction_Builder.calculateFeeAndChange(UTXOs, totalSpent, estWeight, feePerByte, feeSupplement);
+        const utxos 		= Transaction_Builder.extractNecessaryUtxosForAmount(UTXOs, totalSpent + fee);
+        const { change } 	= Transaction_Builder.calculateFeeAndChange(utxos, totalSpent, estWeight, feePerByte, feeSupplement);
+        const changeOutput 	= change > BLOCKCHAIN_SETTINGS.unspendableUtxoAmount ? new TxOutput(change, 'sig', senderAddress) : undefined;
         return { utxos, changeOutput };
     }
     /** @param {UTXO[]} utxos @param {number} amount */
@@ -122,7 +121,7 @@ export class Transaction_Builder {
     /** @param {UTXO[]} utxos @param {TxOutput[]} outputs */
     static simulateTxToEstimateWeight(utxos, outputs, nbOfSigners = 1) {
         const change = 26_152_659_654_321;
-        const changeOutput = new TxOutput(change, 'sig', 'Cv6XXKBTALRPSCzuU6k4');
+        const changeOutput = new TxOutput(change, 'sig', ADDRESS.SAMPLE);
         const outputsClone = JSON.parse(JSON.stringify(outputs));
         outputsClone.push(changeOutput);
 

@@ -268,7 +268,7 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Witnesses array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-        /** @param {Transaction} tx @param {'tx' | 'validator' | 'miner'} [mode] default: normal */
+        /** @param {Transaction} tx @param {'tx' | 'validator' | 'miner'} [mode] default: tx */
         transaction(tx, mode = 'tx') {
 			if (mode === 'miner' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.nonce.str)) throw new Error('Invalid coinbase transaction');
             if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.validatorInput.str)) throw new Error('Invalid transaction: validator input must be address + posHash');

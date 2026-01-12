@@ -47,17 +47,39 @@ export class Connector {
 			this.height = c.blockHeight;
 			this.hash = c.blockHash;
 
-			if (!this.blocks.finalized[this.hash]) this.getMissingBlock(this.height, this.hash);
+			if (!this.blocks.finalized[this.hash]) this.getMissingBlock();
 			for (const handler of this.listeners['consensus_height_change'] || []) handler(this.height);
 		}
 	}
-	/** @param {number} height @param {string} hash */
-	async getMissingBlock(height, hash) {
-		const peersToAsk = this.sync.getPeersToAskList(height, hash);
+	/** @param {number} [height] @param {Object} [consensus] @param {number} consensus.height @param {string} consensus.hash */
+	async getMissingBlock(height = this.height, consensus = { height: this.height, hash: this.hash }) {
+		const peersToAsk = this.sync.getPeersToAskList(consensus.height, consensus.hash);
 		for (const peerId of peersToAsk) {
 			const blockBytes = await this.sync.fetchBlockFromPeer(peerId, height);
-			if (this.#storeBlock(blockBytes)) return true;
+			const block = this.#storeBlock(blockBytes);
+			if (block) return block;
 		}
+	}
+	/** @param {number} height */
+	async getBlockRelatedToCurrentConsensus(height) {
+		if (height < 0 || height > this.height) return;
+
+		let h = this.hash;
+		let i = this.height;
+		while (i > -1) {
+			const block = this.blocks.finalized[h];
+			if (!block) break; // fetch needed
+			if (i === height) return block;
+			h = block.prevHash;
+			i--;
+		}
+
+		// IF ONLY ONE BLOCK AT THIS HEIGHT, RETURN IT
+		const hashesAtHeight = this.blocksHashesByHeight[height];
+		if (hashesAtHeight && hashesAtHeight.length === 1) return this.blocks.finalized[hashesAtHeight[0]];
+
+		// NOT FOUND, FETCH FROM PEERS
+		return this.getMissingBlock(height);
 	}
 	/** @param {Uint8Array} serializedBlock */
 	#storeBlock(serializedBlock) {
@@ -67,7 +89,7 @@ export class Connector {
 			if (!this.blocksHashesByHeight[block.index]) this.blocksHashesByHeight[block.index] = [];
 			if (!this.blocksHashesByHeight[block.index].includes(block.hash)) this.blocksHashesByHeight[block.index].push(block.hash);
 			this.blockWeightByHash[block.hash] = serializedBlock.length;
-			return true;
+			return block;
 		} catch (error) {}
 	}
 	/** @param {any} msg */

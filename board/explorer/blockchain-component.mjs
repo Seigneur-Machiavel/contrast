@@ -88,9 +88,6 @@ export class BlockchainComponent {
 		const isNextOfLast = lastFilled?.hash === block.prevHash;
 		if (lastFilled && !isNextOfLast) return false;
 
-		//const isFirstFilled = this.blocks[0]?.isFilled || false;
-		//if (!isFirstFilled) this.#suckFirstBlockElement();
-
 		const filled = lastFilled
 			? this.blocks[this.MAX_BLOCKS_FILLED]?.fill(block, weight)
 			: this.blocks[this.MAX_BLOCKS_FILLED - 1]?.fill(block, weight);

@@ -496,7 +496,7 @@ button {
 .cbe-TxsTable {
     background: var(--color1);
     box-shadow: inset 0px 0px 4px -2px var(--color2);
-    padding: 1% 2%;
+    padding: 1% 0%;
     border-radius: 10px;
     width: 92%;
     margin-left: 50%;
@@ -507,6 +507,10 @@ button {
     font-weight: bold;
     color: var(--color3);
     text-align: right;
+	padding: 0 12px;
+}
+.cbe-Table tr td:not(:last-child), .cbe-Table tr th:not(:last-child) {
+    border-right: solid 1px var(--color1_2);
 }
 .cbe-Table thead tr th {
     font-weight: bolder;
@@ -541,61 +545,32 @@ button {
 }
 
 #cbe-TxDetails {
-    position: absolute;
-    margin-left: -1%;
-    width: 102%;
-    max-width: 800px;
-    background: var(--color1);
-    padding: 2%;
-    border-radius: 10px;
-    font-size: 72%;
-    box-shadow:
-    inset 0px 0px 4px -2px var(--color2),
-    0px 0px 4px -2px var(--color2);
-    transform: translateY(calc(-100% - 32px));
-    overflow-y: auto;
+    background: var(--color1_1);
+	width: 100%;
+	font-size: x-small;
     max-height: 320px;
     transform-origin: bottom;
-    animation: fadeInBackground .5s ease-out forwards, scaleTxDetailsFromBottom .2s ease-out forwards;
 }
-@keyframes fadeInBackground {
-    from {
-        background: transparent;
-    }
-    to {
-        background: var(--color1);
-    }
+#cbe-TxDetails td {
+	vertical-align: top;
+	padding-bottom: 8px;
 }
-@keyframes scaleTxDetailsFromBottom {
-    from {
-        transform: translateY(calc(-100% - 32px)) scale(0);
-    }
-    to {
-        transform: translateY(calc(-100% - 32px)) scale(1);
-    }
+#cbe-TxDetails h3 {
+	margin: 2px 0 8px 0;
 }
-.cbe-threeContainerWrap {
-    display: flex;
-    justify-content: space-evenly;
-    margin: 5% 0%;
+#cbe-TxDetails .cbe-TxOutput.targeted {
+	background-color: var(--color1_2);
 }
-#cbe-TxDetails .cbe-threeContainerWrap {
-    margin: 0;
-}
-.cbe-threeContainerWrap .cbe-TxInfoWrap, .cbe-threeContainerWrap .cbe-TxInputsWrap {
+.cbe-TxInfoWrap, .cbe-TxInputsWrap {
     margin-right: 4%;
 }
 .cbe-TxInfoWrap, .cbe-TxInputsWrap, .cbe-TxOutputsWrap {
     border-radius: 3px;
     padding: 0 10px 10px 10px;
-
-    box-shadow: inset 0px 0px 4px -2px var(--color2);
+    /*box-shadow: inset 0px 0px 4px -2px var(--color2);*/
     height: fit-content;
     max-height: 200px;
     overflow: auto;
-}
-.cbe-TxInputsWrap, .cbe-TxOutputsWrap {
-    text-align: right;
 }
 .cbe-TxWitnessesWrap {
     margin-bottom: 20px;

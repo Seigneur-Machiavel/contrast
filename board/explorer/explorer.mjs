@@ -11,6 +11,7 @@ import { eHTML_STORE } from '../board-helpers.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { ModalComponent } from './modal-component.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { BlockchainComponent } from './blockchain-component.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
@@ -32,30 +33,32 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 const eHTML = new eHTML_STORE('cbe-', 'maxSupply');
 export class Navigator {
-	/** @type {string | null} */	blockHash = null;
 	/** @type {number | null} */	blockIndex = null;
 	/** @type {number | null} */	txIndex = null;
 	/** @type {number | null} */	outputIndex = null;
 	/** @type {string | null} */	address = null;
 	/** @type {any} */				lastUsed = null;
 
-	get correspondToLastUsed() {
+	get correspondToLastBlock() {
 		if (!this.lastUsed) return false;
-		if (this.blockHash !== this.lastUsed.blockHash) return false;
 		if (this.blockIndex !== this.lastUsed.blockIndex) return false;
+		return true;
+	}
+	get correspondToLastNavigation() {
+		if (!this.lastUsed) return false;
+		if (!this.correspondToLastBlock) return false;
 		if (this.txIndex !== this.lastUsed.txIndex) return false;
 		if (this.outputIndex !== this.lastUsed.outputIndex) return false;
 		if (this.address !== this.lastUsed.address) return false;
 		return true;
 	}
 	getValuesAndReset() {
-		const { blockHash, blockIndex, txIndex, outputIndex, address } = this;
-		this.lastUsed = { blockHash, blockIndex, txIndex, outputIndex, address };
+		const {  blockIndex, txIndex, outputIndex, address } = this;
+		this.lastUsed = { blockIndex, txIndex, outputIndex, address };
 		this.reset();
-		return { blockHash, blockIndex, txIndex, outputIndex, address };
+		return { blockIndex, txIndex, outputIndex, address };
 	}
 	reset() {
-		this.blockHash = null;
 		this.blockIndex = null;
 		this.txIndex = null;
 		this.outputIndex = null;
@@ -82,29 +85,34 @@ export class Explorer {
 
 		console.log('Explorer DOM elements ready');
 		this.bc.createEmptyBlocksUntilFillTheDiv();
-		eHTML.get('maxSupply').textContent = CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply);
-		eHTML.get('targetBlocktime').textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
+		const [supply, targetTime] = [eHTML.get('maxSupply'), eHTML.get('targetBlocktime')];
+		if (!supply || !targetTime) throw new Error('Explorer init error: required elements not found');
+		
+		supply.textContent = CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply);
+		targetTime.textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
 		this.#setupListeners();
 	}
 	#setupListeners() {
 		this.connector.on('consensus_height_change', this.#onConsensusHeightChange);
 	}
 	#onConsensusHeightChange = async (newHeight = 0) => {
-		eHTML.get('chainHeight').textContent = newHeight.toString();
-
 		const block = this.connector.blocks.finalized[this.connector.hash];
 		if (!block) return;
-
+		
 		//console.log('Explorer: New consensus block:', block);
 		const consensusMsgElement = eHTML.get('blockExplorerWaitingConsensusMessage');
+		if (!consensusMsgElement) throw new Error('Explorer: consensusMsgElement not found');
 		if (!this.connector.isConsensusRobust) consensusMsgElement.classList.add('show');
 		else consensusMsgElement.classList.remove('show');
-
+		
 		const percent = ((block.supply + block.coinBase) / BLOCKCHAIN_SETTINGS.maxSupply * 100).toFixed(2);
 		const readableLocalDate = new Date(block.timestamp).toLocaleString();
 		const agoText = `${((block.timestamp - block.posTimestamp) / 1000).toFixed(2)}s`;
-		eHTML.get('circulatingSupply').textContent = CURRENCY.formatNumberAsCurrency(block.supply + block.coinBase);
-		eHTML.get('circulatingSupplyPercent').textContent = `~${percent}`;
+		
+		// @ts-ignore
+		eHTML.get('chainHeight').textContent = newHeight.toString(); // @ts-ignore
+		eHTML.get('circulatingSupply').textContent = CURRENCY.formatNumberAsCurrency(block.supply + block.coinBase); // @ts-ignore
+		eHTML.get('circulatingSupplyPercent').textContent = `~${percent}`; // @ts-ignore
 		eHTML.get('lastBlocktime').textContent = `${readableLocalDate} (${agoText})`;
 
 		const weight = this.connector.blockWeightByHash[block.hash] || 0;
@@ -115,7 +123,7 @@ export class Explorer {
 		await this.#fillBlocksFromLastUntilEnough();
 	}
 	async #fillBlocksFromLastUntilEnough() {
-		console.log('Explorer: Filling previous blocks until enough...');
+		//console.log('Explorer: Filling previous blocks until enough...');
 		while(!this.bc.isEnoughBlocksFilled) {
 			const firstBlock = this.bc.firstFilledBlock;
 			if (!firstBlock?.prevHash) break;
@@ -125,7 +133,7 @@ export class Explorer {
 				const index = firstBlock.index ? firstBlock.index - 1 : -1;
 				if (index < 0) break;
 
-				const retrived = await this.connector.getMissingBlock(index, firstBlock.prevHash);
+				const retrived = await this.connector.getMissingBlock(index);
 				if (!retrived) break;
 				prevBlock = this.connector.blocks.finalized[firstBlock.prevHash];
 			}
@@ -134,101 +142,144 @@ export class Explorer {
 			if (!this.bc.setPreviousBlockIfCorresponding(prevBlock, weight)) break;
 		}
 	}
+	get searchMenuRect() {
+		const searchMenuBtn = eHTML.get('searchMenuBtn');
+		if (!searchMenuBtn) { console.error('navigateUntilTarget => error: searchMenuBtn not found'); return; }
+		const searchMenuBtnRect = searchMenuBtn.getBoundingClientRect();
+		const searchMenuBtnCenter = { x: searchMenuBtnRect.left + searchMenuBtnRect.width / 2, y: searchMenuBtnRect.top + searchMenuBtnRect.height / 2 };
+		return { rect: searchMenuBtnRect, center: searchMenuBtnCenter };
+	}
 
 	// HANDLERS METHODS
 	// @ts-ignore
 	clickHandler(e) {
-		console.log('Explorer clickHandler:', e);
+		// console.log('Explorer clickHandler:', e);
 		if (!e.target.dataset.action) return;
-
+		
+		const parent = e.target.parentElement;
 		switch(e.target.dataset.action) {
 			case 'display_block_details':
-				this.displayBlockDetails(e.target);
+				this.displayBlock(e.target);
+				break;
+			case 'copy_block_hash': // TODO
+				console.log('Copy block hash:', e.target.dataset.hash);
+				break;
+			case 'display_transaction_details':
+				this.displayTransaction(parent.dataset.txId);
+				break;
+			case 'display_utxo_details':
+				this.displayVout(e.target.dataset.anchor);
+				break;
+			case 'display_address_details':
+				console.log('Display address details:', e.target.dataset.address);
+				const address = e.target.dataset.address;
+				if (!address) throw new Error('Address not found in dataset');
+				this.displayAddressDetails(address);
 				break;
 			case 'hide_modal':
 				this.modal.hide();
 				break;
 		}
 	}
+	// @ts-ignore
+	keyUpHandler(e) {
+		if (e.key !== 'Enter') return;
+
+		const inputText = e.target.value.replace(/\s/g, '');
+		const isNumber = !isNaN(inputText);
+		const isAddress = ADDRESS.checkConformity(inputText);
+		const isTxId = inputText.split(':').length === 2;
+		const isAnchor = inputText.split(':').length === 3;
+
+		if (isNumber) this.navigator.blockIndex = parseInt(inputText);
+		if (isAddress) this.navigator.address = inputText;
+		if (isTxId) {
+			const { height, txIndex } = serializer.parseTxId(inputText);
+			this.navigator.blockIndex = height;
+			this.navigator.txIndex = txIndex;
+		}
+		if (isAnchor) {
+			const { height, txIndex, vout } = serializer.parseAnchor(inputText);
+			this.navigator.blockIndex = height;
+			this.navigator.txIndex = txIndex;
+			this.navigator.outputIndex = vout;
+		}
+		
+		this.navigateUntilTarget(this.searchMenuRect);
+	}
 
 	// API METHODS
 	/** @param {HTMLElement} blockElement */
-	displayBlockDetails(blockElement) {
+	displayBlock(blockElement) {
 		const hash = blockElement.dataset.hash;
 		const index = parseInt(blockElement.dataset.index || '-1');
 		if (!hash || index < 0) return;
 
-		const blockRect = blockElement.getBoundingClientRect();
-        const blockCenter = { x: blockRect.left + blockRect.width / 2, y: blockRect.top + blockRect.height / 2 };
-		this.navigator.blockHash = hash;
 		this.navigator.blockIndex = index;
-		
-		if (!this.navigator.correspondToLastUsed) this.modal.destroy();
-		else return this.modal.show(); // Block is already shown in the modal => do not recreate it
 
-		this.modal.newContainer();
-        this.modal.newContent(blockRect.width, blockRect.height, blockCenter);
+		const blockRect = blockElement.getBoundingClientRect();
+		const blockCenter = { x: blockRect.left + blockRect.width / 2, y: blockRect.top + blockRect.height / 2 };
+		this.navigateUntilTarget({ rect: blockRect, center: blockCenter });
+	}
+	/** @param {string} txId */
+	displayTransaction(txId) {
+		const txPointer = serializer.parseTxId(txId);
+		this.navigator.blockIndex = txPointer.height;
+		this.navigator.txIndex = txPointer.txIndex;
 		this.navigateUntilTarget();
 	}
-	async navigateUntilTarget() {
-        let modalContentCreated = false;
+	/** @param {string} anchor */
+	displayVout(anchor) {
+		const voutPointer = serializer.parseAnchor(anchor);
+		this.navigator.blockIndex = voutPointer.height;
+		this.navigator.txIndex = voutPointer.txIndex;
+		this.navigator.outputIndex = voutPointer.vout;
+		this.navigateUntilTarget();
+	}
+	/** @param {string} address */
+	displayAddressDetails(address) {
+		this.navigator.address = address;
+		if (this.navigator.correspondToLastNavigation) return this.modal.show(); // Address is already shown in the modal => do not recreate it
+		this.navigateUntilTarget();
+	}
+	async navigateUntilTarget(modalOrigin = this.searchMenuRect) {
+		if (!modalOrigin) throw new Error('navigateUntilTarget => error: modalOrigin is required');
 
-        const { blockHash, blockIndex, txIndex, outputIndex, address } = this.navigator.getValuesAndReset();
+		const correspondToLastNavigation = this.navigator.correspondToLastNavigation;
+		const correspondToLastBlock = this.navigator.correspondToLastBlock;
+        const { blockIndex, txIndex, outputIndex, address } = this.navigator.getValuesAndReset();
         if (!address && blockIndex === null) // no target specified => abort
             { console.info('navigateUntilTarget => blockReference === null'); return }
 
-        if (address) console.info('navigateUntilTarget =>', address);
-        else console.info(`navigateUntilTarget => #${blockIndex}${txIndex !== null ? `:${txIndex}` : ''}${outputIndex !== null ? `:${outputIndex}` : ''}`);
-
-    	/* ???
-		const rebuildModal = txIndex !== null || outputIndex !== null || address;
-        if (rebuildModal && this.cbeHTML.modalContainer()) { //TODO: to test
-            this.cbeHTML.modalContainer().click();
-            await new Promise((resolve) => { setTimeout(() => { resolve(); }, this.modal.animations.modalDuration); });
-        }*/
-        if (!this.modal.contentReady) { // CREATE MODAL FROM THE SEARCH BUTTON
-			const searchMenuBtn = eHTML.get('searchMenuBtn');
-			if (!searchMenuBtn) { console.error('navigateUntilTarget => error: searchMenuBtn not found'); return; }
-			const searchMenuBtnRect = searchMenuBtn.getBoundingClientRect();
-			const searchMenuBtnCenter = { x: searchMenuBtnRect.left + searchMenuBtnRect.width / 2, y: searchMenuBtnRect.top + searchMenuBtnRect.height / 2 };
+		// EARLY RETURN IF SAME NAVIGATION
+		let modalContentCreated = false;
+		if (correspondToLastNavigation) return this.modal.show(); // same => just show it
+		if (correspondToLastBlock) this.modal.show(); // same => just show it
+		if (address) console.info('navigateUntilTarget =>', address);
+		else console.info(`navigateUntilTarget => #${blockIndex}${txIndex !== null ? `:${txIndex}` : ''}${outputIndex !== null ? `:${outputIndex}` : ''}`);
+		
+		// REBUILD THE MODAL IF NEEDED
+		if (!correspondToLastBlock) await this.modal.destroy(); // different block => destroy previous modal
+		if (!this.modal.contentReady) {
 			this.modal.newContainer();
-			this.modal.newContent(searchMenuBtnRect.width, searchMenuBtnRect.height, searchMenuBtnCenter);
-        }
+			this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
+			modalContentCreated = true;
+		}
 
-        // if address is set, fill the modal content with address data
-        //if (address) { this.#fillModalContentWithAddressData(address); return; }
-		if (address) return; // TODO: address handling not implemented yet
+		// IF ADDRESS IS SPECIFIED => FILL THE MODAL WITH ADDRESS DATA
+        if (address) { this.modal.fillContentWithAddressData(address); return; }
         
-        // fill the modal content with the block data
-        if (blockHash === null || blockIndex === null) return;
-		const blockData = this.connector.blocks.finalized[blockHash] || await this.connector.getMissingBlock(blockIndex, blockHash);
+		// FILL THE MODAL WITH BLOCK DATA
+        if (blockIndex === null) return;
+		const blockData = await this.connector.getBlockRelatedToCurrentConsensus(blockIndex);
 		if (!blockData) { console.info('navigateUntilTarget => error: blockData not found'); return; }
 
-        this.modal.fillContentWithBlock(blockData, this.connector.blockWeightByHash[blockHash] || 0);
-        return; // TODO: tx/output handling not implemented yet
-		/*if (!txId) return;
+        if (!correspondToLastBlock) this.modal.fillContentWithBlock(blockData, this.connector.blockWeightByHash[blockData.hash] || 0);
+		if (txIndex == null) return;
 
-        await new Promise((resolve) => { setTimeout(() => { resolve(); }, modalContentCreated ? 1000 : 200); });
+		const tx = blockData.Txs[txIndex];
+		if (!tx) throw new Error('navigateUntilTarget => error: tx not found in block');
 
-        // wait for txs table to be filled
-        await new Promise((resolve) => { setTimeout(() => { resolve(); }, 800); });
-        // scroll to the tx line
-        const modalContentWrap = this.cbeHTML.modalContentWrap();
-        const txRow = this.#getTxRowElement(txId, modalContentWrap);
-        if (!txRow) { console.error('navigateUntilTarget => error: txRow not found'); return; }
-
-        const scrollDuration = this.modal.animations.modalDuration * 2;
-        this.#scrollUntilVisible(txRow, modalContentWrap, scrollDuration);
-        this.#blinkElementScaleY(txRow, 200, scrollDuration, () => { 
-            txRow.click();
-            if (outputIndex === null) return;
-
-            const txDetails = this.cbeHTML.txDetails();
-            if (!txDetails) { console.error('navigateUntilTarget => error: txDetails not found'); return; }
-            const outputRow = txDetails.getElementsByClassName('cbe-TxOutput')[outputIndex];
-            if (!outputRow) { console.error('navigateUntilTarget => error: outputRow not found'); return; }
-            this.#scrollUntilVisible(outputRow, txDetails, scrollDuration);
-            this.#blinkElementScaleY(outputRow, 200, scrollDuration, () => { outputRow.style.fontWeight = 'bold'; });
-        });*/
+		setTimeout(() => this.modal.displayTransactionDetails(tx, txIndex, outputIndex), modalContentCreated ? 1000 : 200);
     }
 }

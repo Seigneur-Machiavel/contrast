@@ -54,7 +54,12 @@ export class eHTML_STORE {
 	}
 	/** @param {HTMLElement} element @param {string} id */
 	add(element, id) {
-		element.id = id;
+		element.id = `${this.prefix}${id}`;
 		this.elements[id] = element;
+	}
+	/** @param {string} id */
+	remove(id) {
+		this.elements[id]?.remove();
+		delete this.elements[id];
 	}
 }

@@ -60,6 +60,9 @@ document.addEventListener('click', (e) => {
 	//infoManager.clickInfoButtonHandler(e);
 	//settingsManager.clickSettingsButtonHandler(e);
 });
+document.addEventListener('keyup', (e) => {
+	explorer.keyUpHandler(e);
+});
 document.addEventListener('mouseover', (e) => appsManager.hoverAppButtonsHandler(e));
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
 document.addEventListener('mousedown', (e) => appsManager.grabWindowHandler(e));

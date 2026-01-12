@@ -21,8 +21,10 @@ import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 // TEST CONFIG
-const nbReceipients = 4800;	// Number of receipient addresses in multi output transaction
-const nbOfSenders = 800; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
+const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
+const nbReceipients = nor || 4800;	// Number of receipient addresses in multi output transaction
+const nbOfSenders = nos || 800; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 

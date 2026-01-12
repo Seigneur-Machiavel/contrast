@@ -27,9 +27,10 @@ export class ADDRESS {
 	static AUTHORIZED_PREFIXES = new Set(Object.keys(LEXICON));
 	static LEXICON = LEXICON;
 	static CRITERIA = CRITERIA;
+	static SAMPLE = 'C111111';
 	get isMultiSig() { return ADDRESS.LEXICON[this.prefix]?.multiSig || false; }
-	STRING = 'C11111111'; 	// THE FULL ADDRESS STRING, 			length = 7
-	B58 = '11111111';		// THE BASE58 PART WITHOUT THE PREFIX, 	length = 6
+	STRING = 'C111111'; 	// THE FULL ADDRESS STRING, 			length = 7
+	B58 = '111111';			// THE BASE58 PART WITHOUT THE PREFIX, 	length = 6
 	prefix = 'C';			// THE PREFIX CHARACTER
 	uint32 = 0;				// THE NUMERICAL REPRESENTATION OF THE ADDRESS
 	bytes; 					// THE ADDRESS AS BYTES (1 byte prefix + 4 bytes number)
