@@ -1,14 +1,16 @@
 // @ts-check
 import { Sync } from '../node/src/sync.mjs';
 import { serializer } from '../utils/serializer.mjs';
+import { PendingRequest } from '../utils/networking.mjs';
 
 /**
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
+ * @typedef {import("../storage/ledgers-store.mjs").AddressLedger} AddressLedger
  */
 
 export class Connector {
-	/** @type {Record<string, Function[]>} */
-	listeners = {};
+	/** @type {PendingRequest | null} */		pendingRequest = null;
+	/** @type {Record<string, Function[]>} */	listeners = {};
 	isConsensusRobust = false;
 	height = -1;
 	hash = '';
@@ -28,6 +30,7 @@ export class Connector {
 		this.sync = new Sync({ p2p: p2pNode });
 		//p2pNode.onGossipData = (msg) => this.#handleMessage(msg);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
+		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
 		this.#consensusChangeDetectionLoop();
 	}
 
@@ -35,21 +38,6 @@ export class Connector {
 	on(type, callback) {
 		if (!this.listeners[type]) this.listeners[type] = [];
 		this.listeners[type].push(callback);
-	}
-
-	// INTERNAL METHODS
-	async #consensusChangeDetectionLoop() {
-		while(true) {
-			await new Promise(r => setTimeout(r, 200));
-			const c = this.sync.getConsensus();
-			if (this.height === c.blockHeight && this.hash === c.blockHash) continue; // No change
-			this.isConsensusRobust = !c.equality && c.count >= 1;
-			this.height = c.blockHeight;
-			this.hash = c.blockHash;
-
-			if (!this.blocks.finalized[this.hash]) this.getMissingBlock();
-			for (const handler of this.listeners['consensus_height_change'] || []) handler(this.height);
-		}
 	}
 	/** @param {number} [height] @param {Object} [consensus] @param {number} consensus.height @param {string} consensus.hash */
 	async getMissingBlock(height = this.height, consensus = { height: this.height, hash: this.hash }) {
@@ -81,6 +69,33 @@ export class Connector {
 		// NOT FOUND, FETCH FROM PEERS
 		return this.getMissingBlock(height);
 	}
+	/** @param {string} address */
+	async getAddressLedger(address, timeout = 3000) {
+		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		for (const peerId of peersToAsk) {
+			this.pendingRequest = new PendingRequest(peerId, 'address_ledger', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, address, 'address_ledger_request');
+			try {
+				/** @type {AddressLedger} */
+				const response = await this.pendingRequest.promise;
+				return response;
+			} catch (error) { console.error('Error fetching address ledger from peer', peerId, ':', error); }
+		}
+	}
+	// INTERNAL METHODS
+	async #consensusChangeDetectionLoop() {
+		while(true) {
+			await new Promise(r => setTimeout(r, 200));
+			const c = this.sync.getConsensus();
+			if (this.height === c.blockHeight && this.hash === c.blockHash) continue; // No change
+			this.isConsensusRobust = !c.equality && c.count >= 1;
+			this.height = c.blockHeight;
+			this.hash = c.blockHash;
+
+			if (!this.blocks.finalized[this.hash]) this.getMissingBlock();
+			for (const handler of this.listeners['consensus_height_change'] || []) handler(this.height);
+		}
+	}
 	/** @param {Uint8Array} serializedBlock */
 	#storeBlock(serializedBlock) {
 		try {
@@ -102,4 +117,10 @@ export class Connector {
 		if (!this.#storeBlock(data)) return;
 		for (const handler of this.listeners['block_finalized'] || []) handler(data);
 	};
+	/** @param {string} senderId @param {any} data */
+	#onAddressLedger = (senderId, data) => {
+		if (this.pendingRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingRequest.complete(data);
+		this.pendingRequest = null;
+	}
 }

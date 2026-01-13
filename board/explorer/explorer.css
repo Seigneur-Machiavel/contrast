@@ -537,7 +537,7 @@ button {
 .cbe-TxRow, .cbe-addressTxRow .cbe-addressTxFee {
     width: 20%;
 }
-.cbe-TxRow, .cbe-addressTxRow .cbe-addressTxReference {
+.cbe-TxRow, .cbe-addressTxRow .cbe-addressTxId {
     width: 30%;
 }
 .cbe-TxRow, .cbe-addressTxRow .cbe-addressTxDate {
@@ -619,60 +619,21 @@ button {
     color: var(--color1) !important;
     opacity: 1 !important;
 }
-.cbe-TxHistoryWrap {
-    overflow: initial;
+.cbe-TxHistoryWrap, .cbe-utxosWrap {
+    z-index: 1;
+	overflow-y: visible;
     position: relative;
     overflow: initial;
     max-height: unset !important;
     padding: 0 !important;
     width: 100% !important;
-
-    /* solve */
-    z-index: 1;
+    box-shadow: inset 0px 0px 4px -2px var(--color2);
 }
 .cbe-folded {
     height: 0;
     overflow-y: hidden !important;
 }
-.cbe-TxHistoryWrap table {
+.cbe-TxHistoryWrap table, .cbe-utxosWrap table {
     padding: 10px 30px;
     width: 100%;
-}
-.cbe-TxHistoryTable tbody {
-    position: relative;
-}
-/*.cbe-TxHistoryTable #cbe-TxDetails {
-    right: 4%;
-    width: 720px;
-}*/
-.cbe-utxoAndTransactionsWrap {
-    display: flex;
-    justify-content: space-between;
-    margin: 5% 0%;
-}
-/*.cbe-utxosWrap {
-}*/
-.cbe-utxosRuleTitle {
-    margin-top: 0px;
-    text-align: center;
-}
-.cbe-utxosRuleWrap, .cbe-TxHistoryWrap {
-    overflow-y: visible;
-    max-height: 200px;
-    width: fit-content;
-    padding: 10px;
-    border-radius: 0 0 6px 6px;
-    box-shadow: inset 0px 0px 4px -2px var(--color2);
-}
-.cbe-utxosRuleWrap {
-    overflow-y: auto;
-}
-.cbe-utxosRuleWrap:not(:first-child) {
-    border-radius: 6px;
-}
-.cbe-utxosRuleWrap:not(:last-child) {
-    margin-bottom: 20px;
-}
-.cbe-utxosTable {
-    min-width: 360px;
 }

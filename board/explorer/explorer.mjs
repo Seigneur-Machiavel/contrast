@@ -171,10 +171,19 @@ export class Explorer {
 				this.displayVout(e.target.dataset.anchor);
 				break;
 			case 'display_address_details':
-				console.log('Display address details:', e.target.dataset.address);
-				const address = e.target.dataset.address;
-				if (!address) throw new Error('Address not found in dataset');
-				this.displayAddressDetails(address);
+				this.displayAddressDetails(e.target.dataset.address);
+				break;
+			case 'toggle_folder':
+				const folderWrap = e.target.closest('.cbe-folderWrap');
+                const arrowBtn = folderWrap.getElementsByClassName('.cbe-arrowBtn')[0]; // '▼' -> '▲'
+				const isArrowDown = arrowBtn.textContent === '▼';
+                arrowBtn.textContent = isArrowDown ? '▲' : '▼';
+
+				const targetContent = isArrowDown ? folderWrap.querySelector('.cbe-folded') : folderWrap.querySelector('.cbe-unfolded');
+                if (!targetContent) throw new Error('toggle_folder error: targetContent not found');
+
+                targetContent.classList.remove(isArrowDown ? 'cbe-folded' : 'cbe-unfolded');
+                targetContent.classList.add(isArrowDown ? 'cbe-unfolded' : 'cbe-folded');
 				break;
 			case 'hide_modal':
 				this.modal.hide();
@@ -206,6 +215,10 @@ export class Explorer {
 		}
 		
 		this.navigateUntilTarget(this.searchMenuRect);
+	}
+	// @ts-ignore
+	overHandler(e) {
+		// console.log('Explorer overHandler:', e);
 	}
 
 	// API METHODS
@@ -239,7 +252,6 @@ export class Explorer {
 	/** @param {string} address */
 	displayAddressDetails(address) {
 		this.navigator.address = address;
-		if (this.navigator.correspondToLastNavigation) return this.modal.show(); // Address is already shown in the modal => do not recreate it
 		this.navigateUntilTarget();
 	}
 	async navigateUntilTarget(modalOrigin = this.searchMenuRect) {
@@ -258,6 +270,23 @@ export class Explorer {
 		if (address) console.info('navigateUntilTarget =>', address);
 		else console.info(`navigateUntilTarget => #${blockIndex}${txIndex !== null ? `:${txIndex}` : ''}${outputIndex !== null ? `:${outputIndex}` : ''}`);
 		
+		// IF ADDRESS IS SPECIFIED => FILL THE MODAL WITH ADDRESS DATA
+        if (address) {
+			console.log('isShown:', this.modal.isShown);
+			// CLEAR PREVIOUS CONTENT IF ANY, OR CREATE NEW CONTENT
+			if (this.modal.isShown) this.modal.clearContentWrap();
+			else {
+				this.modal.newContainer();
+				this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
+			}
+
+			if (!ADDRESS.checkConformity(address)) throw new Error('navigateUntilTarget => error: invalid address format');
+			const ledger = await this.connector.getAddressLedger(address);
+			if (!ledger) throw new Error('navigateUntilTarget => error: ledger not found for address ' + address);
+			this.modal.fillContentWithLedger(address, ledger);
+			return;
+		}
+
 		// REBUILD THE MODAL IF NEEDED
 		if (!correspondToLastBlock) await this.modal.destroy(); // different block => destroy previous modal
 		if (!this.modal.contentReady) {
@@ -265,9 +294,6 @@ export class Explorer {
 			this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
 			modalContentCreated = true;
 		}
-
-		// IF ADDRESS IS SPECIFIED => FILL THE MODAL WITH ADDRESS DATA
-        if (address) { this.modal.fillContentWithAddressData(address); return; }
         
 		// FILL THE MODAL WITH BLOCK DATA
         if (blockIndex === null) return;

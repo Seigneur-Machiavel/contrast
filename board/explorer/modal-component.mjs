@@ -2,9 +2,12 @@ import { ADDRESS } from '../../types/address.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { BlockFinalized } from '../../types/block.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { Transaction } from '../../types/transaction.mjs';
+import { Transaction, LedgerUtxo, UTXO_RULESNAME_FROM_CODE } from '../../types/transaction.mjs';
 import { Transaction_Builder } from '../../node/src/transaction.mjs';
 import { eHTML_STORE, createElement, createSpacedTextElement } from '../board-helpers.mjs';
+
+/**
+ * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */
 
 const eHTML = new eHTML_STORE('cbe-', 'maxSupply');
 
@@ -20,6 +23,7 @@ export class ModalComponent {
 	heightPerc = .9;
 	get containerReady() { return !!eHTML.get('modalContainer', 'cbe-', false); }
 	get contentReady() { return !!eHTML.get('modalContent', 'cbe-', false); }
+	get isShown() { return eHTML.get('modalContainer', 'cbe-', false)?.classList.contains('show'); }
 	hide() { eHTML.get('modalContainer', 'cbe-', false)?.classList.remove('show'); }
 	show() { eHTML.get('modalContainer', 'cbe-', false)?.classList.add('show'); }
 	async destroy() {
@@ -31,6 +35,8 @@ export class ModalComponent {
 	}
 
 	newContainer() {
+		this.destroy();
+
 		const explorerContentDiv = eHTML.get('contrastBlocks').parentElement.parentElement;
         const container = createElement('div', ['show'], explorerContentDiv);
 		container.id = 'cbe-modalContainer';
@@ -47,6 +53,10 @@ export class ModalComponent {
     }
     /** @param {number} fromWidth @param {number} fromHeight @param {{ x: number, y: number }} fromPosition */
     newContent(fromWidth, fromHeight, fromPosition) {
+		eHTML.remove('modalContent');
+		eHTML.remove('modalContentWrap');
+		eHTML.remove('TxDetails');
+
 		const container = eHTML.get('modalContainer');
         if (!container) { console.error('newModalContent() error: modalContainer not found'); return; }
 
@@ -83,6 +93,11 @@ export class ModalComponent {
             easing: 'spring(.8, 80, 20, -100)',
         });
     }
+	clearContentWrap() {
+		eHTML.remove('TxDetails');
+		const contentWrap = eHTML.get('modalContentWrap');
+		if (contentWrap) contentWrap.innerHTML = '';
+	}
 	/** @param {BlockFinalized} block */
 	fillContentWithBlock(block, weight = 0) {
 		const [modalContent, contentWrap] = [eHTML.get('modalContent'), eHTML.get('modalContentWrap')];
@@ -237,7 +252,84 @@ export class ModalComponent {
             easing: 'easeInOutQuad',
         });
     }
-	/** @param {string} address */
-	fillContentWithAddressData(address) {
+	/** @param {string} address @param {AddressLedger} ledger */
+	fillContentWithLedger(address, ledger) {
+		const contentWrap = eHTML.get('modalContentWrap');
+		const addressTitle = createElement('div', ['cbe-addressTitle', 'cbe-fixedTop'], contentWrap);
+        addressTitle.textContent = address;
+
+        contentWrap.style = 'margin-top: 56px; padding-top: 0; height: calc(100% - 76px);';
+
+		const addressInfoElement = createElement('div', [], contentWrap);
+		eHTML.add(addressInfoElement, 'addressExhaustiveData');
+
+        const balancesWrap = createElement('div', [], addressInfoElement);
+		eHTML.add(balancesWrap, 'balancesWrap');
+
+		createSpacedTextElement('Balance', [], `${CURRENCY.formatNumberAsCurrency(ledger.balance)}`, [], balancesWrap);
+		createSpacedTextElement('Total received', [], `${CURRENCY.formatNumberAsCurrency(ledger.totalReceived)}`, [], balancesWrap);
+		createSpacedTextElement('Total sent', [], `${CURRENCY.formatNumberAsCurrency(ledger.totalSent)}`, [], balancesWrap);
+
+        // create transaction history folded element
+        const wrap1 = createElement('div', ['cbe-folderWrap'], addressInfoElement);
+        const folderTopBar1 = createSpacedTextElement('History', [], '▼', ['.cbe-arrowBtn'], wrap1);
+		folderTopBar1.dataset.action = 'toggle_folder';
+
+        const txHistoryWrap = createElement('div', ['cbe-TxHistoryWrap', 'cbe-folded'], wrap1);
+		this.#newTxHistory(ledger.history, txHistoryWrap);
+
+        // create UTXOs folded element
+        const wrap2 = createElement('div', ['cbe-folderWrap'], addressInfoElement);
+        const folderTopBar2 = createSpacedTextElement('UTXOs', [], '▼', ['.cbe-arrowBtn'], wrap2);
+		folderTopBar2.dataset.action = 'toggle_folder';
+
+        const utxosWrap = createElement('div', ['cbe-utxosWrap', 'cbe-folded'], wrap2);
+		this.#newUtxosTable(ledger.ledgerUtxos, utxosWrap);
+	}
+	/** @param {string[]} history ex: 12:456 @param {HTMLElement} [parent] */
+	#newTxHistory(history, parent) {
+		const table = createElement('table', ['cbe-Table'], parent);
+		const thread = createElement('thead', [], table);
+		const headerRow = createElement('tr', [], thread);
+        createElement('th', [], headerRow).textContent = 'Amount';
+        createElement('th', [], headerRow).textContent = 'Fee';
+        createElement('th', [], headerRow).textContent = 'Anchor';
+        createElement('th', [], headerRow).textContent = 'Date';
+        
+		const tbody = createElement('tbody', [], table);
+        for (const txId of history) {
+			const row = createElement('tr', ['cbe-addressTxRow'], tbody);
+			row.dataset.overaction = 'display_transaction_details';
+			row.dataset.txId = txId;
+			createElement('td', ['cbe-addressTxAmount'], row).textContent = '...';
+			createElement('td', ['cbe-addressTxFee'], row).textContent = '...';
+			createElement('td', ['cbe-addressTxId'], row).textContent = txId;
+			createElement('td', ['cbe-addressTxDate'], row).textContent = '...';
+        }
+        
+        return table;
+	}
+	/** @param {LedgerUtxo[]} ledgerUtxos @param {HTMLElement} [parent] */
+	#newUtxosTable(ledgerUtxos, parent) {
+		const table = createElement('table', ['cbe-Table'], parent);
+		const thread = createElement('thead', [], table);
+		const headerRow = createElement('tr', [], thread);
+		createElement('th', [], headerRow).textContent = 'Anchor';
+		createElement('th', [], headerRow).textContent = 'Amount';
+		createElement('th', [], headerRow).textContent = 'Rule';
+
+		const tbody = createElement('tbody', [], table);
+		for (const utxo of ledgerUtxos) {
+			const { amount, anchor, ruleCode } = utxo;
+			const row = createElement('tr', [], tbody);
+			const anchorElement = createElement('td', ['cbe-anchorSpan'], row);
+			anchorElement.dataset.action = 'display_utxo_details';
+			anchorElement.dataset.anchor = anchor;
+			anchorElement.textContent = anchor;
+            createElement('td', [], row).textContent = `${CURRENCY.formatNumberAsCurrency(amount)} c`;
+			createElement('td', [], row).textContent = UTXO_RULESNAME_FROM_CODE[ruleCode] || `Unknown (${ruleCode})`;
+		}
+
+		return table;
 	}
 }

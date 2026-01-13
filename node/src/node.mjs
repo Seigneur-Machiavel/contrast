@@ -11,6 +11,7 @@ import { serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
+import { ADDRESS } from "../../types/address.mjs";
 
 /**
 * @typedef {import("./wallet.mjs").Account} Account
@@ -79,6 +80,7 @@ export class ContrastNode {
 
 		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
+		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
 	}
 
 	// GETTERS --------------------------------------------------------------------------
@@ -161,11 +163,26 @@ export class ContrastNode {
 			const isLegitimate = await BlockValidation.validateLegitimacy(block, this.vss, 'candidate');
 			if (isLegitimate) this.taskQueue.push('NewCandidate', block);
 		} catch (/** @type {any} */ error) { this.logger.log(`[SYNC] -onBlockCandidate- Error deserializing block candidate from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
-	};
+	}
 	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
 	#onBlockFinalized = (senderId, data, HOPS) => {
 		this.taskQueue.push('DigestBlock', data);
-	};
+	}
+	/** @param {string} senderId @param {string} data */
+	#onAddressLedgerRequest = async (senderId, data) => {
+		try {
+			/** @type {string} */
+			const address = data;
+			if (!ADDRESS.checkConformity(address)) throw new Error('Invalid address format');
+			
+			const ledger = this.blockchain.ledgersStorage.getAddressLedger(address);
+			if (!ledger) throw new Error('Ledger not found for address: ' + address);
+			// CLEAR REDUNDANT DATA & SEND RESPONSE
+			delete ledger.historyBytes;
+			delete ledger.utxosBuffer;
+			this.p2p.messager.sendUnicast(senderId, ledger, 'address_ledger');
+		} catch (/** @type {any} */ error) { this.logger.log(`-onAddressLedgerRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	}
 	#executeNextTask = async () => {
 		const task = this.taskQueue.nextTask;
 		if (!task) { this.miner.canProceedMining = true; return; } // no task to process

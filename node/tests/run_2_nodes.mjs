@@ -54,6 +54,7 @@ async function createClientNode(seed = 'toto') {
 	return clientNode;
 }
 
+/** @type {import("../src/node.mjs").ContrastNode[]} */
 const clientNodes = [];
 for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 
@@ -62,6 +63,8 @@ for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 // -------------------------------------------------------------------------------------
 /** @param {import("../src/blockchain.mjs").BlockFinalized} block */
 const onBlockConfirmed = (block) => {
+	//const c = clientNodes[0]; // Simple request test => Success
+	//c.p2p.messager.sendUnicast(bootstrapNode.p2p.id, 'C1YyJoc', 'address_ledger_request');
 	if (!transactionTest) return;
 
 	// TEST: create transaction

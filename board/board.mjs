@@ -63,7 +63,10 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keyup', (e) => {
 	explorer.keyUpHandler(e);
 });
-document.addEventListener('mouseover', (e) => appsManager.hoverAppButtonsHandler(e));
+document.addEventListener('mouseover', (e) => {
+	appsManager.overAppButtonsHandler(e);
+	explorer.overHandler(e)
+});
 document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
 document.addEventListener('mousedown', (e) => appsManager.grabWindowHandler(e));
 document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); appsManager.moveResizeHandler(e); });

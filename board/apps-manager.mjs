@@ -129,7 +129,7 @@ export class AppsManager {
 
 		this.toggleAppWindow(appName);
 	}
-	hoverAppButtonsHandler(e) {
+	overAppButtonsHandler(e) {
 		const button = e.target.closest('.app-button');
 		if (!button && this.tempFrontAppName) {
 			for (const win in this.windows) this.windows[win].element.classList.remove('temp-front');

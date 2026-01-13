@@ -1,7 +1,8 @@
 // @ts-check
-import { serializer } from '../../utils/serializer.mjs';
-import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockHeightHash } from '../../types/sync.mjs';
+import { serializer } from '../../utils/serializer.mjs';
+import { PendingRequest } from '../../utils/networking.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 /**
  * @typedef {Object} MinimalContrastNode
@@ -12,34 +13,6 @@ import { BlockHeightHash } from '../../types/sync.mjs';
  * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../../types/sync.mjs").BlockHeightHashStr} BlockHeightHashStr */
-
-class PendingRequest {
-	/** @type {Function | undefined} */ #resolve;
-	/** @type {Function | undefined} */ #reject;
-	/** @type {NodeJS.Timeout | undefined} */ #timeout;
-
-	/** @param {string} peerId @param {string} type @param {number} [timeout] */
-	constructor(peerId, type, timeout = 3000) {
-		this.peerId = peerId;
-		this.type = type;
-		
-		this.promise = new Promise((resolve, reject) => {
-			this.#resolve = resolve;
-			this.#reject = reject;
-			this.#timeout = setTimeout(() => reject(new Error(`Request timeout`)), timeout);
-		});
-	}
-	/** @param {any} data */
-	complete(data) {
-		clearTimeout(this.#timeout);
-		this.#resolve?.(data);
-	}
-	/** @param {any} error */
-	fail(error) {
-		clearTimeout(this.#timeout);
-		this.#reject?.(error);
-	}
-}
 
 export class Sync {
 	logger = new MiniLogger('sync');
