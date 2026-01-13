@@ -142,12 +142,12 @@ export class Explorer {
 			if (!this.bc.setPreviousBlockIfCorresponding(prevBlock, weight)) break;
 		}
 	}
-	get searchMenuRect() {
-		const searchMenuBtn = eHTML.get('searchMenuBtn');
-		if (!searchMenuBtn) { console.error('navigateUntilTarget => error: searchMenuBtn not found'); return; }
-		const searchMenuBtnRect = searchMenuBtn.getBoundingClientRect();
-		const searchMenuBtnCenter = { x: searchMenuBtnRect.left + searchMenuBtnRect.width / 2, y: searchMenuBtnRect.top + searchMenuBtnRect.height / 2 };
-		return { rect: searchMenuBtnRect, center: searchMenuBtnCenter };
+	get blockBlowerRect() {
+		const blockBlower = eHTML.get('blockBlower');
+		if (!blockBlower) throw new Error('Explorer: blockBlower element not found');
+		const blockBlowerRect = blockBlower.getBoundingClientRect();
+		const blockBlowerCenter = { x: blockBlowerRect.left + blockBlowerRect.width / 2, y: blockBlowerRect.top + blockBlowerRect.height / 2 };
+		return { rect: blockBlowerRect, center: blockBlowerCenter };
 	}
 
 	// HANDLERS METHODS
@@ -214,7 +214,7 @@ export class Explorer {
 			this.navigator.outputIndex = vout;
 		}
 		
-		this.navigateUntilTarget(this.searchMenuRect);
+		this.navigateUntilTarget(this.blockBlowerRect);
 	}
 	// @ts-ignore
 	overHandler(e) {
@@ -254,7 +254,7 @@ export class Explorer {
 		this.navigator.address = address;
 		this.navigateUntilTarget();
 	}
-	async navigateUntilTarget(modalOrigin = this.searchMenuRect) {
+	async navigateUntilTarget(modalOrigin = this.blockBlowerRect) {
 		if (!modalOrigin) throw new Error('navigateUntilTarget => error: modalOrigin is required');
 
 		const correspondToLastNavigation = this.navigator.correspondToLastNavigation;
@@ -270,29 +270,20 @@ export class Explorer {
 		if (address) console.info('navigateUntilTarget =>', address);
 		else console.info(`navigateUntilTarget => #${blockIndex}${txIndex !== null ? `:${txIndex}` : ''}${outputIndex !== null ? `:${outputIndex}` : ''}`);
 		
+		// CLEAR PREVIOUS CONTENT IF ANY, OR CREATE NEW CONTENT
+		if (this.modal.isShown) this.modal.clearContentWrap();
+		else {
+			this.modal.newContainer();
+			this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
+		}
+
 		// IF ADDRESS IS SPECIFIED => FILL THE MODAL WITH ADDRESS DATA
         if (address) {
-			console.log('isShown:', this.modal.isShown);
-			// CLEAR PREVIOUS CONTENT IF ANY, OR CREATE NEW CONTENT
-			if (this.modal.isShown) this.modal.clearContentWrap();
-			else {
-				this.modal.newContainer();
-				this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
-			}
-
 			if (!ADDRESS.checkConformity(address)) throw new Error('navigateUntilTarget => error: invalid address format');
 			const ledger = await this.connector.getAddressLedger(address);
 			if (!ledger) throw new Error('navigateUntilTarget => error: ledger not found for address ' + address);
 			this.modal.fillContentWithLedger(address, ledger);
 			return;
-		}
-
-		// REBUILD THE MODAL IF NEEDED
-		if (!correspondToLastBlock) await this.modal.destroy(); // different block => destroy previous modal
-		if (!this.modal.contentReady) {
-			this.modal.newContainer();
-			this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
-			modalContentCreated = true;
 		}
         
 		// FILL THE MODAL WITH BLOCK DATA

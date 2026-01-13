@@ -20,7 +20,7 @@ export class ModalComponent {
 		modalContentPositionAnim: null,
 	};
 	widthPerc = .9;
-	heightPerc = .9;
+	heightPerc = .86;
 	get containerReady() { return !!eHTML.get('modalContainer', 'cbe-', false); }
 	get contentReady() { return !!eHTML.get('modalContent', 'cbe-', false); }
 	get isShown() { return eHTML.get('modalContainer', 'cbe-', false)?.classList.contains('show'); }
@@ -79,7 +79,7 @@ export class ModalComponent {
         this.animations.modalContentPositionAnim = anime({
             targets: content,
             left: `${containerRect.width / 2}px`,
-            top: `${containerRect.height / 2}px`,
+            top: `${(containerRect.height / 2) + 16}px`,
             duration: this.animations.modalDuration,
             delay: this.animations.modalDuration,
             easing: 'easeInOutQuad',

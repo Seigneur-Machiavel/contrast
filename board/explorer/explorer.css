@@ -127,9 +127,38 @@ button {
     transition: filter .2s;
 }
 
+#cbe-searchInput-wrap {
+	z-index: 100;
+	position: fixed;
+	top: calc(32px + 8px);
+	left: 50%;
+	width: 80%;
+	max-width: 400px;
+	transform: translateX(-50%);
+}
+#cbe-searchInput-wrap::before {
+    content: '';
+    background-image: url('./img/icons8-search-128.png');
+    background-size: cover;
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    left: 7px;
+    top: 50%;
+    opacity: .6;
+    transform: translateY(-50%);
+    pointer-events: none;
+    filter: invert(var(--dark-mode-boolean));
+}
+#cbe-searchInput {
+	width: 100%;
+    border-width: 1px !important;
+    padding: 4px 10px !important;
+}
+
 #cbe-contrastBlocks {
     position: relative;
-    padding: 10px 30px;
+    padding: 40px 30px 0;
     border-radius: var(--cbe-wrap-border-radius, var(--cbe-wrap-border-radius-default));
     height: var(--cbe-inner-height, var(--cbe-inner-height-default));
     background: none;
@@ -137,38 +166,24 @@ button {
 #cbe-blockExplorerWaitingConsensusMessage {
 	z-index: 10;
 	pointer-events: none;
-    position: absolute;
     text-align: center;
 	opacity: 0;
     left: 0;
     top: 4px;
 	font-size: small;
+	font-weight: bold;
     width: 100%;
-    /*height: 100%;*/
     background-color: var(--color1);
-    transition: opacity .2s;
 }
 #cbe-blockExplorerWaitingConsensusMessage.show {
-	opacity: .5;
+	animation: pulseOpacity 2s infinite;
 }
-#cbe-contrastBlocks input {
-    background: var(--color2);
-    color: var(--color1);
-    border-radius: 6px;
-    text-align: center;
-    margin: 0 10px;
-    border: solid 1px transparent;
-    /*font-size: large;*/
-    font-size: calc(var(--cbe-inner-height, var(--cbe-inner-height-default))* .126);
+@keyframes pulseOpacity {
+	0% { opacity: .4 }
+	50% { opacity: .7 }
+	100% { opacity: .4 }
 }
-#cbe-contrastBlocks input[type="text"] {
-    text-align: right;
-    width: 194px;
-    padding: 2px 10px;
-    margin: 0;
-	box-sizing: border-box;
-    width: 100%;
-}
+
 #cbe-blockExplorerWrapUpperBackground {
     pointer-events: none;
     position: absolute;
@@ -190,7 +205,7 @@ button {
     overflow-x: hidden;
     height: 100%;
 }
-#cbe-searchMenuBtn {
+#cbe-blockBlower {
     position: relative;
     padding-left: 6px;
     height: 78%;
@@ -202,56 +217,6 @@ button {
     height: 100%;
     filter: invert(var(--dark-mode-boolean));
     transition: filter .2s;
-}
-#cbe-searchMenu {
-    position: absolute;
-    background: var(--color1);
-    box-shadow: inset 0px 0px 4px -2px var(--color2);
-    border-radius: 10px;
-    height: 100%;
-    width: 0%;
-    opacity: 0;
-    transition: width .2s, opacity .3s;
-}
-#cbe-searchTarget {
-    color: var(--color1);
-}
-#cbe-searchMenuBtn:hover #cbe-searchMenu,
-#cbe-searchMenuBtn:focus-within #cbe-searchMenu {
-    padding: 6px;
-    width: var(--cbe-search-menu-width, var(--cbe-search-menu-width-default));
-    height: calc(100% - 12px);
-    opacity: 1;
-}
-#cbe-searchMenuWrap {
-    position: relative;
-}
-#cbe-searchBox {
-    position: relative;
-    display: inline-block;
-    width: 100%;
-}
-#cbe-searchInput {
-    text-align: left !important;
-    width: calc(100% - 12px);
-    border-width: 1px !important;
-    /*padding: 0 10px 0 0 !important;*/
-	padding: 0 10px 0 33px !important;
-    margin: 0 !important;
-}
-#cbe-searchBox::before {
-    content: '';
-    background-image: url('./img/icons8-search-128.png');
-    background-size: cover;
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    left: 3px;
-    top: 50%;
-    opacity: .6;
-    transform: translateY(-50%);
-    pointer-events: none;
-    filter: invert(var(--dark-mode-boolean));
 }
 #cbe-chainWrap {
     display: flex;
@@ -391,6 +356,7 @@ button {
 }
 
 #cbe-modalContainer {
+    z-index: 10;
 	pointer-events: none;
     position: absolute;
     font-size: calc(var(--cbe-inner-height, var(--cbe-inner-height-default)) * .116);
@@ -398,7 +364,6 @@ button {
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 100;
     /*background: transparent;*/
     background: radial-gradient(transparent, var(--color1) 150%);
     opacity: 0;
@@ -425,9 +390,9 @@ button {
 }
 #cbe-modalContentWrap {
     height: calc(100% - 40px);
-    padding: 20px;
+    padding: 20px 20px 20px 28px;
     border-top: solid 1px var(--color1);
-    overflow: hidden auto;
+    overflow: hidden scroll;
 }
 #cbe-modalContentWrap .cbe-fixedTop {
     position: fixed !important;
@@ -452,8 +417,10 @@ button {
 #cbe-modalContent .cbe-spacedText {
     display: flex;
     justify-content: space-between;
+	align-items: center;
     width: 100%;
     padding: 8px 0;
+	font-size: small;
     font-weight: bold;
     color: var(--color2);
 }
@@ -474,7 +441,8 @@ button {
 }
 #cbe-modalContent .cbe-spacedText .cbe-blockIndex {
     position: unset;
-    font-size: x-large;
+    font-size: large;
+	font-weight: bold;
 }
 
 .cbe-twoContainerWrap, .cbe-threeContainerWrap {
@@ -496,12 +464,13 @@ button {
 .cbe-TxsTable {
     background: var(--color1);
     box-shadow: inset 0px 0px 4px -2px var(--color2);
+    margin-left: 50%;
     padding: 1% 0%;
     border-radius: 10px;
     width: 92%;
-    margin-left: 50%;
-    transform: translateX(-50%);
     max-width: 800px;
+	font-size: small;
+    transform: translateX(-50%);
 }
 .cbe-Table tr td, .cbe-Table tr th {
     font-weight: bold;

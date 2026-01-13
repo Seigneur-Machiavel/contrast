@@ -1,25 +1,21 @@
 <div style="height: 100%; overflow-y: auto;">
+	<div id="cbe-searchInput-wrap">
+		<input type="text" id="cbe-searchInput" placeholder="Address, height, transaction, anchor...">
+	</div>
+
     <div id="cbe-contrastBlocks">
-		<div id="cbe-blockExplorerWaitingConsensusMessage" class="show">
-			Consensus isn't robust - Should not be considered reliable yet.
-		</div>
 		<div id="cbe-blockExplorerWrapUpperBackground"></div>
 		<div id="cbe-blockExplorerWrap">
-			<div id="cbe-searchMenuBtn">
+			<div id="cbe-blockBlower">
 				<img id="cbe-C-magnet-img" src="./explorer/img/C_magnet.png" alt="C magnet">
-				<div id="cbe-searchMenu">
-					<div id="cbe-searchTarget"></div>
-					<div id="cbe-searchMenuWrap">
-						<div id="cbe-searchBox">
-							<input type="text" id="cbe-searchInput" placeholder="address, height, tx ID, anchor...">
-						</div>
-					</div>
-				</div>
 			</div>
 
 			<div id="cbe-chainWrap" style="filter: blur(0px)"></div>
 		</div>
+	</div>
 
+	<div id="cbe-blockExplorerWaitingConsensusMessage" class="show">
+		Consensus isn't robust - Should not be considered reliable yet.
 	</div>
 
     <div id="cbe-contrastChainExplorer">
@@ -29,14 +25,6 @@
                 <h3 class="cbe-heightText">#<span id="cbe-chainHeight">0</span></h3>
             </div>
 
-            <div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockTime">
-                <h3>Target blockTime</h3>
-                <h3 id="cbe-targetBlocktime">120s</h3>
-            </div>
-            <div class="cbe-spacedText" data-infokey="lastBlocktime">
-                <h3>Last blockTime</h3>
-                <h3 id="cbe-lastBlocktime">~120s</h3>
-            </div>
             <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
                 <h3>Circulating supply</h3>
                 <h3><span id="cbe-circulatingSupply">0.000000</span></h3>
@@ -44,6 +32,14 @@
             <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
                 <h3>Distribution progress</h3>
                 <h3><span id="cbe-circulatingSupplyPercent">0</span> % of <span id="cbe-maxSupply" style="opacity: .6;">27,000,000.000000</span></h3>
+            </div>
+			<div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockTime">
+                <h3>Target blockTime</h3>
+                <h3 id="cbe-targetBlocktime">120s</h3>
+            </div>
+            <div class="cbe-spacedText" data-infokey="lastBlocktime">
+                <h3>Last blockTime</h3>
+                <h3 id="cbe-lastBlocktime">~120s</h3>
             </div>
 
             <h1 class="cbe-title-with-separator">Last blocks time-gap<span id="cbe-averageBlocksTimeGap"></span></h1>
