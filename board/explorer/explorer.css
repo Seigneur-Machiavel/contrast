@@ -135,6 +135,11 @@ button {
 	width: 80%;
 	max-width: 400px;
 	transform: translateX(-50%);
+	opacity: .33;
+	transition: opacity .2s cubic-bezier(.4, 0, .2, 1);
+}
+#cbe-searchInput-wrap:hover, #cbe-searchInput-wrap:focus-within {
+	opacity: 1;
 }
 #cbe-searchInput-wrap::before {
     content: '';
@@ -151,6 +156,7 @@ button {
     filter: invert(var(--dark-mode-boolean));
 }
 #cbe-searchInput {
+	box-sizing: border-box;
 	width: 100%;
     border-width: 1px !important;
     padding: 4px 10px !important;
@@ -469,8 +475,10 @@ button {
     border-radius: 10px;
     width: 92%;
     max-width: 800px;
-	font-size: small;
     transform: translateX(-50%);
+}
+.cbe-TxsTable, .cbe-Table {
+	font-size: small;
 }
 .cbe-Table tr td, .cbe-Table tr th {
     font-weight: bold;

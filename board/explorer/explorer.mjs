@@ -13,6 +13,7 @@ import { IS_VALID } from '../../types/validation.mjs';
 import { ModalComponent } from './modal-component.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockchainComponent } from './blockchain-component.mjs';
+import { BlocksTimesChartComponent } from './charts-component.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
@@ -67,6 +68,7 @@ export class Navigator {
 }
 
 export class Explorer {
+	blocksTimesChart = new BlocksTimesChartComponent();
 	bc = new BlockchainComponent();
 	modal = new ModalComponent();
 	navigator = new Navigator();
@@ -75,11 +77,12 @@ export class Explorer {
 	/** @param {import('../connector.mjs').Connector} connector */
 	constructor(connector) {
 		this.connector = connector;
-		this.#init();
+		this.connector.on('connection_established', () => setTimeout(this.getAndDisplayBlocksTimegaps, 2000));
+		this.#initWhileDomReady();
 	}
 
 	// INTERNAL METHODS
-	async #init() {
+	async #initWhileDomReady() {
 		if (!eHTML.isReady) console.log('Explorer awaiting DOM elements...');
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
 
@@ -90,9 +93,6 @@ export class Explorer {
 		
 		supply.textContent = CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply);
 		targetTime.textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
-		this.#setupListeners();
-	}
-	#setupListeners() {
 		this.connector.on('consensus_height_change', this.#onConsensusHeightChange);
 	}
 	#onConsensusHeightChange = async (newHeight = 0) => {
@@ -117,6 +117,8 @@ export class Explorer {
 
 		const weight = this.connector.blockWeightByHash[block.hash] || 0;
 		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
+		if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
+			this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight);
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation
@@ -271,11 +273,12 @@ export class Explorer {
 		else console.info(`navigateUntilTarget => #${blockIndex}${txIndex !== null ? `:${txIndex}` : ''}${outputIndex !== null ? `:${outputIndex}` : ''}`);
 		
 		// CLEAR PREVIOUS CONTENT IF ANY, OR CREATE NEW CONTENT
-		if (this.modal.isShown) this.modal.clearContentWrap();
-		else {
-			this.modal.newContainer();
-			this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
-		}
+		if (!correspondToLastBlock)
+			if (this.modal.isShown) this.modal.clearContentWrap();
+			else {
+				this.modal.newContainer();
+				this.modal.newContent(modalOrigin.rect.width, modalOrigin.rect.height, modalOrigin.center);
+			}
 
 		// IF ADDRESS IS SPECIFIED => FILL THE MODAL WITH ADDRESS DATA
         if (address) {
@@ -299,4 +302,13 @@ export class Explorer {
 
 		setTimeout(() => this.modal.displayTransactionDetails(tx, txIndex, outputIndex), modalContentCreated ? 1000 : 200);
     }
+	getAndDisplayBlocksTimegaps = async (fromHeight = 0, toHeight = this.connector.height) => {
+		this.blocksTimesChart.reset();
+		const f = Math.max(0, toHeight - 60);
+		const tg = await this.connector.getBlocksTimestamps(fromHeight, toHeight);
+		if (!tg) throw new Error('Explorer: getAndDisplayBlocksTimegaps => Unable to get blocks timestamps gaps');
+		console.log('Explorer: Retrieved blocks timestamps gaps:', tg);
+		for (let i = 0; i < tg.heights.length; i++)
+			this.blocksTimesChart.appendBlockTimeIfCorresponding(tg.heights[i], tg.timestamps[i]);
+	}
 }

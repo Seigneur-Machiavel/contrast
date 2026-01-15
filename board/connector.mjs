@@ -9,7 +9,8 @@ import { PendingRequest } from '../utils/networking.mjs';
  */
 
 export class Connector {
-	/** @type {PendingRequest | null} */		pendingRequest = null;
+	/** @type {PendingRequest | null} */		pendingLedgerRequest = null;
+	/** @type {PendingRequest | null} */		pendingTimestampsRequest = null;
 	/** @type {Record<string, Function[]>} */	listeners = {};
 	isConsensusRobust = false;
 	height = -1;
@@ -29,8 +30,10 @@ export class Connector {
 		this.p2pNode = p2pNode;
 		this.sync = new Sync({ p2p: p2pNode });
 		//p2pNode.onGossipData = (msg) => this.#handleMessage(msg);
+		p2pNode.onPeerConnect(this.#onPeerConnect);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
+		p2pNode.messager.on('blocks_timestamps', this.#onBlocksTimestamps);
 		this.#consensusChangeDetectionLoop();
 	}
 
@@ -73,13 +76,29 @@ export class Connector {
 	async getAddressLedger(address, timeout = 3000) {
 		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
 		for (const peerId of peersToAsk) {
-			this.pendingRequest = new PendingRequest(peerId, 'address_ledger', timeout);
+			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
 			this.p2pNode.messager.sendUnicast(peerId, address, 'address_ledger_request');
 			try {
 				/** @type {AddressLedger} */
-				const response = await this.pendingRequest.promise;
+				const response = await this.pendingLedgerRequest.promise;
 				return response;
 			} catch (error) { console.error('Error fetching address ledger from peer', peerId, ':', error); }
+		}
+	}
+	/** Max number of blocks: 120 @param {number} [fromHeight] default: 0 @param {number} [toHeight] default: this.height */
+	async getBlocksTimestamps(fromHeight = 0, toHeight = this.height, timeout = 3000) {
+		const t = Math.min(toHeight, this.height);
+		const min = Math.max(0, t - 119);
+		const f = Math.max(min, Math.min(fromHeight, t));
+		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		for (const peerId of peersToAsk) {
+			this.pendingTimestampsRequest = new PendingRequest(peerId, 'blocks_timestamps', timeout);
+			const s = serializer.serialize.blocksTimestampsRequest(f, t);
+			this.p2pNode.messager.sendUnicast(peerId, s, 'blocks_timestamps_request');
+			try {
+				const response = await this.pendingTimestampsRequest.promise;
+				if (response) return serializer.deserialize.blocksTimestampsResponse(response);
+			} catch (error) { console.error('Error fetching blocks timestamps from peer', peerId, ':', error); }
 		}
 	}
 	// INTERNAL METHODS
@@ -96,6 +115,11 @@ export class Connector {
 			for (const handler of this.listeners['consensus_height_change'] || []) handler(this.height);
 		}
 	}
+	#onPeerConnect = () => {
+		if (this.p2pNode.peerStore.neighborsList.length !== 1) return;
+		this.isConsensusRobust = false; this.height = -1; this.hash = ''; // reset consensus data
+		for (const handler of this.listeners['connection_established'] || []) handler();
+	};
 	/** @param {Uint8Array} serializedBlock */
 	#storeBlock(serializedBlock) {
 		try {
@@ -119,8 +143,14 @@ export class Connector {
 	};
 	/** @param {string} senderId @param {any} data */
 	#onAddressLedger = (senderId, data) => {
-		if (this.pendingRequest?.peerId !== senderId) return; // not the expected sender
-		this.pendingRequest.complete(data);
-		this.pendingRequest = null;
+		if (this.pendingLedgerRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingLedgerRequest.complete(data);
+		this.pendingLedgerRequest = null;
+	}
+	/** @param {string} senderId @param {Uint8Array} data */
+	#onBlocksTimestamps = (senderId, data) => {
+		if (this.pendingTimestampsRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingTimestampsRequest.complete(data);
+		this.pendingTimestampsRequest = null;
 	}
 }

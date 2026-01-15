@@ -373,7 +373,24 @@ export const serializer = {
 			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.minerAddress));
 			w.writeByte(nodeSetting.minerThreads);
             return w.getBytes();
-        }
+        },
+		/** @param {number} fromHeight @param {number} toHeight */
+		blocksTimestampsRequest(fromHeight, toHeight) {
+			const w = new BinaryWriter(4 * 2);
+			w.writeBytes(converter.numberTo4Bytes(fromHeight));
+			w.writeBytes(converter.numberTo4Bytes(toHeight));
+			return w.getBytes();
+		},
+		/** @param {number[]} heights @param {number[]} timestamps */
+		blocksTimestampsResponse(heights, timestamps) {
+			if (heights.length !== timestamps.length) throw new Error('Heights and timestamps arrays must have the same length');
+			const w = new BinaryWriter((4 * heights.length) + (lengths.timestamp.bytes * timestamps.length));
+			for (let i = 0; i < heights.length; i++) {
+				w.writeBytes(converter.numberTo4Bytes(heights[i]));
+				w.writeBytes(converter.numberTo6Bytes(timestamps[i]));
+			}
+			return w.getBytes();
+		},
 	},
     deserialize: {
 		/** @param {Uint8Array} encodedData */
@@ -572,6 +589,26 @@ export const serializer = {
 			const minerAddress = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
 			const minerThreads = r.read(1)[0];
             return { privateKey, validatorRewardAddress, minerAddress, minerThreads };
-        }
+        },
+		/** @param {Uint8Array} serializedRequest */
+		blocksTimestampsRequest(serializedRequest) {
+			const r = new BinaryReader(serializedRequest);
+			const fromHeight = converter.bytes4ToNumber(r.read(4));
+			const toHeight = converter.bytes4ToNumber(r.read(4));
+			if (r.isReadingComplete) return { fromHeight, toHeight };
+			else throw new Error(`BlocksTimestampsRequest is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
+		},
+		/** @param {Uint8Array} serializedResponse */
+		blocksTimestampsResponse(serializedResponse) {
+			if (serializedResponse.length % (4 + lengths.timestamp.bytes) !== 0) throw new Error('Serialized blocks timestamps response length is invalid');
+			const heights = [];
+			const timestamps = [];
+			const r = new BinaryReader(serializedResponse);
+			while (!r.isReadingComplete) {
+				heights.push(converter.bytes4ToNumber(r.read(4)));
+				timestamps.push(converter.bytes6ToNumber(r.read(6)));
+			}
+			return { heights, timestamps };
+		}
     }
 };

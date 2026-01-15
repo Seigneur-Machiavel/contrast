@@ -140,6 +140,27 @@ export class BlockchainStorage {
 
 		return utxos;
 	}
+	/** @param {number} [fromHeight] @param {number} [toHeight] */
+	getBlocksTimestamps(fromHeight = this.lastBlockIndex - 1, toHeight = this.lastBlockIndex) {
+		if (fromHeight < 0 || toHeight > this.lastBlockIndex || fromHeight > toHeight) return null;
+		if (toHeight - fromHeight > 120) return null; // limit to 120 blocks at a time
+
+		const offsets = this.#getOffsetsOfRangeOfBlocksData(fromHeight, toHeight);
+		if (!offsets) return null;
+
+		/** @type {number[]} */	const heights = [];
+		/** @type {number[]} */	const timestamps = [];
+		for (let h = fromHeight; h <= toHeight; h++) {
+			const offset = offsets[h];
+			const timestampOffset = offset.start + serializer.dataPositions.timestampInFinalizedBlock;
+			const blockchainHandler = this.#getBlockchainHandler(h);
+			const timestampBuffer = blockchainHandler.read(timestampOffset, serializer.lengths.timestamp.bytes);
+			const timestamp = this.converter.bytes6ToNumber(timestampBuffer);
+			heights.push(h);
+			timestamps.push(timestamp);
+		}
+		return { heights, timestamps };
+	}
 	/** Undo the last block added to the blockchain @param {TxAnchor[]} [involvedAnchors] If missing: will erase block without restoring UTXOs */
     undoBlock(involvedAnchors) {
         const offset = this.#getOffsetOfBlockData(this.lastBlockIndex);
@@ -227,6 +248,19 @@ export class BlockchainStorage {
 		if (height < 0 || height > this.lastBlockIndex) return null;
 		const buffer = this.idxsHandler.read(height * ENTRY_BYTES, ENTRY_BYTES);
 		return serializer.deserialize.blockIndexEntry(buffer);
+	}
+	/** Optimized version to get offsets of a range of blocks data => one disk read only */
+	#getOffsetsOfRangeOfBlocksData(fromHeight = 0, toHeight = 0) {
+		if (fromHeight < 0 || toHeight > this.lastBlockIndex || fromHeight > toHeight) return null;
+		/** @type {Object<number, {start: number, blockBytes: number, utxosStatesBytes: number}>} */
+		const offsets = {};
+		const nbOfEntries = toHeight - fromHeight + 1;
+		const buffer = this.idxsHandler.read(fromHeight * ENTRY_BYTES, nbOfEntries * ENTRY_BYTES);
+		for (let i = 0; i < nbOfEntries; i++) {
+			const entryBuffer = buffer.subarray(i * ENTRY_BYTES, (i + 1) * ENTRY_BYTES);
+			offsets[i + fromHeight] = serializer.deserialize.blockIndexEntry(entryBuffer);
+		}
+		return offsets;
 	}
 	#getBlockchainHandler(height = 0) {
 		const batchIndex = Math.floor(height / this.batchSize);

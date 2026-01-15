@@ -81,6 +81,7 @@ export class ContrastNode {
 		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
+		p2pNode.messager.on('blocks_timestamps_request', this.#onBlocksTimestampsRequest);
 	}
 
 	// GETTERS --------------------------------------------------------------------------
@@ -182,6 +183,16 @@ export class ContrastNode {
 			delete ledger.utxosBuffer;
 			this.p2p.messager.sendUnicast(senderId, ledger, 'address_ledger');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onAddressLedgerRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	}
+	/** @param {string} senderId @param {Uint8Array} data */
+	#onBlocksTimestampsRequest = async (senderId, data) => {
+		try {
+			const request = serializer.deserialize.blocksTimestampsRequest(data);
+			const t = this.blockchain.blockStorage.getBlocksTimestamps(request.fromHeight, request.toHeight);
+			if (!t) throw new Error(`No timestamps found between heights ${request.fromHeight} and ${request.toHeight}`);
+			const s = serializer.serialize.blocksTimestampsResponse(t.heights, t.timestamps);
+			this.p2p.messager.sendUnicast(senderId, s, 'blocks_timestamps');
+		} catch (/** @type {any} */ error) { this.logger.log(`-onBlocksTimestampsRequest- Error processing blocks timestamps request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	#executeNextTask = async () => {
 		const task = this.taskQueue.nextTask;

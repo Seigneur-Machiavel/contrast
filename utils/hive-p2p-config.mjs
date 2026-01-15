@@ -11,7 +11,10 @@ export const HIVE_P2P_CONFIG = {
 			'125': 'address_ledger_request',
 			address_ledger: 124,
 			'124': 'address_ledger',
-			
+			blocks_timestamps_request: 123,
+			'123': 'blocks_timestamps_request',
+			blocks_timestamps: 122,
+			'122': 'blocks_timestamps',
 		}
 	},
 	GOSSIP: {
