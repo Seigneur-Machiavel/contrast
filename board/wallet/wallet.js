@@ -5,7 +5,7 @@ if (false) { // For better completion
 /**
  * @typedef {import("../../node/src/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../node/src/transaction.mjs").TransactionWithDetails} TransactionWithDetails
- * @typedef {import("../../node/front/explorer.mjs").BlockExplorerWidget} BlockExplorerWidget
+ * @typedef {import("../../node/front/explorer.js").BlockExplorerWidget} BlockExplorerWidget
  * 
  * @typedef {import("../../node/src/wallet.mjs").Wallet} Wallet
  * @typedef {import("../../node/src/wallet.mjs").Account} Account

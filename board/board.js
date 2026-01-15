@@ -5,9 +5,9 @@ if (false) { // For better completion
 
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('./hive-p2p.min.js');
-import { Connector } from './connector.mjs';
-import { AppsManager } from './apps-manager.mjs';
-import { Explorer } from './explorer/explorer.mjs';
+import { Connector } from './connector.js';
+import { AppsManager } from './apps-manager.js';
+import { Explorer } from './explorer/explorer.js';
 import { FrontStorage } from '../utils/front-storage.mjs';
 import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
 

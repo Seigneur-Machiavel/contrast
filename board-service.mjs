@@ -11,7 +11,7 @@ const wsProtocol = args.includes('-wss') ? 'wss' : 'ws'; // pour forcer wss en p
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const boardMjs = fs.readFileSync('board/board.mjs', 'utf8');
+const boardMjs = fs.readFileSync('board/board.js', 'utf8');
 app.get('/board.mjs', (req, res) => { // PATCH board.mjs TO SET THE RIGHT BOOTSTRAP NODE URL
     const wsUrl = `${wsProtocol}://${hostname}:${nodePort}`;
     const patched = boardMjs.replace(

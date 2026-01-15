@@ -1,5 +1,5 @@
 import { AppConfig, appsConfig, buildAppsConfig } from './apps-config.js';
-import { ButtonsBar, SubWindow } from './apps-initializer.mjs';
+import { ButtonsBar, SubWindow } from './apps-initializer.js';
 
 export class AppsManager {
 	/** @type {Object<string, SubWindow>} */	windows = {};

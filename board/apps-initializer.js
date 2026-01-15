@@ -1,4 +1,4 @@
-import { createElement } from './board-helpers.mjs';
+import { createElement } from './board-helpers.js';
 
 export class ButtonsBar {
 	/** @type {HTMLElement} */					element;

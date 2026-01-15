@@ -4,7 +4,7 @@ import { BlockFinalized } from '../../types/block.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { Transaction, LedgerUtxo, UTXO_RULESNAME_FROM_CODE } from '../../types/transaction.mjs';
 import { Transaction_Builder } from '../../node/src/transaction.mjs';
-import { eHTML_STORE, createElement, createSpacedTextElement } from '../board-helpers.mjs';
+import { eHTML_STORE, createElement, createSpacedTextElement } from '../board-helpers.js';
 
 /**
  * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */

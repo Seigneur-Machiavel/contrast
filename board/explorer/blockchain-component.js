@@ -1,5 +1,5 @@
 
-import { eHTML_STORE, createElement, getTimeSinceBlockConfirmedString } from '../board-helpers.mjs';
+import { eHTML_STORE, createElement, getTimeSinceBlockConfirmedString } from '../board-helpers.js';
 const eHTML = new eHTML_STORE('cbe-', 'chainWrap');
 
 

@@ -7,13 +7,13 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
 //import { StakeReference } from '../src/vss.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 //import { UTXO } from '../../types/transaction.mjs';
-import { eHTML_STORE } from '../board-helpers.mjs';
+import { eHTML_STORE } from '../board-helpers.js';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
-import { ModalComponent } from './modal-component.mjs';
+import { ModalComponent } from './modal-component.js';
 import { serializer } from '../../utils/serializer.mjs';
-import { BlockchainComponent } from './blockchain-component.mjs';
-import { BlocksTimesChartComponent } from './charts-component.mjs';
+import { BlockchainComponent } from './blockchain-component.js';
+import { BlocksTimesChartComponent } from './charts-component.js';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
@@ -74,7 +74,7 @@ export class Explorer {
 	navigator = new Navigator();
 	connector;
 
-	/** @param {import('../connector.mjs').Connector} connector */
+	/** @param {import('../connector.js').Connector} connector */
 	constructor(connector) {
 		this.connector = connector;
 		this.connector.on('connection_established', () => setTimeout(this.getAndDisplayBlocksTimegaps, 2000));
