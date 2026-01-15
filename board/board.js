@@ -4,15 +4,16 @@ if (false) { // For better completion
 }
 
 /** @type {typeof import('hive-p2p')} */
-const HiveP2P = await import('./hive-p2p.min.js');
+const HiveP2P = await import('../hive-p2p.min.js');
 import { Connector } from './connector.js';
 import { AppsManager } from './apps-manager.js';
 import { Explorer } from './explorer/explorer.js';
 import { FrontStorage } from '../utils/front-storage.mjs';
-import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
+import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 
+const host = window.location.hostname;
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
-HiveP2P.CLOCK.proxyUrl = '/api/time';
+if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/time';
 const bootstraps = ['ws://localhost:27260'];
 const hiveNode = await HiveP2P.createNode({ bootstraps });
 const connector = new Connector(hiveNode);

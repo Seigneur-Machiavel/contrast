@@ -25,12 +25,15 @@ input::-webkit-inner-spin-button {
     margin: 0;
 }
 h1 {
+	font-size: 1.5em;
     font-weight: 600;
 }
 h2 {
+	font-size: 1.25em;
     font-weight: 400;
 }
 h3 {
+	font-size: 1em;
     font-weight: 400;
 }
 
@@ -92,9 +95,9 @@ h3 {
     width: 100%;
     max-width: 300px;
 }
-#modalInputWrap button {
+/*#modalInputWrap button {
 
-}
+}*/
 #modalConfirmBtn {
     background: #28a745;
     border: none;
@@ -136,7 +139,7 @@ h3 {
     margin-bottom: -18px;
 }
 .container-header h2:not(:first-child) {
-    font-size: 1.25em;
+    font-size: 1.1em;
     opacity: .5;
 }
 .container .spacedText h3 {
@@ -193,9 +196,9 @@ h3 {
     transform: translate(58px, 114px);
 }
 
-.incrementalInput {
+/*.incrementalInput {
 
-}
+}*/
 .amountInput {
     width: 120px;
 }

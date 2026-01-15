@@ -4,6 +4,7 @@ not_published
 miniLogger/mini-logger-config-custom.json
 miniLogger/history
 
-dist
+extension/dist
+extension/extension.zip
 win-unpacked
 test-setup

@@ -10,9 +10,9 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     rewardMagicNb1: 39_088_169, 			// Fibonacci n+2
     rewardMagicNb2: 24_157_817, 			// Fibonacci n+1
     blockReward: 39_088_169 - 24_157_817, 	// Fibonacci n = 14_930_352
-    minBlockReward: 1,
+    minBlockReward: 10_000,			// 0.01 Contrast = 10_000 mC
     halvingInterval: 525_960, 		// 1 year at 1 min per block
-    maxSupply: 27_000_000_000_000, 	// last 6 zeros are considered as decimals ( can be stored as 8 bytes )
+    maxSupply: 21_000_000_000_000, 	// last 6 zeros are considered as decimals ( can be stored as 8 bytes )
 
     // TRANSACTION
     minTransactionFeePerByte: 1,

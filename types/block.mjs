@@ -57,18 +57,6 @@ export class BlockFinalized extends BlockFinalizedHeader {
 	}
 }
 
-export class BlockInfo {
-	/** @param {BlockCandidateHeader | BlockFinalizedHeader} header @param {number} totalFees @param {number} lowerFeePerByte @param {number} higherFeePerByte @param {number} blockBytes @param {number} nbOfTxs */
-	constructor(header, totalFees, lowerFeePerByte, higherFeePerByte, blockBytes, nbOfTxs) {
-		this.header = header;
-		this.totalFees = totalFees;
-		this.lowerFeePerByte = lowerFeePerByte;
-		this.higherFeePerByte = higherFeePerByte;
-		this.blockBytes = blockBytes;
-		this.nbOfTxs = nbOfTxs;
-	}
-}
-
 export class BlockMiningData {
 	/** @param {number} index - The block height @param {number} difficulty - The difficulty of the block @param {number} timestamp - The timestamp of the block @param {number} posTimestamp - The timestamp of the block's creation */
 	constructor(index, difficulty, timestamp, posTimestamp) {
@@ -85,6 +73,5 @@ export const BLOCK = {
 	BlockFinalizedHeader,
 	BlockCandidate,
 	BlockFinalized,
-	BlockInfo,
 	BlockMiningData,
 };

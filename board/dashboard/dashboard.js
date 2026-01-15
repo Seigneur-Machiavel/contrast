@@ -173,7 +173,6 @@ const eHTML = {
         incrementBtn: document.getElementById('minerThreadsIncrementalInput').getElementsByTagName('button')[1],
     },
     peersConnected: document.getElementById('peersConnected'),
-    lastBlockInfo: document.getElementById('lastBlockInfo'),
     txInMempool: document.getElementById('txInMempool'),
     averageBlockTime: document.getElementById('averageBlockTime'),
     adminPanelButtons: document.querySelector('#topBar .btnWrap'),
@@ -233,7 +232,6 @@ function displayNodeInfo(data) {
 
     // Update Global Information
     eHTML.peersConnected.textContent = data.peersConnected ? data.peersConnected : 0;
-    eHTML.lastBlockInfo.textContent = data.lastBlockInfo ? data.lastBlockInfo : 'No Block Info';
     eHTML.txInMempool.textContent = data.txInMempool;
     eHTML.averageBlockTime.textContent = data.averageBlockTime ? `${data.averageBlockTime} seconds` : '0 seconds';
     eHTML.peerId.textContent = data.peerId ? readableId(data.peerId) : 'No Peer ID';

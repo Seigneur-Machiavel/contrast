@@ -5,13 +5,19 @@
 			"request": "launch",
 			"name": "Board Service",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/board-service.mjs",
-			"args": ["--max-old-space-size=16384"]
+			"program": "${workspaceFolder}/board-service.mjs"
 		},
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Run 2 Nodes",
+			"name": "Build Extension",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/build-extension.mjs"
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Test: Run 2 Nodes",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/tests/run_2_nodes.mjs",
 			"args": ["--max-old-space-size=16384"]
@@ -19,7 +25,7 @@
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Test Worst TXs Validations",
+			"name": "Test: Worst TXs Validations",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/tests/test-worst-txs-validations.mjs",
 			"args": ["--max-old-space-size=16384"],
@@ -28,7 +34,7 @@
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Test Sync",
+			"name": "Test: Sync",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/tests/test_sync.mjs",
 			"args": ["--max-old-space-size=16384"]
@@ -36,7 +42,7 @@
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Test storage",
+			"name": "Test: Storage",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/storage/storage.mjs",
 			"args": ["--max-old-space-size=16384"]

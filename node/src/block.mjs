@@ -1,6 +1,6 @@
 // @ts-check
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
-import { BlockInfo, BlockFinalizedHeader, BlockFinalized,
+import { BlockFinalizedHeader, BlockFinalized,
 	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
 import { mining } from '../../utils/conditionals.mjs';
 import { HashFunctions } from './conCrypto.mjs';
@@ -144,36 +144,6 @@ export class BlockUtils {
 		const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = block;
 		return new BlockFinalizedHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce);
 	}
-    /** @param {Object<string, UTXO>} involvedUTXOs @param {BlockFinalized} block */
-    static getFinalizedBlockInfo(involvedUTXOs, block, totalFees = 0) {
-        /** @type {BlockInfo} */
-        const blockInfo = {
-            header: this.getFinalizedBlockHeader(block),
-            totalFees: totalFees || this.#calculateTxsTotalFees(involvedUTXOs, block.Txs),
-            lowerFeePerByte: 0,
-            higherFeePerByte: 0,
-            blockBytes: serializer.serialize.block(block).length,
-            nbOfTxs: block.Txs.length
-        };
-        
-        const firstTx = block.Txs[2];
-        const lastTx = block.Txs.length - 1 <= 2 ? firstTx : block.Txs[block.Txs.length - 1];
-
-		// THIS IS SHITTY CODE, BUT NOT SENSITIVE - TO REWORK LATER
-        if (firstTx) {
-            const specialTx = Transaction_Builder.isMinerOrValidatorTx(firstTx);
-            const firstTxWeight = serializer.serialize.transaction(firstTx, specialTx || undefined).length;
-			blockInfo.higherFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, firstTx) / firstTxWeight);
-        }
-        
-        if (lastTx) {
-        	const specialTx = Transaction_Builder.isMinerOrValidatorTx(lastTx);
-            const lastTxWeight = serializer.serialize.transaction(lastTx, specialTx || undefined).length;
-            blockInfo.lowerFeePerByte = specialTx ? 0 : Math.round(TxValidation.calculateRemainingAmount(involvedUTXOs, lastTx) / lastTxWeight);
-        }
-
-        return blockInfo;
-    }
 	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {

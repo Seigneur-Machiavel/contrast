@@ -11,7 +11,6 @@ import { BLOCKCHAIN_SETTINGS } from '../utils/blockchain-settings.mjs';
 
 /**
  * @typedef {import("hive-p2p").Converter} Converter
- * @typedef {import("../types/block.mjs").BlockInfo} BlockInfo
  * @typedef {import("../types/transaction.mjs").TxId} TxId
  * @typedef {import("../types/transaction.mjs").VoutId} VoutId
  * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor

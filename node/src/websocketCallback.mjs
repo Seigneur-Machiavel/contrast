@@ -1,7 +1,6 @@
 /**
 * @typedef {import("./node.mjs").Node} Node
 * @typedef {import("../../types/transaction.mjs").TxId} TxId
-* @typedef {import("../../types/block.mjs").BlockInfo} BlockInfo
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 */
@@ -138,13 +137,6 @@ const CALLBACKS_FUNCTIONS = {
         },
         onStateUpdate: (newState = 'toto', wsClients = [], trigger = '') => {
             sendToClients({ type: 'state_updated', data: newState, trigger }, wsClients);
-        },
-        /** send the confirmed block header (without Txs) when the local node validate it
-         * @param {BlockInfo} blockInfo
-         * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'new_block_confirmed', data: blockInfo, trigger } */
-        onBlockConfirmed: (blockInfo, wsClients = [], trigger = '') => {
-            sendToClients({ type: 'new_block_confirmed', data: blockInfo, trigger }, wsClients);
         }
     },
     miner: {

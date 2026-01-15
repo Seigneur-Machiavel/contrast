@@ -79,10 +79,6 @@ export class Blockchain {
 			// UPDATE STATUS & NOTIFY CALLBACKS
 			node.sync.setAndshareMyStatus(block);
 			node.callbacks.onBlockConfirmed?.(block);
-			if (node.wsCallbacks.onBlockConfirmed) {
-				const blockInfo = BlockUtils.getFinalizedBlockInfo(involvedUTXOs, block);
-				node.wsCallbacks.onBlockConfirmed.execute(blockInfo, undefined);
-			}
 		} catch (/** @type {any} */ error) {
 			const isOffense = error.message.startsWith('!applyOffense!');
 			if (isOffense) this.logger.log(`!!! Offense detected while digesting finalized block: ${error.message}`, (m, c) => console.warn(m, c));
