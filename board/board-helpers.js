@@ -45,7 +45,7 @@ export class eHTML_STORE {
 	get isReady() { return !!document.getElementById(`${this.prefix}${this.idUsedToCheckLoad}`); }
 
 	/** @param {string} id */
-	get(id, prefix = 'cbe-', throwIfNotFound = true) {
+	get(id, prefix = this.prefix, throwIfNotFound = true) {
 		const e = this.elements[id] || document.getElementById(prefix + id);
 		if (!e && throwIfNotFound) throw new Error(`Element with id "${id}" not found`);
 		if (!e) return null;

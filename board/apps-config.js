@@ -91,7 +91,7 @@ export const appsConfig = {
 		disableOnLock: false,
 		minWidth: 420,
 		minHeight: 300,
-		initHeight: 610,
+		initHeight: 600,
 		initTop: 0,
 		iconWidth: '69%',
 		title: '<span class="title-deco">~~</span>DASHBOARD<span class="title-deco">___\\</span>',

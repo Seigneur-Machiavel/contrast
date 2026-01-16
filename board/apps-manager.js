@@ -47,7 +47,7 @@ export class AppsManager {
 		this.windows[appName].initSize.width = initWidth;
 		this.windows[appName].initSize.height = initHeight;
 		this.windows[appName].position.top = initTop || 0;
-		this.windows[appName].position.left = initLeft || 0;
+		this.windows[appName].position.left = initLeft || 1;
 
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
 		if (this.appsConfig[appName].setGlobal) window[appName] = this.windows[appName];
@@ -83,7 +83,7 @@ export class AppsManager {
 
 		console.log('appToFocus', appToFocus);
 		const delay = appToFocus === appName ? 0 : this.transitionsDuration;
-		setTimeout(() => { this.setFrontWindow(appToFocus); }, delay);
+		setTimeout(() => this.setFrontWindow(appToFocus), delay);
 	}
 	/** @param {string} appName */
 	setFrontWindow(appName) {
@@ -204,7 +204,7 @@ export class AppsManager {
 		e.preventDefault();
 		const maxLeft = this.windowsWrap.offsetWidth - 50;
 		const minTop = this.windowsWrap.offsetHeight - 32;
-		const left = Math.max(0, e.clientX - this.draggingWindow.dragStart.x);
+		const left = Math.max(1, e.clientX - this.draggingWindow.dragStart.x);
 		const top = Math.max(0, e.clientY - this.draggingWindow.dragStart.y);
 		this.draggingWindow.element.style.left = Math.min(left, maxLeft) + 'px';
 		this.draggingWindow.element.style.top = Math.min(top, minTop) + 'px';
@@ -236,8 +236,8 @@ export class AppsManager {
 		}
 		
 		if (this.draggingWindow) {
-			this.draggingWindow.position.left = e.clientX - this.draggingWindow.dragStart.x;
-			this.draggingWindow.position.top = e.clientY - this.draggingWindow.dragStart.y;
+			this.draggingWindow.position.left = Math.max(1, e.clientX - this.draggingWindow.dragStart.x);
+			this.draggingWindow.position.top = Math.max(0, e.clientY - this.draggingWindow.dragStart.y);
 			this.draggingWindow.element.classList.remove('dragging');
 			this.draggingWindow = null;
 		}
@@ -251,12 +251,10 @@ export class AppsManager {
 	#getElementParentWindow(element) {
 		// GO UP THROUGH PARENTS UNTIL FIND THE WINDOW (or abort on document.body)
 		let target = element;
-		while(target && target !== document.body) {
+		while(target && target !== document.body)
 			if (target.classList.contains('window')) break;
-			target = target.parentElement;
-		}
+			else target = target.parentElement;
 
-		/** @type {string | null} */
 		const appName = target.dataset.appName || null;
 		const subWindow = appName ? this.windows[appName] : null;
 		return { appName, subWindow };

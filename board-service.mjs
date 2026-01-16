@@ -24,7 +24,7 @@ app.use((req, res, next) => { // CSP Middleware
     const csp = `
         default-src 'self';
         style-src 'self' 'unsafe-inline';
-        connect-src 'self' ${wsProtocol}://${hostname}:${nodePort} https://time.cloudflare.com https://time.google.com https://pool.ntp.org;
+        connect-src 'self' ${wsProtocol}://${hostname}:${nodePort} ws://127.0.0.1:27261 https://time.cloudflare.com https://time.google.com https://pool.ntp.org;
     `.replace(/\s+/g, ' ').trim();
     
     res.setHeader('Content-Security-Policy', csp);

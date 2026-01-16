@@ -7,6 +7,7 @@ import { MemPool } from './mempool.mjs';
 import { BlockUtils } from './block.mjs';
 import { TaskQueue } from './task-queue.mjs';
 import { Blockchain } from './blockchain.mjs';
+import { NodeController } from "./node-controller.mjs";
 import { serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -14,8 +15,8 @@ import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 import { ADDRESS } from "../../types/address.mjs";
 
 /**
+ * @typedef {import("./wallet.mjs").Wallet} Wallet
 * @typedef {import("./wallet.mjs").Account} Account
-* @typedef {import("./wallet.mjs").Wallet} Wallet
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * 
 * @typedef {Object} NodeOptions
@@ -25,6 +26,7 @@ import { ADDRESS } from "../../types/address.mjs";
 * @property {boolean} [autoStart] - Whether to automatically start the node upon creation. (default: true)
 * @property {string} [domain] - The domain name for the node (Public only).
 * @property {number} [port] - The port number for the node to listen on (Public only).
+* @property {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable)
 * @property {string[]} bootstraps - An array of bootstrap node addresses. */
 
 /** @param {NodeOptions} [options] */
@@ -36,17 +38,16 @@ export async function createContrastNode(options = { bootstraps: [] }) {
 	if (options.autoStart === undefined) options.autoStart = true; // set default autoStart to true
 	
 	const p2pNode = asPublic ? await HiveP2P.createPublicNode(options) : await HiveP2P.createNode(options);
-	return new ContrastNode(p2pNode, options.storage, verb);
+	return new ContrastNode(p2pNode, options.storage, verb, options.controllerPort);
 }
 
 export class ContrastNode {
+	controller;
 	running = true;
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
 	/** @type {{ validator: string | null, miner: string | null }} */
 	rewardAddresses = { validator: null, miner: null };
-	/** @type {Object<string, import("./websocketCallback.mjs").WebSocketCallBack>} */
-    wsCallbacks = {};
 	/** @type {Object<string, Function>} */
 	callbacks = {};
 
@@ -66,8 +67,9 @@ export class ContrastNode {
 
 	/** Node instance should be created with "createContrastNode" method, not using "new" constructor.
 	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance.
-	 * @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
-	constructor(p2pNode, storage, verb = 2) {
+	 * @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence.
+	 * @param {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable) */
+	constructor(p2pNode, storage, verb = 2, controllerPort) {
 		this.blockchain = new Blockchain(storage);
 		this.memPool = new MemPool(this.blockchain);
 		this.taskQueue = new TaskQueue();
@@ -77,6 +79,7 @@ export class ContrastNode {
 		this.vss = new Vss();
 		this.miner = new Miner(this);
 		this.sync = new Sync(this);
+		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort);
 
 		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
@@ -97,7 +100,7 @@ export class ContrastNode {
         if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) return;
         this.info.state = newState;
 		this.callbacks.onStateUpdate?.(newState);
-		this.wsCallbacks.onStateUpdate?.execute(newState, undefined);
+		this.controller?.onStateUpdate(newState);
     }
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
 	async start(wallet, startFromScratch = false) {
@@ -142,7 +145,7 @@ export class ContrastNode {
 			const serialized = serializer.serialize.block(myCandidate, 'candidate');
 			this.p2p.broadcast(serialized, { topic: 'block_candidate' });
 			this.callbacks.onBroadcastNewCandidate?.(myCandidate);
-			this.wsCallbacks.onBroadcastNewCandidate?.execute(BlockUtils.getCandidateBlockHeader(myCandidate), undefined);
+			this.controller?.onBroadcastNewCandidate(BlockUtils.getCandidateBlockHeader(myCandidate));
 		} catch (/** @type {any} */ error) { this.logger.log(error.stack, (m, c) => console.error(m, c)); }
 		
 		this.updateState("idle", "creating block candidate");

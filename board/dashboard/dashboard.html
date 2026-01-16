@@ -1,32 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
+<div class="cnd-dashboard-wrapper">
+	<div id="cnd-establishing-connection">
+		<button id="cnd-connection-btn">Connect</button>
+	</div>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" sizes="16x16" href="../../styles/contrast16.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="../../styles/contrast32.png">
-    <link rel="icon" type="image/png" sizes="48x48" href="../../styles/contrast48.png">
-    <title>Contrast Node Dashboard</title>
-    <script src="/libs/anime.min.js"></script>
-    <script src="./dashboard/dashboard.js" type="module"></script>
-    <link rel="stylesheet" href="./dashboard/dashboard.css">
-</head>
-
-<div id="dashboard-wrapper">
-    <!--<div style="width: 100%;">
-        <div id="cbe-contrastBlocksWidget"></div>
-    </div>-->
-    
-    <div class="containers-wrap">
-        <div class="container">
-            <div class="container-header">
+    <div class="cnd-containers-wrap">
+        <div class="cnd-container">
+            <div class="cnd-container-header">
                 <h1>Node</h1>
                 <h2>#<span id="validatorHeight">0</span></h2>
             </div>
             <div class="spacedText">
                 <h3>State</h3>
-                <h3 id="nodeState">Sync/Idle/Digest</h3>
+                <h3 id="cnd-nodeState">Sync/Idle/Digest</h3>
             </div>
             <div class="spacedText" data-infokey="myLastLegitimacy">
                 <h3>My Last Legitimacy</h3>
@@ -34,17 +19,17 @@
             </div>
         </div>
 
-        <div class="container">
-            <div class="container-header">
+        <div class="cnd-container">
+            <div class="cnd-container-header">
                 <h1>Miner</h1>
                 <h2><span id="minerLegitimacy" data-infokey="minerLegitimacy">Legitimacy 0</span> | #<span id="minerHeight">0</span></h2>
             </div>
             <div class="spacedText" data-infokey="globalHashRate">
-                <h3>Est. global hashrate</h3>
+                <h3>Network power</h3>
                 <h3>~ <span id="globalHashRate"></span> H/s</h3>
             </div>
             <div class="spacedText" data-infokey="hashRate">
-                <h3>HashRate</h3>
+                <h3>My power</h3>
                 <h3><span id="hashRate"></span> H/s</h3>
             </div>
             <div class="spacedText" data-infokey="miningDailyReward">
@@ -52,7 +37,7 @@
                 <h3>~ <span id="miningDailyReward"></span></h3>
             </div>
             <div class="spacedText">
-                <h3>Threads (mining intensity)</h3>
+                <h3>Threads</h3>
                 <div id="minerThreadsIncrementalInput" class="incrementalInput">
                     <button>-</button>
                     <input type="number" value="1"> <!-- min="1" max="4"> (managed with js) -->
@@ -61,8 +46,8 @@
             </div>
         </div>
 
-        <div class="container">
-            <div class="container-header">
+        <div class="cnd-container" style="width: 90%; margin-right: 10%;">
+            <div class="cnd-container-header">
                 <h1>Addresses</h1>
             </div>
             <div class="spacedText" data-infokey="publicAddress">
@@ -107,8 +92,8 @@
             </div>
         </div>
         
-        <div class="container">
-            <div class="container-header">
+        <div class="cnd-container">
+            <div class="cnd-container-header">
                 <h1>Detailed view (dev)</h1>
             </div>
             <div id="ignoreBlocksWrap" class="toggleWrap flex justify-between items-center mb-2">
@@ -205,5 +190,3 @@
         </div>
     </div>
 </div>
-
-</html>

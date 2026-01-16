@@ -8,6 +8,7 @@ const HiveP2P = await import('../hive-p2p.min.js');
 import { Connector } from './connector.js';
 import { AppsManager } from './apps-manager.js';
 import { Explorer } from './explorer/explorer.js';
+import { Dashboard } from './dashboard/dashboard.js';
 import { FrontStorage } from '../utils/front-storage.mjs';
 import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 
@@ -18,6 +19,7 @@ const bootstraps = ['ws://localhost:27260'];
 const hiveNode = await HiveP2P.createNode({ bootstraps });
 const connector = new Connector(hiveNode);
 const explorer = new Explorer(connector);
+const dashboard = new Dashboard(connector);
 const boardStorage = new FrontStorage('board');
 
 if (boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
@@ -39,6 +41,7 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.hiveNode = hiveNode;
 	window.connector = connector;
 	window.explorer = explorer;
+	window.dashboard = dashboard;
 }
 
 // Implementation with less event listeners

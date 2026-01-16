@@ -164,7 +164,7 @@ button {
 
 #cbe-contrastBlocks {
     position: relative;
-    padding: 40px 30px 0;
+    margin: 40px 30px 0;
     border-radius: var(--cbe-wrap-border-radius, var(--cbe-wrap-border-radius-default));
     height: var(--cbe-inner-height, var(--cbe-inner-height-default));
     background: none;

@@ -1,5 +1,5 @@
 /**
-* @typedef {import("./node.mjs").Node} Node
+* @typedef {import("./node.mjs").ContrastNode} ContrastNode
 * @typedef {import("../../types/transaction.mjs").TxId} TxId
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
@@ -39,30 +39,22 @@ export const WebSocketCallBack = (fnc, triggers, active = true) => {
 }
 
 export class CallBackManager {
-    #CALLBACKS_RELATED_TO_MODE;
+	#CALLBACKS_RELATED_TO_MODE = { // HERE ARE THE GENERIC CALLBACKS - THOSE THAT SPEND EVENT TO ALL CLIENTS
+		validatorDashboard: {
+			node: ['onBroadcastNewCandidate:all', 'onStateUpdate:all'],
+			memPool: ['pushTransaction:all', 'uxtoSpent:all'],
+		},
+		minerDashboard: {
+			miner: ['onBroadcastFinalizedBlock:all', 'onHashRateUpdated:all'],
+		}
+	}
+	node;
 
-    /** @param {Node} node */
-    constructor(node) {
-        /** @type {Node} */
-        this.node = node;
-        
-        this.#CALLBACKS_RELATED_TO_MODE = { // HERE ARE THE GENERIC CALLBACKS - THOSE THAT SPEND EVENT TO ALL CLIENTS
-            validatorDashboard: {
-                node: ['onBroadcastNewCandidate:all', 'onStateUpdate:all'],
-                memPool: ['pushTransaction:all', 'uxtoSpent:all'],
-                //utxoCache: [`onBalanceUpdated:${this.node.account.address}`],
-            },
-            minerDashboard: {
-                miner: ['onBroadcastFinalizedBlock:all', 'onHashRateUpdated:all'],
-                //utxoCache: [`onBalanceUpdated:${this.node.miner.address}`],
-            },
-            observer: {
-                node: ['onBroadcastNewCandidate:all'], //, 'onBlockConfirmed:all']
-            },
-        }
-    }
+    /** @param {ContrastNode} node */
+    constructor(node) { this.node = node; }
+
     /** 
-     * @param { string[] | string } modes - 'validatorDashboard' | 'minerDashboard' | 'observer'
+     * @param { string[] | string } modes - 'validatorDashboard' | 'minerDashboard'
      * @param {WebSocket[]} wsClients - clients to send the message (wss.clients for all) */
     initAllCallbacksOfMode(modes, wsClients) {
         const modesArray = Array.isArray(modes) ? modes : [modes];
@@ -74,7 +66,7 @@ export class CallBackManager {
                 this.attachWsCallBackToModule(module, fncKey, wsClients); // we attach the callback to all clients
     }
     /** 
-     * @param {string} moduleName - 'node' | 'miner' | 'memPool' | 'utxoCache'
+     * @param {string} moduleName - 'node' | 'miner'
      * @param {string} fncKey -  "fncName:trigger"  ex: 'balance_updated:W9bxy4aLJiQjX1kNgoAC'
      * @param {WebSocket[]} wsClients - clients to send the message */
     attachWsCallBackToModule(moduleName, fncKey, wsClients) {
@@ -95,7 +87,7 @@ export class CallBackManager {
     /** @param { string[] | string } modes */
     #buildCallBacksFunctionsListToSubscribe(modes = ['dashboard']) {
         const modesArray = Array.isArray(modes) ? modes : [modes];
-        const aggregatedCallBacksNames = { node: [], miner: [], memPool: [] };
+        const aggregatedCallBacksNames = { node: [], miner: [] };
         for (const mode of modesArray) 
             for (const module of Object.keys(this.#CALLBACKS_RELATED_TO_MODE[mode]))
                 for (const fncName of this.#CALLBACKS_RELATED_TO_MODE[mode][module]) {
@@ -168,22 +160,6 @@ const CALLBACKS_FUNCTIONS = {
          * @emits msgSent: { type: 'hash_rate_updated', data: hashRate, trigger } */
         onHashRateUpdated: (hashRate = 0, wsClients = [], trigger = '') => {
             sendToClients({ type: 'hash_rate_updated', data: hashRate, trigger }, wsClients);
-        },
-    },
-    memPool: {
-        /** send info of tx inclusion when the memPool try to push a tx
-         * @param {Object} txInfo - { broadcasted, pushedInLocalMempool, error }
-         * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'transaction_broadcasted', data: txInfo, trigger } */
-        pushTransaction: (txInfo = {}, wsClients = [], trigger = '') => {
-            sendToClients({ type: 'transaction_broadcasted', data: txInfo, trigger }, wsClients);
-        },
-        /** send tx reference when the uxto is spent.
-         * @param {TxId} txId txId: blockHeight:txIndex - '0:1'
-         * @param {WebSocket[]} wsClients
-         * @emits msgSent: { type: 'uxto_spent', data: txId, trigger } */
-        uxtoSpent: (txId = '0:1', wsClients = [], trigger = '') => {
-            sendToClients({ type: 'uxto_spent', data: txId, trigger }, wsClients);
         },
     },
     utxoCache: {
