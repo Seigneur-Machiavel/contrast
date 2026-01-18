@@ -7,12 +7,12 @@ import { MemPool } from './mempool.mjs';
 import { BlockUtils } from './block.mjs';
 import { TaskQueue } from './task-queue.mjs';
 import { Blockchain } from './blockchain.mjs';
+import { ADDRESS } from "../../types/address.mjs";
 import { NodeController } from "./node-controller.mjs";
 import { serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
-import { ADDRESS } from "../../types/address.mjs";
 
 /**
  * @typedef {import("./wallet.mjs").Wallet} Wallet
@@ -42,14 +42,15 @@ export async function createContrastNode(options = { bootstraps: [] }) {
 }
 
 export class ContrastNode {
-	controller;
+	/** @type {Object<string, Function>} */
+	callbacks = {}; // Callbacks used by the script who start the node to hook their functions (no sensitive data)
+	controller;		// Callbacks to manage the node and display info via local WebSocket (can imply sensitive data)
 	running = true;
+
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
 	/** @type {{ validator: string | null, miner: string | null }} */
 	rewardAddresses = { validator: null, miner: null };
-	/** @type {Object<string, Function>} */
-	callbacks = {};
 
 	mainStorage; blockchain;
 	taskQueue; memPool; p2p;
@@ -92,7 +93,7 @@ export class ContrastNode {
 	get neighborsCount() { return this.p2p.peerStore.neighborsList.length; }
 
 	// API ------------------------------------------------------------------------------
-	/** Register a websocket callback. @param {'onBlockConfirmed' | 'onStateUpdate' | 'onBroadcastNewCandidate'} event @param {Function} callback */
+	/** Register a p2p callback. @param {'onBlockConfirmed' | 'onStateUpdate' | 'onBroadcastNewCandidate'} event @param {Function} callback */
 	on(event, callback) { this.callbacks[event] = callback; }
 	/** Update the node state and notify websocket clients. @param {string} newState @param {string} [onlyFrom] Updates only if current state matches */
 	updateState(newState, onlyFrom) {
@@ -100,7 +101,7 @@ export class ContrastNode {
         if (onlyFrom && !(state === onlyFrom || state.includes(onlyFrom))) return;
         this.info.state = newState;
 		this.callbacks.onStateUpdate?.(newState);
-		this.controller?.onStateUpdate(newState);
+		this.controller?.sendEncryptedMessage('stateUpdate', newState);
     }
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
 	async start(wallet, startFromScratch = false) {
@@ -145,7 +146,7 @@ export class ContrastNode {
 			const serialized = serializer.serialize.block(myCandidate, 'candidate');
 			this.p2p.broadcast(serialized, { topic: 'block_candidate' });
 			this.callbacks.onBroadcastNewCandidate?.(myCandidate);
-			this.controller?.onBroadcastNewCandidate(BlockUtils.getCandidateBlockHeader(myCandidate));
+			this.controller?.sendEncryptedMessage('newBlockCandidate', myCandidate);
 		} catch (/** @type {any} */ error) { this.logger.log(error.stack, (m, c) => console.error(m, c)); }
 		
 		this.updateState("idle", "creating block candidate");

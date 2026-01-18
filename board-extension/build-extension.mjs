@@ -4,11 +4,11 @@ import archiver from 'archiver';
 import { createWriteStream } from 'fs';
 
 const CREATE_ZIP = true;
-const SRC_DIR = './';
-const DIST_DIR = 'extension/dist';
+const SRC_DIR = '../';
+const DIST_DIR = 'dist';
 const FILES = [
-	{ in: 'extension/manifest.json', out: 'manifest.json' },
-	{ in: 'extension/background.js', out: 'background.js' },
+	{ in: 'board-extension/manifest.json', out: 'manifest.json' },
+	{ in: 'board-extension/background.js', out: 'background.js' },
 	{ in: 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js', out: 'hive-p2p.min.js' },
 
 	{ in: 'libs/d3.v7.min.js' },
@@ -64,7 +64,7 @@ for (const folder of FOLDERS) {
 
 // Optional: create zip
 if (CREATE_ZIP) {
-	const output = createWriteStream('extension/extension.zip');
+	const output = createWriteStream('board-extension/extension.zip');
 	const archive = archiver('zip', { zlib: { level: 9 } });
 	
 	output.on('close', () => console.log(`✓ Extension packaged (${archive.pointer()} bytes)`));

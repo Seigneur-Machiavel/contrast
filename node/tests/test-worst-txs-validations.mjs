@@ -38,6 +38,7 @@ await bootstrapWallet.deriveAccounts(2 + nbReceipients, 'C', bootstrapStorage);
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
 // @ts-ignore
 const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
+if (bootstrapNode.controller) bootstrapNode.controller.unsafeMode = true; // ENABLE UNSAFE MODE FOR TESTING
 await bootstrapNode.start(bootstrapWallet);
 
 // -------------------------------------------------------------------------------------

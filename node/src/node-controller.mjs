@@ -1,13 +1,16 @@
 import { WebSocketServer } from 'ws';
 
-/** @typedef {import("./node.mjs").ContrastNode} ContrastNode */
+/** 
+ * @typedef {import("./node.mjs").ContrastNode} ContrastNode
+ * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate */
 
 export class NodeController {
-	/** @type {import('ws').WebSocket | null} */
-	wsConnection = null;
+	/** @type {import('ws').WebSocket | null} */	wsConnection = null;
+	/** @type {NodeJS.Timeout | null} */			authTimeout = null;
 	textEncoder = new TextEncoder();
 	textDecoder = new TextDecoder();
-	clientPublicKey;
+	unsafeMode = false;
+	pingInterval;
 	sharedSecret;
 	myKeypair;
 	wsServer;
@@ -19,6 +22,15 @@ export class NodeController {
 		this.wsServer = new WebSocketServer({ port });
 		this.wsServer.on('connection', this.#handleConnection);
 		this.myKeypair = this.node.p2p.cryptoCodex.generateEphemeralX25519Keypair();
+		console.log(`[NodeController] started on port ${port}`);
+		console.log(`[NodeController] unsafeMode is ${this.unsafeMode ? 'ENABLED' : 'DISABLED'}`);
+		console.log('[NodeController] waiting for client connection...');
+		console.log(`[NodeController] Public key: ${Buffer.from(this.myKeypair.myPub).toString('hex')}`);
+		this.pingInterval = setInterval(() => {
+			if (!this.wsConnection || !this.sharedSecret) return;
+			this.sendEncryptedMessage('currentHeight', this.node.blockchain.currentHeight);
+			//this.sendEncryptedMessage('ping', Date.now());
+		}, 1_000);
 	}
 
 	/** @param {import('ws').WebSocket} ws */
@@ -27,14 +39,13 @@ export class NodeController {
 		this.wsConnection = ws;
 		ws.on('message', (message) => this.#handleMessage(message));
 		ws.on('close', () => this.#handleClose());
+		this.authTimeout = setTimeout(() => this.#handleClose('authentication timeout'), 1_000);
 	}
-
 	/** @param {string | Buffer | ArrayBuffer | Buffer[] } message */
 	#handleMessage = (message) => {
 		try {
-			console.log('[NodeController] Received message:', message.data);
-			// give it to the function as Uint8Array
 			if (!this.sharedSecret) {
+				if (message.length !== 32) return; // expecting 32-byte public key
 				this.#handleKeyExchange(new Uint8Array(message));
 				return;
 			}
@@ -42,24 +53,22 @@ export class NodeController {
 			const parsedMessage = this.#parseEncryptedMessage(new Uint8Array(message.data));
 			const { type, data } = parsedMessage;
 			if (!type) throw new Error('Message type is missing');
-			console.log(`[NodeController] Parsed message of type "${type}":`, data);
-		} catch (/**@type {any} */ error) { console.error(error.message); }
+			this.handleDecryptedMessage(type, data);
+		} catch (/**@type {any} */ error) {
+			console.error(error.message);
+			if (!this.sharedSecret) return;
+			this.wsConnection.send(new Uint8Array([0])); // send error response
+			this.#handleClose('decryption error');
+		}
 	}
 	/** @param {Uint8Array} data */
 	#handleKeyExchange = (data) => {
 		const codex = this.node.p2p.cryptoCodex;
-		this.clientPublicKey = data;
-		this.sharedSecret = codex.computeX25519SharedSecret(this.myKeypair.myPriv, this.clientPublicKey);
-		this.wsConnection.send(this.myKeypair.myPub);
+		const sharedSecret = codex.computeX25519SharedSecret(this.myKeypair.myPriv, data);
+		this.sharedSecret = sharedSecret;
+		if (this.unsafeMode) this.wsConnection.send(this.myKeypair.myPub); // share the pubkey back in unsafe mode
+		if (this.authTimeout) { clearTimeout(this.authTimeout); this.authTimeout = null; }
 		console.log('[NodeController] Key exchange completed - secure channel established');
-	}
-	/** @param {string} type @param {any} data */
-	#sendEncryptedMessage = (type, data) => {
-		if (!this.sharedSecret || !this.wsConnection) return;
-		const str = JSON.stringify({ type, data });
-		const encoded = this.textEncoder.encode(str);
-		const encrypted = this.node.p2p.cryptoCodex.encryptData(encoded, this.sharedSecret);
-		this.wsConnection.send(encrypted);
 	}
 	/** @param {Uint8Array} encryptedData */
 	#parseEncryptedMessage = (encryptedData) => {
@@ -68,20 +77,26 @@ export class NodeController {
 		const decodedStr = this.textDecoder.decode(decrypted);
 		return JSON.parse(decodedStr);
 	}
-	#handleClose = () => {
-		this.clientPublicKey = null;
+	/** @param {string} [reason] */
+	#handleClose = (reason) => {
+		if (this.authTimeout) { clearTimeout(this.authTimeout); this.authTimeout = null; }
+		if (this.wsConnection) this.wsConnection.close();
 		this.wsConnection = null;
 		this.sharedSecret = null;
-		this.myKeypair = this.node.p2p.cryptoCodex.generateEphemeralX25519Keypair(); // Prepare new keypair for next connection
-		console.log('[NodeController] WebSocket connection closed => reset keys');
+		if (reason) console.log(`[NodeController] WS closed: ${reason}`);
 	}
 
-	// PUBLIC METHODS - CALLBACKS FROM NODE EVENTS
-	onStateUpdate = (newState) => {
-		this.#sendEncryptedMessage('stateUpdate', newState);
-		console.log('[NodeController] Node state updated:', newState);
+	// PUBLIC METHODS
+	/** @param {string} type @param {any} data */
+	sendEncryptedMessage = (type, data) => {
+		if (!this.sharedSecret || !this.wsConnection) return;
+		const str = JSON.stringify({ type, data });
+		const encoded = this.textEncoder.encode(str);
+		const encrypted = this.node.p2p.cryptoCodex.encryptData(encoded, this.sharedSecret);
+		this.wsConnection.send(encrypted);
 	}
-	onBroadcastNewCandidate = (blockHeader) => {
-		console.log('[NodeController] New block candidate broadcasted:', blockHeader);
+	/** @param {string} type @param {any} data */
+	handleDecryptedMessage(type, data) {
+				
 	}
 }
