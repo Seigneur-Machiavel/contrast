@@ -19,14 +19,14 @@ const WS_SETTINGS = {
 }
 
 const ACTIONS = {
+    SETUP: 'setup',
     HARD_RESET: 'hard_reset',
     UPDATE_GIT: 'update_git',
-    FORCE_RESTART: 'force_restart',
     REVALIDATE: 'revalidate',
     RESET_WALLET: 'reset_wallet',
-    SETUP: 'setup',
-    SET_VALIDATOR_ADDRESS: 'set_validator_address',
-    SET_MINER_ADDRESS: 'set_miner_address'
+    FORCE_RESTART: 'force_restart',
+    SET_MINER_ADDRESS: 'set_miner_address',
+    SET_VALIDATOR_ADDRESS: 'set_validator_address'
 };
 
 const eHTML = new eHTML_STORE('cnd-', 'node-pubkey-input');
@@ -72,6 +72,8 @@ export class Dashboard {
 	#handleConnection = async (ws) => {
 		this.wsConnection = ws;
 		this.isWsAccessible = true;
+		eHTML.get('establishing-connection-text').classList.add('hidden');
+		setTimeout(() => eHTML.get('node-pubkey-input').classList.remove('hidden'), 1200);
 		this.ws.send(this.myKeypair.myPub);
 		this.#setPubkeyFromInput();
 		if (!this.sharedSecret) this.buildSharedSecretFromPubkey();
@@ -115,7 +117,7 @@ export class Dashboard {
 	#setConnected() {
 		this.isConnected = true;
 		//this.sendEncryptedMessage('getNodeHeight');
-		setTimeout(() => eHTML.get('establishing-connection').classList.add('hide'), 500);
+		eHTML.get('establishing-connection').classList.add('hidden');
 		console.log('[NodeController] Key exchange completed - secure channel established');
 	}
 	/** @param {Uint8Array} encryptedData */
@@ -134,7 +136,7 @@ export class Dashboard {
 		this.sharedSecret = null;
 		this.isConnected = false;
 		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair(); // Prepare new keypair for next connection
-		eHTML.get('establishing-connection').classList.remove('hide');
+		eHTML.get('establishing-connection').classList.remove('hidden');
 		if (reason) console.log(`[NodeController] WebSocket connection closed: ${reason}`);
 		else console.log('[NodeController] WebSocket connection closed.');
 	}

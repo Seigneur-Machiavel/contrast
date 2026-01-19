@@ -1,18 +1,5 @@
 /* Remove spinner arrows from number inputs in WebKit browsers */
 
-/*h1 {
-	font-size: 1.5em;
-    font-weight: 600;
-}
-h2 {
-	font-size: 1.25em;
-    font-weight: 400;
-}
-h3 {
-	font-size: 1em;
-    font-weight: 400;
-}*/
-
 #cnd-establishing-connection {
 	z-index: 1;
 	opacity: 1;
@@ -23,11 +10,17 @@ h3 {
 	justify-content: center;
 	align-items: center;
 	background: var(--color1);
-	transition: opacity .5s ease;
+	transition: opacity .4s ease;
 }
-#cnd-establishing-connection.hide {
+#cnd-establishing-connection.hidden {
 	opacity: 0;
 	pointer-events: none;
+}
+#cnd-establishing-connection-text.hidden {
+	display: none;
+}
+#cnd-node-pubkey-input.hidden {
+	display: none;
 }
 
 .cnd-dashboard-wrapper {
