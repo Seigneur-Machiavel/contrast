@@ -4,7 +4,6 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
     const Plotly = require('plotly.js-dist-min');
 }
 
-//import { StakeReference } from '../src/vss.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 //import { UTXO } from '../../types/transaction.mjs';
 import { eHTML_STORE } from '../board-helpers.js';
@@ -22,15 +21,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
-* @typedef {import("../../types/transaction.mjs").UTXO} UTXO
-
-* @typedef {Object} StakeReference
-* @property {string} address - Example: "WCHMD65Q7qR2uH9XF5dJ"
-* @property {string} anchor - Example: "0:bdadb7ab:0"
-* @property {number} amount - Example: 100
-* 
-* @typedef {Object<string, StakeReference | undefined>} Spectrum
-*/
+* @typedef {import("../../types/transaction.mjs").UTXO} UTXO */
 
 const eHTML = new eHTML_STORE('cbe-', 'maxSupply');
 export class Navigator {

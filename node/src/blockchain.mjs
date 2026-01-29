@@ -1,4 +1,5 @@
 // @ts-check
+import { Vss } from './vss.mjs';
 import { BlockUtils } from './block.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockValidation } from './block-validation.mjs';
@@ -23,6 +24,7 @@ export class Blockchain {
 	/** @type {BlockFinalized | null} */	lastBlock = null;
 	get currentHeight() { return this.blockStorage.lastBlockIndex; }
     logger = new MiniLogger('blockchain');
+	vss;
 	blockStorage;
 	identityStore;
 	ledgersStorage;
@@ -34,6 +36,7 @@ export class Blockchain {
 		this.blockStorage = new BlockchainStorage(storage);
 		this.identityStore = new IdentityStore(this.blockStorage);
 		this.ledgersStorage = new LedgersStorage(storage);
+		this.vss = new Vss(this, storage);
 		if (this.currentHeight === -1) return; // FRESH CHAIN
 
 		this.#ensureConsistency();
@@ -47,45 +50,46 @@ export class Blockchain {
      * @param {boolean} [options.broadcastNewCandidate] - default: true
      * @param {boolean} [options.isSync] - default: false */
     async digestFinalizedBlock(node, serializedBlock, options = {}) {
+		let block;
 		const startTime = performance.now();
 		const statePrefix = options.isSync ? '(syncing) ' : '';
 		const { broadcastNewCandidate = true, isSync = false } = options;
 
 		if (this.currentHeight > 10 && Math.random() < this.simulateFailureRate)
 			return console.log(`%c[DEBUG] Simulated failure of digestFinalizedBlock #${this.currentHeight}`, 'color: orange;');
-
+		
 		try {
 			// VALIDATE BLOCK
-			const block = serializer.deserialize.blockFinalized(serializedBlock);
+			block = serializer.deserialize.blockFinalized(serializedBlock);
 			node.updateState(`${statePrefix}block-validation #${block.index}`);
 			const validationResult = await BlockValidation.validateBlockProposal(node, block, serializedBlock);
 			const { hashConfInfo, involvedAnchors, involvedUTXOs } = validationResult;
 			if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
-	
-			const newStakesOutputs = BlockUtils.extractNewStakesFromFinalizedBlock(block);
-			if (!node.vss.newStakes(newStakesOutputs, 'control')) throw new Error('VSS unable to control new stakes from block');
+			this.vss.digestBlockStakes(block, 'control'); // throw if invalid stakes
 	
 			// APPLY BLOCK
 			node.updateState(`${statePrefix}applying finalized block #${block.index}`);
 			this.addBlock(block, involvedAnchors, involvedUTXOs);
-			node.vss.newStakes(newStakesOutputs, 'persist');
 			node.memPool.removeFinalizedBlocksTransactions(block);
 			
 			const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
 			const [minerAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
-			this.logger.log(`${statePrefix}#${block.index} (${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {valid: ${validatorAddress} | miner: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+			this.logger.log(`${statePrefix}#${block.index} (${block.Txs.length} Txs, ${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {v: ${validatorAddress} | m: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
 			node.updateState("idle", "applying finalized block");
-			
-			// UPDATE STATUS & NOTIFY CALLBACKS
 			node.sync.setAndshareMyStatus(block);
-			node.callbacks.onBlockConfirmed?.(block);
 		} catch (/** @type {any} */ error) {
+			const shouldLog = !error.message.includes('(outdated)');
+			if (shouldLog) this.logger.log(`Failed to digest finalized block: ${error.stack}`, (m, c) => console.error(m, c));
+			
 			const isOffense = error.message.startsWith('!applyOffense!');
 			if (isOffense) this.logger.log(`!!! Offense detected while digesting finalized block: ${error.message}`, (m, c) => console.warn(m, c));
 			else if (!isSync) await node.sync.catchUpWithNetwork();
-			//this.logger.log(`Failed to digest finalized block: ${error.message}`, (m, c) => console.error(m, c));
 			return false;
 		}
+
+		// EXEC CALLBACK
+		try { node.callbacks.onBlockConfirmed?.(block);
+		} catch (/** @type {any} */ error) { this.logger.log(`onBlockConfirmed callback error: ${error.message}`, (m, c) => console.error(m, c)); }
 
 		// CREATE AND SHARE NEW CANDIDATE AFTER A SHORT DELAY
 		if (broadcastNewCandidate && !isSync) {
@@ -107,6 +111,7 @@ export class Blockchain {
 		//if (block.index === 5) throw new Error('Test error on block 5 saving');
 		this.identityStore.digestBlock(block, involvedUTXOs);
 		this.ledgersStorage.digestBlock(block, involvedUTXOs);
+		this.vss.digestBlockStakes(block, 'persist');
 		this.lastBlock = block;
 		this.ledgersStorage.cache.clear();
 		//this.logger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
@@ -131,15 +136,17 @@ export class Blockchain {
 		this.ledgersStorage.undoBlock(block, involvedUTXOs);
 		this.identityStore.undoBlock(block, involvedUTXOs);
 		this.blockStorage.undoBlock(involvedAnchors);
+		this.vss.undoBlockStakes(block);
 		this.ledgersStorage.cache.clear();
 		if (this.currentHeight === -1) this.reset();
 		else this.lastBlock = this.getBlock() || null;
 	}
 	reset() {
 		this.logger.log('RESETTING BLOCKCHAIN...', (m, c) => console.warn(m, c));
+		this.vss.reset();
         this.blockStorage.reset();
-        this.ledgersStorage.reset();
 		this.identityStore.reset();
+        this.ledgersStorage.reset();
 		this.lastBlock = null;
         this.logger.log('BLOCKCHAIN RESET COMPLETE.', (m, c) => console.warn(m, c));
     }
@@ -178,5 +185,13 @@ export class Blockchain {
 		if (applyCount === 0) this.logger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
 		else this.logger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
 		this.ledgersStorage.cache.clear();
+
+		// FOURTH: ENSURE VSS CONSISTENCY
+		if (this.vss.hasBlockStakes(block)) this.logger.log('VSS consistency check: no change', (m, c) => console.info(m, c));
+		else {
+			this.vss.undoBlockStakes(block); // ensure no stakes from block
+			this.vss.digestBlockStakes(block, 'persist'); // re-add stakes from block
+			this.logger.log('VSS consistency check: stakes repaired', (m, c) => console.warn(m, c));
+		}
 	}
 }

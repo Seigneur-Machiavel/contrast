@@ -27,7 +27,7 @@ class EncryptedGeneratedAccount extends GeneratedAccount {
 
 export class Account {
     #privKey;
-	#pubKey;
+	pubKey;
 	prefix;		// e.g., 'C'
 	b58;		// e.g., '123456'
 
@@ -39,7 +39,7 @@ export class Account {
 
 	/** @param {string} pubKey @param {string} privKey @param {string} b58 @param {string} [prefix] default: 'C' */
     constructor(pubKey, privKey, b58, prefix = 'C') {
-        this.#pubKey = pubKey;
+        this.pubKey = pubKey;
         this.#privKey = privKey;
         this.b58 = b58;
 		this.prefix = prefix;
@@ -54,8 +54,8 @@ export class Account {
 
 		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
         const { signatureHex } = AsymetricFunctions.signMessage(toSign, this.#privKey);
-        if (transaction.witnesses.includes(`${signatureHex}:${this.#pubKey}`)) throw new Error('Signature already included');
-        transaction.witnesses.push(`${signatureHex}:${this.#pubKey}`);
+        if (transaction.witnesses.includes(`${signatureHex}:${this.pubKey}`)) throw new Error('Signature already included');
+        transaction.witnesses.push(`${signatureHex}:${this.pubKey}`);
         return transaction;
     }
     /** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */
@@ -69,7 +69,7 @@ export class Account {
     }
     /** @param {number} length - len of the hex hash */
     async getUniqueHash(length = 64) {
-        const hash = await HashFunctions.SHA256(this.#pubKey + this.#privKey);
+        const hash = await HashFunctions.SHA256(this.pubKey + this.#privKey);
         return hash.substring(0, length);
     }
 }

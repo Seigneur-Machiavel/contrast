@@ -111,7 +111,6 @@ const lengths = {
 	nonce: { bytes: 4, str: 8 },
 	amount: { bytes: 6, str: null },
 	timestamp: { bytes: 6, str: null },
-	validatorInput: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 1 + 32, str: ADDRESS.CRITERIA.TOTAL_LENGTH + 1 + 64 }, // addressB58 + : + posHashHex
 
 	// BLOCK INDEX ENTRY
 	startEntry: { bytes: 6, str: null },
@@ -271,13 +270,13 @@ export const serializer = {
         /** @param {Transaction} tx @param {'tx' | 'validator' | 'miner'} [mode] default: tx */
         transaction(tx, mode = 'tx') {
 			if (mode === 'miner' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.nonce.str)) throw new Error('Invalid coinbase transaction');
-            if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.validatorInput.str)) throw new Error('Invalid transaction: validator input must be address + posHash');
+            if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.hash.str)) throw new Error('Invalid transaction: validator input must be address + posHash');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
 			
 			const witnessesBytes = tx.witnesses.length * lengths.witness.bytes;
 			let inputBytes = lengths.anchor.bytes;
 			if (mode === 'miner') inputBytes = 4; 			// input = nonce
-			if (mode === 'validator') inputBytes = lengths.address.bytes + 32; // address + posHash
+			if (mode === 'validator') inputBytes = lengths.hash.bytes; // posHash
 			const inputsBytes = tx.inputs.length * inputBytes;
 			const outputsBytes = tx.outputs.length * lengths.miniUTXO.bytes;
 			const dataBytes = tx.data?.length || 0;			// arbitrary data
@@ -291,12 +290,8 @@ export const serializer = {
 			w.writeBytes(converter.numberTo2Bytes(tx.data?.length || 0)); 		// data: bytes
 			if (mode !== 'miner') w.writeBytes(this.witnessesArray(tx.witnesses));	// witnesses
 			if (mode === 'tx') w.writeBytes(this.anchorsArray(tx.inputs));			// inputs
-			if (mode === 'miner') w.writeBytes(converter.hexToBytes(tx.inputs[0])); // nonce (hex)
-			if (mode === 'validator') {
-				const s = tx.inputs[0].split(':');
-				w.writeBytes(ADDRESS.B58_TO_BYTES(s[0])); 						// address
-				w.writeBytes(converter.hexToBytes(s[1]));						// posHash
-			}
+			if (mode === 'miner' || mode === 'validator')						// input miner/validator
+				w.writeBytes(converter.hexToBytes(tx.inputs[0])); 				// nonce | posHash (hex)
 			w.writeBytes(this.miniUTXOsArray(tx.outputs));						// outputs
 			if (tx.data) w.writeBytes(tx.data);									// data
 			
@@ -504,16 +499,13 @@ export const serializer = {
 			const witnesses = mode !== 'miner' ? this.witnessesArray(r.read(nbOfWitnesses * lengths.witness.bytes)) : [];
 			const inputs = mode === 'tx' ? this.anchorsArray(r.read(nbOfInputs * lengths.anchor.bytes)) : [];
 			if (mode === 'miner') inputs.push(converter.bytesToHex(r.read(4), 4)); // nonce
-			if (mode === 'validator') {
-				const address = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
-				const posHash = converter.bytesToHex(r.read(32));
-				inputs.push(`${address}:${posHash}`);
-			}
+			if (mode === 'validator') inputs.push(converter.bytesToHex(r.read(lengths.hash.bytes))); // posHash
+
 			const outputs = this.miniUTXOsArray(r.read(nbOfOutputs * lengths.miniUTXO.bytes));
 			const data = dataLength ? r.read(dataLength) : undefined;
 
 			if (!r.isReadingComplete) throw new Error('Transaction is not fully deserialized');
-			return new Transaction(inputs, outputs, witnesses, undefined, undefined, version, data);
+			return new Transaction(inputs, outputs, witnesses, data, version);
 		},
 		/** @param {Uint8Array} serializedBlock @param {'finalized' | 'candidate'} [mode] default: finalized */
 		blockData(serializedBlock, mode = 'finalized') {

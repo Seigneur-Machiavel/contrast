@@ -63,7 +63,7 @@ class StorageRoot {
 		}
 		return HashFunctions.xxHash32(input.join(''));
 	}
-	clear(passHash = true, nodeSettings = true) {
+	clear(passHash = true, nodeSettings = true, vssData = true) {
 		const dirPaths = [
 			this.PATH.TRASH,
 			this.PATH.LEDGERS,
@@ -74,6 +74,7 @@ class StorageRoot {
 		const filePaths = [];
 		if (passHash) filePaths.push(path.join(this.PATH.STORAGE, 'passHash.bin'));
 		if (nodeSettings) filePaths.push(path.join(this.PATH.STORAGE, 'nodeSetting.bin'));
+		if (vssData) filePaths.push(path.join(this.PATH.STORAGE, 'vss.bin'));
 
 		for (const dirPath of dirPaths)
 			if (!fs.existsSync(dirPath)) continue;

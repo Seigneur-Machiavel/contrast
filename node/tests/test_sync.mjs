@@ -14,6 +14,7 @@ const transactionTest = false; 	// ENABLE TRANSACTION TESTING MODE - FOR TEST PU
 
 import { Wallet } from '../src/wallet.mjs';
 import { createContrastNode } from '../src/node.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { ContrastStorage } from '../../storage/storage.mjs';
 import { Transaction_Builder } from "../src/transaction.mjs";
 
@@ -77,7 +78,9 @@ const onBlockConfirmed = (block) => {
 
 	// TEST: push transaction
 	console.log(`Pushing transaction spending: ${tx.inputs.join(', ')}`);
-	try { bootstrapNode.memPool.pushTransaction(bootstrapNode,tx); }
-	catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
+	try { 
+		const s = serializer.serialize.transaction(tx);
+		bootstrapNode.memPool.pushTransaction(bootstrapNode, s);
+	} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
 }
 bootstrapNode.on('onBlockConfirmed', onBlockConfirmed);

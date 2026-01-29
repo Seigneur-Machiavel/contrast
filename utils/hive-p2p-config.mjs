@@ -22,6 +22,7 @@ export const HIVE_P2P_CONFIG = {
 			block_candidate: 32,
 			block_finalized: 32,
 			sync_status: 2,
+			transaction: 16,
 		},
 		MARKERS_BYTES: {
 			block_candidate: 255,
@@ -30,6 +31,8 @@ export const HIVE_P2P_CONFIG = {
 			'254': 'block_finalized',
 			sync_status: 253,
 			'253': 'sync_status',
+			transaction: 252,
+			'252': 'transaction',
 		},
 	}
 }

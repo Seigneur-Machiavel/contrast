@@ -1,5 +1,4 @@
 // @ts-check
-// THIS FILE IS USED TO START NODE STANDALONE (WITHOUT ELECTRON APP WRAPPER)
 //process.on('uncaughtException', (error) => { console.error('Uncatched exception:', error.stack); });
 //process.on('unhandledRejection', (reason, promise) => { console.error('Promise rejected:', promise, 'reason:', reason); });
 
@@ -12,6 +11,7 @@ const clearOnStart = true; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 import { Wallet } from '../src/wallet.mjs';
 import { createContrastNode } from '../src/node.mjs';
 import { Transfer } from "../../types/transaction.mjs";
+import { serializer } from '../../utils/serializer.mjs';
 import { ContrastStorage } from '../../storage/storage.mjs';
 import { Transaction_Builder } from "../src/transaction.mjs";
 
@@ -38,7 +38,7 @@ await bootstrapWallet.deriveAccounts(2 + nbReceipients, 'C', bootstrapStorage);
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
 // @ts-ignore
 const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
-if (bootstrapNode.controller) bootstrapNode.controller.unsafeMode = true; // ENABLE UNSAFE MODE FOR TESTING
+if (bootstrapNode.controller) bootstrapNode.controller.enableUnsafeMode(); // ENABLE UNSAFE MODE FOR TESTING
 await bootstrapNode.start(bootstrapWallet);
 
 // -------------------------------------------------------------------------------------
@@ -62,8 +62,10 @@ const onBlockConfirmed = (block) => {
 		if (!signedTx) return; // failed to create tx
 	
 		//console.log(`Pushing transaction spending: ${signedTx.inputs.join(', ')}`);
-		try { bootstrapNode.memPool.pushTransaction(bootstrapNode, signedTx); }
-		catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
+		try {
+			const s = serializer.serialize.transaction(signedTx);
+			bootstrapNode.memPool.pushTransaction(bootstrapNode, s);
+		} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
 	}
 
 	// TEST: SEND LOT OF SINGLE OUTPUT TRANSACTIONS
@@ -80,8 +82,11 @@ const onBlockConfirmed = (block) => {
 
 		let nbSent = 0;
 		for (const tx of txs) { // FLOOD!
-			try { bootstrapNode.memPool.pushTransaction(bootstrapNode, tx); nbSent++; }
-			catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
+			try {
+				const s = serializer.serialize.transaction(tx);
+				bootstrapNode.memPool.pushTransaction(bootstrapNode, s);
+				nbSent++;
+			} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
 		}
 
 		console.log(`Sent ${nbSent}/${nbOfSenders} single output transactions.`);

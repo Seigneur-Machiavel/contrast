@@ -46,24 +46,18 @@ export class Miner {
 	// API METHODS
     /** @param {BlockCandidate} block */
     updateBestCandidate(block) {
-		if (!block) return false;
+		if (!block) throw new Error('Candidate is null or undefined');
 		
-        const posAddress = block.Txs[0].inputs[0].split(':')[0];
-        const isMyBlock = posAddress === this.node.account?.address;
+		const validatorPubKey = block.Txs[0].witnesses[0].split(':')[1];
+		const validatorAddress = block.Txs[0].outputs[0].address;
+        const isMyBlock = validatorPubKey === this.node.account?.pubKey;
         const posReward = block.Txs[0].outputs[0].amount;
         const powReward = block.powReward;
-        if (!posReward || !powReward) {
-			if (this.node.verb > 2) this.logger.log(`Invalid block candidate (#${block.index} | v:${posAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward}`, (m, c) => console.info(m, c));
-			return;
-		}
-        
-		if (Math.abs(posReward - powReward) > 1) {
-			if (this.node.verb > 2) this.logger.log(`[MINER] Invalid block candidate (#${block.index} | v:${posAddress.slice(0,6 )}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`, (m, c) => console.info(m, c));
-			return;
-		}
+        if (!posReward || !powReward) throw new Error(`Invalid candidate (#${block.index} | v:${validatorAddress}) | posReward = ${posReward} | powReward = ${powReward}`);
+		if (Math.abs(posReward - powReward) > 1) throw new Error(`Invalid candidate (#${block.index} | v:${validatorAddress}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`);
 
         const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
-        if (block.prevHash !== prevHash) return false;
+        if (block.prevHash !== prevHash) throw new Error(`Invalid candidate prevHash (#${block.index} | v:${validatorAddress}) | expected: ${prevHash} | got: ${block.prevHash}`);
         
         let reasonChange = 'none';
         if (!this.bestCandidate)
@@ -75,7 +69,7 @@ export class Miner {
         else if (block.index === this.bestCandidate.index) {
             const newCandidateFinalDiff = mining.getBlockFinalDifficulty(block).finalDifficulty;
             const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate).finalDifficulty;
-            if (newCandidateFinalDiff > bestCandidateFinalDiff) return false;
+            if (newCandidateFinalDiff > bestCandidateFinalDiff) throw new Error(`Ignored candidate (#${block.index} | v:${validatorAddress}) | new final diff ${newCandidateFinalDiff} > best final diff ${bestCandidateFinalDiff}`);
             if (newCandidateFinalDiff < bestCandidateFinalDiff) reasonChange = `(easier block: ${newCandidateFinalDiff} < ${bestCandidateFinalDiff})`;
             // if everything is the same, then check the powReward to decide
             if (reasonChange === 'none' && powReward > (this.bestCandidate?.powReward || 0))
@@ -134,7 +128,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 			if (worker.result !== null) {
 				const finalizedBlock = worker.getResultAndClear();
 				if (this.node.verb > 2) this.logger.log(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`, (m, c) => console.info(m, c));
-				await this.broadcastFinalizedBlock(finalizedBlock);
+				await this.#broadcastFinalizedBlock(finalizedBlock);
 			}
 
 			if (!this.canProceedMining) continue;
@@ -172,7 +166,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         return totalHashRate;
     }
     /** @param {BlockFinalized} block */
-    async broadcastFinalizedBlock(block) {
+    async #broadcastFinalizedBlock(block) {
         // Avoid sending the block pow if a higher block candidate is available to be mined
         if (this.bestCandidateIndex > block.index) {
             if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized is not the highest block candidate: #${block.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));

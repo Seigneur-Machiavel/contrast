@@ -19,7 +19,8 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     unspendableUtxoAmount: 200,
 
     // VSS (STAKING)
-    minStakeAmount: 100_000_000, 	// 100 Contrast = 100_000_000 mC
+	validatorsPerRound: 10, 	// maximum number of validators per round
+    stakeAmount: 10_000_000, 	// 10_000_000 mC = 10 C
 };
 
 export const BLOCKCHAIN_SETTINGS_120SEC = { // DEPRECATED
@@ -43,7 +44,7 @@ export const BLOCKCHAIN_SETTINGS_120SEC = { // DEPRECATED
     unspendableUtxoAmount: 200,
 
     // VSS (STAKING)
-    minStakeAmount: 100_000_000, // 100 Contrast = 100_000_000 mC
+    stakeAmount: 10_000_000, 	// 10_000_000 mC = 10 C
 };
 
 export const MINING_PARAMS = {

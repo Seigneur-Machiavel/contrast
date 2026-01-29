@@ -6,7 +6,6 @@ import { serializer } from '../../utils/serializer.mjs';
 /**
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
- * @typedef {import("../../src/vss.mjs").StakeReference} StakeReference
  */
 
 let ws;

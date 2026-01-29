@@ -42,14 +42,14 @@ export class BlockUtils {
 	 * @param {ContrastNode} node @param {BlockCandidate} block */
 	static async #signBlockCandidate(node, block) {
 		const { blockchain, rewardAddresses, account } = node;
-		if (!rewardAddresses.validator || !account || !account.address) throw new Error('Node reward addresses or account not set');
+		if (!rewardAddresses.validator || !account || !account.pubKey) throw new Error('Node reward addresses or account not set');
 
 		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
 		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
 		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
 
 		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
-		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator, account.address);
+		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator);
 		const signedPosFeeTx = account.signTransaction(posFeeTx);
 		block.Txs.unshift(signedPosFeeTx);
 		block.powReward = powReward; // Reward for the miner
@@ -82,15 +82,14 @@ export class BlockUtils {
 
         return { hex: blockHash.hex, bitsArrayAsString: blockHash.bitsString };
     }
-    /** @param {BlockCandidate} block @param {Transaction} coinbaseTx */
+    /** @param {BlockCandidate | BlockFinalized} block @param {Transaction} coinbaseTx */
     static setCoinbaseTransaction(block, coinbaseTx) {
         if (Transaction_Builder.isMinerOrValidatorTx(coinbaseTx) !== 'miner')
 			throw new Error('Invalid coinbase transaction');
 
 		// REMOVE EXISTING COINBASE IF ANY
-		const firstTx = block.Txs[0];
-		if (firstTx && Transaction_Builder.isMinerOrValidatorTx(firstTx) === 'miner')
-			block.Txs.shift();
+		const isFirstTxMiner = block.Txs[0] && Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) === 'miner';
+		if (isFirstTxMiner) block.Txs.shift();
 
 		// SET NEW COINBASE TX
         block.Txs.unshift(coinbaseTx);
@@ -119,21 +118,6 @@ export class BlockUtils {
         const newDifficulty = mining.difficultyAdjustment(lastBlock, averageBlockTime, undefined, logs);
         return { averageBlockTime, newDifficulty };
     }
-    /** @param {BlockFinalized | BlockCandidate} block */
-    static dataAsJSON(block) {
-        return JSON.stringify(block);
-    }
-	/** @param {string} blockDataJSON */
-	static candidateBlockFromJSON(blockDataJSON) {
-		if (!blockDataJSON || typeof blockDataJSON !== 'string') throw new Error('Invalid blockDataJSON');
-		const parsed = JSON.parse(blockDataJSON);
-		const { index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, powReward } = parsed;
-		return new BlockCandidate(index, supply, coinBase, difficulty, legitimacy, prevHash, Txs, posTimestamp, powReward);
-	}
-    /** @param {BlockCandidate} block */
-    static cloneBlockCandidate(block) {
-        return this.candidateBlockFromJSON(this.dataAsJSON(block));
-    }
 	/** @param {BlockCandidate} block */
     static getCandidateBlockHeader(block) { // DEPRECATED
 		const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = block;
@@ -147,24 +131,21 @@ export class BlockUtils {
 	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
-		const { blockchain, memPool, vss, account, miner, time } = node;
+		const { blockchain, memPool, account, miner, time } = node;
 		if (typeof time !== 'number') throw new Error('Invalid node time');
-		if (!account || !account.address) throw new Error('Node account not set');
+		if (!account || !account.pubKey) throw new Error('Node account not set');
 
 		const posTimestamp = blockchain.lastBlock?.timestamp ? blockchain.lastBlock.timestamp + 1 : time;
 		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
 		
+		// CHOOSE TO RETURN NULL IF NOT ELIGIBLE TO MINE
 		const prevHash = blockchain.lastBlock.hash;
-		const myLegitimacy = await vss.getAddressLegitimacy(account.address, prevHash);
+		const minerBestIndex = miner.bestCandidateIndex !== -1 ? miner.bestCandidateIndex : null;
+		const myLegitimacy = await blockchain.vss.getPubkeyLegitimacy(account.pubKey, prevHash);
 		node.info.lastLegitimacy = myLegitimacy;
-
-		// THIS PART SHOULD BE SEPARATED
-		let maxLegitimacyToBroadcast = vss.maxLegitimacyToBroadcast;
-		/*if (roles.includes('miner') && miner.bestCandidateIndex() === blockchain.lastBlock.index + 1)
-			maxLegitimacyToBroadcast = Math.min(maxLegitimacyToBroadcast, miner.bestCandidateLegitimacy);
-		
-		if (myLegitimacy > maxLegitimacyToBroadcast) return null;*/
-		// END OF PART THAT SHOULD BE SEPARATED
+		if (minerBestIndex !== null && minerBestIndex < blockchain.lastBlock.index) return null;
+		if (minerBestIndex !== null && minerBestIndex > blockchain.lastBlock.index + 1) return null;
+		if (myLegitimacy > BLOCKCHAIN_SETTINGS.validatorsPerRound) return null;
 
 		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
 		node.info.averageBlockTime = averageBlockTime;
@@ -175,6 +156,7 @@ export class BlockUtils {
 	/** @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createAndSignBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
 		const blockCandidate = await this.createBlockCandidate(node, blockReward, initDiff);
+		if (!blockCandidate) return null;
 		await this.#signBlockCandidate(node, blockCandidate);
 		return blockCandidate;
 	}
@@ -190,20 +172,6 @@ export class BlockUtils {
 				else { control[input] = true; involvedAnchors.push(input); }
 
 		return { involvedAnchors, repeatedAnchorsCount };
-	}
-	/** @param {BlockFinalized} block */
-	static extractNewStakesFromFinalizedBlock(block) {
-		/** @type {UTXO[]} */ const newStakesOutputs = [];
-		for (let txId = 2; txId < block.Txs.length; txId++) // skip coinbase and pos fee Txs
-			for (let voudId = 0; voudId < block.Txs[txId].outputs.length; voudId++) {
-				const { address, amount, rule } = block.Txs[txId].outputs[voudId];
-				if (amount < BLOCKCHAIN_SETTINGS.unspendableUtxoAmount) continue;
-				if (rule !== "sigOrSlash") continue;
-
-				newStakesOutputs.push(new UTXO(`${block.index}:${txId}:${voudId}`, amount, rule, address, false));
-			}
-
-		return newStakesOutputs;
 	}
 	/** @param {BlockFinalized} block @returns {UtxoState[]} */
 	static buildUtxosStatesOfFinalizedBlock(block) {

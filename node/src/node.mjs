@@ -54,7 +54,7 @@ export class ContrastNode {
 
 	mainStorage; blockchain;
 	taskQueue; memPool; p2p;
-	vss; miner; sync;
+	miner; sync;
 	verb;
 
 	/** @type {Account | undefined} */
@@ -77,13 +77,13 @@ export class ContrastNode {
 		this.mainStorage = storage;
 		this.verb = verb;
 		this.p2p = p2pNode;
-		this.vss = new Vss();
 		this.miner = new Miner(this);
 		this.sync = new Sync(this);
 		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort);
 
 		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
+		p2pNode.gossip.on('transaction', this.#onTransactionReceived);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
 		p2pNode.messager.on('blocks_timestamps_request', this.#onBlocksTimestampsRequest);
 	}
@@ -114,10 +114,13 @@ export class ContrastNode {
 			await this.p2p.start();
 		}
 		
-		this.#startStackExecution();
+		this.#stackExecution();
 		await this.createAndShareMyBlockCandidate();
 		if (this.blockchain.lastBlock) // SHARE MY STATUS IF ANY BLOCK EXISTS
 			this.sync.setAndshareMyStatus(this.blockchain.lastBlock);
+		
+		this.updateState("idle");
+		this.logger.log(`Contrast node started. Current height: ${this.blockchain.currentHeight}`, (m, c) => console.log(m, c));
 	}
 	async stop() {
 		if (this.verb >= 1) this.logger.log(`Stopping Contrast node...`, (m, c) => console.log(m, c));
@@ -140,8 +143,9 @@ export class ContrastNode {
 			const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
 			if (!myCandidate) throw new Error('Failed to create block candidate');
 
-			const updated = this.miner.updateBestCandidate(myCandidate);
-			if (!updated) throw new Error('The miner rejected the created block candidate');
+			//const updated = this.miner.updateBestCandidate(myCandidate);
+			//if (!updated) throw new Error('The miner rejected the created block candidate');
+			this.miner.updateBestCandidate(myCandidate); // throw if not updated
 			
 			const serialized = serializer.serialize.block(myCandidate, 'candidate');
 			this.p2p.broadcast(serialized, { topic: 'block_candidate' });
@@ -153,25 +157,43 @@ export class ContrastNode {
 	}
 	
 	// INTERNALS ------------------------------------------------------------------------
-	async #startStackExecution() {
+	async #stackExecution() {
 		while (this.running) {
 			await this.#executeNextTask();
 			await this.miner.tick();
 			await new Promise(r => setTimeout(r, 10));
 		}
 	}
+	#executeNextTask = async () => {
+		const task = this.taskQueue.nextTask;
+		if (!task) { this.miner.canProceedMining = true; return; } // no task to process
+
+		if (task.type === 'PushTxs') 			// as batch of transactions
+			for (const tx of task.data)
+				try { this.memPool.pushTransaction(this, tx); }
+				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
+		else if (task.type === 'NewCandidate') 	//@ts-ignore: task.data = BlockCandidate
+			try { this.miner.updateBestCandidate(task.data); }
+			catch (/** @type {any} */ error) { this.logger.log(`[P2P->MINER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
+		else if (task.type === 'DigestBlock') 	//@ts-ignore: task.data = BlockFinalizedSerialized
+			await this.blockchain.digestFinalizedBlock(this, task.data);
+	}
 	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
 	#onBlockCandidate = async (senderId, data, HOPS) => {
 		try { // ignore block candidates that are not the next block
 			const block = serializer.deserialize.blockCandidate(data);
 			if (this.blockchain.currentHeight + 1 !== block.index) return;
-			const isLegitimate = await BlockValidation.validateLegitimacy(block, this.vss, 'candidate');
+			const isLegitimate = await BlockValidation.validateLegitimacy(block, this.blockchain.vss, 'candidate');
 			if (isLegitimate) this.taskQueue.push('NewCandidate', block);
 		} catch (/** @type {any} */ error) { this.logger.log(`[SYNC] -onBlockCandidate- Error deserializing block candidate from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
 	#onBlockFinalized = (senderId, data, HOPS) => {
 		this.taskQueue.push('DigestBlock', data);
+	}
+	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
+	#onTransactionReceived = (senderId, data, HOPS) => {
+		this.taskQueue.push('PushTx', data);
 	}
 	/** @param {string} senderId @param {string} data */
 	#onAddressLedgerRequest = async (senderId, data) => {
@@ -197,16 +219,5 @@ export class ContrastNode {
 			const s = serializer.serialize.blocksTimestampsResponse(t.heights, t.timestamps);
 			this.p2p.messager.sendUnicast(senderId, s, 'blocks_timestamps');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onBlocksTimestampsRequest- Error processing blocks timestamps request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
-	}
-	#executeNextTask = async () => {
-		const task = this.taskQueue.nextTask;
-		if (!task) { this.miner.canProceedMining = true; return; } // no task to process
-
-		if (task.type === 'PushTxs') 			// as batch of transactions
-			for (const tx of task.data) this.memPool.pushTransaction(this, tx);
-		else if (task.type === 'NewCandidate') 	//@ts-ignore: task.data = BlockCandidate
-			this.miner.updateBestCandidate(task.data);
-		else if (task.type === 'DigestBlock') 	//@ts-ignore: task.data = BlockFinalizedSerialized
-			await this.blockchain.digestFinalizedBlock(this, task.data);
 	}
 }

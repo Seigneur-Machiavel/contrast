@@ -87,6 +87,14 @@ export class NodeController {
 	}
 
 	// PUBLIC METHODS
+	enableUnsafeMode() {
+		this.unsafeMode = true;
+		console.log('[NodeController] unsafeMode is ENABLED');
+	}
+	disableUnsafeMode() {
+		this.unsafeMode = false;
+		console.log('[NodeController] unsafeMode is DISABLED');
+	}
 	/** @param {string} type @param {any} data */
 	sendEncryptedMessage = (type, data) => {
 		if (!this.sharedSecret || !this.wsConnection) return;

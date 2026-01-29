@@ -1,9 +1,9 @@
 // @ts-check
-import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { BlockUtils } from './block.mjs';
+import { TxValidation } from './tx-validation.mjs';
 import { mining } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { TxValidation } from './tx-validation.mjs';
-import { BlockUtils } from './block.mjs';
+import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
@@ -87,7 +87,7 @@ export class BlockValidation {
 
 		// VALIDATE BLOCK TIMESTAMPS && LEGITIMACY
 		this.#validateTimestamps(block, lastBlock, node.time);
-        await this.validateLegitimacy(block, node.vss);
+        await this.validateLegitimacy(block, node.blockchain.vss);
 
 		// VALIDATE BLOCK DIFFICULTY EQUAL TO EXPECTED
         const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node, true);
@@ -118,15 +118,14 @@ export class BlockValidation {
     }
 	/** @param {BlockFinalized | BlockCandidate} block @param {import("./vss.mjs").Vss} vss @param {'finalized' | 'candidate'} mode */
     static async validateLegitimacy(block, vss, mode = 'finalized') {
-        //await vss.calculateRoundLegitimacies(block.prevHash);
         const txs = block.Txs;
         const validatorTx = mode === 'candidate' ? txs[0] : txs[1];
         if (!validatorTx) throw new Error('Validator transaction not found');
 
-        const validatorAddress = validatorTx.inputs[0].split(':')[0];
-        if (!validatorAddress) throw new Error('Validator address not found');
+        const validatorPubKey = validatorTx.witnesses[0].split(':')[1];
+        if (!validatorPubKey) throw new Error('Validator pubKey not found');
 
-        const validatorLegitimacy = await vss.getAddressLegitimacy(validatorAddress, block.prevHash);
+        const validatorLegitimacy = await vss.getPubkeyLegitimacy(validatorPubKey, block.prevHash);
         if (validatorLegitimacy === block.legitimacy) return true;
         else throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - expected: ${validatorLegitimacy}`);
     }

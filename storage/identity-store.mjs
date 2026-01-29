@@ -81,13 +81,10 @@ export class IdentityStore {
 		/** Key: address, value: blockIndex @type {Map<string, number>} */
 		const known = new Map();
 
-		// Starting from txIndex = 1 to skip coinbase
-		for (let txIndex = 1; txIndex < block.Txs.length; txIndex++)
+		// Starting from txIndex = 2 to skip coinbase & validator Txs
+		for (let txIndex = 2; txIndex < block.Txs.length; txIndex++)
 			for (const input of block.Txs[txIndex].inputs) {
-				const address = txIndex === 1 // validator tx
-					? input.split(':')[0] // Validator: address is in the input
-					: involvedUTXOs[input]?.address; // Normal tx: address is in the UTXO
-
+				const address = involvedUTXOs[input]?.address; // address is in the UTXO
 				if (!address) throw new Error(`Unable to find address to verify for input: ${input}`);
 				if (discovery.has(address) || known.has(address)) continue;
 

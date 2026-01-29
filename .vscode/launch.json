@@ -34,6 +34,14 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Test: Staking",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/tests/test-staking.mjs",
+			"args": ["--max-old-space-size=16384"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Test: Sync",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/tests/test_sync.mjs",

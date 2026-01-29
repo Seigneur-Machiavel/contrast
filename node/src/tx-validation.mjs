@@ -6,6 +6,7 @@ import { IS_VALID } from '../../types/validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { OutputCreationValidator } from './tx-rule-checkers.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
@@ -18,7 +19,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
  * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger
  * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
 
-const validationMiniLogger = new MiniLogger('validation');
+const miniLogger = new MiniLogger('validation');
 export class TxValidation {
     /** ==> First validation, low computation cost. - control format of : amount, address, rule, version, TxID, UTXOs spendable
      * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {'miner' | 'validator'} [specialTx] */
@@ -33,37 +34,26 @@ export class TxValidation {
         if (specialTx && transaction.outputs.length !== 1) throw new Error(`Invalid coinbase transaction: ${transaction.outputs.length} outputs`);
         if (transaction.inputs.length === 0) throw new Error('Invalid transaction: no inputs');
         if (transaction.outputs.length === 0) throw new Error('Invalid transaction: no outputs');
+		if (transaction.data && !(transaction.data instanceof Uint8Array)) throw new Error('Invalid transaction data');
 
         try { for (const witness of transaction.witnesses) this.#decomposeWitnessOrThrow(witness);
         } catch (/**@type {any}*/ error) { throw new Error('Invalid signature size'); }
         
+		const remainingAmount = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, transaction);
         for (let i = 0; i < transaction.outputs.length; i++) {
             const output = transaction.outputs[i];
             this.isConformOutput(output);
 
-            if (output.rule !== "sigOrSlash") continue;
-
-			if (i !== 0) throw new Error('sig_Or_Slash must be the first output');
-			if (output.amount < BLOCKCHAIN_SETTINGS.minStakeAmount) throw new Error(`sig_Or_Slash amount < ${BLOCKCHAIN_SETTINGS.minStakeAmount}`);
-
-			const remainingAmount = this.calculateRemainingAmount(involvedUTXOs, transaction);
-			if (remainingAmount < output.amount) throw new Error('Sig_Or_Slash requires fee > amount');
+			// CHECK OUTPUT CREATION RULE CONDITIONS, FNC THROWS IF INVALID
+			OutputCreationValidator.validate(output.rule, involvedUTXOs, transaction, remainingAmount);
         }
 
         for (const input of transaction.inputs) {
-            if (specialTx && typeof input !== 'string') throw new Error('Invalid coinbase input');
-            if (specialTx === 'miner') continue;
-
-			if (specialTx === 'validator') {
-				const parts = input.split(':');
-				if (parts.length !== 2) throw new Error('Invalid validator anchor format');
-				if (parts[0].length !== serializer.lengths.address.str) throw new Error('Invalid validator address length');
-				if (parts[1].length !== 64) throw new Error('Invalid validator posHash length');
-				if (!ADDRESS.checkConformity(parts[0])) throw new Error(`Invalid validator address: ${parts[0]}`);
-				if (!IS_VALID.HEX(parts[1])) throw new Error(`Invalid validator posHash: ${parts[1]}`);
-				continue;
-			}
-
+            if (specialTx && typeof input !== 'string') throw new Error('Invalid coinbase/validator input type');
+			if (specialTx && !IS_VALID.HEX(input)) throw new Error(`Invalid coinbase/validator input(not HEX): ${input}`);
+			if (specialTx === 'validator' && input.length !== serializer.lengths.hash.str) throw new Error('Invalid validator input length');
+			if (specialTx === 'miner' && input.length !== serializer.lengths.nonce.str) throw new Error('Invalid coinbase input length');
+			if (specialTx) continue; // skip further checks for special txs
 
             const anchor = input;
             if (!IS_VALID.ANCHOR(anchor)) throw new Error('Invalid anchor');
@@ -72,7 +62,6 @@ export class TxValidation {
             if (!utxo) throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${anchor}`);
             if (utxo.spent) throw new Error(`Invalid transaction: UTXO already spent: ${anchor}`);
             if (utxo.rule === 'sigOrSlash') throw new Error(`Invalid transaction: sigOrSlash UTXO cannot be spend: ${anchor}`);
-			
 		}
     }
     /** @param {TxOutput} txOutput */
@@ -166,13 +155,11 @@ export class TxValidation {
 		};
 
 		// MINER TX HAS NO ADDRESS OWNERSHIP TO CONFIRM
-		if (specialTx === 'miner') return;
+		if (specialTx) return; // No address & discovery to perform for special txs
 
 		// EXTRACT DISCOVERED ADDRESS AND EXPECTED ( PUBKEY > ADDRESS )s FROM INPUTS
 		for (let i = 0; i < tx.inputs.length; i++) {
-			const addressToVerify = specialTx === 'validator'
-				? tx.inputs[i].split(':')[0] // Validator: address is in the input
-				: involvedUTXOs[tx.inputs[i]]?.address; // Normal tx: address is in the UTXO
+			const addressToVerify = involvedUTXOs[tx.inputs[i]]?.address; // address is in the UTXO
 			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${tx.inputs[i]}`);
 
 			const pks = involvedIdentities.get(addressToVerify) || node.blockchain.identityStore.get(addressToVerify);

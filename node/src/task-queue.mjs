@@ -29,7 +29,7 @@ export class TaskQueue {
 		// BATCH PUSH TRANSACTIONS TASKS
 		const upgradedTask = { type: 'PushTxs', data: [] };
 		while (this.isNextTaskTxPush && upgradedTask.data.length < this.transactionsBatchSize)
-			if (nextTxTask) upgradedTask.data.push(this.queue.shift().data);
+			upgradedTask.data.push(this.queue.shift().data);
 		
 		return upgradedTask;
 	}

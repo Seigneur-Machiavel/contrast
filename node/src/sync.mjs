@@ -57,7 +57,7 @@ export class Sync {
 			// ROLLBACK UNTIL CONSENSUS BLOCK AND CATCH UP
 			const peersToAsk = this.getPeersToAskList(c.blockHeight, c.blockHash);
 			if (!attempts) this.logger.log(`Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
-			bc.undoBlock(); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
+			try { bc.undoBlock() } catch {} // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
 			while (bc.currentHeight > c.blockHeight) bc.undoBlock();
 
 			// DOWNLOAD AND APPLY BLOCKS UNTIL REASONABLE GAP

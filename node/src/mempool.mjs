@@ -1,6 +1,5 @@
 // @ts-check
 import { HashFunctions } from './conCrypto.mjs';
-import { ADDRESS } from '../../types/address.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { serializer } from '../../utils/serializer.mjs';
@@ -14,8 +13,21 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack */
 
-class FeeTiersOrganizer {
-	/** @type {Object<string, Map<TxUniqueId, Transaction>>} */
+class OrganizedTx {
+	tx; fee; serializedTx; feePerByte;
+
+	/** @param {Transaction} tx - The transaction object @param {number} fee - The total fee of the transaction @param {Uint8Array} serializedTx - The serialized transaction */
+	constructor(tx, fee, serializedTx) {
+		this.tx = tx;
+		this.fee = fee;
+		this.serializedTx = serializedTx;
+		this.feePerByte = fee / serializedTx.byteLength;
+	}
+}
+
+class Organizer {
+	/** @type {Map<string, OrganizedTx>} */	byAnchor = new Map();
+	/** @type {Object<string, Map<TxUniqueId, OrganizedTx>>} */
 	txsByRanges = {
 		'1000+': new Map(),
 		'100-1000': new Map(),
@@ -36,83 +48,88 @@ class FeeTiersOrganizer {
 		if (val < 1000) return '100-1000';
 		return '1000+';
 	}
-	/** @param {Transaction} tx @param {number} feePerByte */
-	async addTransaction(tx, feePerByte) {
-		if (!feePerByte || feePerByte <= 0) throw new Error('Invalid feePerByte value');
-		const rangeKey = this.#getRangeKey(feePerByte);
-		const rangeMap = this.txsByRanges[rangeKey];
-		const txUniqueId = await HashFunctions.SHA256(JSON.stringify(tx.inputs));
-		rangeMap.set(txUniqueId, tx);
+	/** @param {OrganizedTx} oTx */
+	async add(oTx) {
+		const txUniqueId = await HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs));
+		const rangeKey = this.#getRangeKey(oTx.feePerByte);
+
+		// ADD BOTH MAPPINGS
+		this.txsByRanges[rangeKey].set(txUniqueId, oTx);
+		for (const input of oTx.tx.inputs) this.byAnchor.set(input, oTx);
 		return true;
 	}
-	/** @param {Transaction} tx @param {number} feePerByte */
-	async removeTransaction(tx, feePerByte) {
-		if (!feePerByte || feePerByte <= 0) throw new Error('Invalid feePerByte value');
-		const rangeKey = this.#getRangeKey(feePerByte);
-		const rangeMap = this.txsByRanges[rangeKey];
-		const txUniqueId = await HashFunctions.SHA256(JSON.stringify(tx.inputs));
-		return rangeMap.delete(txUniqueId);
+	/** @param {OrganizedTx} oTx */
+	async remove(oTx) {
+		if (oTx.feePerByte <= 0) throw new Error('Invalid feePerByte value');
+
+		const rangeKey = this.#getRangeKey(oTx.feePerByte);
+		const txUniqueId = await HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs)); 
+
+		// REMOVE BOTH MAPPINGS
+		for (const input of oTx.tx.inputs) this.byAnchor.delete(input);
+		return this.txsByRanges[rangeKey].delete(txUniqueId);
 	}
+	/** @param {Transaction} tx */
+    caughtAnchorsCollision(tx) {
+        for (const input of tx.inputs) {
+			const oTx = this.byAnchor.get(input);
+			if (oTx) return { oTx, anchor: input };
+		}
+    }
 }
 
 export class MemPool {
 	blockchain;
-	organizer = new FeeTiersOrganizer();
-    /** @type {Map<string, Transaction>} */				byAnchor = new Map();
+	organizer = new Organizer();
     /** @type {Object<string, WebSocketCallBack>} */	wsCallbacks = {};
 
 	/** @param {import("./blockchain.mjs").Blockchain} blockchain */
 	constructor(blockchain) { this.blockchain = blockchain; }
 
-    /** @param {ContrastNode} node @param {Transaction} tx */
-    pushTransaction(node, tx) {
-		try {
-			// CHECK CONFORMITY & SPENDABILITY
-			TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
-			const { involvedAnchors, repeatedAnchorsCount } = Transaction_Builder.extractInvolvedAnchors(tx, true);
-			if (repeatedAnchorsCount > 0) throw new Error('Transaction has repeated anchors');
-			
-			const involvedUTXOs = this.blockchain.getUtxos(involvedAnchors, true);
-			if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for transaction, spent or missing UTXO detected');
-			TxValidation.isConformTransaction(involvedUTXOs, tx); // throw if not conform/spendable
-			
-			// CHECK CONFLICTS
-			const colliding = this.#caughtTransactionsAnchorsCollision(tx);
-			if (colliding?.tx) throw new Error(`Conflicting UTXOs anchor: ${colliding?.anchor}`);
-			
-			const serialized = serializer.serialize.transaction(tx);
-			if (serialized.byteLength >= BLOCKCHAIN_SETTINGS.maxTransactionSize)
-				throw new Error(`Transaction size too big: ${serialized.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
-				
-			// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
-			const result = TxValidation.transactionValidation(node, involvedUTXOs, tx);
-			if (!result.success) throw new Error('Transaction validation failed: succes === false');
-			
-			tx.byteWeight = serialized.byteLength;
-			tx.feePerByte = result.fee / tx.byteWeight;
-			if (tx.feePerByte <= (colliding?.tx?.feePerByte || 0)) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${(colliding?.tx?.feePerByte || 0)} >= ${tx.feePerByte}`);
-			
-			// ADD TRANSACTION TO MEMPOOL
-			if (colliding?.tx) this.#removeMempoolTransaction(colliding.tx);
-			this.organizer.addTransaction(tx, tx.feePerByte || 0);
-			for (const input of tx.inputs) this.byAnchor.set(input, tx);
-		} catch (/** @type {any} */ error) { return error.message; }
+    /** @param {ContrastNode} node @param {Uint8Array} serializedTx */
+    pushTransaction(node, serializedTx) {
+		// CHECK CONFORMITY & SPENDABILITY
+		const tx = serializer.deserialize.transaction(serializedTx);
+		TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
+		const { involvedAnchors, repeatedAnchorsCount } = Transaction_Builder.extractInvolvedAnchors(tx, true);
+		if (repeatedAnchorsCount > 0) throw new Error('Transaction has repeated anchors');
+		
+		const involvedUTXOs = this.blockchain.getUtxos(involvedAnchors, true);
+		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for transaction, spent or missing UTXO detected');
+		TxValidation.isConformTransaction(involvedUTXOs, tx); // throw if not conform/spendable
+		
+		// CHECK SIZE LIMIT
+		if (serializedTx.byteLength >= BLOCKCHAIN_SETTINGS.maxTransactionSize)
+			throw new Error(`Transaction size too big: ${serializedTx.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
+		
+		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
+		const result = TxValidation.transactionValidation(node, involvedUTXOs, tx);
+		if (!result.success) throw new Error('Transaction validation failed: succes === false');
+		
+		// CHECK CONFLICTS & REPLACEMENT POLICY
+		const oTx = new OrganizedTx(tx, result.fee, serializedTx);
+		const colliding = this.organizer.caughtAnchorsCollision(tx);
+		if (colliding && oTx.feePerByte <= colliding.oTx.feePerByte) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${colliding.oTx.feePerByte} >= ${oTx.feePerByte}`);
+		
+		// ADD TRANSACTION TO MEMPOOL
+		if (colliding?.oTx) this.organizer.remove(colliding.oTx);
+		this.organizer.add(oTx);
     }
 	/** @param {BlockFinalized} block */
     removeFinalizedBlocksTransactions(block) {
         for (let i = 2; i < block.Txs.length; i++) {
-            const colliding = this.#caughtTransactionsAnchorsCollision(block.Txs[i]);
-            if (colliding) this.#removeMempoolTransaction(colliding.tx);
+            const colliding = this.organizer.caughtAnchorsCollision(block.Txs[i]);
+            if (colliding) this.organizer.remove(colliding.oTx);
         }
     }
     getMostLucrativeTransactionsBatch() {
-		/** @type {Transaction[]} */
+		/** @type {OrganizedTx[]} */
 		const invalidTransactions = [];
 		const batchSize = 1000; // Number of anchors to process in one go
 		const maxSize = BLOCKCHAIN_SETTINGS.maxBlockSize;
     	const targetSize = maxSize * 0.98;
 		const batch = {
-			/** @type {Transaction[]} */ 	txs: [],
+			/** @type {OrganizedTx[]} */   oTxs: [],
 			/** @type {string[]} */ 	anchors: [],
 			bytes: 0
 		}
@@ -125,35 +142,33 @@ export class MemPool {
 
 		const controlCurrentBatch = () => {
 			const involvedUTXOs = this.blockchain.getUtxos(batch.anchors, false) || {};
-			for (const tx of batch.txs) {
-				try { TxValidation.isConformTransaction(involvedUTXOs, tx) }
-				catch (error) { invalidTransactions.push(tx); continue; }
+			for (const oTx of batch.oTxs) {
+				try { TxValidation.isConformTransaction(involvedUTXOs, oTx.tx) }
+				catch (error) { invalidTransactions.push(oTx); continue; }
 				
-				// ADD THE TRANSACTION
-				const clone = Transaction_Builder.clone(tx);
-				delete clone.feePerByte;
-				delete clone.byteWeight;
-				result.txs.push(clone);
-				result.totalFee += (tx.feePerByte || 0) * (tx.byteWeight || 0);
-				result.bytes += tx.byteWeight || 0;
+				// ADD THE TRANSACTION TO RESULT
+				result.txs.push(oTx.tx);
+				result.totalFee += oTx.fee;
+				result.bytes += oTx.serializedTx.byteLength;
 				if (result.bytes >= targetSize) break;
 			}
 
 			batch.anchors = [];
-			batch.txs = [];
+			batch.oTxs = [];
 			batch.bytes = 0;
 		}
 
         // SELECT TRANSACTIONS FROM HIGHEST FEE TIERS TO LOWEST
         for (const rangeKey of this.organizer.rangesList) {
             const rangeMap = this.organizer.txsByRanges[rangeKey];
-        	for (const [h, tx] of rangeMap) {
-				if (!tx.byteWeight) throw new Error('Transaction in mempool missing byteWeight');
-				if (result.bytes + batch.bytes + tx.byteWeight > maxSize) continue;
+        	for (const [h, oTx] of rangeMap) {
+				const oTxByteWeight = oTx.serializedTx.byteLength;
+				if (!oTxByteWeight) throw new Error('Transaction in mempool missing byteWeight');
+				if (result.bytes + batch.bytes + oTxByteWeight > maxSize) continue;
 
-				batch.txs.push(tx);
-				batch.anchors.push(...tx.inputs);
-				batch.bytes += tx.byteWeight;
+				batch.oTxs.push(oTx);
+				batch.anchors.push(...oTx.tx.inputs);
+				batch.bytes += oTxByteWeight;
 				if (batch.anchors.length >= batchSize) controlCurrentBatch();
 				if (result.bytes + batch.bytes >= targetSize) controlCurrentBatch();
 				if (result.bytes >= targetSize) break;
@@ -164,20 +179,7 @@ export class MemPool {
         }
 
 		// REMOVE INVALID TRANSACTIONS FROM MEMPOOL & RETURN RESULT
-		for (const tx of invalidTransactions) this.#removeMempoolTransaction(tx);
+		for (const oTx of invalidTransactions) this.organizer.remove(oTx);
         return result;
-    }
-
-	/** @param {Transaction} transaction */
-    #caughtTransactionsAnchorsCollision(transaction) {
-        for (const input of transaction.inputs) {
-			const tx = this.byAnchor.get(input);
-			if (tx) return { tx, anchor: input };
-		}
-    }
-    /** @param {Transaction} transaction */
-    #removeMempoolTransaction(transaction) {
-		for (const input of transaction.inputs) this.byAnchor.delete(input);
-        this.organizer.removeTransaction(transaction, transaction.feePerByte || 0);
     }
 }
