@@ -12,7 +12,7 @@ import { IS_VALID } from '../../types/validation.mjs';
 import { ModalComponent } from './modal-component.js';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockchainComponent } from './blockchain-component.js';
-import { BlocksTimesChartComponent } from './charts-component.js';
+import { BlocksTimesChartComponent, RoundLegitimaciesChartComponent } from './charts-component.js';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
@@ -60,6 +60,7 @@ export class Navigator {
 
 export class Explorer {
 	blocksTimesChart = new BlocksTimesChartComponent();
+	roundLegitimaciesChart = new RoundLegitimaciesChartComponent();
 	bc = new BlockchainComponent();
 	modal = new ModalComponent();
 	navigator = new Navigator();
@@ -100,16 +101,22 @@ export class Explorer {
 		const readableLocalDate = new Date(block.timestamp).toLocaleString();
 		const agoText = `${((block.timestamp - block.posTimestamp) / 1000).toFixed(2)}s`;
 		
-		// @ts-ignore
+		// @ts-ignore UPDATE CHAIN OVERVIEW ELEMENTS
 		eHTML.get('chainHeight').textContent = newHeight.toString(); // @ts-ignore
 		eHTML.get('circulatingSupply').textContent = CURRENCY.formatNumberAsCurrency(block.supply + block.coinBase); // @ts-ignore
 		eHTML.get('circulatingSupplyPercent').textContent = `~${percent}`; // @ts-ignore
 		eHTML.get('lastBlocktime').textContent = `${readableLocalDate} (${agoText})`;
 
+		// UPDATE BLOCKCHAIN COMPONENT
 		const weight = this.connector.blockWeightByHash[block.hash] || 0;
 		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
+
+		// UPDATE BLOCK TIMES CHART
 		if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
 			this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight);
+
+		// UPDATE ROUND LEGITIMACIES CHART
+		this.getAndDisplayRoundLegitimacies();
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation
@@ -291,7 +298,7 @@ export class Explorer {
 		const tx = blockData.Txs[txIndex];
 		if (!tx) throw new Error('navigateUntilTarget => error: tx not found in block');
 
-		setTimeout(() => this.modal.displayTransactionDetails(tx, txIndex, outputIndex), modalContentCreated ? 1000 : 200);
+		setTimeout(() => this.modal.displayTransactionDetails(tx, txIndex, outputIndex), modalContentCreated ? 1000 : Math.round(220 + (blockData.Txs.length * .2)));
     }
 	getAndDisplayBlocksTimegaps = async (fromHeight = 0, toHeight = this.connector.height) => {
 		this.blocksTimesChart.reset();
@@ -301,5 +308,14 @@ export class Explorer {
 		console.log('Explorer: Retrieved blocks timestamps gaps:', tg);
 		for (let i = 0; i < tg.heights.length; i++)
 			this.blocksTimesChart.appendBlockTimeIfCorresponding(tg.heights[i], tg.timestamps[i]);
+	}
+	async getAndDisplayRoundLegitimacies() {
+		const rl = await this.connector.getRoundsLegitimacies();
+		if (!rl) throw new Error('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
+		console.log('Explorer: Retrieved rounds legitimacies:', rl);
+		this.roundLegitimaciesChart.setData(rl);
+		
+		const legHeightElement = eHTML.get('legHeight');
+		if (legHeightElement) legHeightElement.textContent = this.connector.height.toString();
 	}
 }

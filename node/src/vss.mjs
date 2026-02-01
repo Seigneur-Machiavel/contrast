@@ -26,7 +26,7 @@ class RoundLegitimacies {
 
 /** Validator Selection Spectrum (VSS) */
 export class Vss {
-	/** @type {Map<string, RoundLegitimacies>} BlockHash: RoundLegitimacies */
+	/** @type {Map<string, {legitimacies: RoundLegitimacies, owners: string[]}>} BlockHash: RoundLegitimacies */
 	blockLegitimaciesByAddress = new Map();
     currentRoundHash = '';
 	maxCacheLenght = 100;
@@ -63,9 +63,19 @@ export class Vss {
 	/** Returns best legitimacy of pubkey for the round, if not found: return last index + 1 (= array length) @param {string} pubkey @param {string} prevHash */
 	async getPubkeyLegitimacy(pubkey, prevHash) {
 		if (pubkey.length !== serializer.lengths.pubKey.str) throw new Error('Invalid pubkey length');
-		const legs = await this.#calculateRoundLegitimacies(prevHash);
-		const bestLeg = legs.getPubkeyBestLegitimacy(pubkey);
-		return bestLeg !== undefined ? bestLeg : legs.legitimacies.length;
+		const round = await this.#calculateRound(prevHash);
+		const bestLeg = round.legitimacies.getPubkeyBestLegitimacy(pubkey);
+		return bestLeg !== undefined ? bestLeg : round.legitimacies.legitimacies.length;
+	}
+	/** @param {string} blockHash */
+	getRoundForExplorerIfExists(blockHash) {
+		const round = this.blockLegitimaciesByAddress.get(blockHash);
+		if (!round) return null;
+		
+		/** @type {Array<{address: string, pubkeys: Set<string>}>} */	const result = [];
+		for (let i = 0; i < round.legitimacies.legitimacies.length; i++)
+			result.push({ address: round.owners[i], pubkeys: round.legitimacies.legitimacies[i] });
+		return result;
 	}
 	reset() {
 		this.vssStorage.reset();
@@ -92,8 +102,7 @@ export class Vss {
 		const anchor = this.vssStorage.getStakeAnchor(index);
 		if (!anchor) return null;
 
-		const utxos = this.blockchain.getUtxos([anchor], true);
-		const utxo = utxos?.[anchor];;
+		const utxo = this.blockchain.getUtxo(anchor);
 		if (!utxo?.address || utxo.spent) throw new Error(`Stake UTXO is missing or spent for anchor: ${anchor}`);
 
 		const { height, txIndex, vout } = serializer.parseAnchor(anchor);
@@ -101,32 +110,33 @@ export class Vss {
 		if (!tx) throw new Error(`Stake transaction not found for anchor: ${anchor}`);
 		if (!tx.data || tx.data.length % 32 !== 0) throw new Error(`Invalid stake transaction data for anchor: ${anchor}`);
 
-		/** @type {Set<string>} */
-		const authorizedPubkeys = new Set();
+		/** @type {Set<string>} */	const authorizedPubkeys = new Set();
 		const hex = serializer.converter.bytesToHex(tx.data);
 		for (let i = 0; i < hex.length; i += 64) authorizedPubkeys.add(hex.slice(i, i + 64));
-		return authorizedPubkeys;
+		return { authorizedPubkeys, owner: utxo.address };
 	}
     /** @param {string} blockHash @param {number} [maxTry] */
-    async #calculateRoundLegitimacies(blockHash, maxTry = 100) {
+    async #calculateRound(blockHash, maxTry = 100) {
 		const existing = this.blockLegitimaciesByAddress.get(blockHash);
 		if (existing) return existing; // already calculated
         
 		// everyone has considered 0 legitimacy when not enough stakes
         const startTimestamp = Date.now();
-		const roundLegitimacies = new RoundLegitimacies();
+		/** @type {string[]} */ const owners = [];
+		const legitimacies = new RoundLegitimacies();
 		const maxRange = this.vssStorage.stakesCount;
         if (maxRange < BLOCKCHAIN_SETTINGS.validatorsPerRound) // no calculation needed => set empty and return
-			{ this.blockLegitimaciesByAddress.set(blockHash, roundLegitimacies); return roundLegitimacies; }
-
+			{ this.blockLegitimaciesByAddress.set(blockHash, {legitimacies, owners}); return {legitimacies, owners}; }
 		let [ leg, i ] = [ 0, 0 ];
         for (i; i < maxTry; i++) {
 			const hash = await HashFunctions.SHA256(`${i}${blockHash}`);
             const winningNumber = Number(BigInt('0x' + hash) % BigInt(maxRange)); // Calculate the maximum acceptable range to avoid bias
-			const authorizedPubkeys = this.#getStakeAuthorizations(winningNumber);
-			if (!authorizedPubkeys || authorizedPubkeys.size === 0) { console.error(`[VSS] No authorized pubkeys for winning number: ${winningNumber}`); continue; }
+			const roundAuth = this.#getStakeAuthorizations(winningNumber);
+			if (!roundAuth) continue; // Stake not found (should not happen)
+			if (!roundAuth.authorizedPubkeys || roundAuth.authorizedPubkeys.size === 0) { console.error(`[VSS] No authorized pubkeys for winning number: ${winningNumber}`); continue; }
 
-            roundLegitimacies.addPubkeys(authorizedPubkeys);
+            legitimacies.addPubkeys(roundAuth.authorizedPubkeys);
+			owners.push(roundAuth.owner);
             leg++;
 
             if (leg >= this.vssStorage.stakesCount) break; // If all stakes have been selected
@@ -134,10 +144,10 @@ export class Vss {
         }
 
         //console.log(`[VSS] -- Calculated round legitimacies in ${((Date.now() - startTimestamp)/1000).toFixed(2)}s. | ${i} iterations. -->`);
-        //console.info(roundLegitimacies);
-        this.blockLegitimaciesByAddress.set(blockHash, roundLegitimacies);
+        //console.info(legitimacies);
+        this.blockLegitimaciesByAddress.set(blockHash, {legitimacies, owners});
 		this.#pruneCache();
-		return roundLegitimacies;
+		return { legitimacies, owners };
     }
 	#pruneCache() {
 		const toRemove = this.blockLegitimaciesByAddress.size - this.maxCacheLenght;

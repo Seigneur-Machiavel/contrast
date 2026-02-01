@@ -86,6 +86,7 @@ export class ContrastNode {
 		p2pNode.gossip.on('transaction', this.#onTransactionReceived);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
 		p2pNode.messager.on('blocks_timestamps_request', this.#onBlocksTimestampsRequest);
+		p2pNode.messager.on('rounds_legitimacies_request', this.#onRoundsLegitimaciesRequest);
 	}
 
 	// GETTERS --------------------------------------------------------------------------
@@ -219,5 +220,16 @@ export class ContrastNode {
 			const s = serializer.serialize.blocksTimestampsResponse(t.heights, t.timestamps);
 			this.p2p.messager.sendUnicast(senderId, s, 'blocks_timestamps');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onBlocksTimestampsRequest- Error processing blocks timestamps request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	}
+	/** @param {string} senderId @param {Uint8Array} data */
+	#onRoundsLegitimaciesRequest = async (senderId, data) => {
+		try {
+			const h = serializer.converter.bytesToHex(data);
+			const rl = this.blockchain.vss.getRoundForExplorerIfExists(h);
+			if (!rl) throw new Error(`No round legitimacies found for block hash ${h}`);
+
+			const s = serializer.serialize.roundsLegitimaciesResponse(rl);
+			this.p2p.messager.sendUnicast(senderId, s, 'rounds_legitimacies');
+		} catch (/** @type {any} */ error) { this.logger.log(`-onRoundsLegitimaciesRequest- Error processing rounds legitimacies request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 }

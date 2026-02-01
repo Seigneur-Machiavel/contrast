@@ -2,7 +2,6 @@
 import { eHTML_STORE, createElement, getTimeSinceBlockConfirmedString } from '../board-helpers.js';
 const eHTML = new eHTML_STORE('cbe-', 'chainWrap');
 
-
 class BlockComponent {
 	wrap; blockSquare; miniHash; blockIndex;
 	weight; timeAgo; nbTx;

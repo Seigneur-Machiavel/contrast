@@ -105,3 +105,104 @@ export class BlocksTimesChartComponent {
 		if (container) container.innerHTML = '';
 	}
 }
+export class RoundLegitimaciesChartComponent {
+	maxBars = 10;
+	minColor = 255;
+	decay = 20;
+	/** @type {Array<{address: string, pubkeys: Set<any>}>} */
+	#data = [];
+	width = 500;
+	height = 300;
+
+	// PRIVATE METHODS
+	#render() {
+		const container = document.getElementById('cbe-roundLegitimaciesChart');
+		if (!container) throw new Error('RoundLegitimaciesChartComponent: render => Chart container not found');
+
+		container.innerHTML = '';
+		if (this.#data.length === 0) return;
+
+		// Take top N, reverse for display (lowest legitimacy at bottom)
+		const topEntries = this.#data.slice(0, this.maxBars);
+		const entries = topEntries.map((e, i) => ({
+			address: e.address,
+			legitimacy: i, // position in array = legitimacy score
+			index: i
+		}));
+
+		const margin = { top: 20, right: 0, bottom: 0, left: 0 };
+		const width = this.width - margin.left - margin.right;
+		const height = this.height - margin.top - margin.bottom;
+
+		const svg = d3.select(container)
+			.append('svg')
+			.attr('width', this.width)
+			.attr('height', this.height)
+			.append('g')
+			.attr('transform', `translate(${margin.left},${margin.top})`);
+
+		const maxLegitimacy = entries.length;
+		const total = maxLegitimacy + this.decay;
+
+		const x = d3.scaleLinear()
+			.domain([Math.floor(this.decay * 0.5), total])
+			.range([0, width]);
+		
+		// Use index as unique identifier instead of address
+		const y = d3.scaleBand()
+			.domain(entries.map((e, i) => i))
+			.range([0, height])
+			.padding(0.1);
+
+		const barHeight = y.bandwidth();
+
+		// Bars
+		svg.selectAll('rect')
+			.data(entries)
+			.enter()
+			.append('rect')
+			.attr('x', 0)
+			.attr('y', (d, i) => y(i))
+			.attr('width', d => x(d.legitimacy + this.decay))
+			.attr('height', barHeight)
+			.attr('fill', d => {
+				const grey = Math.floor((d.legitimacy / (maxLegitimacy* 1.5)) * this.minColor);
+				return `rgb(${grey}, ${grey}, ${grey})`;
+			})
+			.style('cursor', 'pointer')
+			.on('click', (event, d) => this.#handleClick(d.address));
+
+		// Labels
+		svg.selectAll('text')
+			.data(entries)
+			.enter()
+			.append('text')
+			.attr('x', d => x(d.legitimacy + this.decay) - 5)
+			.attr('y', (d, i) => y(i) + barHeight / 2)
+			.attr('dy', '0.35em')
+			.attr('text-anchor', 'end')
+			.style('fill', '#ffffff')
+			.style('font-size', '10px')
+			.style('font-weight', '600')
+			.style('font-family', '"IBM Plex Mono", monospace')
+			.style('pointer-events', 'none')
+			.text(d => `${d.legitimacy} | ${d.address}  `);
+	}
+	#handleClick(address) {
+		const event = new CustomEvent('addressClick', { detail: { address } });
+		document.dispatchEvent(event);
+	}
+
+	// PUBLIC METHODS
+	/** @param {Array<{address: string, pubkeys: Set<any>}>} data */
+	setData(data = []) {
+		this.reset();
+		this.#data = data;
+		this.#render();
+	}
+	reset() {
+		this.#data = [];
+		const container = document.getElementById('cbe-roundLegitimaciesChart');
+		if (container) container.innerHTML = '';
+	}
+}

@@ -120,6 +120,10 @@ export class Blockchain {
 		const blockBytes = this.blockStorage.getBlockBytes(height)?.blockBytes;
 		if (blockBytes) return serializer.deserialize.blockFinalized(blockBytes);
 	}
+	/** @param {TxAnchor} anchor */
+	getUtxo(anchor) {
+		return this.getUtxos([anchor], true)?.[anchor] || null;
+	}
 	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify to return null when a spent UTXO is found (early abort), default: false */
 	getUtxos(anchors, breakOnSpent = false) {
 		return this.blockStorage.getUtxos(anchors, breakOnSpent);

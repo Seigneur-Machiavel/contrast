@@ -11,7 +11,9 @@ import { PendingRequest } from '../utils/networking.mjs';
 export class Connector {
 	/** @type {PendingRequest | null} */		pendingLedgerRequest = null;
 	/** @type {PendingRequest | null} */		pendingTimestampsRequest = null;
+	/** @type {PendingRequest | null} */		pendingRoundsLegitimaciesRequest = null;
 	/** @type {Record<string, Function[]>} */	listeners = {};
+	get prevHash() { return this.blocks.finalized[this.hash]?.prevHash; }
 	isConsensusRobust = false;
 	height = -1;
 	hash = '';
@@ -34,6 +36,7 @@ export class Connector {
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
 		p2pNode.messager.on('blocks_timestamps', this.#onBlocksTimestamps);
+		p2pNode.messager.on('rounds_legitimacies', this.#onRoundsLegitimacies);
 		this.#consensusChangeDetectionLoop();
 	}
 
@@ -101,6 +104,21 @@ export class Connector {
 			} catch (error) { console.error('Error fetching blocks timestamps from peer', peerId, ':', error); }
 		}
 	}
+	async getRoundsLegitimacies() {
+		if (!this.prevHash) return null;
+
+		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		for (const peerId of peersToAsk) {
+			this.pendingRoundsLegitimaciesRequest = new PendingRequest(peerId, 'rounds_legitimacies', 3000);
+			const s = serializer.converter.hexToBytes(this.prevHash);
+			this.p2pNode.messager.sendUnicast(peerId, s, 'rounds_legitimacies_request');
+			try {
+				const response = await this.pendingRoundsLegitimaciesRequest.promise;
+				if (response) return serializer.deserialize.roundsLegitimaciesResponse(response);
+			} catch (error) { console.error('Error fetching rounds legitimacies from peer', peerId, ':', error); }
+		}
+	}
+	
 	// INTERNAL METHODS
 	async #consensusChangeDetectionLoop() {
 		while(true) {
@@ -152,5 +170,11 @@ export class Connector {
 		if (this.pendingTimestampsRequest?.peerId !== senderId) return; // not the expected sender
 		this.pendingTimestampsRequest.complete(data);
 		this.pendingTimestampsRequest = null;
+	}
+	/** @param {string} senderId @param {Uint8Array} data */
+	#onRoundsLegitimacies = (senderId, data) => {
+		if (this.pendingRoundsLegitimaciesRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingRoundsLegitimaciesRequest.complete(data);
+		this.pendingRoundsLegitimaciesRequest = null;
 	}
 }

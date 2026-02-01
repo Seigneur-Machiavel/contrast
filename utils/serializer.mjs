@@ -386,6 +386,23 @@ export const serializer = {
 			}
 			return w.getBytes();
 		},
+		/** @param {Array<{address: string, pubkeys: Set<string>}>} roundsLegitimacies */
+		roundsLegitimaciesResponse(roundsLegitimacies) {
+			let totalBytes = 2; // nb of entries (2)
+			for (const entry of roundsLegitimacies) {
+				totalBytes += lengths.address.bytes; // address
+				totalBytes += 2; // nb of pubkeys (2)
+				totalBytes += entry.pubkeys.size * lengths.pubKey.bytes; // pubkeys
+			}
+			const w = new BinaryWriter(totalBytes);
+			w.writeBytes(converter.numberTo2Bytes(roundsLegitimacies.length));
+			for (const entry of roundsLegitimacies) {
+				w.writeBytes(ADDRESS.B58_TO_BYTES(entry.address));
+				w.writeBytes(converter.numberTo2Bytes(entry.pubkeys.size));
+				for (const pubkey of entry.pubkeys) w.writeBytes(converter.hexToBytes(pubkey));
+			}
+			return w.getBytes();
+		}
 	},
     deserialize: {
 		/** @param {Uint8Array} encodedData */
@@ -601,6 +618,20 @@ export const serializer = {
 				timestamps.push(converter.bytes6ToNumber(r.read(6)));
 			}
 			return { heights, timestamps };
+		},
+		/** @param {Uint8Array} serializedResponse */
+		roundsLegitimaciesResponse(serializedResponse) {
+			const r = new BinaryReader(serializedResponse);
+			const roundsLegitimacies = [];
+			const nbOfEntries = converter.bytes2ToNumber(r.read(2));
+			for (let i = 0; i < nbOfEntries; i++) {
+				const address = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
+				const nbOfPubkeys = converter.bytes2ToNumber(r.read(2));
+				const pubkeys = new Set();
+				for (let j = 0; j < nbOfPubkeys; j++) pubkeys.add(converter.bytesToHex(r.read(lengths.pubKey.bytes)));
+				roundsLegitimacies.push({ address, pubkeys });
+			}
+			return roundsLegitimacies;
 		}
     }
 };

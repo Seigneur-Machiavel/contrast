@@ -15,6 +15,10 @@ export const HIVE_P2P_CONFIG = {
 			'123': 'blocks_timestamps_request',
 			blocks_timestamps: 122,
 			'122': 'blocks_timestamps',
+			rounds_legitimacies_request: 121,
+			'121': 'rounds_legitimacies_request',
+			rounds_legitimacies: 120,
+			'120': 'rounds_legitimacies',
 		}
 	},
 	GOSSIP: {

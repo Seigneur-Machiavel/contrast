@@ -119,22 +119,9 @@ export class Transaction {
 	}
 }
 
-export class TransactionWithDetails extends Transaction {
-	/** @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {number} balanceChange @param {number} inAmount @param {number} outAmount @param {number} fee @param {TxId} txId @param {string[]} [witnesses] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {number} [version] */
-	constructor(inputs, outputs, balanceChange, inAmount, outAmount, fee, txId, witnesses = [], feePerByte, byteWeight, version = TRANSACTION.VERSION) {
-		super(inputs, outputs, witnesses, feePerByte, byteWeight, version);
-		this.balanceChange = balanceChange;
-		this.inAmount = inAmount;
-		this.outAmount = outAmount;
-		this.fee = fee;
-		this.txId = txId;
-	}
-}
-
 export const TRANSACTION = {
 	VERSION: 1,
 	TxOutput,
 	UTXO,
-	Transaction,
-	TransactionWithDetails
+	Transaction
 };

@@ -187,20 +187,24 @@ export class ModalComponent {
         const txDetails = createElement('tr');
 		eHTML.add(txDetails, 'TxDetails');
 
-        const isMinerTx = tx.inputs.length === 1 && tx.inputs[0].split(':').length === 1;
+		const specialTx = Transaction_Builder.isMinerOrValidatorTx(tx);
 		const txInfoWrap = createElement('td', ['cbe-TxInfoWrap'], txDetails);
 		createElement('h3', [], txInfoWrap).textContent = 'Version';
 		createElement('div', [], txInfoWrap).textContent = tx.version.toString();
         
 		const inputsWrap = createElement('td', ['cbe-TxInputsWrap'], txDetails);
 		const isValidatorTx = tx.inputs[0].split(':').length === 2;
-		const titleText = isMinerTx ? 'Miner nonce' : `Inputs (${isValidatorTx ? 0 : tx.inputs.length})`;
+		const titleText =
+			 specialTx === 'miner' ? 'Miner nonce'
+			 : specialTx === 'validator' ? 'Validator hash'
+			 : `Inputs (${isValidatorTx ? 0 : tx.inputs.length})`;
 		createElement('h3', [], inputsWrap).textContent = titleText;
 		for (const anchor of tx.inputs) {
             if (isValidatorTx) continue;
 
 			const inputDiv = createElement('div', ['cbe-TxInput'], inputsWrap);
-			if (isMinerTx) { inputDiv.textContent = anchor; continue; }
+			if (specialTx === 'miner') { inputDiv.textContent = anchor; continue; }
+			if (specialTx === 'validator') { inputDiv.textContent = `${anchor.slice(0, 6)}...${anchor.slice(-4)}`; continue; }
 			
 			const anchorSpan = createElement('span', ['cbe-anchorSpan'], inputDiv);
 			anchorSpan.textContent = anchor;
