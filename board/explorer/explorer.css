@@ -118,8 +118,8 @@ button {
 	width: 80%;
 	max-width: 400px;
 	transform: translateX(-50%);
-	opacity: .33;
-	transition: opacity .2s cubic-bezier(.4, 0, .2, 1);
+	opacity: .66;
+	transition: opacity .12s cubic-bezier(.4, 0, .2, 1);
 }
 #cbe-searchInput-wrap:hover, #cbe-searchInput-wrap:focus-within {
 	opacity: 1;

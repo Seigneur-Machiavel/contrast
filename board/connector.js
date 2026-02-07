@@ -85,7 +85,7 @@ export class Connector {
 				/** @type {AddressLedger} */
 				const response = await this.pendingLedgerRequest.promise;
 				return response;
-			} catch (error) { console.error('Error fetching address ledger from peer', peerId, ':', error); }
+			} catch (error) {}
 		}
 	}
 	/** Max number of blocks: 120 @param {number} [fromHeight] default: 0 @param {number} [toHeight] default: this.height */
@@ -101,7 +101,7 @@ export class Connector {
 			try {
 				const response = await this.pendingTimestampsRequest.promise;
 				if (response) return serializer.deserialize.blocksTimestampsResponse(response);
-			} catch (error) { console.error('Error fetching blocks timestamps from peer', peerId, ':', error); }
+			} catch (error) {}
 		}
 	}
 	async getRoundsLegitimacies() {
@@ -115,7 +115,7 @@ export class Connector {
 			try {
 				const response = await this.pendingRoundsLegitimaciesRequest.promise;
 				if (response) return serializer.deserialize.roundsLegitimaciesResponse(response);
-			} catch (error) { console.error('Error fetching rounds legitimacies from peer', peerId, ':', error); }
+			} catch (error) {}
 		}
 	}
 	

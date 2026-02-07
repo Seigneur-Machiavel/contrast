@@ -51,11 +51,10 @@ export class Dashboard {
 
 	// INTERNAL METHODS
 	async #initWhileDomReady() {
-		console.log('Dashboard awaiting DOM elements...');
-		if (!eHTML.isReady) console.log('Explorer awaiting DOM elements...');
+		if (!eHTML.isReady) console.log('Dashboard awaiting DOM elements...');
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
-
 		console.log('Dashboard DOM elements ready.');
+		
 		this.hostPubkeyStr = await this.#pubkeyFromStorage();
 		this.wsInitInterval = setInterval(() => this.initWebSocketIfNot(), 1000);
 	}

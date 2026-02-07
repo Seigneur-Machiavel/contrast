@@ -9,6 +9,7 @@ import { Connector } from './connector.js';
 import { AppsManager } from './apps-manager.js';
 import { Explorer } from './explorer/explorer.js';
 import { Dashboard } from './dashboard/dashboard.js';
+import { BoardInternalWallet } from './wallet/biw.js';
 import { FrontStorage } from '../utils/front-storage.mjs';
 import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 
@@ -17,12 +18,13 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/time';
 const bootstraps = ['ws://localhost:27260'];
 const hiveNode = await HiveP2P.createNode({ bootstraps });
+const boardStorage = new FrontStorage('board');
 const connector = new Connector(hiveNode);
 const explorer = new Explorer(connector);
 const dashboard = new Dashboard(connector);
-const boardStorage = new FrontStorage('board');
+const biw = new BoardInternalWallet(connector, boardStorage);
 
-if (boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
+if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
 else document.body.classList.remove('dark-mode');
 
 //const { ipcRenderer } = require('electron');
@@ -42,6 +44,7 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.connector = connector;
 	window.explorer = explorer;
 	window.dashboard = dashboard;
+	window.biw = biw;
 }
 
 // Implementation with less event listeners
@@ -61,6 +64,7 @@ document.addEventListener('click', (e) => {
 	clickTitleBarButtonsHandler(e);
 	appsManager.clickHandler(e);
 	explorer.clickHandler(e);
+	biw.clickHandler(e);
 	//infoManager.clickInfoButtonHandler(e);
 	//settingsManager.clickSettingsButtonHandler(e);
 });
@@ -88,7 +92,6 @@ document.addEventListener('change', (event) => {
 				//console.log('darkMode msg sent:', darkModeState);
 			}
 			
-			//if (!window.modulesLoaded) break;
 			boardStorage.save('darkModeState', darkModeState);
 			break;
 	}

@@ -1,12 +1,14 @@
 // @ts-check
-import { Converter } from 'hive-p2p';
 import { ADDRESS } from '../../types/address.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ProgressLogger } from '../../utils/progress-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 
 /**
+* @typedef {import("../../storage/storage.mjs").ContrastStorage} ContrastStorage
+* @typedef {import("../../utils/front-storage.mjs").FrontStorage} FrontStorage
 * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 * @typedef {import("../../types/transaction.mjs").LedgerUtxo} LedgerUtxo */
 
@@ -76,7 +78,7 @@ export class Account {
 
 export class Wallet {
     #masterHex = '';
-	converter = new Converter();
+	converter = serializer.converter;
     miniLogger = new MiniLogger('wallet');
 
     /** @type {Account[]} */			accounts = [];
@@ -86,75 +88,43 @@ export class Wallet {
     constructor(masterHex) { this.#masterHex = masterHex; }
 
 	// API
-	/** @param {import("../../storage/storage.mjs").ContrastStorage} contrastStorage */
-    async loadAccounts(contrastStorage) {
+	static generateRandomMasterHex() {
+		const randomBytes = new Uint8Array(32);
+		crypto.getRandomValues(randomBytes);
+		return serializer.converter.bytesToHex(randomBytes);
+	}
+	/** @param {ContrastStorage} contrastStorage */
+	async loadAccountsFromStorage(contrastStorage) {
 		/** @type {EncryptedGeneratedAccount[] | null} */
-        const accountsGeneratedEncrypted = contrastStorage.loadJSON(`accounts-${contrastStorage.localIdentifier}`);
-        if (!accountsGeneratedEncrypted) return false;
-		
-		/** @type {GeneratedAccount[]} */
-		const decryptedAccounts = [];
-        const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
-        const key = await crypto.subtle.importKey(
-            "raw",
-            Buffer.from(masterHexUint8),
-            { name: "AES-GCM" },
-            false, // extractable
-            ["encrypt", "decrypt"]
-        );
-		for (const account of accountsGeneratedEncrypted) {
-			const iv = this.converter.hexToBytes(account.iv);
-			const seedModifierDecrypted = await crypto.subtle.decrypt(
-				{ name: "AES-GCM", iv },
-				key,
-				Buffer.from(this.converter.hexToBytes(account.seedModifierHex))
-			);
-			const seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierDecrypted));
-			const decryptedAccount = new GeneratedAccount(account.address, seedModifierHex);
-			decryptedAccounts.push(decryptedAccount);
-		}
+		const accountsGeneratedEncrypted = contrastStorage.loadJSON(`accounts-${contrastStorage.localIdentifier}`);
+		if (!accountsGeneratedEncrypted) return false;
+		await this.#loadAccounts(accountsGeneratedEncrypted);
+	}
+	/** @param {ContrastStorage} contrastStorage */
+	async saveAccountsToStorage(contrastStorage) {
+		const encryptedAccounts = await this.#encryptAccounts();
+		contrastStorage.saveJSON(`accounts-${contrastStorage.localIdentifier}`, encryptedAccounts);
+	}
+	/** @param {FrontStorage} frontStorage */
+	async loadAccountsFromFrontStorage(frontStorage) {
+		/** @ts-ignore @type {EncryptedGeneratedAccount[] | null} */
+		const accountsGeneratedEncrypted = await frontStorage.load(`accounts-${await this.#walletIdentifier()}`);
+		if (!accountsGeneratedEncrypted) return false;
+		await this.#loadAccounts(accountsGeneratedEncrypted);
+	}
+	/** @param {FrontStorage} frontStorage */
+	async saveAccountsToFrontStorage(frontStorage) {
+		const encryptedAccounts = await this.#encryptAccounts();
+		await frontStorage.save(`accounts-${await this.#walletIdentifier()}`, encryptedAccounts);
+	}
 
-        this.accountsGenerated = decryptedAccounts;
-		if (!this.accountsGenerated.length) return;
-		
-		// Derive all loaded accounts (fast as they are saved)
-		await this.deriveAccounts(this.accountsGenerated.length);
-    }
-	/** @param {import("../../storage/storage.mjs").ContrastStorage} contrastStorage */
-    async saveAccounts(contrastStorage) {
-		/** @type {EncryptedGeneratedAccount[]} */
-		const encryptedAccounts = [];
-		const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
-        const key = await crypto.subtle.importKey(
-            "raw",
-            Buffer.from(masterHexUint8),
-            { name: "AES-GCM" },
-            false, // extractable
-            ["encrypt", "decrypt"]
-        );
-		
-		for (const account of this.accountsGenerated) {
-			const iv = new Uint8Array(12);
-			crypto.getRandomValues(iv);
-			const seedModifierEncrypted = await crypto.subtle.encrypt(
-				{ name: "AES-GCM", iv },
-				key,
-				Buffer.from(this.converter.hexToBytes(account.seedModifierHex))
-			);
-
-			const seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierEncrypted));
-			const encryptedAccount = new EncryptedGeneratedAccount(account.address, seedModifierHex, this.converter.bytesToHex(iv));
-			encryptedAccounts.push(encryptedAccount);
-		}
-
-        contrastStorage.saveJSON(`accounts-${contrastStorage.localIdentifier}`, encryptedAccounts);
-    }
 	/** Derive accounts from master seed. (If storage is provide: load and save accounts)
-	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {import("../../storage/storage.mjs").ContrastStorage} [contrastStorage] */
-    async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', contrastStorage) {
-		if (contrastStorage) await this.loadAccounts(contrastStorage);
+	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
+    async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', contrastStorage, frontStorage) {
+		if (contrastStorage) await this.loadAccountsFromStorage(contrastStorage);
+		if (frontStorage) await this.loadAccountsFromFrontStorage(frontStorage);
 
-        const nbOfExistingAccounts = this.accountsGenerated.length;    
+        const nbOfExistingAccounts = this.accountsGenerated.length;
         const accountToLoad = Math.min(nbOfExistingAccounts, nbOfAccounts);
         for (let i = 0; i < accountToLoad; i++) {
 			if (this.accounts[i]) continue; // already derived account
@@ -198,10 +168,19 @@ export class Wallet {
         const avgIterations = derivedAccounts.length > 0 ? Math.round(iterationsPerAccount / derivedAccounts.length) : 0;
         if (derivedAccounts.length) this.miniLogger.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
 avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
-		if (contrastStorage) await this.saveAccounts(contrastStorage);
 
+		if (contrastStorage) await this.saveAccountsToStorage(contrastStorage);
+		if (frontStorage) await this.saveAccountsToFrontStorage(frontStorage);
+		
         return { derivedAccounts: this.accounts, avgIterations: avgIterations };
     }
+	/** @param {string} [addressPrefix] - default: 'C' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
+	async deriveOneAccount(addressPrefix = 'C', contrastStorage, frontStorage) {
+		const accountsBefore = this.accounts.length;
+		const result = await this.deriveAccounts(accountsBefore + 1, addressPrefix, contrastStorage, frontStorage);
+		if (!result.derivedAccounts || result.derivedAccounts.length <= accountsBefore) return null;
+		return result.derivedAccounts[accountsBefore];
+	}
 
 	// INTERNALS
 	/** @param {number} accountIndex @param {string} [prefix] default 'C' */
@@ -225,5 +204,67 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
         }
 
 		throw new Error('Max iterations reached during account derivation');
+    }
+    async #walletIdentifier() {
+        const hash = await HashFunctions.SHA256(`${this.#masterHex}-wallet-identifier`);
+        return hash.substring(0, 16);
+    }
+	/** @param {EncryptedGeneratedAccount[]} accountsGeneratedEncrypted */
+    async #loadAccounts(accountsGeneratedEncrypted) {
+		/** @type {GeneratedAccount[]} */
+		const decryptedAccounts = [];
+        const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
+        const key = await crypto.subtle.importKey(
+            "raw",
+			masterHexUint8,
+            { name: "AES-GCM" },
+            false, // extractable
+            ["encrypt", "decrypt"]
+        );
+		for (const account of accountsGeneratedEncrypted) {
+			const iv = this.converter.hexToBytes(account.iv);
+			const seedModifierDecrypted = await crypto.subtle.decrypt(
+				{ name: "AES-GCM", iv },
+				key,
+				this.converter.hexToBytes(account.seedModifierHex)
+			);
+			const seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierDecrypted));
+			const decryptedAccount = new GeneratedAccount(account.address, seedModifierHex);
+			decryptedAccounts.push(decryptedAccount);
+		}
+
+        this.accountsGenerated = decryptedAccounts;
+		if (!this.accountsGenerated.length) return;
+		
+		// Derive all loaded accounts (fast as they are saved)
+		await this.deriveAccounts(this.accountsGenerated.length);
+    }
+    async #encryptAccounts() {
+		/** @type {EncryptedGeneratedAccount[]} */
+		const encryptedAccounts = [];
+		const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
+        const key = await crypto.subtle.importKey(
+            "raw",
+			masterHexUint8,
+            { name: "AES-GCM" },
+            false, // extractable
+            ["encrypt", "decrypt"]
+        );
+		
+		for (const account of this.accountsGenerated) {
+			const iv = new Uint8Array(12);
+			crypto.getRandomValues(iv);
+			const seedModifierEncrypted = await crypto.subtle.encrypt(
+				{ name: "AES-GCM", iv },
+				key,
+				this.converter.hexToBytes(account.seedModifierHex)
+			);
+
+			const seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierEncrypted));
+			const encryptedAccount = new EncryptedGeneratedAccount(account.address, seedModifierHex, this.converter.bytesToHex(iv));
+			encryptedAccounts.push(encryptedAccount);
+		}
+
+		return encryptedAccounts;
     }
 }

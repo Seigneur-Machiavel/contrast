@@ -1,100 +1,95 @@
 <link rel="stylesheet" href="./wallet/wallet.css">
 
 <div id="biw-container" class="biw-container">
-    <div class="biw-miniFormsWrap">
-        <div id="biw-spendMiniForm" class="biw-miniForm" data-foldName="send">
-            <div class="biw-flexWrap">
+    <div id="biw-miniFormsWrap" class="biw-miniFormsWrap">
+		<div id="biw-miniForm" class="biw-miniForm">
+			<div class="biw-flexWrap">
                 <div class="biw-spaced">
-                    <h3>Sender</h3>
-                    <h3 class="biw-senderAddress"></h3>
+                    <h3 id="biw-senderAddress">C123456</h3>
+					<select class="biw-actionSelector">
+						<option value="send">Send</option>
+						<option value="stake">Stake</option>
+						<option value="unstake">Unstake</option>
+						<option value="inscribe">Inscribe</option>
+					</select>
                 </div>
 
-                <input class="biw-amountInput" type="text" placeholder="Amount to send">
-                <input type="text" placeholder="Recipient address">
+				<div class="biw-inputs-wrap">
+					<div class="biw-spaced">
+						<h3>Amount:</h3>
+						<input class="biw-amountInput" type="text" placeholder="Amount to send">
+					</div>
+					<div class="biw-spaced">
+						<h3>To:</h3>
+						<input id="biw-recipientAddress" type="text" placeholder="Recipient address">
+					</div>
+					<div class="biw-spaced hidden" id="biw-data-field">
+						<h3>Data:</h3>
+						<input class="biw-dataInput" type="text" placeholder="Data (optional)">
+					</div>
+				</div>
 
                 <div class="biw-spaced thinBottomBorder" style="margin-top: 40px !important;">
-                    <h3>Transaction fee:</h3>
+                    <h3>Fee:</h3>
                     <h3>~<span class="biw-txFee">0.002000</span>c</h3>
                 </div>
                 <div class="biw-spaced thinBottomBorder">
-                    <h3>Total spent:</h3>
+                    <h3>Total:</h3>
                     <h3><span class="biw-totalSpent">0.000000</span>c</h3>
                 </div>
             </div>
 
-            <p class="biw-textInfo"></p>
-            <button class="biw-sendBtn biw-holdBtn"><div>Send</div></button>
-        </div>
-        <div id="biw-stakeMiniForm" class="biw-miniForm" data-foldName="stake">
-            <div class="biw-flexWrap">
-                <div class="biw-spaced">
-                    <h3>Sender</h3>
-                    <h3 class="biw-senderAddress"></h3>
-                </div>
-                <div class="biw-spaced">
-                    <h3>Recipient</h3>
-                    <input type="text" class="biw-destAddress"></input>
-                </div>
-
-                <input class="biw-amountInput biw-stakingInput" type="text" placeholder="Amount to stake">
-
-                <div class="biw-spaced thinBottomBorder" style="margin-top: 40px !important;">
-                    <h3>Transaction fee:</h3>
-                    <h3>~<span class="biw-txFee">0.002000</span>c</h3>
-                </div>
-
-                <div class="biw-spaced thinBottomBorder">
-                    <h3>Staking fee:</h3>
-                    <h3><span class="biw-stakingFee">0.000000</span>c</h3>
-                </div>
-
-                <div class="biw-spaced thinBottomBorder">
-                    <h3>Total spent:</h3>
-                    <h3><span class="biw-totalSpent">0.000000</span>c</h3>
-                </div>
-            </div>
-
-            <p class="biw-textInfo"></p>
-            <button class="biw-stakeBtn biw-holdBtn"><div>Stake</div></button>
-        </div>
-        <div id="biw-instructionsMiniForm" class="biw-miniForm" data-foldName="instructions">
-            <div class="biw-flexWrap">
-                <h3>Write/paste instructions here</h3>
-                <input type="text" class="biw-instructionsInput"></input>
-            </div>
-
-            <p class="biw-textInfo"></p>
-            <button class="biw-followInstructionsBtn">Follow Instructions</button>
-        </div>
+			<p class="biw-textInfo"></p>
+            <button class="biw-confirmBtn biw-holdBtn" data-action="confirm"><div>Send</div></button>
+		</div>
     </div>
 
     <div id="biw-mainForm">
-        <button id="biw-buttonRefresh"><img src="./wallet/img/refresh64.png" alt="Send"></button>
-        <div id="biw-addressTypeList" data-infokey="addressTypes">
-            <h2>Address type: </h2>
-            <button data-addresstype="W">W</button>
-            <button data-addresstype="C">C</button>
-            <button data-addresstype="P" class="disabled">P</button>
-            <button data-addresstype="U" class="disabled">U</button>
-        </div>
+        <button id="biw-buttonRefresh" data-action="biw-refresh">
+			<img src="./wallet/img/refresh64.png" alt="Send">
+			<div class="tooltip">Refresh balances</div>
+		</button>
+		<button id="biw-buttonSettings" data-action="biw-toggle-settings-menu">
+			<img src="assets/settings64.png">
+			<div class="tooltip">Settings</div>
+		</button>
+		<div id="biw-settings-menu" data-action="biw-toggle-settings-menu">
+			<div class="content">
+				<div class="board-settings-line">
+					<label for="biw-autoRefreshCheckbox">Auto-refresh</label>
+					<input type="checkbox" id="biw-autoRefreshCheckbox" checked data-action="biw-auto-refresh-toggle">
+				</div>
+				<div class="board-settings-line">
+					<label for="biw-enableCommandsCheckbox">Enable commands</label>
+					<input type="checkbox" id="biw-enableCommandsCheckbox" data-action="biw-enable-commands-toggle">
+				</div>
+				<div class="board-settings-line">
+					<label for="biw-enableDataFieldCheckbox">Enable data field</label>
+					<input type="checkbox" id="biw-enableDataFieldCheckbox" data-action="biw-enable-data-field-toggle">
+				</div>
+			</div>
+		</div>
+
         <h1><span id="biw-spendableBalanceStr">0.00</span>c</h1>
         <h2 class="biw-stakedBalance">Staked: <span id="biw-stakedStr">0.00</span>c</h2>
-        <div class="biw-buttonBar">
-            <button id="biw-buttonBarSend"><img src="./wallet/img/send32.png" alt="Send">Send</button>
-            <button id="biw-buttonBarStake"><img src="./wallet/img/stake64.png" alt="Stake">Stake</button>
-            <button id="biw-buttonBarSwap" class="disabled"><img src="./wallet/img/swap32.png" alt="Swap">Swap</button>
-            <button id="biw-buttonBarSpecial"><img src="./wallet/img/category64.png" alt="Special">Special</button>
+
+        <div id="biw-buttonBar">
+            <button id="biw-buttonBarSend" data-action="biw-toogle-send-form"><img src="./wallet/img/send32.png" alt="Send">Send</button>
+            <button id="biw-buttonBarSwap" data-action="biw-toogle-swap-form" class="disabled"><img src="./wallet/img/swap32.png" alt="Swap">Swap</button>
+			<button id="biw-buttonBarSpecial" data-action="biw-toogle-special-menu" class="hidden"><img src="./wallet/img/category64.png" alt="Special">Command</button>
             <div id="biw-specialMenu">
-                <button id="biw-buttonBarInstructions">Instructions<img src="./wallet/img/instructions64.png" alt="Instructions"></button>
-                <button id="biw-buttonBarSpecialClaim" class="disabled">Claim<img src="./wallet/img/claim64.png" alt="Claim"></button>
+				<input type="text" data-action="biw-interpreter-input" placeholder="ex: Send 10 to C123456" autocomplete="off">
+				<button id="biw-buttonBarInstructions" data-action="biw-interpret-input-btn">Confirm</button>
             </div>
         </div>
+
         <div class="wrap">
             <div id="biw-accountsWrap-box"></div>
             <div id="biw-accountsWrap">
-                <button id="biw-newAddressBtn">+</button>
+                <button id="biw-newAddressBtn" data-action="biw-new-address">+</button>
             </div>
         </div>
+
         <h3 style="position: absolute; font-size: .84em; color: var(--color1_2); bottom: 0;">v0.0.1</h3>
         <div id="biw-globalTextInfo" class="biw-textInfo"></div>
     </div>

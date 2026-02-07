@@ -108,24 +108,23 @@ export class BlocksTimesChartComponent {
 export class RoundLegitimaciesChartComponent {
 	maxBars = 10;
 	minColor = 255;
-	decay = 20;
-	/** @type {Array<{address: string, pubkeys: Set<any>}>} */
-	#data = [];
-	width = 500;
+	decay = 10;
+	width = 400;
 	height = 300;
 
 	// PRIVATE METHODS
-	#render() {
+	/** @param {Array<{address: string, pubkeys: Set<string>}>} data */
+	render(data = [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}]) {
 		const container = document.getElementById('cbe-roundLegitimaciesChart');
 		if (!container) throw new Error('RoundLegitimaciesChartComponent: render => Chart container not found');
 
 		container.innerHTML = '';
-		if (this.#data.length === 0) return;
+		if (data.length === 0) return;
 
 		// Take top N, reverse for display (lowest legitimacy at bottom)
-		const topEntries = this.#data.slice(0, this.maxBars);
+		const topEntries = data.slice(0, this.maxBars);
 		const entries = topEntries.map((e, i) => ({
-			address: e.address,
+			address: e.address || '-------',
 			legitimacy: i, // position in array = legitimacy score
 			index: i
 		}));
@@ -145,7 +144,7 @@ export class RoundLegitimaciesChartComponent {
 		const total = maxLegitimacy + this.decay;
 
 		const x = d3.scaleLinear()
-			.domain([Math.floor(this.decay * 0.5), total])
+			.domain([Math.floor(this.decay * .5), total])
 			.range([0, width]);
 		
 		// Use index as unique identifier instead of address
@@ -188,21 +187,13 @@ export class RoundLegitimaciesChartComponent {
 			.style('pointer-events', 'none')
 			.text(d => `${d.legitimacy} | ${d.address}  `);
 	}
+	reset() {
+		const container = document.getElementById('cbe-roundLegitimaciesChart');
+		if (container) container.innerHTML = '';
+	}
+
 	#handleClick(address) {
 		const event = new CustomEvent('addressClick', { detail: { address } });
 		document.dispatchEvent(event);
-	}
-
-	// PUBLIC METHODS
-	/** @param {Array<{address: string, pubkeys: Set<any>}>} data */
-	setData(data = []) {
-		this.reset();
-		this.#data = data;
-		this.#render();
-	}
-	reset() {
-		this.#data = [];
-		const container = document.getElementById('cbe-roundLegitimaciesChart');
-		if (container) container.innerHTML = '';
 	}
 }

@@ -2,6 +2,7 @@ import { AppConfig, appsConfig, buildAppsConfig } from './apps-config.js';
 import { ButtonsBar, SubWindow } from './apps-initializer.js';
 
 export class AppsManager {
+	/** @type {SubWindow[]} */					ordering = [];
 	/** @type {Object<string, SubWindow>} */	windows = {};
 	/** @type {SubWindow} */					draggingWindow = null;
 	/** @type {SubWindow} */					resizingWindow = null;
@@ -52,6 +53,9 @@ export class AppsManager {
 		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
 		if (this.appsConfig[appName].setGlobal) window[appName] = this.windows[appName];
 
+		this.ordering.push(appName);
+		this.windows[appName].element.style.zIndex = (this.ordering.length - 1).toString();
+
 		const { fullScreen, setFront } = this.appsConfig[appName];
 		if (fullScreen || setFront) {
 			setTimeout(() => {
@@ -91,13 +95,20 @@ export class AppsManager {
 		if (!this.windows[appName].element) return;
 		if (this.windows[appName].element.classList.contains('front')) return;
 
-		for (const app in this.windows) {
-			this.windows[app].element.classList.remove('front');
-			this.buttonsBar.buttonsByAppNames[app].classList.remove('front');
-		}
+		// REORDER Z-INDEX
+		this.ordering = this.ordering.filter(a => a !== appName);
+		this.ordering.push(appName);
 
-		this.windows[appName].element.classList.add('front');
-		this.buttonsBar.buttonsByAppNames[appName].classList.add('front');
+		for (let i = 0; i < this.ordering.length; i++) {
+			const an = this.ordering[i];
+			this.windows[an].element.style.zIndex = i.toString();
+
+			if (an === appName) this.windows[an].element.classList.add('front');
+			else this.windows[an].element.classList.remove('front');
+
+			if (an === appName) this.buttonsBar.buttonsByAppNames[an].classList.add('front');
+			else this.buttonsBar.buttonsByAppNames[an].classList.remove('front');
+		}
 	}
 	lock() {
 		this.state = 'locked';

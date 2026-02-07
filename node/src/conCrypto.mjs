@@ -1,5 +1,4 @@
 // @ts-check
-//import * as crypto from 'crypto';
 
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = typeof window !== 'undefined' // @ts-ignore

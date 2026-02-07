@@ -1,33 +1,39 @@
+// CHOOSE BETWEEN localStorage AND chrome.storage BASED ON ENVIRONMENT
+const mode = chrome.storage?.local ? 'c' : 'l';
+
 export class FrontStorage {
     initiator;
     constructor(initiator = 'global') { this.initiator = initiator; }
 
-    save(key, value) {
+	/** @param {string} key @param {Object|number|string|boolean} value */
+    async save(key, value) {
         const valueType = typeof value;
-        localStorage.setItem(`${this.initiator}-${key}-type`, valueType);
+		if (mode === 'l') localStorage.setItem(`${this.initiator}-${key}-type`, valueType);
+		else if (mode === 'c') await chrome.storage.local.set({ [`${this.initiator}-${key}-type`]: valueType });
 
         if (valueType === 'object') value = JSON.stringify(value);
-        localStorage.setItem(`${this.initiator}-${key}`, value);
+		if (mode === 'l') localStorage.setItem(`${this.initiator}-${key}`, value);
+		else if (mode === 'c') await chrome.storage.local.set({ [`${this.initiator}-${key}`]: value });
 
         console.log(`[FrontStorage] ${key} saved, value: ${value}`);
     }
-    load(key, parsing = 'default') {
-        const valueType = localStorage.getItem(`${this.initiator}-${key}-type`);
+	
+	/** @param {string} key @param {'default' | 'raw'} [parsing] @returns {Promise<Object|number|string|boolean|null>} */
+    async load(key, parsing = 'default') {
+		const valueType = mode === 'l' ? localStorage.getItem(`${this.initiator}-${key}-type`)
+			: (await chrome.storage.local.get([`${this.initiator}-${key}-type`]))[`${this.initiator}-${key}-type`];
         if (!valueType) return null;
-        let value = localStorage.getItem(`${this.initiator}-${key}`);
+		
+        const v = mode === 'l' ? localStorage.getItem(`${this.initiator}-${key}`)
+			: (await chrome.storage.local.get([`${this.initiator}-${key}`]))[`${this.initiator}-${key}`];
+		if (v === null || v === undefined) return null;
 
         if (parsing === 'default') {
-            if (valueType === 'object') value = JSON.parse(value);
-            if (valueType === 'number') value = parseFloat(value);
-            if (valueType === 'boolean') value = value === 'true';
-
-            if (typeof value !== valueType) {
-                console.error(`[FrontStorage] Error: ${key} is not a ${valueType}`);
-                return null;
-            }
+            if (valueType === 'object') return JSON.parse(v);
+            if (valueType === 'number') return parseFloat(v);
+            if (valueType === 'boolean') return v === 'true';
         }
 
-        console.log(`[FrontStorage] ${key} loaded, value: ${value}`);
-        return value;
+		return v;
     }
 }

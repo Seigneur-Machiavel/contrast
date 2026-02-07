@@ -39,7 +39,8 @@
     position: relative;
     width: 100%;
     height: 100%;
-    height: 180px !important;
+    /*height: 180px !important;*/
+	height: 230px !important;
 }
 .biw-container .biw-miniFormsWrap {
     position: absolute;
@@ -115,25 +116,26 @@
         color: orange;
     }
 }
-.biw-buttonBar {
+#biw-buttonBar {
     position: relative;
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+	gap: 10px;
     width: 84%;
     margin: 10px 0px;
     border-bottom: solid #80808024 1px;
     padding: 0 0 10px 0;
 }
-.biw-buttonBar button {
+#biw-buttonBar button {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: space-around;
-    width: 56px;
-    height: 56px;
+    width: 80px;
+    height: 64px;
     border-radius: 10px;
-    font-size: small;
+    font-size: .75em;
     border-style: none;
     cursor: pointer;
     transition: background .06s ease-in-out, color .06s .06s, border-radius .06s ease-in-out;
@@ -143,41 +145,49 @@
     background: var(--color2);
     color: var(--color1);
 }
-.biw-buttonBar button:not(.disabled):hover {
+#biw-buttonBar button:not(.disabled):not(.open):hover {
     box-shadow: inset 0px 0px 0px 3px var(--color1_2);
     background: var(--color1);
     color: var(--color2);
 }
-.biw-buttonBar button.active {
+#biw-buttonBar button.active {
     box-shadow: inset 0px 0px 0px 3px var(--color2) !important;
     background: var(--color1) !important;
     color: var(--color2) !important;
 }
-.biw-buttonBar button.disabled {
+#biw-buttonBar button.disabled {
     opacity: .6;
     cursor: initial;
     filter: brightness(0.8);
     box-shadow: 3px 2px 5px var(--neumo-color2), -2px -2px 4px var(--neumo-color1);
 }
-.biw-buttonBar button img {
+#biw-buttonBar button img {
     pointer-events: none;
     width: 24px;
     filter: invert(var(--dark-mode-boolean));
     transform: translateY(5px);
 }
-.biw-buttonBar button:not(.disabled):hover img, .biw-buttonBar button:not(.disabled).active img {
+#biw-buttonBar button:not(.disabled):not(.open):hover img, #biw-buttonBar button:not(.disabled).active img {
     filter: invert(calc(1 - var(--dark-mode-boolean)));
     transition: filter .06s .06s ease-in-out;
 }
 
-#biw-buttonBarSpecial:hover, #biw-buttonBarSpecial.open {
+#biw-buttonBarSpecial {
+	transition: transform .12s .06s ease-in-out;
+}
+#biw-buttonBarSpecial:hover {
     box-shadow: none;
     background: var(--color2);
     color: var(--color1);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 }
-#biw-buttonBarSpecial:not(.active):hover img, #biw-buttonBarSpecial:not(.active).open img {
+#biw-buttonBarSpecial.open {
+	border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+	transform: translateY(10px);
+}
+#biw-buttonBarSpecial:not(.active):not(.open):hover img {
     filter: invert(var(--dark-mode-boolean));
     /*transition: none;*/
 }
@@ -187,43 +197,41 @@
     position: absolute;
     display: flex;
     flex-direction: column;
-    right: 0;
-    top: calc(100% - 10px);
+	top: 100%;
+    right: 5px;
+    width: 260px;
     background: var(--color2);
     color: var(--color1);
     opacity: 0;
-    transition: opacity .06s ease-in-out;
     border-radius: 10px 0 10px 10px;
+	transform: translateY(-10px);
+	transition: opacity .12s .06s ease-in-out, transform .12s .06s ease-in-out;
 }
 #biw-specialMenu.open {
     pointer-events: all;
     opacity: 1;
-    transition: opacity .06s .06s ease-in-out;
+	transform: translateY(0px);
 }
 #biw-specialMenu button {
-    height: 0px;
-    width: 200px;
-    flex-direction: row;
-    justify-content: space-between;
+	text-align: center;
+    display: block;
+    height: 32px;
+    width: auto;
+    margin: 8px 10px;
+    border-radius: 4px;
     padding: 0px 20px;
     align-items: baseline;
-    border-bottom: solid 0px var(--color2_3);
-    border-radius: 20px;
     transition: height .06s ease-in-out, border .06s ease-in-out;
 }
-#biw-specialMenu.open button {
-    height: 36px;
-    border-radius: 0px;
-    border-bottom: solid 1px var(--color2_3);
-    transition: height .06s .06s ease-in-out, border .12s .06s ease-in-out;
+#biw-specialMenu input {
+    height: 28px;
+    margin: 8px 10px 0px;
+    border-radius: 4px;
+	background-color: var(--color1);
+	color: var(--color2);
 }
-#biw-specialMenu button:first-child {
-    border-top-left-radius: 10px !important;
-}
-#biw-specialMenu button:last-child {
-    border-bottom-left-radius: 10px !important;
-    border-bottom-right-radius: 10px !important;
-}
+
+
 .biw-miniForm {
     pointer-events: all;
     position: absolute;
@@ -276,16 +284,44 @@
     font-size: .8em;
     margin: 10px 0 12px 0;
 }
+.biw-inputs-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 90%;
+    margin-top: 30px;
+}
+.biw-inputs-wrap .biw-spaced {
+	width: 100%;
+}
 .biw-flexWrap input {
-    height: 30px;
-    margin: 10px 0 0 0;
+    height: 24px;
+	width: 60%;
+	font-size: .9em;
 }
-.biw-flexWrap input:first-child {
-    margin: 20px 0 0 0 !important;
+.biw-actionSelector {
+	cursor: pointer;
+    background-color: var(--color2);
+    color: var(--color1);
+    padding: 4px 6px;
+    box-shadow: 3px 0px 0px var(--color2);
+    margin-right: 3px;
+	margin-top: 2px;
+    border-radius: 3px;
+	border: none;
 }
-.biw-amountInput {
-    margin-top: 40px !important;
+.biw-actionSelector option {
+	background-color: var(--color2);
+	color: var(--color1);
 }
+.biw-actionSelector option:hover {
+	background-color: var(--color2);
+	color: var(--color1);
+}
+/*.biw-actionSelector option:checked {
+	background-color: var(--color2);
+	color: var(--color1);
+}*/
 .biw-destAddress {
     height: 24px !important;
     margin: 0 !important;
@@ -301,7 +337,7 @@
     background: linear-gradient(90deg, var(--color1) 0%, var(--color2) 0%);
     transition: background 0.24s ease-in-out;
 }
-.biw-miniForm .biw-holdBtn, .biw-miniForm .biw-followInstructionsBtn {
+.biw-miniForm .biw-holdBtn, .biw-miniForm .biw-interpretBtn {
     position: absolute;
     bottom: 23px;
     left: 50%;
@@ -324,23 +360,38 @@
     margin-top: 50px;
 }
 
-#biw-buttonRefresh {
+#biw-buttonRefresh, #biw-buttonSettings {
     position: absolute;
-    top: 8px;
-    left: 10px;
-    width: 24px;
-    height: 24px;
+    top: 12px;
+    width: 26px;
+    height: 26px;
     padding: 0;
     background: none;
 }
-#biw-buttonRefresh img {
+#biw-buttonRefresh {
+	width: 24px;
+    height: 24px;
+	left: 10px;
+}
+#biw-buttonSettings {
+	right: 10px;
+}
+#biw-buttonSettings .tooltip {
+	left: auto;
+	right: 50%;
+	transform: translateX(0%);
+}
+#biw-buttonRefresh img, #biw-buttonSettings img {
     pointer-events: none;
     width: 100%;
     opacity: .2;
-    filter: invert(calc(1 - var(--dark-mode-boolean)));
+	filter: invert(var(--dark-mode-boolean));
     transition: transform .5s, opacity .24s;
 }
-#biw-buttonRefresh:hover img {
+#biw-buttonRefresh img {
+	filter: invert(calc(1 - var(--dark-mode-boolean)));
+}
+#biw-buttonRefresh:hover img, #biw-buttonSettings:hover img {
     opacity: .3;
     transform: rotate(320deg) scale(1.02);
 }
@@ -361,59 +412,31 @@
         transform: rotate(360deg) scale(1);
     }
 }
-#biw-addressTypeList {
-    position: absolute;
-    display: flex;
-    align-items: center;
-    gap: 0px;
-    right: 0px;
-    box-shadow: inset 0px 0px 0px 0px var(--color1_1);
-    padding: 4px 10px;
-    border-radius: 10px;
-    transition: gap .24s, box-shadow .12s, right .12s .12s;
+
+#biw-settings-menu {
+	pointer-events: none;
+	z-index: 1000;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	opacity: 0;
+	backdrop-filter: brightness(.8) blur(1px);
 }
-#biw-addressTypeList.expand {
-    box-shadow:
-    0px 0px 8px -4px var(--color2),
-    inset 0px 0px 4px 4px var(--color1_1);
-    gap: 6px;
-    right: 6px;
+#biw-settings-menu.open {
+	pointer-events: all;
+	opacity: 1;
 }
-#biw-addressTypeList h2 {
-    margin: 0 10px 0 0;
-    font-size: 0em;
-    transition: font-size .12s;
-    color: var(--color3);
-}
-#biw-addressTypeList.expand h2 {
-    font-size: 1em;
-}
-#biw-addressTypeList button {
-    width: 0px;
-    height: 30px;
-    background: var(--color1);
-    color: var(--color3);
-    padding: 0;
+#biw-settings-menu .content {
+	top: 50%;
+	left: 50%;
+	width: 200px;
+	height: auto;
+	padding: 10px;
+	background: var(--color1);
     border-radius: 6px;
-    font-size: 0em;
-    font-weight: bold;
-    transition: width .12s, font-size .12s;
-}
-#biw-addressTypeList button.active {
-    pointer-events: none;
-    box-shadow: inset 0px 0px 2px 1px var(--color1_3);
-    width: 30px;
-    font-size: .86em;
-}
-#biw-addressTypeList.expand button.active {
-    box-shadow: inset 0px 0px 2px 1px var(--color2);
-}
-#biw-addressTypeList button:not(.disabled):hover {
-    box-shadow: inset 0px 0px 2px 1px var(--color1_3);
-}
-#biw-addressTypeList.expand button {
-    width: 30px;
-    font-size: .86em;
+	transform: translate(-50%, -50%);
 }
 
 .biw-stakedBalance {
@@ -445,6 +468,7 @@
     box-shadow: inset 0px 0px 4px -2px black;
 }
 .biw-accountLabel {
+	cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -454,7 +478,8 @@
     border-radius: 10px;
     transition: box-shadow .12s .06s ease-in-out;
     width: 86%;
-    box-shadow: inset 0px 0px 6px -4px var(--color2), -.2px -.2px 0px 1px var(--color2);
+    /*box-shadow: inset 0px 0px 6px -4px var(--color2), -.2px -.2px 0px 1px var(--color2);*/
+	box-shadow: inset 0px 0px 6px -4px var(--color1_1), -.2px -.2px 0px 1px var(--color1_1);
 }
 .biw-accountLabel.active {
     box-shadow: inset -1px -1px 8px -6px var(--color2), .2px .2px 0px 2px var(--color2);
@@ -465,6 +490,9 @@
     width: 52px;
     height: 52px;
     transition: filter 0.12s ease-in-out;
+}
+.biw-accountLabel:not(.active):hover {
+	box-shadow: inset 0px 0px 6px -4px var(--color3), -.2px -.2px 0px 1px var(--color3);
 }
 .biw-accountLabel:not(.active) .biw-accountImgWrap:hover {
     /*transform: scale(1.02);*/
@@ -479,6 +507,7 @@
     height: 100%;
     transition: box-shadow 0.12s ease-in-out;
 }
+.biw-accountLabel:not(.active):hover .biw-accountImgWrap div,
 .biw-accountLabel:not(.active) .biw-accountImgWrap:hover div {
     box-shadow: 0px 0px 1px 2px var(--color3), inset 0px 0px 2px -1px var(--color3);
     transition: box-shadow 0.12s ease-in-out;
@@ -584,33 +613,33 @@
     pointer-events: none;
     width: calc(100% - 64px);
 }
-.biw-accountLabelNameAndValueWrap {
+.biw-accountLabelAddressAndValueWrap {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: 2px;
 }
-.biw-accountLabelNameAndValueWrap h2 {
+.biw-accountLabelAddressAndValueWrap h2 {
     pointer-events: all;
     color: var(--color2);
     opacity: .7;
     font-size: .8em;
 }
-.biw-accountLabelNameAndValueWrap h3 {
+.biw-accountLabelAddressAndValueWrap h3 {
     pointer-events: all;
     color: var(--color2);
     font-size: .8em;
     font-weight: 500;
 }
-.biw-accountLabel.active .biw-accountLabelNameAndValueWrap h3 {
+.biw-accountLabel.active .biw-accountLabelAddressAndValueWrap h3 {
     opacity: .8;
     font-weight: 600;
 }
-.biw-accountLabelAddress {
+.biw-accountLabelName {
     display: flex;
     justify-content: space-between;
 }
-.biw-accountLabelAddress h3 {
+.biw-accountLabelName h3 {
     pointer-events: all;
     font-size: .9em;
     color: var(--color2);
@@ -618,7 +647,7 @@
     margin: 0 0 4px 0;
     opacity: .6;
 }
-.biw-accountLabelAddress button {
+.biw-accountLabelName button {
     pointer-events: all;
     padding: 0;
     width: 20px;
@@ -626,15 +655,13 @@
     background: none;
     border-radius: 50%;
     opacity: .6;
+	margin: -1px -1px 0 0;
     transition: opacity .24s;
 }
-.biw-accountLabel.active .biw-accountLabelAddress h3, .biw-accountLabel.active .biw-accountLabelAddress button {
-    opacity: .8;
-}
-.biw-accountLabelAddress button:hover {
+.biw-accountLabelName button:hover {
     opacity: .9 !important;
 }
-.biw-accountLabelAddress button img {
+.biw-accountLabelName button img {
     pointer-events: none;
     width: 100%;
     filter: invert(calc(1 - var(--dark-mode-boolean)));

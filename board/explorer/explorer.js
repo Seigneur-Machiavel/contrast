@@ -79,6 +79,7 @@ export class Explorer {
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
 
 		console.log('Explorer DOM elements ready');
+		this.roundLegitimaciesChart.render(); // reset chart with 'loading' state
 		this.bc.createEmptyBlocksUntilFillTheDiv();
 		const [supply, targetTime] = [eHTML.get('maxSupply'), eHTML.get('targetBlocktime')];
 		if (!supply || !targetTime) throw new Error('Explorer init error: required elements not found');
@@ -92,6 +93,7 @@ export class Explorer {
 		if (!block) return;
 		
 		//console.log('Explorer: New consensus block:', block);
+		this.roundLegitimaciesChart.render(); // reset chart with 'loading' state
 		const consensusMsgElement = eHTML.get('blockExplorerWaitingConsensusMessage');
 		if (!consensusMsgElement) throw new Error('Explorer: consensusMsgElement not found');
 		if (!this.connector.isConsensusRobust) consensusMsgElement.classList.add('show');
@@ -305,15 +307,16 @@ export class Explorer {
 		const f = Math.max(0, toHeight - 60);
 		const tg = await this.connector.getBlocksTimestamps(fromHeight, toHeight);
 		if (!tg) throw new Error('Explorer: getAndDisplayBlocksTimegaps => Unable to get blocks timestamps gaps');
-		console.log('Explorer: Retrieved blocks timestamps gaps:', tg);
+		//console.log('Explorer: Retrieved blocks timestamps gaps:', tg);
 		for (let i = 0; i < tg.heights.length; i++)
 			this.blocksTimesChart.appendBlockTimeIfCorresponding(tg.heights[i], tg.timestamps[i]);
 	}
 	async getAndDisplayRoundLegitimacies() {
 		const rl = await this.connector.getRoundsLegitimacies();
 		if (!rl) throw new Error('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
-		console.log('Explorer: Retrieved rounds legitimacies:', rl);
-		this.roundLegitimaciesChart.setData(rl);
+		if (rl.length === 0) return; // no data
+		//console.log('Explorer: Retrieved rounds legitimacies:', rl);
+		this.roundLegitimaciesChart.render(rl);
 		
 		const legHeightElement = eHTML.get('legHeight');
 		if (legHeightElement) legHeightElement.textContent = this.connector.height.toString();

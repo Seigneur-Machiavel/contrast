@@ -1,6 +1,6 @@
 // pattern-generator.js
 
-class PatternGenerator {
+export class PatternGenerator {
     constructor(options = {}) {
         this.SCALE = options.scale || 2;
         this.width = options.width || 48;
@@ -97,10 +97,3 @@ class PatternGenerator {
         ctx.stroke();
     }
 }
-
-// Export the class for use in other modules
-//export default PatternGenerator;
-
-const isNode = typeof module !== 'undefined' && module.exports;
-if (isNode) { module.exports = PatternGenerator; }
-//module.exports = PatternGenerator;
