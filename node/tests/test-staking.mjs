@@ -82,7 +82,7 @@ const onBlockConfirmed = (block) => {
 		const availableAmount = sigUtxos.reduce((a, b) => a + b.amount, 0);
 		if (availableAmount < 10_000_000 * 2) continue; // not enough to stake
 
-		account.ledgerUtxos = ledger.ledgerUtxos;
+		account.setBalanceAndUTXOs(account.balance, ledger.ledgerUtxos);
 		const tx = Transaction_Builder.createStakingVss(account, 1);
 		const signedTx = account.signTransaction(tx);
 		if (!signedTx) continue; // failed to create tx

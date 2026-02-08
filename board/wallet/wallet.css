@@ -638,6 +638,8 @@
 .biw-accountLabelName {
     display: flex;
     justify-content: space-between;
+	width: fit-content;
+    gap: 8px;
 }
 .biw-accountLabelName h3 {
     pointer-events: all;

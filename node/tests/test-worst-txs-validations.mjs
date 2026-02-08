@@ -54,9 +54,10 @@ const onBlockConfirmed = (block) => {
 
 		const a = bootstrapWallet.accounts[0];
 		const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
+		if (!ledger || !ledger.ledgerUtxos) throw new Error('Ledger or ledgerUtxos not found for the account');
 		if (ledger.totalReceived - ledger.totalSent !== ledger.balance) throw new Error('Inconsistent balance calculation!');
-		a.ledgerUtxos = ledger?.ledgerUtxos || [];
 
+		a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);
 		const tx = Transaction_Builder.createTransaction(a, transfers, 1);
 		const signedTx = a.signTransaction(tx);
 		if (!signedTx) return; // failed to create tx

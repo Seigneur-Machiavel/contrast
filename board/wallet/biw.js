@@ -72,6 +72,7 @@ export class BoardInternalWallet {
 	eHTML = eHTML;
 	autoRefresh = true;
 	wallet = new Wallet("0000000000000000000000000000000000000000000000000000000000000000");
+	accountThatNeedsRefresh = new Set();
 	instructionsReader = new InstructionsReader();
 	boardStorage;
 	connector;
@@ -106,11 +107,34 @@ export class BoardInternalWallet {
         await this.wallet.loadAccountsFromFrontStorage(this.boardStorage);
 		this.components.accounts.updateLabels();
 		if (this.wallet.accounts.length > 0) this.selectAccountLabel(this.wallet.accounts[0].address);
+		for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
+		await this.refreshAccounts();
 
 		this.connector.on('consensus_height_change', this.#onConsensusHeightChange);
     }
 
 	#onConsensusHeightChange = async (newHeight = 0) => {
+		if (!this.autoRefresh) return;
+		console.log('Consensus height changed:', newHeight);
+
+		// CHECK WHICH ACCOUNTS NEED REFRESH (because they are involved in the new finalized block)
+		const block = this.connector.blocks.finalized[this.connector.hash];
+		if (!block) return;
+
+		for (const tx of block.Txs) {
+			for (const output of tx.outputs)
+				for (const account of this.wallet.accounts)
+					if (output.address === account.address && !this.accountThatNeedsRefresh.has(account.address))
+						this.accountThatNeedsRefresh.add(account.address);
+
+			for (const input of tx.inputs)
+				for (const account of this.wallet.accounts)
+					for (const utxo of account.ledgerUtxos)
+						if (input === utxo.anchor && !this.accountThatNeedsRefresh.has(account.address))
+							this.accountThatNeedsRefresh.add(account.address);
+		}
+
+		await this.refreshAccounts();
 	}
 	#getWalletAccountIndexByAddress(address = '') {
         for (let j = 0; j < this.wallet.accounts.length; j++)
@@ -203,6 +227,7 @@ export class BoardInternalWallet {
 			if (userPreferences.enableDataField) eHTML.get('dataField')?.classList.remove('hidden');
 		} catch (error) { console.error('Error loading user preferences:', error); }
 	}
+
 	// HANDLERS METHODS
 	// @ts-ignore
 	clickHandler(e) {
@@ -211,7 +236,7 @@ export class BoardInternalWallet {
 		const parent = e.target.parentElement;
 		switch(e.target.dataset.action) {
 			case 'biw-refresh':
-				console.log('buttonRefresh');
+				this.refreshAccounts();
 				break;
 			case 'biw-toggle-settings-menu':
 				eHTML.get('settings-menu')?.classList.toggle('open');
@@ -280,18 +305,33 @@ export class BoardInternalWallet {
 		this.components.miniform.setSenderAddress(address);
 		console.log(`Selected account: ${address}`);
     }
+	async refreshAccounts() {
+		const buttonRefresh = eHTML.get('buttonRefresh');
+		const balanceElement = eHTML.get('balanceStr');
+		const stakedBalanceElement = eHTML.get('stakedStr');
+		if (!buttonRefresh || !balanceElement || !stakedBalanceElement) throw new Error('Refresh button element not found');
+		buttonRefresh.classList.add('active');
+
+		const start = Date.now();
+		for (const account of this.wallet.accounts) {
+			if (!this.accountThatNeedsRefresh.has(account.address)) continue;
+			const ledger = await this.connector.getAddressLedger(account.address);
+			if (!ledger || !ledger.ledgerUtxos) continue;
+
+			account.setBalanceAndUTXOs(ledger.balance, ledger.ledgerUtxos);
+			this.accountThatNeedsRefresh.delete(account.address);
+        }
+
+		this.components.accounts.updateLabels();
+		balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance);
+		stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.stakedBalance);
+		
+		// wait at least 500ms to remove the active state, to avoid too quick flashes if the refresh is very fast
+		if (Date.now() - start < 1000) await new Promise(r => setTimeout(r, 1000 - (Date.now() - start)));
+        buttonRefresh.classList.remove('active');
+    }
 
 	// OLD API METHODS - MAINLY DEPRECATED
-    async refreshActiveAccounts() {
-        this.eHTML.buttonRefresh.classList.add('active');
-        // refresh all accounts data
-		for (const account of this.wallet.accounts) {
-            this.fetcher.send({ type: 'get_address_exhaustive_data', data: account.address });
-            await new Promise((resolve) => setTimeout(() => resolve(), 10));
-        }
-        await new Promise((resolve) => setTimeout(() => resolve(), 1000));
-        this.eHTML.buttonRefresh.classList.remove('active');
-    }
     holdBtnMouseUpAnimation(target, invertColors = false, duration = 1000) {
         const leftColor = invertColors ? 'var(--color1)' : 'var(--color2)';
         const rightColor = invertColors ? 'var(--color2)' : 'var(--color1)';

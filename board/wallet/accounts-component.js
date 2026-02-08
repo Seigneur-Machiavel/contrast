@@ -50,7 +50,7 @@ export class AccountsComponent {
                     accountImgWrap.appendChild(img);
                 }
 
-                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.balance)}c`;
+                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sigOrSlash']))}c`;
                 if (name.innerText !== accountName) name.innerText = accountName;
                 if (address.innerText !== account.address) address.innerText = account.address;
                 if (amount.innerText !== readableAmount) amount.innerText = readableAmount;

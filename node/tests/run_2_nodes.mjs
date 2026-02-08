@@ -73,7 +73,8 @@ const onBlockConfirmed = (block) => {
 	const receipient = bootstrapWallet.accounts[1].address;
 	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
 	if (!ledger.ledgerUtxos) return;
-	a.ledgerUtxos = ledger.ledgerUtxos;
+
+	a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);
 	const tx = Transaction_Builder.createAndSignTransaction(a, 10, receipient)?.signedTx;
 	if (!tx) return; // failed to create tx
 

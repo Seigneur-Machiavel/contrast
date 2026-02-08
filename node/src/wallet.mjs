@@ -5,6 +5,7 @@ import { Transaction_Builder } from './transaction.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ProgressLogger } from '../../utils/progress-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
+import { UTXO_RULES_GLOSSARY, UTXO } from '../../types/transaction.mjs';
 
 /**
 * @typedef {import("../../storage/storage.mjs").ContrastStorage} ContrastStorage
@@ -61,19 +62,35 @@ export class Account {
         return transaction;
     }
     /** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */
-    setBalanceAndUTXOs(balance, ledgerUtxos, spendableBalance = 0) {
+    setBalanceAndUTXOs(balance, ledgerUtxos) {
         if (typeof balance !== 'number') throw new Error('Invalid balance');
         if (!Array.isArray(ledgerUtxos)) throw new Error('Invalid LedgerUtxos');
 
         this.balance = balance;
         this.ledgerUtxos = ledgerUtxos;
-        this.spendableBalance = spendableBalance;
     }
     /** @param {number} length - len of the hex hash */
     async getUniqueHash(length = 64) {
         const hash = await HashFunctions.SHA256(this.pubKey + this.#privKey);
         return hash.substring(0, length);
     }
+	/** Return a list of UTXOs that are filtered based on the provided criteria. (excludeRules or includesRules, not both)
+	 * @param {number} maxHeight default: Infinity @param {string[]} excludeRules ex: ['sigOrSlash'] @param {string[]} includesRules ex: ['sigOrSlash'] */
+	filteredUtxos(maxHeight = Infinity, excludeRules, includesRules) {
+		if (excludeRules.length > 0 && includesRules.length > 0) throw new Error('Cannot use both excludeRules and includesRules at the same time');
+		
+		const rulesCodesToExclude = excludeRules.map(r => UTXO_RULES_GLOSSARY[r]?.code).filter(c => c !== undefined);
+		const ruleCodesToExclude = rulesCodesToExclude.length ? new Set(rulesCodesToExclude) : undefined;
+		let utxo = UTXO.fromLedgerUtxos(this.address, this.ledgerUtxos, ruleCodesToExclude);
+		if (includesRules.length > 0) utxo = utxo.filter(u => includesRules.some(r => r === u.rule));
+		return utxo.filter(u => parseInt(u.anchor.split(':')[0], 10) <= maxHeight);
+	}
+	/** Calculate the balance based on the filtered UTXOs. (excludeRules or includesRules, not both)
+	 * @param {number} maxHeight default: Infinity @param {string[]} excludeRules ex: ['sigOrSlash'] @param {string[]} includesRules ex: ['sigOrSlash'] */
+	filteredBalance(maxHeight = Infinity, excludeRules = [], includesRules = []) {
+		const filteredUtxos = this.filteredUtxos(maxHeight, excludeRules, includesRules);
+		return filteredUtxos.reduce((sum, utxo) => sum + utxo.amount, 0);
+	}
 }
 
 export class Wallet {
@@ -117,7 +134,6 @@ export class Wallet {
 		const encryptedAccounts = await this.#encryptAccounts();
 		await frontStorage.save(`accounts-${await this.#walletIdentifier()}`, encryptedAccounts);
 	}
-
 	/** Derive accounts from master seed. (If storage is provide: load and save accounts)
 	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
     async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', contrastStorage, frontStorage) {
@@ -181,6 +197,8 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
 		if (!result.derivedAccounts || result.derivedAccounts.length <= accountsBefore) return null;
 		return result.derivedAccounts[accountsBefore];
 	}
+	get balance() { return this.accounts.reduce((sum, account) => sum + account.balance, 0); }
+	get stakedBalance() { return this.accounts.reduce((sum, account) => sum + account.filteredBalance(Infinity, [], ['sigOrSlash']), 0); }
 
 	// INTERNALS
 	/** @param {number} accountIndex @param {string} [prefix] default 'C' */
