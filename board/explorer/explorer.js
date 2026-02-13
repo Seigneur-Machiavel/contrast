@@ -93,7 +93,6 @@ export class Explorer {
 		if (!block) return;
 		
 		//console.log('Explorer: New consensus block:', block);
-		this.roundLegitimaciesChart.render(); // reset chart with 'loading' state
 		const consensusMsgElement = eHTML.get('blockExplorerWaitingConsensusMessage');
 		if (!consensusMsgElement) throw new Error('Explorer: consensusMsgElement not found');
 		if (!this.connector.isConsensusRobust) consensusMsgElement.classList.add('show');

@@ -172,26 +172,26 @@
     transition: filter .06s .06s ease-in-out;
 }
 
-#biw-buttonBarSpecial {
+#biw-buttonBarInterpreter {
 	transition: transform .12s .06s ease-in-out;
 }
-#biw-buttonBarSpecial:hover {
+#biw-buttonBarInterpreter:hover {
     box-shadow: none;
     background: var(--color2);
     color: var(--color1);
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 }
-#biw-buttonBarSpecial.open {
+#biw-buttonBarInterpreter.open {
 	border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
 	transform: translateY(10px);
 }
-#biw-buttonBarSpecial:not(.active):not(.open):hover img {
+#biw-buttonBarInterpreter:not(.active):not(.open):hover img {
     filter: invert(var(--dark-mode-boolean));
     /*transition: none;*/
 }
-#biw-specialMenu {
+#biw-interpreter {
     pointer-events: none;
     z-index: 2;
     position: absolute;
@@ -207,12 +207,12 @@
 	transform: translateY(-10px);
 	transition: opacity .12s .06s ease-in-out, transform .12s .06s ease-in-out;
 }
-#biw-specialMenu.open {
+#biw-interpreter.open {
     pointer-events: all;
     opacity: 1;
 	transform: translateY(0px);
 }
-#biw-specialMenu button {
+#biw-interpreter button {
 	text-align: center;
     display: block;
     height: 32px;
@@ -223,8 +223,7 @@
     align-items: baseline;
     transition: height .06s ease-in-out, border .06s ease-in-out;
 }
-#biw-specialMenu input {
-    height: 28px;
+#biw-interpreter input {
     margin: 8px 10px 0px;
     border-radius: 4px;
 	background-color: var(--color1);
@@ -295,11 +294,9 @@
 	width: 100%;
 }
 .biw-flexWrap input {
-    height: 24px;
-	width: 60%;
-	font-size: .9em;
+	width: 64%;
 }
-.biw-actionSelector {
+#biw-actionSelector {
 	cursor: pointer;
     background-color: var(--color2);
     color: var(--color1);
@@ -310,15 +307,15 @@
     border-radius: 3px;
 	border: none;
 }
-.biw-actionSelector option {
+#biw-actionSelector option {
 	background-color: var(--color2);
 	color: var(--color1);
 }
-.biw-actionSelector option:hover {
+#biw-actionSelector option:hover {
 	background-color: var(--color2);
 	color: var(--color1);
 }
-/*.biw-actionSelector option:checked {
+/*#biw-actionSelector option:checked {
 	background-color: var(--color2);
 	color: var(--color1);
 }*/
@@ -620,29 +617,26 @@
     margin-top: 2px;
 }
 .biw-accountLabelAddressAndValueWrap h2 {
-    pointer-events: all;
     color: var(--color2);
     opacity: .7;
     font-size: .8em;
 }
 .biw-accountLabelAddressAndValueWrap h3 {
-    pointer-events: all;
-    color: var(--color2);
+    color: var(--color3);
     font-size: .8em;
-    font-weight: 500;
-}
-.biw-accountLabel.active .biw-accountLabelAddressAndValueWrap h3 {
-    opacity: .8;
     font-weight: 600;
 }
+/*.biw-accountLabel.active .biw-accountLabelAddressAndValueWrap h3 {
+	color: var(--color2);
+}*/
 .biw-accountLabelName {
+	pointer-events: none;
     display: flex;
     justify-content: space-between;
 	width: fit-content;
     gap: 8px;
 }
 .biw-accountLabelName h3 {
-    pointer-events: all;
     font-size: .9em;
     color: var(--color2);
     text-align: right;

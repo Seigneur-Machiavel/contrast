@@ -94,7 +94,7 @@ export class TxValidation {
             if (!involvedUTXOs[anchor]) throw new Error(`UTXO: ${anchor} not found in involvedUTXOs, already spent?`);
             else fee += involvedUTXOs[anchor].amount;
 
-        if (fee <= 0) throw new Error('Negative or zero fee transaction');
+        if (fee < 0) throw new Error('Negative transaction fee');
         if (fee % 1 !== 0) throw new Error('Invalid fee: not integer');
 
         return fee;

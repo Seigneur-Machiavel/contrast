@@ -336,7 +336,8 @@ body {
     border-radius: 5px;
     background-color: var(--color1);
     /*background-color: blue;*/ /* FOR EASY DEBUG */
-    transform-origin: bottom center;
+    /*transform-origin: bottom center;*/
+	transform-origin: top left;
     box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2);
     transition: border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
 }
@@ -372,12 +373,10 @@ body {
         border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
 }
 .window.onBoard.front {
-    /* z-index: 1; */ /* => ordered in apps-manager.js */
     box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);
 }
 .window.onBoard:not(.front).temp-front {
-    z-index: 2;
-    /*opacity: .8 !important;*/
+    z-index: 1000 !important;
     box-shadow: inset 0 0 1.5px .5px var(--color2_3), 1px 1px 0px 1px var(--color2_3);
 }
 .window .title-bar {

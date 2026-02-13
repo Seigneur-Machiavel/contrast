@@ -1,5 +1,5 @@
-import { AppConfig, appsConfig, buildAppsConfig } from './apps-config.js';
 import { ButtonsBar, SubWindow } from './apps-initializer.js';
+import { AppConfig, appsConfig, buildAppsConfig } from './apps-config.js';
 
 export class AppsManager {
 	/** @type {SubWindow[]} */					ordering = [];
@@ -50,7 +50,7 @@ export class AppsManager {
 		this.windows[appName].position.top = initTop || 0;
 		this.windows[appName].position.left = initLeft || 1;
 
-		this.windows[appName].render(this.windowsWrap, origin.x, origin.y);
+		this.windows[appName].render(this.windowsWrap, origin.x || 1, origin.y);
 		if (this.appsConfig[appName].setGlobal) window[appName] = this.windows[appName];
 
 		this.ordering.push(appName);
@@ -179,14 +179,14 @@ export class AppsManager {
 		const { appName } = this.#getElementParentWindow(e.target);
 		if (appName) this.setFrontWindow(appName);
 	}
-	dlbClickTitleBarHandler(e) {
+	dlbClickHandler(e) {
 		if (!e.target.classList.contains('title-bar')) return;
 
 		const { subWindow } = this.#getElementParentWindow(e.target);
 		if (subWindow.isFullScreen) subWindow.unsetFullScreen(this.transitionsDuration);
 		else subWindow.setFullScreen(this.#boardSize, this.transitionsDuration);
 	}
-	grabWindowHandler(e) {
+	mouseDownHandler(e) {
 		const { appName, subWindow } = this.#getElementParentWindow(e.target);
 		if (!appName || !subWindow || subWindow.isFullScreen) return;
 
@@ -194,8 +194,8 @@ export class AppsManager {
 		if (e.target.classList.contains('title-bar')) {
 			e.preventDefault();
 			this.draggingWindow = subWindow;
-			subWindow.dragStart.x = e.clientX - subWindow.element.offsetLeft;
-			subWindow.dragStart.y = e.clientY - subWindow.element.offsetTop;
+			subWindow.dragStart.x = e.clientX - subWindow.position.left;
+			subWindow.dragStart.y = e.clientY - subWindow.position.top;
 			subWindow.element.classList.add('dragging');
 		}
 
@@ -209,16 +209,19 @@ export class AppsManager {
 			subWindow.element.classList.add('resizing');
 		}
 	}
+	mousemoveHandler(e) {
+		if (this.draggingWindow) this.moveWindowHandler(e);
+		if (this.resizingWindow) this.moveResizeHandler(e);
+	}
 	moveWindowHandler(e) {
 		if (!this.draggingWindow) return;
 		
 		e.preventDefault();
-		const maxLeft = this.windowsWrap.offsetWidth - 50;
 		const minTop = this.windowsWrap.offsetHeight - 32;
-		const left = Math.max(1, e.clientX - this.draggingWindow.dragStart.x);
+		const maxLeft = this.windowsWrap.offsetWidth - 50;
 		const top = Math.max(0, e.clientY - this.draggingWindow.dragStart.y);
-		this.draggingWindow.element.style.left = Math.min(left, maxLeft) + 'px';
-		this.draggingWindow.element.style.top = Math.min(top, minTop) + 'px';
+		const left = Math.max(1, e.clientX - this.draggingWindow.dragStart.x);
+		this.draggingWindow.element.style.transform = `scale(1) translateX(${Math.min(left, maxLeft)}px) translateY(${Math.min(top, minTop)}px)`;
 	}
 	moveResizeHandler(e) {
 		if (!this.resizingWindow) return;
@@ -239,7 +242,7 @@ export class AppsManager {
 		this.resizingWindow.resizeStart.width = newWidth;
 		this.resizingWindow.resizeStart.height = newHeight;
 	}
-	releaseWindowHandler(e) {
+	mouseupHandler(e) {
 		if (this.resizingWindow) {
 			this.resizingWindow.element.classList.remove('resizing');
 			this.resizingWindow = null;

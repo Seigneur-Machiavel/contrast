@@ -127,13 +127,15 @@ body {
 	font-size: initial;
 }
 input {
-    padding: 2px 12px;
-    font-size: 1em; /* same as h2 */
+	box-sizing: border-box;
     text-align: center;
     background-color: var(--color2);
     color: var(--color1);
     border-radius: 6px;
     border-style: none;
+	height: 28px;
+    padding: 2px 12px;
+    font-size: .9em;
 }
 input::-webkit-outer-spin-button,
 input::-webkit-inner-spin-button {

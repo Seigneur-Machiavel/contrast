@@ -104,12 +104,12 @@ export class Connector {
 			} catch (error) {}
 		}
 	}
-	async getRoundsLegitimacies() {
+	async getRoundsLegitimacies(timeout = 5000) {
 		if (!this.prevHash) return null;
 
 		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
 		for (const peerId of peersToAsk) {
-			this.pendingRoundsLegitimaciesRequest = new PendingRequest(peerId, 'rounds_legitimacies', 3000);
+			this.pendingRoundsLegitimaciesRequest = new PendingRequest(peerId, 'rounds_legitimacies', timeout);
 			const s = serializer.converter.hexToBytes(this.prevHash);
 			this.p2pNode.messager.sendUnicast(peerId, s, 'rounds_legitimacies_request');
 			try {
@@ -128,12 +128,14 @@ export class Connector {
 			this.isConsensusRobust = !c.equality && c.count >= 1;
 			this.height = c.blockHeight;
 			this.hash = c.blockHash;
+			console.log(`Consensus height changed #${this.height} | Robust: ${this.isConsensusRobust}(c: ${c.count})`);
 
 			if (!this.blocks.finalized[this.hash]) this.getMissingBlock();
 			for (const handler of this.listeners['consensus_height_change'] || []) handler(this.height);
 		}
 	}
 	#onPeerConnect = () => {
+		console.log(`New peer connected! Total neighbors: ${this.p2pNode.peerStore.neighborsList.length}`);
 		if (this.p2pNode.peerStore.neighborsList.length !== 1) return;
 		this.isConsensusRobust = false; this.height = -1; this.hash = ''; // reset consensus data
 		for (const handler of this.listeners['connection_established'] || []) handler();

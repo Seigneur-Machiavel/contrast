@@ -58,7 +58,7 @@ const onBlockConfirmed = (block) => {
 		if (ledger.totalReceived - ledger.totalSent !== ledger.balance) throw new Error('Inconsistent balance calculation!');
 
 		a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);
-		const tx = Transaction_Builder.createTransaction(a, transfers, 1);
+		const { tx } = Transaction_Builder.createTransaction(a, transfers, 1);
 		const signedTx = a.signTransaction(tx);
 		if (!signedTx) return; // failed to create tx
 	

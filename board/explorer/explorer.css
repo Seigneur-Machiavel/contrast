@@ -109,6 +109,9 @@ button {
     filter: invert(var(--dark-mode-boolean));
     transition: filter .2s;
 }
+#cbe-blocksTimesChart {
+	margin-left: -36px;
+}
 
 #cbe-searchInput-wrap {
 	z-index: 100;
@@ -139,10 +142,7 @@ button {
     filter: invert(var(--dark-mode-boolean));
 }
 #cbe-searchInput {
-	box-sizing: border-box;
 	width: 100%;
-    border-width: 1px !important;
-    padding: 4px 10px !important;
 }
 
 #cbe-contrastBlocks {

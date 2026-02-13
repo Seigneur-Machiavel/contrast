@@ -69,14 +69,24 @@ export class Account {
         this.balance = balance;
         this.ledgerUtxos = ledgerUtxos;
     }
+	/** @param {string} anchor */
+	markUTXOAsSpent(anchor) {
+		const utxo = this.ledgerUtxos.find(utxo => utxo.anchor === anchor);
+		const amount = utxo?.amount;
+		if (typeof amount !== 'number') throw new Error('UTXO not found for anchor: ' + anchor);
+
+		this.balance -= amount;
+		this.totalSent += amount;
+		this.ledgerUtxos = this.ledgerUtxos.filter(utxo => utxo.anchor !== anchor);
+	}
     /** @param {number} length - len of the hex hash */
     async getUniqueHash(length = 64) {
         const hash = await HashFunctions.SHA256(this.pubKey + this.#privKey);
         return hash.substring(0, length);
     }
 	/** Return a list of UTXOs that are filtered based on the provided criteria. (excludeRules or includesRules, not both)
-	 * @param {number} maxHeight default: Infinity @param {string[]} excludeRules ex: ['sigOrSlash'] @param {string[]} includesRules ex: ['sigOrSlash'] */
-	filteredUtxos(maxHeight = Infinity, excludeRules, includesRules) {
+	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sigOrSlash'] @param {string[]} [includesRules] ex: ['sigOrSlash'] */
+	filteredUtxos(maxHeight = Infinity, excludeRules = [], includesRules = []) {
 		if (excludeRules.length > 0 && includesRules.length > 0) throw new Error('Cannot use both excludeRules and includesRules at the same time');
 		
 		const rulesCodesToExclude = excludeRules.map(r => UTXO_RULES_GLOSSARY[r]?.code).filter(c => c !== undefined);
@@ -86,7 +96,7 @@ export class Account {
 		return utxo.filter(u => parseInt(u.anchor.split(':')[0], 10) <= maxHeight);
 	}
 	/** Calculate the balance based on the filtered UTXOs. (excludeRules or includesRules, not both)
-	 * @param {number} maxHeight default: Infinity @param {string[]} excludeRules ex: ['sigOrSlash'] @param {string[]} includesRules ex: ['sigOrSlash'] */
+	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sigOrSlash'] @param {string[]} [includesRules] ex: ['sigOrSlash'] */
 	filteredBalance(maxHeight = Infinity, excludeRules = [], includesRules = []) {
 		const filteredUtxos = this.filteredUtxos(maxHeight, excludeRules, includesRules);
 		return filteredUtxos.reduce((sum, utxo) => sum + utxo.amount, 0);

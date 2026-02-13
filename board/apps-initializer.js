@@ -110,10 +110,9 @@ export class SubWindow {
 		if (this.initSize.height) this.element.style.height = this.initSize.height + 'px';
 		
 		// Set initial position
-		if (fromX && fromY) {
+		if (fromX && fromY) { // START INVISIBLE
 			this.element.style.opacity = 1;
-			this.element.style.transform = 'scale(1)';
-			this.element.style.top = document.body.offsetHeight + 1000 + 'px';
+			this.element.style.transform = `scale(0) translateX(0px) translateY(0px)`;
 
 			anime({
 				targets: this.element,
@@ -122,8 +121,7 @@ export class SubWindow {
 				duration: 100,
 				delay: 100,
 				complete: () => {
-					this.element.style.top = (fromX - this.element.offsetWidth / 2) + 'px';
-					this.element.style.left = (fromY - this.element.offsetHeight) + 'px';
+					this.element.style.transform = `scale(0) translateX(${fromX}px) translateY(${fromY}px)`;
 				}
 			});
 
@@ -172,13 +170,12 @@ export class SubWindow {
 	}
 	toggleFold(originX, originY, duration = 400) {
 		this.folded = !this.folded;
-		//if (this.folded) this.element.classList.remove('onBoard');
 		if (!this.folded) this.element.classList.add('onBoard');
 
 		// COMBINED ANIMATION
 		if (this.animation) this.animation.pause();
 
-		const toPosition = { left: originX - this.element.offsetWidth / 2, top: originY - this.element.offsetHeight };
+		const toPosition = { left: originX, top: originY };
 		if (!this.folded) {
 			toPosition.left = this.isFullScreen ? 0 : this.position.left;
 			toPosition.top = this.isFullScreen ? 0 : this.position.top;
@@ -193,8 +190,8 @@ export class SubWindow {
 				easing: 'easeOutQuad'
 			},
 			scale: { value: this.folded ? .1 : 1, duration: duration, easing: 'easeOutQuad' },
-			left: { value: toPosition.left, duration: duration, easing: 'easeOutQuad' },
-			top: { value: toPosition.top, duration: duration, easing: 'easeOutQuad' },
+			translateX: { value: toPosition.left, duration: duration, easing: 'easeOutQuad' },
+			translateY: { value: toPosition.top, duration: duration, easing: 'easeOutQuad' },
 			complete: () => {
 				if (this.folded) this.element.classList.remove('onBoard');
 			}
@@ -236,8 +233,8 @@ export class SubWindow {
 			targets: this.element,
 			width: this.windowSize.width + 'px',
 			height: this.windowSize.height + 'px',
-			top: this.position.top + 'px',
-			left: this.position.left + 'px',
+			translateX: this.position.left + 'px',
+			translateY: this.position.top + 'px',
 			duration,
 			easing: 'easeOutQuad'
 		});

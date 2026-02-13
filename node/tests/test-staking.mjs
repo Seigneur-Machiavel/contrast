@@ -1,3 +1,9 @@
+// TESTING STAKING TRANSACTIONS
+// IN THIS TEST, WE CREATE A BOOTSTRAP NODE AND SEVERAL CLIENT NODES
+// THEN ON EACH FINALIZED BLOCK, WE TRY TO CREATE AND PUSH A STAKING TRANSACTION FROM EACH NODE (IF THEY HAVE ENOUGH FUNDS TO DO SO).
+// TO MADE THE CONDITION WORST, WE RUN ALL NODES ON THE SAME THREAD,
+// SO THEY ARE ALL CONFLICTING FOR THE SAME RESOURCES (CPU, DISK, NETWORK), AND THEREFORE MORE LIKELY TO FAIL.
+
 // @ts-check
 //process.on('uncaughtException', (error) => { console.error('Uncatched exception:', error.stack); });
 //process.on('unhandledRejection', (reason, promise) => { console.error('Promise rejected:', promise, 'reason:', reason); });
@@ -6,7 +12,7 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
 const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const clearOnStart = false;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
+const clearOnStart = true;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 
 import { Wallet } from '../src/wallet.mjs';
 import { createContrastNode } from '../src/node.mjs';
@@ -41,7 +47,7 @@ const clientSeeds = [
 	'0000000000000000000000000000000000000000000000000000000000000003',
 	'0000000000000000000000000000000000000000000000000000000000000004',
 	'0000000000000000000000000000000000000000000000000000000000000005',
-	//'0000000000000000000000000000000000000000000000000000000000000008',
+	'0000000000000000000000000000000000000000000000000000000000000008',
 	//'0000000000000000000000000000000000000000000000000000000000000009',
 ]
 async function createClientNode(seed = 'toto') {
@@ -78,12 +84,13 @@ const onBlockConfirmed = (block) => {
 		const ledger = node.blockchain.ledgersStorage.getAddressLedger(r);
 		if (!ledger.ledgerUtxos) continue; // no UTXO
 
-		const sigUtxos = ledger.ledgerUtxos.filter(u => u.ruleCode === UTXO_RULES_GLOSSARY['sig'].code)
+		//const sigUtxos = ledger.ledgerUtxos.filter(u => u.ruleCode === UTXO_RULES_GLOSSARY['sig'].code)
+		account.setBalanceAndUTXOs(account.balance, ledger.ledgerUtxos);
+		const sigUtxos = account.filteredUtxos(undefined, undefined, ['sig']);
 		const availableAmount = sigUtxos.reduce((a, b) => a + b.amount, 0);
 		if (availableAmount < 10_000_000 * 2) continue; // not enough to stake
 
-		account.setBalanceAndUTXOs(account.balance, ledger.ledgerUtxos);
-		const tx = Transaction_Builder.createStakingVss(account, 1);
+		const { tx } = Transaction_Builder.createStakingVss(account, 1);
 		const signedTx = account.signTransaction(tx);
 		if (!signedTx) continue; // failed to create tx
 

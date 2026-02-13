@@ -15,8 +15,8 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     maxSupply: 21_000_000_000_000, 	// last 6 zeros are considered as decimals ( can be stored as 8 bytes )
 
     // TRANSACTION
-    minTransactionFeePerByte: 1,
-    unspendableUtxoAmount: 200,
+    minTransactionFeePerByte: 0.1, // 0.1 mC per byte = 100 mC per KB
+    unspendableUtxoAmount: 120,
 
     // VSS (STAKING)
 	validatorsPerRound: 10, 	// maximum number of validators per round

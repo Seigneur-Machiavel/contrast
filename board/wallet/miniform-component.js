@@ -1,103 +1,137 @@
 // @ts-check
-//import { eHTML_STORE, createElement, createSpacedTextElement } from '../board-helpers.js';
+import { ADDRESS } from "../../types/address.mjs";
 import { CURRENCY } from "../../utils/currency.mjs";
+import { serializer } from "../../utils/serializer.mjs";
+//import { TransactionDiagram } from './tx-diagram.js'; // PROTOTYPE, TO BE IMPLEMENTED LATER
 import { Transaction_Builder } from "../../node/src/transaction.mjs";
 
+/**
+ * @typedef {import('../../types/transaction.mjs').Transaction} Transaction
+ */
+
 export class MiniformComponent {
+	//txDiagram = new TransactionDiagram(document.getElementById('biw-diagram-wrapper'));
 	biw;
-	eHTML = {
-		enableDataFieldCheckbox: document.getElementById('biw-enableDataFieldCheckbox'),
-		container: 			document.getElementById('biw-container'),
-		wrap: 				document.getElementById('biw-miniFormsWrap'),
-		miniForm: 			document.getElementById('biw-miniForm'),
-		actionSelector: 	document.getElementById('biw-miniForm')?.querySelector('.biw-actionSelector'),
-		senderAddress: 		document.getElementById('biw-senderAddress'),
-		recipientAddress: 	document.getElementById('biw-recipientAddress'),
-		amountInput: 		document.getElementById('biw-miniForm')?.querySelector('.biw-amountInput'),
-		dataInput: 			document.getElementById('biw-miniForm')?.querySelector('.biw-dataInput'),
-		txFee: 				document.getElementById('biw-miniForm')?.querySelector('.biw-txFee'),
-		totalSpent: 		document.getElementById('biw-miniForm')?.querySelector('.biw-totalSpent'),
-		confirmBtn: 		document.getElementById('biw-miniForm')?.querySelector('.biw-confirmBtn'),
-	}
+	eHTML;
+
 	/** @ts-ignore @returns {'Send' | 'Stake' | 'Unstake' | 'Inscribe'} */
-	get action() { return this.eHTML.actionSelector?.value; } // @ts-ignore
-	get isDataFieldEnabled() { return this.eHTML.enableDataFieldCheckbox?.checked; }
+	get action() { return this.eHTML.actionSelector.value; }
+	get isDataFieldEnabled() { return this.eHTML.enableDataFieldCheckbox.checked; }
+	get isOpen() { return this.eHTML.miniForm?.classList.contains('active'); }
 
 	/** @param {import('./biw.js').BoardInternalWallet} biw */
-	constructor(biw) { this.biw = biw; }
+	constructor(biw) {
+		this.biw = biw;
+		this.eHTML = {
+			enableDataFieldCheckbox:	/** @type {HTMLInputElement} */ (biw.eHTML.get('enableDataFieldCheckbox')),
+			container: 					/** @type {HTMLElement} */		(biw.eHTML.get('container')),
+			wrap: 						/** @type {HTMLElement} */		(biw.eHTML.get('miniFormsWrap')),
+			miniForm: 					/** @type {HTMLElement} */		(biw.eHTML.get('miniForm')),
+			actionSelector: 			/** @type {HTMLSelectElement} */(biw.eHTML.get('actionSelector')),
+			senderAddress: 				/** @type {HTMLElement} */		(biw.eHTML.get('senderAddress')),
+			recipientAddress: 			/** @type {HTMLInputElement} */ (biw.eHTML.get('recipientAddress')),
+			amountInput: 				/** @type {HTMLInputElement} */ (biw.eHTML.get('amountInput')),
+			dataField:					/** @type {HTMLElement} */		(biw.eHTML.get('dataField')),
+			dataInput: 					/** @type {HTMLInputElement} */ (biw.eHTML.get('dataInput')),
+			txFee: 						/** @type {HTMLElement} */		(biw.eHTML.get('miniForm')?.querySelector('.biw-txFee')),
+			totalSpent: 				/** @type {HTMLElement} */		(biw.eHTML.get('miniForm')?.querySelector('.biw-totalSpent')),
+			sendBtn: 					/** @type {HTMLButtonElement} */(biw.eHTML.get('sendBtn')),
+		};
+	}
 
 	// PUBLIC METHODS
-	isExpanded() { return this.eHTML.miniForm?.classList.contains('active'); }
-	/** @param {'SEND' | 'STAKE' | 'UNSTAKE' | 'INSCRIBE'} action */
+	/** @param {'SEND' | 'STAKE' | 'UNSTAKE' | 'INSCRIBE' | string} action */
 	open(action = 'SEND') {
-		if (!this.eHTML.miniForm || !this.eHTML.container) throw new Error('MiniformComponent.open: miniForm or container element not found');
-		if (!this.eHTML.actionSelector) throw new Error('MiniformComponent.open: actionSelector element not found');
 		this.eHTML.miniForm.classList.add('active');
-		this.eHTML.container.classList.add('expand'); // @ts-ignore
+		this.eHTML.container.classList.add('expand');
 		this.eHTML.actionSelector.value = action[0] + action.toLowerCase().slice(1);
+		
+		// SHOW OR HIDE DATA FIELD ACCORDING TO ACTION (Stake | Inscribe => always show)
+		this.toggleDataField();
 	}
 	close() {
-		if (!this.eHTML.miniForm || !this.eHTML.container) throw new Error('MiniformComponent.close: miniForm or container element not found');
 		this.eHTML.miniForm.classList.remove('active');
 		this.eHTML.container.classList.remove('expand');
 	}
-	reset() {
-		if (!this.eHTML.recipientAddress) throw new Error('MiniformComponent.reset: recipientAddress element not found');
-		if (!this.eHTML.amountInput) throw new Error('MiniformComponent.reset: amountInput element not found');
-		if (!this.eHTML.txFee) throw new Error('MiniformComponent.reset: txFee element not found');
-		if (!this.eHTML.totalSpent) throw new Error('MiniformComponent.reset: totalSpent element not found'); // @ts-ignore
-		this.eHTML.recipientAddress.value = ''; // @ts-ignore
-		this.eHTML.amountInput.value = '';		// @ts-ignore
-		this.eHTML.txFee.innerText = '0c';		// @ts-ignore
-		this.eHTML.totalSpent.innerText = '0c';
+	toggle() {
+		this.eHTML.miniForm.classList.toggle('active');
 	}
-	toggle() { // @ts-ignore
-		this.eHTML.miniForm?.classList.toggle('active');
+	toggleDataField(forceVisible = this.action === 'Inscribe' || this.action === 'Stake') {
+		this.eHTML.dataInput.value = '';
+		if (!forceVisible && !this.isDataFieldEnabled) this.eHTML.dataField.classList.add('hidden');
+		else this.eHTML.dataField.classList.remove('hidden');
+	}
+	reset() {
+		this.eHTML.recipientAddress.value = '';
+		this.eHTML.amountInput.value = '';
+		this.eHTML.txFee.innerText = '0';
+		this.eHTML.totalSpent.innerText = '0';
+		this.eHTML.dataInput.value = '';		
+	}
+	/** SET SENDER ADDRESS ACCORDING TO SELECTED ACCOUNT @param {string} address */
+	setSenderAddress(address) {
+		this.eHTML.senderAddress.innerText = address;
+
+		if (this.action === 'Stake' || this.action === 'Unstake' || this.action === 'Inscribe')
+			this.eHTML.recipientAddress.value = address;
 	}
 	/** @param {number} [amount] @param {string} [recipient] @param {string} [dataStr] */
 	setValues(amount, recipient, dataStr) {
-		// @ts-ignore AMOUNT
+		// AMOUNT
 		if (typeof amount === 'number') this.eHTML.amountInput.value = CURRENCY.formatNumberAsCurrency(amount);
 
-		// @ts-ignore RECIPIENT
+		// RECIPIENT
 		this.eHTML.recipientAddress.value = recipient || this.eHTML.senderAddress?.innerText;
-		if (this.action === 'Stake' || this.action === 'Unstake' || this.action === 'Inscribe') // @ts-ignore
+		if (this.action === 'Stake' || this.action === 'Unstake' || this.action === 'Inscribe')
 			this.eHTML.recipientAddress.value = this.eHTML.senderAddress?.innerText; // FORCE SENDER AS RECIPIENT
 
-		// @ts-ignore DATA
-		if (!dataStr && this.isDataFieldEnabled) this.eHTML.dataInput.classList.remove('active');
-		else { 												// @ts-ignore
-			this.eHTML.dataInput.value = dataStr || ''; 	// @ts-ignore
-			this.eHTML.dataInput.classList.add('active');
+		// SHOW DATA FIELD IF dataStr IS PROVIDED, HIDE IT OTHERWISE
+		this.toggleDataField(dataStr !== undefined);
+		this.eHTML.dataInput.value = dataStr || '';
+		this.prepareTxAccordingToInputsAndUpdateFees();
+	}
+	/** @returns {{ action: 'Send' | 'Stake' | 'Unstake' | 'Inscribe', amount: number, recipient: string | undefined, dataStr: string | undefined }} */
+	getValues() {
+		const amountStr = this.eHTML.amountInput.value;
+		const recipient = this.eHTML.recipientAddress.value;
+		const dataStr = this.isDataFieldEnabled ? this.eHTML.dataInput.value : undefined;
+		return {
+			action: this.action,
+			amount: amountStr !== '' ? CURRENCY.formatCurrencyAsMicroAmount(amountStr) : 0,
+			recipient: recipient !== '' ? recipient : undefined,
+			dataStr: dataStr !== '' ? dataStr : undefined
 		}
-
-		this.updateFeesAndTotalAccordingToInputs();
 	}
-	/** @param {string} address */
-	setSenderAddress(address) {
-		if (!this.eHTML.senderAddress) throw new Error('MiniformComponent.setSenderAddress: senderAddress element not found');
+	/** @returns {{ serialized: Uint8Array, signedTx: Transaction } | string }} */
+	prepareTxAccordingToInputsAndUpdateFees() {
+		this.eHTML.txFee.innerText = CURRENCY.formatNumberAsCurrency(0);
+		this.eHTML.totalSpent.innerText = CURRENCY.formatNumberAsCurrency(0);
 
-		// @ts-ignore SET SENDER ADDRESS ACCORDING TO SELECTED ACCOUNT
-		this.eHTML.senderAddress.innerText = address;
+		const senderAccount = this.biw.activeAccount;
+		const feePerByte = this.biw.standardFeePerByte.min;
+		const { action, amount, recipient, dataStr } = this.getValues();
+		if (!amount && !dataStr) return 'Amount or data field must be filled';
 
-		if (this.action === 'Stake' || this.action === 'Unstake' || this.action === 'Inscribe') // @ts-ignore
-			this.eHTML.recipientAddress.value = address;
+		const recipientAddress = recipient || senderAccount.address;
+		if (!ADDRESS.checkConformity(recipientAddress)) return 'Invalid address';
+		
+		try {
+			const { tx, finalFee, totalConsumed } = action === 'Stake' // PREPARE TX ON CLICK
+				? Transaction_Builder.createStakingVss(senderAccount, amount, dataStr)
+				: Transaction_Builder.createTransaction(senderAccount,
+					amount ? [{ recipientAddress, amount }] : [], // don't add an empty output if amount is 0, to allow sending only data
+					feePerByte,
+					dataStr ? serializer.converter.textEncoder.encode(dataStr) : undefined
+				);
+			
+				
+			const signedTx = senderAccount.signTransaction(tx);
+			const serialized = serializer.serialize.transaction(signedTx);
+
+			// UPDATE FEES AND TOTAL IN THE UI
+			this.eHTML.txFee.innerText = CURRENCY.formatNumberAsCurrency(finalFee);
+			this.eHTML.totalSpent.innerText = CURRENCY.formatNumberAsCurrency(totalConsumed);
+			return { serialized, signedTx };
+		} catch (/** @type {any} */ error) { return error.message; }
 	}
-	updateFeesAndTotalAccordingToInputs() { // TO UPDATE
-		// @ts-ignore
-        const amountMicro = CURRENCY.formatCurrencyAsMicroAmount(this.eHTML.amountInput.value); // @ts-ignore
-        this.eHTML.amountInput.value = CURRENCY.formatNumberAsCurrency(amountMicro);
-
-        //let totalSpentMicro = amountMicro; // @ts-ignore
-        //const fee += parseInt(this.eHTML.txFee.innerText.replace('.',''));
-		let feeMicro = 0;
-		if (this.action === 'Stake') feeMicro += amountMicro;
-        else if (this.action === 'Send') // TODO
-			console.log('Send fee calculation to be implemented');
-			// feeMicro += Transaction_Builder.calculateFeeAndChange();
-        
-		const totalSpentMicro = feeMicro + amountMicro; // @ts-ignore FEE AND TOTAL
-		this.eHTML.txFee.innerText = window.convert.formatNumberAsCurrency(totalSpentMicro - amountMicro); // @ts-ignore
-        this.eHTML.totalSpent.innerText = window.convert.formatNumberAsCurrency(totalSpentMicro);
-    }
 }

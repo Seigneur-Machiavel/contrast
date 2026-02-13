@@ -15,7 +15,7 @@ export class FrontStorage {
 		if (mode === 'l') localStorage.setItem(`${this.initiator}-${key}`, value);
 		else if (mode === 'c') await chrome.storage.local.set({ [`${this.initiator}-${key}`]: value });
 
-        console.log(`[FrontStorage] ${key} saved, value: ${value}`);
+        //console.log(`[FrontStorage] ${key} saved, value: ${value}`);
     }
 	
 	/** @param {string} key @param {'default' | 'raw'} [parsing] @returns {Promise<Object|number|string|boolean|null>} */

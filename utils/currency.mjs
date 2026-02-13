@@ -19,8 +19,10 @@ export class CURRENCY {
         const [integer, decimal] = str.split('.');
         const integerStr = integer.replace(/,/g, '');
         const decimalStr = decimal ? decimal.padEnd(6, '0').slice(0, 6) : '000000';
-        const int = integerStr === '' ? 0 : parseInt(`${integerStr}${decimalStr}`);
+        //const int = integerStr === '' ? 0 : parseInt(`${integerStr}${decimalStr}`); // old
+		const int = parseInt(`${integerStr}${decimalStr}`);
         if (isNaN(int)) { console.error('Invalid number:', str); return 0; }
+		//console.log(`Converted "${str}" to micro amount:`, int);
         return int;
     }
 

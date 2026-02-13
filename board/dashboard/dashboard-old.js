@@ -580,9 +580,9 @@ document.addEventListener('click', async (event) => {
             
             console.log('UTXOs', validatorUTXOs);
             const senderAccount = { address: validatorAddress, UTXOs: validatorUTXOs };
-            const transaction = await Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amountToStake);
+            const { tx } = await Transaction_Builder.createStakingVss(senderAccount, validatorAddress, amountToStake);
 
-            ws.send(JSON.stringify({ type: 'new_unsigned_transaction', data: transaction }));
+            ws.send(JSON.stringify({ type: 'new_unsigned_transaction', data: tx }));
             eHTML.stakeInput.input.value = '';
             break;
         case eHTML.minerThreads.decrementBtn:

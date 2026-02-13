@@ -146,7 +146,7 @@ export class ModalComponent {
         const table = createElement('table', tableClasses, divToInject);
 		const thread = createElement('thead', [], table);
         const headerRow = createElement('tr', [], thread);
-        const headers = ['Index', 'Transaction id', 'Total amount spent', 'Bytes'];
+        const headers = ['Index', 'Tx id', 'Total amount spent', 'Bytes'];
         for (const headerText of headers) createElement('th', [], headerRow).textContent = headerText;
 
 		const tbody = createElement('tbody', [], table);

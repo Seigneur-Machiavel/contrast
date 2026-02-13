@@ -3,44 +3,54 @@
 <div id="biw-container" class="biw-container">
     <div id="biw-miniFormsWrap" class="biw-miniFormsWrap">
 		<div id="biw-miniForm" class="biw-miniForm">
+			<!-- DIAGRAM PROTOTYPE
+			<select id="biw-actionSelector">
+				<option value="send">Send</option>
+				<option value="stake">Stake</option>
+				<option value="unstake">Unstake</option>
+				<option value="inscribe">Inscribe</option>
+			</select>
+
+			<div id="biw-diagram-wrapper"></div>-->
+
 			<div class="biw-flexWrap">
                 <div class="biw-spaced">
                     <h3 id="biw-senderAddress">C123456</h3>
-					<select class="biw-actionSelector">
-						<option value="send">Send</option>
-						<option value="stake">Stake</option>
-						<option value="unstake">Unstake</option>
-						<option value="inscribe">Inscribe</option>
+					<select id="biw-actionSelector">
+						<option value="Send">Send</option>
+						<option value="Stake">Stake</option>
+						<option value="Unstake">Unstake</option>
+						<option value="Inscribe">Inscribe</option>
 					</select>
                 </div>
 
 				<div class="biw-inputs-wrap">
 					<div class="biw-spaced">
 						<h3>Amount:</h3>
-						<input class="biw-amountInput" type="text" placeholder="Amount to send">
+						<input id="biw-amountInput" type="text" placeholder="Amount to send">
 					</div>
 					<div class="biw-spaced">
 						<h3>To:</h3>
 						<input id="biw-recipientAddress" type="text" placeholder="Recipient address">
 					</div>
-					<div class="biw-spaced hidden" id="biw-data-field">
+					<div class="biw-spaced hidden" id="biw-dataField">
 						<h3>Data:</h3>
-						<input class="biw-dataInput" type="text" placeholder="Data (optional)">
+						<input id="biw-dataInput" type="text" placeholder="Data (optional)">
 					</div>
 				</div>
 
                 <div class="biw-spaced thinBottomBorder" style="margin-top: 40px !important;">
                     <h3>Fee:</h3>
-                    <h3>~<span class="biw-txFee">0.002000</span>c</h3>
+                    <h3><span class="biw-txFee">0</span>c</h3>
                 </div>
                 <div class="biw-spaced thinBottomBorder">
                     <h3>Total:</h3>
-                    <h3><span class="biw-totalSpent">0.000000</span>c</h3>
+                    <h3><span class="biw-totalSpent">0</span>c</h3>
                 </div>
             </div>
 
 			<p class="biw-textInfo"></p>
-            <button class="biw-confirmBtn biw-holdBtn" data-action="confirm"><div>Send</div></button>
+            <button id="biw-sendBtn" class="biw-sendBtn biw-holdBtn" data-action="biw-confirm"><div>Send</div></button>
 		</div>
     </div>
 
@@ -74,11 +84,11 @@
         <h2 class="biw-stakedBalance">Staked: <span id="biw-stakedStr">0.00</span>c</h2>
 
         <div id="biw-buttonBar">
-            <button id="biw-buttonBarSend" data-action="biw-toogle-send-form"><img src="./wallet/img/send32.png" alt="Send">Send</button>
-            <button id="biw-buttonBarSwap" data-action="biw-toogle-swap-form" class="disabled"><img src="./wallet/img/swap32.png" alt="Swap">Swap</button>
-			<button id="biw-buttonBarSpecial" data-action="biw-toogle-special-menu" class="hidden"><img src="./wallet/img/category64.png" alt="Special">Command</button>
-            <div id="biw-specialMenu">
-				<input type="text" data-action="biw-interpreter-input" placeholder="ex: Send 10 to C123456" autocomplete="off">
+            <button id="biw-buttonBarSend" data-action="biw-toggle-send-form"><img src="./wallet/img/send32.png" alt="Send">Send</button>
+            <button id="biw-buttonBarSwap" data-action="biw-toggle-swap-form" class="disabled"><img src="./wallet/img/swap32.png" alt="Swap">Swap</button>
+			<button id="biw-buttonBarInterpreter" data-action="biw-toggle-interpreter" class="hidden"><img src="./wallet/img/category64.png" alt="Interpreter">Command</button>
+            <div id="biw-interpreter">
+				<input type="text" id="biw-interpreterInput" placeholder="ex: Send 10 to C123456" autocomplete="off">
 				<button id="biw-buttonBarInstructions" data-action="biw-interpret-input-btn">Confirm</button>
             </div>
         </div>

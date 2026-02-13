@@ -55,18 +55,17 @@ export class Transaction_Builder {
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
         const UTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
 		if (UTXOs.length === 0) throw new Error('No UTXO to spend');
-        if (transfers.length === 0) throw new Error('No transfer to make');
 
         this.checkMalformedAnchorsInUtxosArray(UTXOs);
         this.checkDuplicateAnchorsInUtxosArray(UTXOs);
 
 		const dataLength = data ? data.length : 0;
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
-        const { utxos, changeOutput } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress);
+        const { utxos, changeOutput, finalFee } = Transaction_Builder.#estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, dataLength);
         if (changeOutput) outputs.push(changeOutput);
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
-		return Transaction.fromUTXOs(utxos, outputs, data);
+		return { tx: Transaction.fromUTXOs(utxos, outputs, data), finalFee, totalConsumed: totalSpent + finalFee };
     }
 	/** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount - the account who is staking the VSS
@@ -101,16 +100,16 @@ export class Transaction_Builder {
 		// SET THE AUTHORIZED VALIDATOR PUBKEY IN TX DATA
         const tx = Transaction.fromUTXOs(utxos, outputs);
 		tx.data = serializer.converter.hexToBytes(authorizedPubkey);
-		return tx;
+		return { tx, finalFee: fee, totalConsumed: totalStake + fee };
     }
 	/** @param {UTXO[]} UTXOs @param {TxOutput[]} outputs @param {number} totalSpent @param {number} feePerByte @param {string} senderAddress */
     static #estimateFeeToOptimizeUtxos(UTXOs, outputs, totalSpent, feePerByte, senderAddress, dataLength = 0) {
         const estWeight 	= Transaction_Builder.simulateTxToEstimateWeight(UTXOs, outputs) + dataLength;
         const { fee } 		= Transaction_Builder.calculateFeeAndChange(UTXOs, totalSpent, estWeight, feePerByte);
         const utxos 		= Transaction_Builder.extractNecessaryUtxosForAmount(UTXOs, totalSpent + fee);
-        const { change } 	= Transaction_Builder.calculateFeeAndChange(utxos, totalSpent, estWeight, feePerByte);
+        const { fee: finalFee, change } = Transaction_Builder.calculateFeeAndChange(utxos, totalSpent, estWeight, feePerByte);
         const changeOutput 	= change > BLOCKCHAIN_SETTINGS.unspendableUtxoAmount ? new TxOutput(change, 'sig', senderAddress) : undefined;
-        return { utxos, changeOutput };
+        return { utxos, changeOutput, finalFee };
     }
     /** @param {UTXO[]} utxos @param {number} amount */
     static extractNecessaryUtxosForAmount(utxos, amount) {
@@ -157,14 +156,15 @@ export class Transaction_Builder {
         if (feePerByte < BLOCKCHAIN_SETTINGS.minTransactionFeePerByte) throw new Error(`Invalid feePerByte: ${feePerByte}`);
         const inAmount = utxos.reduce((a, b) => a + b.amount, 0);
         const remainingAmount = inAmount - totalSpent;
-        if (remainingAmount <= 0) throw new Error(`Not enough funds: ${inAmount} - ${totalSpent} = ${remainingAmount}`);
+        if (remainingAmount < 0) throw new Error(`Not enough funds: ${inAmount} - ${totalSpent} = ${remainingAmount}`);
 
-        const fee = feePerByte * estimatedWeight;
-        if (fee % 1 !== 0) throw new Error('Invalid fee: not integer');
-        if (fee <= 0) throw new Error(`Invalid fee: ${fee} <= 0`);
+        const fee = Math.ceil(feePerByte * estimatedWeight);
+        if (fee % 1 !== 0) throw new Error(`Invalid fee: not integer (${fee})`);
+        if (fee < 0) throw new Error(`Negative transaction fee (${fee})`);
 
         const change = remainingAmount - fee;
-        if (change <= 0) return { fee: remainingAmount, change: 0 };
+		if (change < 0) throw new Error(`Not enough funds to cover the fee: ${remainingAmount} - ${fee} = ${change}`);
+        if (change === 0) return { fee: remainingAmount, change: 0 };
         else return { fee, change };
     }
     /** @param {Transaction} transaction */
@@ -200,9 +200,9 @@ export class Transaction_Builder {
     static createAndSignTransaction(senderAccount, amount, recipientAddress, feePerByte) {
         try {
             const transfer = { recipientAddress, amount };
-            const transaction = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte);
-            senderAccount.signTransaction(transaction);
-            return { signedTx: transaction, error: false };
+            const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte);
+            senderAccount.signTransaction(tx);
+            return { signedTx: tx, finalFee, error: false };
         } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }
     }
 	/** @param {Transaction} transaction */

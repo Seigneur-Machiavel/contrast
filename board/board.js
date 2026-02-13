@@ -75,24 +75,29 @@ document.addEventListener('mouseover', (e) => {
 	appsManager.overAppButtonsHandler(e);
 	explorer.overHandler(e)
 });
-document.addEventListener('dblclick', (e) => { if (e.target.classList.contains('title-bar')) appsManager.dlbClickTitleBarHandler(e); });
-document.addEventListener('mousedown', (e) => appsManager.grabWindowHandler(e));
-document.addEventListener('mousemove', (e) => { appsManager.moveWindowHandler(e); appsManager.moveResizeHandler(e); });
-document.addEventListener('mouseup', (e) => appsManager.releaseWindowHandler(e));
+document.addEventListener('dblclick', (e) => appsManager.dlbClickHandler(e));
+document.addEventListener('mousedown', (e) => {
+	appsManager.mouseDownHandler(e);
+	biw.mouseDownHandler(e);
+});
+document.addEventListener('mouseup', (e) => {
+	appsManager.mouseupHandler(e);
+	biw.mouseUpHandler(e);
+});
+document.addEventListener('mousemove', (e) => appsManager.mousemoveHandler(e));
+document.addEventListener('input', (e) => biw.inputHandler(e));
+document.addEventListener('keydown', (e) => biw.keyDownHandler(e));
+document.addEventListener('paste', (e) => biw.pasteHandler(e));
+document.addEventListener('focusin', (e) => biw.focusInHandler(e));
+document.addEventListener('focusout', (e) => biw.focusOutHandler(e));
 document.addEventListener('change', (event) => {
 	switch(event.target.id) {
 		case 'dark-mode-toggle':
     		document.body.classList.toggle('dark-mode');
-			const darkModeState = document.body.classList.contains('dark-mode');
-			for (const app in appsManager.windows) {
-				const iframe = appsManager.windows[app].contentElement.querySelector('iframe');
-				if (!iframe) continue;
-				
-				iframe.contentWindow.postMessage({ type: 'darkMode', value: darkModeState }, appsManager.windows[app].origin);
-				//console.log('darkMode msg sent:', darkModeState);
-			}
-			
-			boardStorage.save('darkModeState', darkModeState);
+			boardStorage.save('darkModeState', document.body.classList.contains('dark-mode'));
+			break;
+		case 'biw-actionSelector':
+			biw.components.miniform.open(event.target.value.toUpperCase());
 			break;
 	}
 });
@@ -103,6 +108,7 @@ window.addEventListener('resize', function(e) { // Trigger on main window resize
 		appsManager.windows[app].element.style.maxHeight = height + 'px';
 	}
 });
+
 window.addEventListener('message', function(e) { // TODO
 	/*function formatedUrl(urlStr = 'http://127.0.0.1:27271/') { // ERASE THIS PLEASE...
 		const url = new URL(urlStr);
