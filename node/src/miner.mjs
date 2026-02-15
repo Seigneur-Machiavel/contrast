@@ -9,8 +9,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
- * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack */
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
 export class Miner {
 	node;
@@ -22,7 +21,6 @@ export class Miner {
 	logger = new MiniLogger('miner');
 	
 	/** @type {string[]} */								addressOfCandidatesBroadcasted = [];
-	/** @type {Object<string, WebSocketCallBack>} */	wsCallbacks = {};
 	/** @type {BlockCandidate | null} */				bestCandidate = null;
 	/** @type {MinerWorker[]} */						workers = [];
 	/** @type {number[]} */								bets = [];
@@ -91,7 +89,6 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         this.bestCandidate = block;
         
         this.#prepareBets();
-        if (this.wsCallbacks.onBestBlockCandidateChange) this.wsCallbacks.onBestBlockCandidateChange.execute(block);
         return true;
     }
 	async tick() {
@@ -206,7 +203,6 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
 		//const deserializedBlock = serializer.deserialize.blockFinalized(serialized); // DEBUG
 		this.node.taskQueue.pushFirst('DigestBlock', serialized);
-        if (this.wsCallbacks.onBroadcastFinalizedBlock) this.wsCallbacks.onBroadcastFinalizedBlock.execute(BlockUtils.getFinalizedBlockHeader(block));
     }
 	/** @param {string} rewardAddress */
     async #createMissingWorkers(rewardAddress) {

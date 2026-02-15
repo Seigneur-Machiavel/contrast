@@ -10,8 +10,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
- * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
- * @typedef {import("./websocketCallback.mjs").WebSocketCallBack} WebSocketCallBack */
+ * @typedef {import("../../types/transaction.mjs").Transaction} Transaction */
 
 class OrganizedTx {
 	tx; fee; serializedTx; feePerByte;
@@ -81,7 +80,6 @@ class Organizer {
 export class MemPool {
 	blockchain;
 	organizer = new Organizer();
-    /** @type {Object<string, WebSocketCallBack>} */	wsCallbacks = {};
 
 	/** @param {import("./blockchain.mjs").Blockchain} blockchain */
 	constructor(blockchain) { this.blockchain = blockchain; }
