@@ -4,8 +4,11 @@ import archiver from 'archiver';
 import { createWriteStream } from 'fs';
 
 const CREATE_ZIP = true;
-const SRC_DIR = '../';
-const DIST_DIR = 'dist';
+const currentPath = process.cwd();
+// if not "/contrast" => come back to reach it
+if (!currentPath.endsWith('contrast')) process.chdir(path.join(currentPath, 'contrast'));
+const SRC_DIR = './';
+const DIST_DIR = 'board-extension/dist';
 const FILES = [
 	{ in: 'board-extension/manifest.json', out: 'manifest.json' },
 	{ in: 'board-extension/background.js', out: 'background.js' },
@@ -22,13 +25,16 @@ const FILES = [
 	{ in: 'utils/conditionals.mjs' },
 	{ in: 'utils/front-storage.mjs' },
 	{ in: 'utils/hive-p2p-config.mjs' },
+	{ in: 'utils/progress-logger.mjs' },
 	{ in: 'utils/blockchain-settings.mjs' },
 
 	{ in: 'node/src/sync.mjs' },
 	{ in: 'node/src/block.mjs' },
+	{ in: 'node/src/wallet.mjs' },
 	{ in: 'node/src/conCrypto.mjs' },
 	{ in: 'node/src/transaction.mjs' },
 	{ in: 'node/src/tx-validation.mjs' },
+	{ in: 'node/src/tx-rule-checkers.mjs' },
 
 	{ in: 'types/sync.mjs' },
 	{ in: 'types/block.mjs' },
@@ -68,10 +74,14 @@ if (CREATE_ZIP) {
 	const archive = archiver('zip', { zlib: { level: 9 } });
 	
 	output.on('close', () => console.log(`✓ Extension packaged (${archive.pointer()} bytes)`));
-	archive.on('error', err => { throw err; });
+	archive.on('error', err => console.error('Error creating zip:', err.stack || err));
+	archive.on('entry', entry => console.log('Adding:', entry.name));
 	
+	console.log('DIST_DIR resolved:', path.resolve(DIST_DIR));
+	console.log('DIST exists:', fs.existsSync(DIST_DIR));
+	console.log('DIST contents:', fs.readdirSync(DIST_DIR).slice(0, 5));
 	archive.pipe(output);
-	archive.directory(DIST_DIR, false);
+	archive.directory(path.resolve(DIST_DIR), false);
 	archive.finalize();
 }
 
