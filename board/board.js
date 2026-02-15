@@ -47,7 +47,7 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.biw = biw;
 }
 
-// Implementation with less event listeners
+// Implementation with less DOM event listeners
 async function clickTitleBarButtonsHandler(e) {
 	const button = e.target.closest('button');
 	if (!button) return;
@@ -108,7 +108,6 @@ window.addEventListener('resize', function(e) { // Trigger on main window resize
 		appsManager.windows[app].element.style.maxHeight = height + 'px';
 	}
 });
-
 window.addEventListener('message', function(e) { // TODO
 	/*function formatedUrl(urlStr = 'http://127.0.0.1:27271/') { // ERASE THIS PLEASE...
 		const url = new URL(urlStr);
@@ -143,3 +142,20 @@ window.addEventListener('message', function(e) { // TODO
 	if (isCyberCon && e.data?.type === 'reset_game')
 		ipcRenderer.send('delete-app-data', 'cyberCon', 'auth_info');
 });
+
+// CONNECTOR EVENTS
+const onPeerCountChange = () => {
+	console.log(`Peer count changed: ${connector.p2pNode.peerStore.neighborsList.length} neighbors`);
+	const resumeElement = document.getElementById('connexion-resume');
+	if (!resumeElement) return;
+
+	// 0: red, 1: orange, 2-3: yellow, 4+: green
+	const totalPeers = connector.p2pNode.peerStore.neighborsList.length;
+	const connectedBootstraps = connector.p2pNode.peerStore.publicNeighborsList.length;
+	if (totalPeers < 1 ) resumeElement.innerText = 'Connecting network... 🔴';
+	else if (totalPeers < 2)resumeElement.innerText = `${totalPeers} peer [${connectedBootstraps}bstrap] 🟠`;
+	else if (totalPeers < 4) resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟡`;
+	else resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟢`;
+};
+connector.on('peer_connect', onPeerCountChange);
+connector.on('peer_disconnect', onPeerCountChange);

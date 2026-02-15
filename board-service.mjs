@@ -1,3 +1,9 @@
+// THIS FILE IS USED TO DEBUG THE FRONT BOARD IN A LOCAL ENVIRONMENT
+// BY SERVING THE BOARD FILES WITH EXPRESS AND PATCHING THE BOOTSTRAP NODE URL
+
+// --> NODES NEEDS TO BE RUNS SEPARATELY, NODE PUB_KEY CAN BE COPY FROM THE LOGS WHILE STARTING ONE
+// FOR DEBUGGING THE FRONT BOARD WITHOUT HAVING TO BUILD THE EXTENSION OR ELECTRON EVERY TIME
+
 import fs from 'fs';
 import express from 'express';
 import { CLOCK } from 'hive-p2p';
@@ -7,7 +13,7 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2);
 const hostname = args.includes('-nh') ? nextArg('-nh') : 'localhost';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const wsProtocol = args.includes('-wss') ? 'wss' : 'ws'; // pour forcer wss en prod
+const wsProtocol = args.includes('-wss') ? 'wss' : 'ws'; // force wss in prod (probably useless since we use sym encryption)
 
 const app = express();
 const PORT = process.env.PORT || 3000;

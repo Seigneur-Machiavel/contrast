@@ -33,6 +33,7 @@ export class Connector {
 		this.sync = new Sync({ p2p: p2pNode });
 		//p2pNode.onGossipData = (msg) => this.#handleMessage(msg);
 		p2pNode.onPeerConnect(this.#onPeerConnect);
+		p2pNode.onPeerDisconnect(this.#onPeerDisconnect);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
 		p2pNode.messager.on('blocks_timestamps', this.#onBlocksTimestamps);
@@ -136,10 +137,15 @@ export class Connector {
 	}
 	#onPeerConnect = () => {
 		console.log(`New peer connected! Total neighbors: ${this.p2pNode.peerStore.neighborsList.length}`);
+		for (const handler of this.listeners['peer_connect'] || []) handler();
 		if (this.p2pNode.peerStore.neighborsList.length !== 1) return;
 		this.isConsensusRobust = false; this.height = -1; this.hash = ''; // reset consensus data
 		for (const handler of this.listeners['connection_established'] || []) handler();
 	};
+	#onPeerDisconnect = () => {
+		console.log(`Peer disconnected! Total neighbors: ${this.p2pNode.peerStore.neighborsList.length}`);
+		for (const handler of this.listeners['peer_disconnect'] || []) handler();
+	}
 	/** @param {Uint8Array} serializedBlock */
 	#storeBlock(serializedBlock) {
 		try {

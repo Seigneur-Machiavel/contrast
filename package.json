@@ -10,24 +10,27 @@
   "keywords": [],
   "author": "The Contrast Team",
   "license": "ISC",
+
   "dependencies": {
+	"ws": "^8.18.0",
+	"cors": "^2.8.5",
     "adm-zip": "^0.5.16",
-    "auto-launch": "^5.0.6",
-    "cors": "^2.8.5",
     "express": "^4.21.2",
     "hive-p2p": "^1.0.89",
-    "node-machine-id": "^1.1.12",
-    "ws": "^8.18.0"
+    "auto-launch": "^5.0.6",
+    "node-machine-id": "^1.1.12"
   },
+
   "devDependencies": {
     "archiver": "^7.0.1",
+    "esbuild": "^0.27.2",
     "electron": "^39.2.7",
-    "electron-builder": "^25.1.8",
     "electron-log": "^5.2.4",
-    "electron-packager": "^17.1.2",
     "electron-updater": "^6.3.9",
-    "esbuild": "^0.27.2"
+    "electron-builder": "^25.1.8",
+    "electron-packager": "^17.1.2"
   },
+  
   "files": [
     "!path_to_exclude/**/*"
   ]
