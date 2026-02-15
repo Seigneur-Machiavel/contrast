@@ -6,7 +6,7 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     
     // DISTRIBUTION
     // 1 000 000mC = 1 Contrast
-    // In the code we only speak in mC, but in the UI we will use the Contrast unit
+    // In the code we only speak in mC ( micro contrast = 0.000001 C ), but in the UI we will use the Contrast unit
     rewardMagicNb1: 39_088_169, 			// Fibonacci n+2
     rewardMagicNb2: 24_157_817, 			// Fibonacci n+1
     blockReward: 39_088_169 - 24_157_817, 	// Fibonacci n = 14_930_352
@@ -16,7 +16,8 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
 
     // TRANSACTION
     minTransactionFeePerByte: 0.1, // 0.1 mC per byte = 100 mC per KB
-    unspendableUtxoAmount: 120,
+    unspendableUtxoAmount: 120,	// min utxo amount to be considered as dust ( used for spam protection, and to avoid dust accumulation in the blockchain )
+	finalizationDelay: 12, 		// number of blocks before a transaction is considered final ( used for double spending protection )
 
     // VSS (STAKING)
 	validatorsPerRound: 10, 	// maximum number of validators per round

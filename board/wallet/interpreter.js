@@ -1,5 +1,6 @@
 import { ADDRESS } from '../../types/address.mjs';
 import { CURRENCY } from "../../utils/currency.mjs";
+import { IS_VALID } from "../../types/validation.mjs";
 
 export class Interpreter {
 	interpreter = document.getElementById('biw-interpreter');
@@ -24,62 +25,92 @@ export class Interpreter {
 		this.interpreter.classList.remove('open');
 		this.buttonBarInterpreter.classList.remove('open');
 	}
-	/** @param {string} instructionsStr */
-	read_OLD(instructionsStr) { // DEPRECATED, TO BE REMOVED LATER, USE read() INSTEAD
-		if (!this.#isSafelyReadable(instructionsStr)) return 'Instructions is not safely readable';
+	/** @param {string} str */
+	read_OLD(str) { // DEPRECATED, TO BE REMOVED LATER, USE read() INSTEAD
+		if (!this.#isSafelyReadable(str)) return 'Instructions is not safely readable';
 
 		try {
-			const instructions = instructionsStr.split(' ');
-			if (!['SEND', 'STAKE', 'UNSTAKE', 'INSCRIBE'].includes(instructions[0].toUpperCase()))
-				return `Invalid action: ${instructions[0]}`;
+			const t = str.split(' ');
+			if (!['SEND', 'STAKE', 'UNSTAKE', 'INSCRIBE'].includes(t[0].toUpperCase()))
+				return `Invalid action: ${t[0]}`;
 			
 			/** @ts-ignore @type {'SEND' | 'STAKE' | 'UNSTAKE' | 'INSCRIBE'} */
-			const action = instructions[0].toUpperCase();
-			const amount = this.#parseFloatIfSafeAndValidContrastAmount(instructions[1]) || 0;
+			const action = t[0].toUpperCase();
+			const amount = this.#parseFloatIfSafeAndValidContrastAmount(t[1]) || 0;
 
-			const address = instructions[2].toUpperCase() === 'TO' ? instructions[3] : null;
+			const address = t[2].toUpperCase() === 'TO' ? t[3] : null;
 			if (address && !ADDRESS.checkConformity(address)) return `Invalid address: ${address}`;
 
-			const dataKeywordIndex = instructions.findIndex(word => word.toUpperCase() === 'DATA');
-			const dataStr = action === 'INSCRIBE' ? instructions[1]
-				: dataKeywordIndex > -1 ? instructions[dataKeywordIndex + 1]
+			const dataKeywordIndex = t.findIndex(word => word.toUpperCase() === 'DATA');
+			const dataStr = action === 'INSCRIBE' ? t[1]
+				: dataKeywordIndex > -1 ? t[dataKeywordIndex + 1]
 				: null;
 			if (typeof dataStr !== 'string' && dataStr !== null) return 'Invalid data field';
 	
 			return { action, amount, address, dataStr };
-		} catch (/** @type {any} */ error) { console.warn('Error reading instructions:', error.stack || error); }
+		} catch (/** @type {any} */ error) { console.warn('Error reading t:', error.stack || error); }
 
 		return 'Invalid instructions';
 	}
 	/** @param {string} str */
 	read(str) {
-		if (!this.#isSafelyReadable(str)) return 'Instructions is not safely readable';
+		if (!this.#isSafelyReadable(str)) return 'Unsafe input';
 
-		const tokens = str.trim().split(/\s+/);
-		const action = tokens[0]?.toUpperCase();
-		if (!['SEND', 'STAKE', 'UNSTAKE', 'INSCRIBE'].includes(action))
-			return `Invalid action: ${tokens[0]}`;
+		const t = str.trim().split(/\s+/);
+		const action = t[0]?.toUpperCase();
 
-		let amount = 0, address = null, dataStr = null;
+		if (action === 'SEND') {
+			if (t.length !== 3) return 'Expected: SEND <amount> <address>';
 
-		for (let i = 1; i < tokens.length; i++) {
-			const upper = tokens[i].toUpperCase();
-			if (upper === 'TO') { address = tokens[++i] || null; continue; }
-			if (upper === 'DATA') { dataStr = tokens[++i] || null; continue; }
-			if (amount === 0) amount = this.#parseFloatIfSafeAndValidContrastAmount(tokens[i]) || 0;
+			const amount = this.#parseFloatIfSafeAndValidContrastAmount(t[1]);
+			if (amount === false) return 'Invalid amount';
+
+			if (!ADDRESS.checkConformity(t[2])) return 'Invalid address';
+			return { action, amount, address: t[2], dataStr: null, anchors: null };
 		}
 
-		if (address && !ADDRESS.checkConformity(address)) return `Invalid address: ${address}`;
-		if (action === 'INSCRIBE' && !dataStr) return 'INSCRIBE requires a DATA field';
+		if (action === 'STAKE') {
+			if (t.length !== 3) return 'Expected: STAKE <amount> <pubkey(s),>';
 
-		return { action, amount, address, dataStr };
+			const amount = this.#parseFloatIfSafeAndValidContrastAmount(t[1]);
+			if (amount === false) return 'Invalid amount';
+
+			const pubkeys = t[2].split(','); // allow multiple pubkeys separated by comma
+			for (const pk of pubkeys) if (!this.#isValidHex(pk, 64)) return `Invalid pubkey: ${pk}`;
+			return { action, amount, address: null, dataStr: pubkeys.join(' '), anchors: null };
+		}
+
+		if (action === 'UNSTAKE') {
+			if (t.length !== 2) return 'Expected: UNSTAKE <anchors,>';
+
+			const anchors = t[1].split(','); // allow multiple anchors separated by comma
+			for (const anchor of anchors) if (!IS_VALID.ANCHOR(anchor)) return 'Invalid anchor';
+			return { action, amount: 0, address: null, dataStr: t[1], anchors };
+		}
+
+		if (action === 'INSCRIBE') {
+			if (t.length !== 2) return 'Expected: INSCRIBE <data(hex)>';
+			if (!this.#isValidHex(t[1])) return 'Data must be hex';
+			return { action, amount: 0, address: null, dataStr: t[1], anchors: null };
+		}
+
+		return `Invalid action: ${t[0]}`;
 	}
-	#isSafelyReadable(str = '') {
+	/** @param {string} str */
+	#isSafelyReadable(str) {
 		if (typeof str !== 'string') return false;
 		for (let i = 0; i < str.length; i++) if (!this.validChars.includes(str[i])) return false;
 		return true;
 	}
-	#parseFloatIfSafeAndValidContrastAmount(value = '') {
+	/** @param {string} str @param {number} [length] */
+	#isValidHex(str, length) {
+    	if (str.length === 0 || str.length % 2 !== 0) return false; // must be byte-aligned
+		if (length && str.length !== length) return false; // must match specified length
+		for (let i = 0; i < str.length; i++) if (!'0123456789abcdefABCDEF'.includes(str[i])) return false;
+		return true;
+	}
+	/** @param {string} value */
+	#parseFloatIfSafeAndValidContrastAmount(value) {
 		if (typeof value !== 'string') return false;
 		if (value.length < 1 || value.length > 14) return false;
 		for (let i = 0; i < value.length; i++) if (!'0123456789.'.includes(value[i])) return false;

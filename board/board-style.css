@@ -367,17 +367,28 @@ body {
     letter-spacing: -24px;
 }
 .window.onBoard {
-    box-shadow: inset 0 0 2px 0px var(--color1_2), 0px 2px 0px 0.6px var(--color1_2);
+    box-shadow:
+		inset 0 0 2px 0px var(--color1_2),
+		0px 2px 0px 0.6px var(--color1_2);
     transition:
         box-shadow calc(var(--windows-animation-duration) * .5),
         border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
 }
 .window.onBoard.front {
-    box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);
+    /*box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);*/
+	box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.08),
+		0 4px 6px rgba(0, 0, 0, 0.07),
+		0 12px 24px rgba(0, 0, 0, 0.12);
 }
 .window.onBoard:not(.front).temp-front {
     z-index: 1000 !important;
-    box-shadow: inset 0 0 1.5px .5px var(--color2_3), 1px 1px 0px 1px var(--color2_3);
+    /*box-shadow: inset 0 0 1.5px .5px var(--color2_3), 1px 1px 0px 1px var(--color2_3);*/
+	box-shadow:
+		inset 0 0 4px 0px var(--color1_2),
+		0 0 0 1px rgba(0, 0, 0, 0.08),
+		0 4px 6px rgba(0, 0, 0, 0.07),
+		0 12px 24px rgba(0, 0, 0, 0.12);
 }
 .window .title-bar {
     user-select: none;
