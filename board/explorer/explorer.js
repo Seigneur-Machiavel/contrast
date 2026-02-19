@@ -4,11 +4,11 @@ if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
     const Plotly = require('plotly.js-dist-min');
 }
 
-import { ADDRESS } from '../../types/address.mjs';
 //import { UTXO } from '../../types/transaction.mjs';
+//import { IS_VALID } from '../../types/validation.mjs';
+import { ADDRESS } from '../../types/address.mjs';
 import { eHTML_STORE } from '../board-helpers.js';
 import { CURRENCY } from '../../utils/currency.mjs';
-import { IS_VALID } from '../../types/validation.mjs';
 import { ModalComponent } from './modal-component.js';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockchainComponent } from './blockchain-component.js';

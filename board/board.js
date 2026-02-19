@@ -5,6 +5,7 @@ if (false) { // For better completion
 
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('../hive-p2p.min.js');
+import { NetworkVisualizer } from './visualizer/visualizer.mjs';
 import { Connector } from './connector.js';
 import { AppsManager } from './apps-manager.js';
 import { Explorer } from './explorer/explorer.js';
@@ -34,11 +35,13 @@ else document.body.classList.remove('dark-mode');
 
 //const settingsManager = new SettingsManager(settingsMenuElement);
 //const infoManager = new InfoManager();
+const visualizer = new NetworkVisualizer(connector, HiveP2P.CryptoCodex);
 const windowsWrap = document.getElementById('board-windows-wrap');
 const bottomButtonsBar = document.getElementById('board-apps-buttons-bar');
 const settingsMenuElement = document.getElementById('board-settings-menu');
 const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
 if (true) { // WINDOW EXPOSURE FOR DEBUGGING
+	window.networkVisualizer = visualizer; // Expose for debugging
 	window.appsManager = appsManager;
 	window.hiveNode = hiveNode;
 	window.connector = connector;
@@ -46,6 +49,14 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.dashboard = dashboard;
 	window.biw = biw;
 }
+
+const update = () => { // CENTRALIZED ANIMATION LOOP
+	visualizer.networkRenderer.animate();
+	//nodeCard.update();
+	//subNodeInfoTracker.update();
+	requestAnimationFrame(update);
+};
+requestAnimationFrame(update);
 
 // Implementation with less DOM event listeners
 async function clickTitleBarButtonsHandler(e) {
@@ -68,6 +79,7 @@ document.addEventListener('click', (e) => {
 	//infoManager.clickInfoButtonHandler(e);
 	//settingsManager.clickSettingsButtonHandler(e);
 });
+
 document.addEventListener('keyup', (e) => {
 	explorer.keyUpHandler(e);
 });
@@ -83,10 +95,17 @@ document.addEventListener('mousedown', (e) => {
 document.addEventListener('mouseup', (e) => {
 	appsManager.mouseupHandler(e);
 	biw.mouseUpHandler(e);
+	visualizer.networkRenderer.handleMouseUp(e);
 });
-document.addEventListener('mousemove', (e) => appsManager.mousemoveHandler(e));
+document.addEventListener('mousemove', (e) => {
+	appsManager.mousemoveHandler(e);
+	visualizer.networkRenderer.handleMouseMove(e);
+});
 document.addEventListener('input', (e) => biw.inputHandler(e));
-document.addEventListener('keydown', (e) => biw.keyDownHandler(e));
+document.addEventListener('keydown', (e) => {
+	biw.keyDownHandler(e);
+	visualizer.onKeyDown(e);
+});
 document.addEventListener('paste', (e) => biw.pasteHandler(e));
 document.addEventListener('focusin', (e) => biw.focusInHandler(e));
 document.addEventListener('focusout', (e) => biw.focusOutHandler(e));
@@ -102,6 +121,7 @@ document.addEventListener('change', (event) => {
 	}
 });
 window.addEventListener('resize', function(e) { // Trigger on main window resize event only
+	visualizer.networkRenderer.handleWindowResize();
 	const { width, height } = windowsWrap.getBoundingClientRect();
 	for (const app in appsManager.windows) {
 		appsManager.windows[app].element.style.maxWidth = width + 'px';

@@ -4,6 +4,8 @@ import { serializer } from '../utils/serializer.mjs';
 import { PendingRequest } from '../utils/networking.mjs';
 
 /**
+ * @typedef {import("../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
+ * @typedef {import("../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../storage/ledgers-store.mjs").AddressLedger} AddressLedger
  */
@@ -30,7 +32,7 @@ export class Connector {
 	/** @param {import('hive-p2p').Node} p2pNode */
 	constructor(p2pNode) {
 		this.p2pNode = p2pNode;
-		this.sync = new Sync({ p2p: p2pNode });
+		this.sync = new Sync({ p2p: p2pNode, blockchain: undefined }); // blockchain is not needed for the visualizer, but Sync expects it in the constructor
 		//p2pNode.onGossipData = (msg) => this.#handleMessage(msg);
 		p2pNode.onPeerConnect(this.#onPeerConnect);
 		p2pNode.onPeerDisconnect(this.#onPeerDisconnect);
@@ -162,25 +164,29 @@ export class Connector {
 		console.log('Connector received message:', msg);
 		for (const handler of this.listeners[msg.type] || []) handler(msg.data);
 	}
-	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
-	#onBlockFinalized = (senderId, data, HOPS) => {
-		if (!this.#storeBlock(data)) return;
-		for (const handler of this.listeners['block_finalized'] || []) handler(data);
+	/** @param {GossipMessage} msg */
+	#onBlockFinalized = (msg) => {
+		if (!(msg.data instanceof Uint8Array)) return; // not the expected data type
+		if (!this.#storeBlock(msg.data)) return;
+		for (const handler of this.listeners['block_finalized'] || []) handler(msg.data);
 	};
-	/** @param {string} senderId @param {any} data */
-	#onAddressLedger = (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onAddressLedger = (msg) => {
+		const { senderId, data } = msg;
 		if (this.pendingLedgerRequest?.peerId !== senderId) return; // not the expected sender
 		this.pendingLedgerRequest.complete(data);
 		this.pendingLedgerRequest = null;
 	}
-	/** @param {string} senderId @param {Uint8Array} data */
-	#onBlocksTimestamps = (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onBlocksTimestamps = (msg) => {
+		const { senderId, data } = msg;
 		if (this.pendingTimestampsRequest?.peerId !== senderId) return; // not the expected sender
 		this.pendingTimestampsRequest.complete(data);
 		this.pendingTimestampsRequest = null;
 	}
-	/** @param {string} senderId @param {Uint8Array} data */
-	#onRoundsLegitimacies = (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onRoundsLegitimacies = (msg) => {
+		const { senderId, data } = msg;
 		if (this.pendingRoundsLegitimaciesRequest?.peerId !== senderId) return; // not the expected sender
 		this.pendingRoundsLegitimaciesRequest.complete(data);
 		this.pendingRoundsLegitimaciesRequest = null;

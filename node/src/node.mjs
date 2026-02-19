@@ -15,7 +15,10 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 
 /**
- * @typedef {import("./wallet.mjs").Wallet} Wallet
+* @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
+* @typedef {import("../../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
+* 
+* @typedef {import("./wallet.mjs").Wallet} Wallet
 * @typedef {import("./wallet.mjs").Account} Account
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * 
@@ -179,28 +182,32 @@ export class ContrastNode {
 		else if (task.type === 'DigestBlock') 	//@ts-ignore: task.data = BlockFinalizedSerialized
 			await this.blockchain.digestFinalizedBlock(this, task.data);
 	}
-	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
-	#onBlockCandidate = async (senderId, data, HOPS) => {
+	/** @param {GossipMessage} msg */
+	#onBlockCandidate = async (msg) => {
+		const { senderId, data, HOPS } = msg;
 		try { // ignore block candidates that are not the next block
+			if (!(data instanceof Uint8Array)) throw new Error('Invalid block candidate data type');
 			const block = serializer.deserialize.blockCandidate(data);
 			if (this.blockchain.currentHeight + 1 !== block.index) return;
 			const isLegitimate = await BlockValidation.validateLegitimacy(block, this.blockchain.vss, 'candidate');
 			if (isLegitimate) this.taskQueue.push('NewCandidate', block);
 		} catch (/** @type {any} */ error) { this.logger.log(`[SYNC] -onBlockCandidate- Error deserializing block candidate from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
-	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
-	#onBlockFinalized = (senderId, data, HOPS) => {
+	/** @param {GossipMessage} msg */
+	#onBlockFinalized = (msg) => {
+		const { senderId, data, HOPS } = msg;
 		this.taskQueue.push('DigestBlock', data);
 	}
-	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
-	#onTransactionReceived = (senderId, data, HOPS) => {
+	/** @param {GossipMessage} msg */
+	#onTransactionReceived = (msg) => {
+		const { senderId, data, HOPS } = msg;
 		this.taskQueue.push('PushTx', data);
 	}
-	/** @param {string} senderId @param {string} data */
-	#onAddressLedgerRequest = async (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onAddressLedgerRequest = async (msg) => {
+		const { senderId, data: address } = msg;
 		try {
-			/** @type {string} */
-			const address = data;
+			if (typeof address !== 'string') throw new Error('Invalid address data type');
 			if (!ADDRESS.checkConformity(address)) throw new Error('Invalid address format');
 			
 			const ledger = this.blockchain.ledgersStorage.getAddressLedger(address);
@@ -211,8 +218,10 @@ export class ContrastNode {
 			this.p2p.messager.sendUnicast(senderId, ledger, 'address_ledger');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onAddressLedgerRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
-	/** @param {string} senderId @param {Uint8Array} data */
-	#onBlocksTimestampsRequest = async (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onBlocksTimestampsRequest = async (msg) => {
+		const { senderId, data } = msg;
+		if (!(data instanceof Uint8Array)) return; // not the expected data type
 		try {
 			const request = serializer.deserialize.blocksTimestampsRequest(data);
 			const t = this.blockchain.blockStorage.getBlocksTimestamps(request.fromHeight, request.toHeight);
@@ -221,8 +230,10 @@ export class ContrastNode {
 			this.p2p.messager.sendUnicast(senderId, s, 'blocks_timestamps');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onBlocksTimestampsRequest- Error processing blocks timestamps request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
-	/** @param {string} senderId @param {Uint8Array} data */
-	#onRoundsLegitimaciesRequest = async (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onRoundsLegitimaciesRequest = async (msg) => {
+		const { senderId, data } = msg;
+		if (!(data instanceof Uint8Array)) return; // not the expected data type
 		try {
 			const h = serializer.converter.bytesToHex(data);
 			const rl = this.blockchain.vss.getRoundForExplorerIfExists(h);

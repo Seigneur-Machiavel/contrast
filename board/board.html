@@ -20,9 +20,49 @@
 	
 	<script src="./explorer/explorer.js" type="module"></script>
     <script src="./board.js" type="module"></script>
+
+	<!-- PRE CALL CONTRAST MODULES -->
+	<script src="types/sync.mjs" type="module"></script>
+	<script src="types/address.mjs" type="module"></script>
+	<script src="types/transaction.mjs" type="module"></script>
+	<script src="types/validation.mjs" type="module"></script>
+	<script src="types/block.mjs" type="module"></script>
+	<script src="node/src/tx-validation.mjs" type="module"></script>
+	<script src="miniLogger/mini-logger.mjs" type="module"></script>
+	<script src="utils/progress-logger.mjs" type="module"></script>
+	<script src="node/src/conCrypto.mjs" type="module"></script>
+	<script src="node/src/block.mjs" type="module"></script>
+	<script src="utils/conditionals.mjs" type="module"></script>
+	<script src="node/src/wallet.mjs" type="module"></script>
+	<script src="node/src/tx-rule-checkers.mjs" type="module"></script>
+	<script src="node/src/transaction.mjs" type="module"></script>
+	<script src="node/src/sync.mjs" type="module"></script>
+	<script src="utils/networking.mjs" type="module"></script>
+	<!-- PRE CALL BOARD MODULES -->
+	<script src="apps-initializer.js" type="module"></script>
+	<script src="apps-config.js" type="module"></script>
+	<script src="htmlAnimations.js" type="module"></script>
+	<script src="connector.js" type="module"></script>
+	<script src="apps-manager.js" type="module"></script>
+	<script src="dashboard/dashboard.js" type="module"></script>
+	<script src="wallet/biw.js" type="module"></script>
+	<script src="utils/front-storage.mjs" type="module"></script>
+	<script src="utils/hive-p2p-config.mjs" type="module"></script>
+	<!-- PRE CALL EXPLORER MODULES -->
+	<script src="explorer/blockchain-component.js" type="module"></script>
+	<script src="utils/currency.mjs" type="module"></script>
+	<script src="explorer/modal-component.js" type="module"></script>
+	<script src="explorer/charts-component.js" type="module"></script>
+	<script src="utils/blockchain-settings.mjs" type="module"></script>
+	<script src="utils/serializer.mjs" type="module"></script>
+	<!-- PRE CALL WALLET MODULES -->
+	<script src="wallet/accounts-component.js" type="module"></script>
+	<script src="wallet/miniform-component.js" type="module"></script>
+	<script src="wallet/interpreter.js" type="module"></script>
+	<script src="wallet/pattern-generator.js" type="module"></script>
 </head>
 <body>
-    <div class="titlebar">
+	<div class="titlebar">
         <div id="board-title">CONTRAST<span id="board-version">v0.0.0</span></div>
         <span id="connexion-resume">Connecting network 🔴</span>
         <div class="window-controls">
@@ -36,6 +76,7 @@
         <input type="checkbox" id="dark-mode-toggle" checked>
         <span class="slider"></span>
     </label>
+
     <button id="board-settings-button">
         <img src="assets/settings64.png">
         <div class="tooltip">Settings</div>
@@ -49,7 +90,27 @@
         </div>
     </div>
 
-    <div id="board-windows-wrap"></div>
+    <div id="board-windows-wrap">
+		<div id="vzr-container"></div>
+		
+		<div id="vzr-UI">
+			<div id="node-tooltip"></div>
+		</div>
+		<div class="vzr-dev-info">
+			<!--<div>DEV INFO  |</div>-->
+			<div>°°°°°°°°°</div>
+			<!--<div>°°°°°°°</div>-->
+			<button id="vzr-modeSwitchBtn">2D</button>
+			<div>FPS: <span id="vzr-fpsCount">0</span></div>
+			<div>Nodes: <span id="vzr-nodeCount">0</span></div>
+			<div>Connecting: <span id="vzr-connectingCount">0</span></div>
+			<div>Neighbors: <span id="vzr-neighborCount">0</span></div>
+			<div>Publics: <span id="vzr-publicNeighborCount">0</span></div>
+			<div>Conns: <span id="vzr-connectionsCount">0</span></div>
+			<div>Lines: <span id="vzr-linesCount">0</span></div>
+		</div>
+	</div>
+
     <button id="board-info-panel-button" data-infokey="infoButton">
         <img src="assets/info64.png">
         <div class="tooltip">Info panel</div>
@@ -60,6 +121,7 @@
         <p>Using this component we hope to provide a more interactive experience, and clarify some of the complexitites</p>
         <p>Participate in the development of this project on by asking questions, they can evolve into new info in this panel.</p>
     </div>
+
     <div id="board-apps-buttons-bar"></div>
 </body>
 </html>

@@ -5,9 +5,12 @@ import { PendingRequest } from '../../utils/networking.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 /**
+ * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
+ * @typedef {import("../../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
+ * 
  * @typedef {Object} MinimalContrastNode
  * @property {import('hive-p2p').Node} p2p
- * @property {undefined} [blockchain]
+ * @property {undefined} blockchain
  * 
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("./blockchain.mjs").Blockchain} Blockchain
@@ -128,7 +131,7 @@ export class Sync {
 	/** @param {string} peerId @param {number} height */
 	async fetchBlockFromPeer(peerId, height, timeout = 3000) {
 		try {
-			this.pendingRequest = new PendingRequest(peerId, 'Block', timeout);
+			this.pendingRequest = new PendingRequest(peerId, 'block', timeout);
 			const heightInt32 = serializer.converter.numberTo4Bytes(height);
 			this.node.p2p.messager.sendUnicast(peerId, heightInt32, 'block_request', 1);
 			const serializedBlock = await this.pendingRequest.promise;
@@ -151,8 +154,10 @@ export class Sync {
 	}
 
 	// INTERNAL HANDLERS
-	/** @param {string} senderId @param {Uint8Array} data @param {number} HOPS */
-	#onSyncStatus = (senderId, data, HOPS) => {
+	/** @param {GossipMessage} msg */
+	#onSyncStatus = (msg) => {
+		const { senderId, data, HOPS } = msg;
+		if (!(data instanceof Uint8Array)) return; // not the expected data type
 		try {
 			const { blockHeight, blockHash } = serializer.deserialize.blockHeightHash(data);
 			const oldBHH = this.peersStatus[senderId];
@@ -167,16 +172,18 @@ export class Sync {
 			this.peersStatus[senderId] = bhh;
 		} catch (/** @type {any} */ error) { this.logger.log(`[SYNC] -onSyncStatus- Error deserializing sync status from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
-	/** @param {string} senderId @param {Uint8Array} data */
-	#onBlockRequest = async (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onBlockRequest = async (msg) => {
+		const { senderId, data } = msg;
 		if (!this.node.blockchain) return;
 		if (!(data instanceof Uint8Array) || data.length !== 4) return; // invalid request
 		const height = serializer.converter.bytes4ToNumber(data);
 		const b = this.node.blockchain.blockStorage.getBlockBytes(height, false)?.blockBytes;
 		if (b) this.node.p2p.messager.sendUnicast(senderId, b, 'block', 1);
 	}
-	/** @param {string} senderId @param {Uint8Array} data */
-	#onBlock = async (senderId, data) => {
+	/** @param {DirectMessage} msg */
+	#onBlock = async (msg) => {
+		const { senderId, data } = msg;
 		if (this.pendingRequest?.peerId !== senderId) return; // not the expected sender
 		if (!(data instanceof Uint8Array)) return; // invalid data type
 		this.pendingRequest.complete(data);

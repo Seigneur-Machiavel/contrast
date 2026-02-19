@@ -132,7 +132,7 @@ body {
     bottom: 32px;
     width: calc(var(--buttons-bar-width) - 16px);
     background: none;
-    opacity: .6;
+    opacity: .4;
 }
 #board-settings-button:hover {
     opacity: 1;
@@ -194,6 +194,43 @@ body {
 }
 
 /* BOARD WINDOWS AREA */
+/* === VISUALIZER === */
+#vzr-container {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+#vzr-UI {
+	pointer-events: none;
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+.vzr-dev-info {
+	pointer-events: none;
+	opacity: 1;
+	position: absolute;
+	top: 3%;
+	right: 2%;
+	/* background: var(--bg-header); */
+	color: var(--color3);
+	padding: 10px;
+	border-radius: 5px;
+	font-size: 12px;
+}
+.vzr-dev-info { /* show only in debug mode */
+	pointer-events: initial;
+	animation: fadeIn 1s 1s forwards;
+}
+.vzr-dev-info pre {
+	margin: 5px 0 0 0;
+}
+#vzr-modeSwitchBtn {
+	position: absolute;
+    top: 10px;
+    right: 10px;
+}
+
 #board-windows-wrap {
     user-select: none;
     position: relative;
@@ -365,6 +402,10 @@ body {
     transform-origin: bottom left;
     font-size: 2em;
     letter-spacing: -24px;
+	transition: color .12s ease;
+}
+.resize-button:hover, .window.resizing .resize-button {
+	color: var(--color3);
 }
 .window.onBoard {
     box-shadow:
@@ -382,7 +423,7 @@ body {
 		0 12px 24px rgba(0, 0, 0, 0.12);
 }
 .window.onBoard:not(.front).temp-front {
-    z-index: 1000 !important;
+    z-index: 10 !important;
     /*box-shadow: inset 0 0 1.5px .5px var(--color2_3), 1px 1px 0px 1px var(--color2_3);*/
 	box-shadow:
 		inset 0 0 4px 0px var(--color1_2),
