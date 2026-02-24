@@ -1,16 +1,16 @@
 
 export class CURRENCY {
-    /** @param {number} num - Integer to convert to readable */
-    static formatNumberAsCurrency(num) {
-        const numberPaddded = num.toString().padStart(6, '0');
-        const num2last6 = numberPaddded.toString().slice(-6) || '0';
-        const numRest = numberPaddded.toString().slice(0, -6) || '0';
-        const separedNum = numRest.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        let formatedValue = `${separedNum}.${num2last6}`.replace(/0+$/, ''); // remove trailing zeros
-        if (formatedValue.endsWith('.')) formatedValue = formatedValue.slice(0, -1);
-        
-        return formatedValue;
-    }
+	/** @param {number} num - Integer to convert to readable @param {number} [decimals] - Decimal places to show, default: 6 */
+	static formatNumberAsCurrency(num, decimals = 6) {
+		const numberPadded = num.toString().padStart(6, '0');
+		const num2last6 = numberPadded.slice(-6) || '0';
+		const numRest = numberPadded.slice(0, -6) || '0';
+		const separatedNum = numRest.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+		const full = `${separatedNum}.${num2last6}`;
+		const [intPart, decPart] = full.split('.');
+		const trimmed = decPart.slice(0, decimals).replace(/0+$/, '');
+		return trimmed ? `${intPart}.${trimmed}` : intPart;
+	}
 
     /** @param {string} str - String to convert to readable change */
     static formatCurrencyAsMicroAmount(str) {

@@ -182,7 +182,7 @@ export class MiniformComponent {
 		listItem.classList.add('biw-historyListItem');
 		listItem.dataset.txId = txId;
 
-		const changeText = `${isPositive ? '+' : ''}${CURRENCY.formatNumberAsCurrency(balanceChange)}`;
+		const changeText = `${isPositive ? '+' : ''}${CURRENCY.formatNumberAsCurrency(balanceChange, this.biw.balanceDecimals)}c`;
 		createSpacedTextElement(changeText, ['biw-historyChange'], state, ['biw-historyState'], listItem);
 		
 		const dateText = !approxTimestamp ? 'Pending'

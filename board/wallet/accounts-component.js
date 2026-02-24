@@ -52,7 +52,7 @@ export class AccountsComponent {
                     accountImgWrap.appendChild(img);
                 }
 
-                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sigOrSlash']))}c`;
+                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sigOrSlash']), this.biw.balanceDecimals)}c`;
                 if (name.innerText !== accountName) name.innerText = accountName;
                 if (address.innerText !== account.address) address.innerText = account.address;
                 if (amount.innerText !== readableAmount) amount.innerText = readableAmount;
@@ -69,7 +69,7 @@ export class AccountsComponent {
 	}
 	getHistoryTxIdsOfPage(page = this.activeAccountHistoryPage) {
 		this.activeAccountHistoryPage = page;
-		
+
 		const total = this.biw.activeAccount.historyIds.length;
 		const end = total - (page * this.biw.historyItemsPerPage);
 		if (end <= 0) return [];
@@ -103,7 +103,7 @@ export class AccountsComponent {
 		const accountLabelInfoWrap = createElement('div', ['biw-accountLabelInfoWrap'], accountLabel);
 		const accountLabelAddressAndValueWrap = createElement('div', ['biw-accountLabelAddressAndValueWrap'], accountLabelInfoWrap);
 		createElement('h2', [], accountLabelAddressAndValueWrap).innerText = address;
-		createElement('h3', [], accountLabelAddressAndValueWrap).innerText = `${CURRENCY.formatNumberAsCurrency(amount)}c`;
+		createElement('h3', [], accountLabelAddressAndValueWrap).innerText = `${CURRENCY.formatNumberAsCurrency(amount, this.biw.balanceDecimals)}c`;
 		
 		const accountLabelName = createElement('div', ['biw-accountLabelName'], accountLabelInfoWrap);
 		createElement('h3', [], accountLabelName).innerText = name;

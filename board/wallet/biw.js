@@ -25,12 +25,14 @@ export class BoardInternalWallet {
 	}
 
 	eHTML = eHTML;
-	historyItemsPerPage = 5;
-	autoRefresh = true;
 	wallet = new Wallet("0000000000000000000000000000000000000000000000000000000000000000");
-	accountThatNeedsRefresh = new Set();
 	boardStorage;
 	connector;
+	historyItemsPerPage = 5;
+	accountThatNeedsRefresh = new Set();
+	// User preferences
+	balanceDecimals = 2;
+	autoRefresh = true;
 
 	/** @type {Record<string, anime.AnimeInstance | null>} */
 	animations = {};
@@ -96,8 +98,8 @@ export class BoardInternalWallet {
 		else eHTML.get('buttonBarHistory')?.classList.add('disabled');
 
 		this.components.accounts.updateLabels();
-		balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance);
-		stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.stakedBalance);
+		balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance, this.balanceDecimals);
+		stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.stakedBalance, this.balanceDecimals);
 		
 		// wait at least 500ms to remove the active state, to avoid too quick flashes if the refresh is very fast
 		if (Date.now() - start < 1000) await new Promise(r => setTimeout(r, 1000 - (Date.now() - start)));
@@ -247,10 +249,12 @@ export class BoardInternalWallet {
 		const autoRefreshCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('autoRefreshCheckbox'));
 		const enableCommandsCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('enableCommandsCheckbox'));
 		const enableDataFieldCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('enableDataFieldCheckbox'));
+		const roundTo2DecimalsCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('roundTo2DecimalsCheckbox'));
 		const userPreferences = {
 			autoRefresh: autoRefreshCheckbox.checked || false,
 			enableCommands: enableCommandsCheckbox.checked || false,
 			enableDataField: enableDataFieldCheckbox.checked || false,
+			roundTo2Decimals: roundTo2DecimalsCheckbox.checked || false,
 		};
 
 		this.boardStorage.save('board_internal_wallet_user_preferences', JSON.stringify(userPreferences));
@@ -262,12 +266,15 @@ export class BoardInternalWallet {
 		const autoRefreshCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('autoRefreshCheckbox'));
 		const enableCommandsCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('enableCommandsCheckbox'));
 		const enableDataFieldCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('enableDataFieldCheckbox'));
+		const roundTo2DecimalsCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('roundTo2DecimalsCheckbox'));
 		try {
 			const userPreferences = JSON.parse(d);
 			autoRefreshCheckbox.checked = !!userPreferences.autoRefresh;
 			enableCommandsCheckbox.checked = !!userPreferences.enableCommands;
 			enableDataFieldCheckbox.checked = !!userPreferences.enableDataField;
+			roundTo2DecimalsCheckbox.checked = !!userPreferences.roundTo2Decimals;
 			if (userPreferences.autoRefresh) this.autoRefresh = true;
+			this.balanceDecimals = userPreferences.roundTo2Decimals ? 2 : 6;
 			//if (userPreferences.enableCommands) eHTML.get('buttonBarInterpreter')?.classList.remove('hidden');
 			if (userPreferences.enableCommands) eHTML.get('interpreterWrap')?.classList.add('active');
 			if (userPreferences.enableDataField) eHTML.get('dataField')?.classList.remove('hidden');
@@ -301,6 +308,15 @@ export class BoardInternalWallet {
 			case 'biw-enable-data-field-toggle':
 				if (e.target.checked) eHTML.get('dataField')?.classList.remove('hidden');
 				else eHTML.get('dataField')?.classList.add('hidden');
+				this.#saveUserPreferences();
+				break;
+			case 'biw-round-to-2-decimals-toggle':
+				this.balanceDecimals = e.target.checked ? 2 : 6;
+				this.components.accounts.updateLabels();
+				const balanceElement = eHTML.get('balanceStr');
+				const stakedBalanceElement = eHTML.get('stakedStr');
+				if (balanceElement) balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance, this.balanceDecimals);
+				if (stakedBalanceElement) stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.stakedBalance, this.balanceDecimals);
 				this.#saveUserPreferences();
 				break;
 			case 'biw-new-address':
