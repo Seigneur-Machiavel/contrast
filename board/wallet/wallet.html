@@ -2,7 +2,26 @@
 
 <div id="biw-container" class="biw-container">
     <div id="biw-miniFormsWrap" class="biw-miniFormsWrap">
-		<div id="biw-miniForm" class="biw-miniForm">
+		<div id="biw-miniFormHistory" class="biw-miniForm">
+			<div class="biw-flexWrap">
+				<h3 id="biw-historySenderAddress">C123456</h3>
+
+				<div class="biw-historyHeader hidden">
+					<button data-action="biw-filter-sent" id="biw-historySentBtn">Sent</button>
+					<button data-action="biw-filter-received" id="biw-historyReceivedBtn">Received</button>
+					<button data-action="biw-filter-all" id="biw-historyAllBtn" class="active">All</button>
+				</div>
+
+				<div id="biw-historyList">
+				</div>
+			</div>
+
+			<div id="biw-historyPagination">
+				<button id="biw-historyPrevPageBtn" data-action="biw-history-prev-page">Previous</button>
+				<button id="biw-historyNextPageBtn" data-action="biw-history-next-page">Next</button>
+			</div>
+		</div>
+		<div id="biw-miniFormTransfer" class="biw-miniForm">
 			<!-- DIAGRAM PROTOTYPE
 			<select id="biw-actionSelector">
 				<option value="send">Send</option>
@@ -14,8 +33,15 @@
 			<div id="biw-diagram-wrapper"></div>-->
 
 			<div class="biw-flexWrap">
+				<div id="biw-interpreterWrap" class="biw-spaced thinBottomBorder">
+					<input type="text" id="biw-interpreterInput" placeholder="ex: Send 10 C123456" autocomplete="off">
+					<button id="biw-interpretBtn" data-action="biw-interpret-input-btn" alt="Interpret">
+						<img src="./wallet/img/category64.png" alt="Interpreter">
+					</button>
+				</div>
+
                 <div class="biw-spaced">
-                    <h3 id="biw-senderAddress">C123456</h3>
+                    <h3 id="biw-TransferSenderAddress">C123456</h3>
 					<select id="biw-actionSelector">
 						<option value="Send">Send</option>
 						<option value="Stake">Stake</option>
@@ -49,18 +75,17 @@
                 </div>
             </div>
 
-			<p class="biw-textInfo"></p>
-            <button id="biw-sendBtn" class="biw-sendBtn biw-holdBtn" data-action="biw-confirm"><div>Send</div></button>
+            <button id="biw-sendBtn" class="biw-sendBtn biw-holdBtn" data-action="biw-confirm"><div>Confirm</div></button>
 		</div>
     </div>
 
     <div id="biw-mainForm">
         <button id="biw-buttonRefresh" data-action="biw-refresh">
-			<img src="./wallet/img/refresh64.png" alt="Send">
+			<img src="./wallet/img/refresh64.png" alt="Refresh">
 			<div class="tooltip">Refresh balances</div>
 		</button>
 		<button id="biw-buttonSettings" data-action="biw-toggle-settings-menu">
-			<img src="assets/settings64.png">
+			<img src="assets/settings64.png" alt="Settings">
 			<div class="tooltip">Settings</div>
 		</button>
 		<div id="biw-settings-menu" data-action="biw-toggle-settings-menu">
@@ -84,13 +109,14 @@
         <h2 class="biw-stakedBalance">Staked: <span id="biw-stakedStr">0.00</span>c</h2>
 
         <div id="biw-buttonBar">
-            <button id="biw-buttonBarSend" data-action="biw-toggle-send-form"><img src="./wallet/img/send32.png" alt="Send">Send</button>
-            <button id="biw-buttonBarSwap" data-action="biw-toggle-swap-form" class="disabled"><img src="./wallet/img/swap32.png" alt="Swap">Swap</button>
-			<button id="biw-buttonBarInterpreter" data-action="biw-toggle-interpreter" class="hidden"><img src="./wallet/img/category64.png" alt="Interpreter">Command</button>
+            <button id="biw-buttonBarTransfer" data-action="biw-toggle-transfer-form"><img src="./wallet/img/send32.png" alt="Transfer">Transfer</button>
+            <button id="biw-buttonBarSwap" data-action="biw-toggle-swap-form" class="disabled hidden"><img src="./wallet/img/swap32.png" alt="Swap">Swap</button>
+			<button id="biw-buttonBarHistory" data-action="biw-toggle-history-form" class="disabled"><img src="./wallet/img/history32.png" alt="History">History</button>
+			<!--<button id="biw-buttonBarInterpreter" data-action="biw-toggle-interpreter" class="hidden"><img src="./wallet/img/category64.png" alt="Interpreter">Command</button>
             <div id="biw-interpreter">
 				<input type="text" id="biw-interpreterInput" placeholder="ex: Send 10 to C123456" autocomplete="off">
 				<button id="biw-buttonBarInstructions" data-action="biw-interpret-input-btn">Confirm</button>
-            </div>
+            </div>-->
         </div>
 
         <div class="wrap">

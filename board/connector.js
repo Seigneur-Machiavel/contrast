@@ -2,20 +2,25 @@
 import { Sync } from '../node/src/sync.mjs';
 import { serializer } from '../utils/serializer.mjs';
 import { PendingRequest } from '../utils/networking.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../utils/blockchain-settings.mjs';
 
 /**
  * @typedef {import("../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
  * @typedef {import("../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
- * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../storage/ledgers-store.mjs").AddressLedger} AddressLedger
+ * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
+ * @typedef {import("../types/transaction.mjs").Transaction} Transaction
+ * @typedef {import("../types/transaction.mjs").TxId} TxId
  */
 
 export class Connector {
 	/** @type {PendingRequest | null} */		pendingLedgerRequest = null;
 	/** @type {PendingRequest | null} */		pendingTimestampsRequest = null;
+	/** @type {PendingRequest | null} */		pendingTransactionsRequest = null;
 	/** @type {PendingRequest | null} */		pendingRoundsLegitimaciesRequest = null;
 	/** @type {Record<string, Function[]>} */	listeners = {};
 	get prevHash() { return this.blocks.finalized[this.hash]?.prevHash; }
+	get lastBlock() { return this.blocks.finalized[this.hash]; }
 	isConsensusRobust = false;
 	height = -1;
 	hash = '';
@@ -29,6 +34,12 @@ export class Connector {
 		finalized: /** @type {Object<string, BlockFinalized>} */ ({}),
 	}
 
+	// TXS STORAGE
+	/** @type {Map<string, { address: string, amount: number, rule: string }>} */
+	utxosByAnchors = new Map();
+	/** @type {Map<string, Transaction>} */
+	txsById = new Map();
+
 	/** @param {import('hive-p2p').Node} p2pNode */
 	constructor(p2pNode) {
 		this.p2pNode = p2pNode;
@@ -37,12 +48,20 @@ export class Connector {
 		p2pNode.onPeerConnect(this.#onPeerConnect);
 		p2pNode.onPeerDisconnect(this.#onPeerDisconnect);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
+		p2pNode.messager.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
 		p2pNode.messager.on('blocks_timestamps', this.#onBlocksTimestamps);
 		p2pNode.messager.on('rounds_legitimacies', this.#onRoundsLegitimacies);
 		this.#consensusChangeDetectionLoop();
 	}
+	getBlockConfirmationTimestampApproximation(blockHeight = 0) {
+		const lastBlockTimestamp = this.blocks.finalized[this.hash]?.timestamp;
+		if (!lastBlockTimestamp) return null;
 
+		const heightDifference = this.height - blockHeight;
+		const approxTimestamp = lastBlockTimestamp - heightDifference * BLOCKCHAIN_SETTINGS.targetBlockTime;
+		return approxTimestamp;
+	}
 	/** @param {string} type @param {Function} callback */
 	on(type, callback) {
 		if (!this.listeners[type]) this.listeners[type] = [];
@@ -90,6 +109,33 @@ export class Connector {
 				return response;
 			} catch (error) {}
 		}
+	}
+	/** @param {TxId[]} txIds */
+	async getTransactions(txIds, timeout = 5000, force = false) {
+		// only fetch transactions for which we don't have the implied UTXOs (which means we don't have the transaction details)
+		const txIdsToFetch = force ? txIds : txIds.filter(txId => !this.utxosByAnchors.has(txId));
+		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		for (const peerId of peersToAsk) {
+			console.log(`Requesting transactions ${txIdsToFetch} from peer ${peerId}`);
+			const serializedTxIds = serializer.serialize.txsIdsArray(txIdsToFetch);
+			this.pendingTransactionsRequest = new PendingRequest(peerId, 'transactions', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, serializedTxIds, 'transactions_request');
+			try {
+				const serialized = await this.pendingTransactionsRequest.promise;
+				const r = serializer.deserialize.transactionsResponse(serialized);
+				for (const anchor in r.impliedUtxos) this.utxosByAnchors.set(anchor, r.impliedUtxos[anchor]);
+				for (const txId in r.txs) this.txsById.set(txId, r.txs[txId]);
+				break; // stop after the first successful response
+			} catch (/** @type {any} */ error) { throw new Error(error.stack || error.message || 'Unknown error while fetching transactions'); }
+		}
+
+		/** @type {Transaction[]} */
+		const txs = [];
+		for (const txId of txIds) // @ts-ignore
+			if (this.txsById.has(txId)) txs.push(this.txsById.get(txId));
+			else throw new Error(`Transaction with id ${txId} not found after fetching from peers`);
+
+		return txs;
 	}
 	/** Max number of blocks: 120 @param {number} [fromHeight] default: 0 @param {number} [toHeight] default: this.height */
 	async getBlocksTimestamps(fromHeight = 0, toHeight = this.height, timeout = 3000) {
@@ -176,6 +222,13 @@ export class Connector {
 		if (this.pendingLedgerRequest?.peerId !== senderId) return; // not the expected sender
 		this.pendingLedgerRequest.complete(data);
 		this.pendingLedgerRequest = null;
+	}
+	/** @param {DirectMessage} msg */
+	#onTransactions = (msg) => {
+		const { senderId, data } = msg;
+		if (this.pendingTransactionsRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingTransactionsRequest.complete(data);
+		this.pendingTransactionsRequest = null;
 	}
 	/** @param {DirectMessage} msg */
 	#onBlocksTimestamps = (msg) => {

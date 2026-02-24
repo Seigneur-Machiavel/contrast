@@ -19,6 +19,10 @@ export const HIVE_P2P_CONFIG = {
 			'121': 'rounds_legitimacies_request',
 			rounds_legitimacies: 120,
 			'120': 'rounds_legitimacies',
+			transactions_request: 119,
+			'119': 'transactions_request',
+			transactions: 118,
+			'118': 'transactions',
 		}
 	},
 	GOSSIP: {

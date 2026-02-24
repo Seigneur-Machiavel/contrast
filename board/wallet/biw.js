@@ -10,18 +10,22 @@ import { AccountsComponent } from './accounts-component.js';
 import { Wallet, Account } from '../../node/src/wallet.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 import { ButtonHoldAnimation, horizontalBtnLoading } from '../htmlAnimations.js';
+import { Transaction_Builder } from '../../node/src/transaction.mjs';
 
-/** @typedef {import("../../types/transaction.mjs").Transaction} Transaction */
+/** 
+ * @typedef {import("../../types/transaction.mjs").Transaction} Transaction 
+ * @typedef {import("../../types/transaction.mjs").TxId} TxId */
 
 const eHTML = new eHTML_STORE('biw-', 'container');
 export class BoardInternalWallet {
 	components = {											// @ts-ignore
 		/** @type {MiniformComponent} */ miniform: null, 	// @ts-ignore
 		/** @type {AccountsComponent} */ accounts: null,	// @ts-ignore
-		/** @type {Interpreter} */ interpreter: null,
+		/** @type {Interpreter} */ 	  interpreter: null,
 	}
 
 	eHTML = eHTML;
+	historyItemsPerPage = 5;
 	autoRefresh = true;
 	wallet = new Wallet("0000000000000000000000000000000000000000000000000000000000000000");
 	accountThatNeedsRefresh = new Set();
@@ -83,8 +87,13 @@ export class BoardInternalWallet {
 			if (!ledger || !ledger.ledgerUtxos) continue;
 
 			account.setBalanceAndUTXOs(ledger.balance, ledger.ledgerUtxos);
+			//if (ledger.history) console.log(`Account ${account.address} history ids:`, ledger.history);
+			if (ledger.history) account.setHistoryIds(ledger.history);
 			this.accountThatNeedsRefresh.delete(account.address);
         }
+
+		if (this.activeAccount.historyIds.length > 0) eHTML.get('buttonBarHistory')?.classList.remove('disabled');
+		else eHTML.get('buttonBarHistory')?.classList.add('disabled');
 
 		this.components.accounts.updateLabels();
 		balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance);
@@ -94,11 +103,43 @@ export class BoardInternalWallet {
 		if (Date.now() - start < 1000) await new Promise(r => setTimeout(r, 1000 - (Date.now() - start)));
         buttonRefresh.classList.remove('active');
     }
+	async getAndDisplayTransactionsDetails(page = this.components.accounts.activeAccountHistoryPage) {
+		this.components.miniform.resetHistoryList();
+		
+		const txIds = this.components.accounts.getHistoryTxIdsOfPage(page);
+		this.components.miniform.updatePaginationButtonsState();
+		if (txIds.length === 0 || txIds.length > this.historyItemsPerPage) throw new Error(`getAndDisplayTransactionsDetails: txIds length must be between 1 and ${this.historyItemsPerPage}`);
+
+		const txs = await this.connector.getTransactions(txIds); // Fetch txs and associated miniUtxos
+		if (!txs) throw new Error('No transactions found for the given txIds');
+
+		let index = 0;
+		for (let i = 0; i < txIds.length; i++) {
+			const [ txId, tx ] = [txIds[i], txs[i]];
+			const inAmount = Transaction_Builder.isMinerOrValidatorTx(tx) ? 0
+				: tx.inputs.reduce((sum, input) => {
+					const utxo = this.connector.utxosByAnchors.get(input);
+					if (utxo?.address !== this.activeAccount.address) return sum; // only count inputs from the active account
+					return sum + (utxo ? utxo.amount : 0);
+				}, 0);
+
+			setTimeout(() => this.components.miniform.addTransactionToHistory(txId, tx, inAmount), index * 100);
+			index++;
+		}
+	}
 	/** @param {string} address */
     selectAccountLabel(address) {
 		const accountIndex = this.#getWalletAccountIndexByAddress(address);
 		this.components.accounts.setActiveAccountIndex(accountIndex);
+		this.components.accounts.activeAccountHistoryPage = 0; // reset
 		this.components.miniform.setSenderAddress(address);
+		this.components.miniform.resetHistoryList();
+
+		if (this.activeAccount.historyIds.length > 0) eHTML.get('buttonBarHistory')?.classList.remove('disabled');
+		else eHTML.get('buttonBarHistory')?.classList.add('disabled');
+
+		if (this.components.miniform.isHistoryOpen) this.getAndDisplayTransactionsDetails();
+
 		console.log(`Selected account: ${address}`);
     }
 
@@ -193,14 +234,14 @@ export class BoardInternalWallet {
 
 		const { action, amount, address, dataStr } = instructions;
 		this.components.miniform.open(action);
-		this.components.miniform.setValues(
+		this.components.miniform.setTransferValues(
 			amount,
 			address || sender,
 			dataStr	? dataStr : undefined
 		)
 
-		eHTML.get('buttonBarInterpreter')?.classList.remove('open');
-		eHTML.get('interpreter')?.classList.remove('open');
+		// eHTML.get('buttonBarInterpreter')?.classList.remove('open');
+		// eHTML.get('interpreter')?.classList.remove('open');
     }
 	#saveUserPreferences() {
 		const autoRefreshCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('autoRefreshCheckbox'));
@@ -227,7 +268,8 @@ export class BoardInternalWallet {
 			enableCommandsCheckbox.checked = !!userPreferences.enableCommands;
 			enableDataFieldCheckbox.checked = !!userPreferences.enableDataField;
 			if (userPreferences.autoRefresh) this.autoRefresh = true;
-			if (userPreferences.enableCommands) eHTML.get('buttonBarInterpreter')?.classList.remove('hidden');
+			//if (userPreferences.enableCommands) eHTML.get('buttonBarInterpreter')?.classList.remove('hidden');
+			if (userPreferences.enableCommands) eHTML.get('interpreterWrap')?.classList.add('active');
 			if (userPreferences.enableDataField) eHTML.get('dataField')?.classList.remove('hidden');
 		} catch (error) { console.error('Error loading user preferences:', error); }
 	}
@@ -250,8 +292,10 @@ export class BoardInternalWallet {
 				this.#saveUserPreferences();
 				break;
 			case 'biw-enable-commands-toggle':
-				if (e.target.checked) eHTML.get('buttonBarInterpreter')?.classList.remove('hidden');
-				else eHTML.get('buttonBarInterpreter')?.classList.add('hidden');
+				//if (e.target.checked) eHTML.get('buttonBarInterpreter')?.classList.remove('hidden');
+				//else eHTML.get('buttonBarInterpreter')?.classList.add('hidden');
+				if (e.target.checked) eHTML.get('interpreterWrap')?.classList.add('active');
+				else eHTML.get('interpreterWrap')?.classList.remove('active');
 				this.#saveUserPreferences();
 				break;
 			case 'biw-enable-data-field-toggle':
@@ -265,23 +309,44 @@ export class BoardInternalWallet {
 			case 'biw-select-account':
 				this.selectAccountLabel(e.target.dataset.value);
 				break;
-			case 'biw-toggle-send-form':
-				if (this.components.miniform.isOpen) this.components.miniform.close();
+			case 'biw-toggle-transfer-form':
+				if (this.components.miniform.isTransferOpen) this.components.miniform.close();
 				else this.components.miniform.open('SEND');
-				// OPTIONNAL: add active class to button while form is open
-				//if (this.components.miniform.isOpen) e.target.classList.add('active');
-				//else e.target.classList.remove('active');
 				break;
 			case 'biw-toggle-swap-form':
 				console.log('Swap not implemented yet');
 				break;
 			case 'biw-toggle-interpreter':
-				this.components.interpreter.toggle();
+				//this.components.interpreter.toggle();
 				// OPTIONNAL: add active class to button while form is open
 				break;
+			case 'biw-toggle-history-form':
+				if (this.components.miniform.isHistoryOpen) this.components.miniform.close();
+				else {
+					this.components.miniform.open('HISTORY');
+					this.getAndDisplayTransactionsDetails();
+				}
+				break;
+			case 'biw-history-prev-page':
+				if (this.components.accounts.activeAccountHistoryPage <= 0) throw new Error('Already at the first page');
+				this.getAndDisplayTransactionsDetails(this.components.accounts.activeAccountHistoryPage - 1);
+				break;
+			case 'biw-history-next-page':
+				if (this.components.accounts.activeAccountHistoryPage >= this.components.accounts.totalAccountHistoryPages - 1) throw new Error('Already at the last page');
+				this.getAndDisplayTransactionsDetails(this.components.accounts.activeAccountHistoryPage + 1);
+				break;
+			/*case 'biw-filter-sent':
+				this.components.miniform.setHistoryFilter('SENT');
+				break;
+			case 'biw-filter-received':
+				this.components.miniform.setHistoryFilter('RECEIVED');
+				break;
+			case 'biw-filter-all':
+				this.components.miniform.setHistoryFilter('ALL');
+				break;*/
 			case 'biw-interpret-input-btn':
 				this.#followInstructionsFromInput();
-				this.components.interpreter.close();
+				//this.components.interpreter.close();
 				break;
 		}
 	} // @ts-ignore
@@ -342,7 +407,7 @@ export class BoardInternalWallet {
 
 				for (const anchor of r.signedTx.inputs) this.activeAccount.markUTXOAsSpent(anchor);
 				this.components.accounts.updateLabels();
-				this.components.miniform.reset();
+				this.components.miniform.resetTransferForm();
 				this.animations.sendBtn = null;
 				console.log(`Broadcasted tx (${r.serialized.length} bytes):`, r.signedTx);
 			} catch (/** @type {any} */ error) { this.textInfo(error.message); }

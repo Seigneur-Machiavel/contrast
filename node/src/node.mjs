@@ -9,6 +9,7 @@ import { TaskQueue } from './task-queue.mjs';
 import { Blockchain } from './blockchain.mjs';
 import { ADDRESS } from "../../types/address.mjs";
 import { NodeController } from "./node-controller.mjs";
+import { Transaction_Builder } from "./transaction.mjs";
 import { serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -88,6 +89,7 @@ export class ContrastNode {
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 		p2pNode.gossip.on('transaction', this.#onTransactionReceived);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
+		p2pNode.messager.on('transactions_request', this.#onTransactionsRequest);
 		p2pNode.messager.on('blocks_timestamps_request', this.#onBlocksTimestampsRequest);
 		p2pNode.messager.on('rounds_legitimacies_request', this.#onRoundsLegitimaciesRequest);
 	}
@@ -217,6 +219,28 @@ export class ContrastNode {
 			delete ledger.utxosBuffer;
 			this.p2p.messager.sendUnicast(senderId, ledger, 'address_ledger');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onAddressLedgerRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	}
+	/** @param {DirectMessage} msg */
+	#onTransactionsRequest = async (msg) => {
+		const { senderId, data } = msg;
+		try {
+			if (!(data instanceof Uint8Array)) throw new Error('Invalid transactions request data type');
+			const request = serializer.deserialize.txsIdsArray(data);
+			if (!Array.isArray(request)) throw new Error('Invalid transactions request format');
+			if (request.length === 0) throw new Error('Empty transactions request');
+			if (request.length > 10) throw new Error('Too many transactions requested at once (max 10)');
+
+			const txs = this.blockchain.blockStorage.getTransactionsByIds(request);
+			const impliedAnchors = [];
+			for (const tx in txs)
+				if (Transaction_Builder.isMinerOrValidatorTx(txs[tx])) continue;
+				else impliedAnchors.push(...txs[tx].inputs);
+				
+			const impliedUtxos = this.blockchain.blockStorage.getUtxos(impliedAnchors);
+			if (!impliedUtxos) throw new Error('Failed to retrieve implied UTXOs for the requested transactions');
+			const s = serializer.serialize.transactionsResponse(txs, impliedUtxos);
+			this.p2p.messager.sendUnicast(senderId, s, 'transactions');
+		} catch (/** @type {any} */ error) { this.logger.log(`-onTransactionsRequest- Error processing transactions request from ${senderId}: ${error.stack}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */
 	#onBlocksTimestampsRequest = async (msg) => {

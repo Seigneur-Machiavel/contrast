@@ -3,12 +3,13 @@ import { CURRENCY } from "../../utils/currency.mjs";
 import { IS_VALID } from "../../types/validation.mjs";
 
 export class Interpreter {
-	interpreter = document.getElementById('biw-interpreter');
-	interpreterInput= document.getElementById('biw-interpreterInput');
-	buttonBarInterpreter = document.getElementById('biw-buttonBarInterpreter');
+	//interpreter = document.getElementById('biw-interpreter');
+	interpreterInput = document.getElementById('biw-interpreterInput');
+	//buttonBarInterpreter = document.getElementById('biw-buttonBarInterpreter');
 	validChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .';
 	get isOpen() { return this.interpreter?.classList.contains('open'); }
 
+	/* OLD VERSION WITH "biw-buttonBarInterpreter" TO BE REMOVED LATER
 	toggle() {
 		if (!this.interpreter || !this.buttonBarInterpreter) throw new Error('Interpreter.toggle: interpreter or buttonBarInterpreter element not found');
 		if (this.isOpen) this.close();
@@ -24,7 +25,7 @@ export class Interpreter {
 		if (!this.interpreter || !this.buttonBarInterpreter) throw new Error('Interpreter.close: interpreter or buttonBarInterpreter element not found');
 		this.interpreter.classList.remove('open');
 		this.buttonBarInterpreter.classList.remove('open');
-	}
+	}*/
 	/** @param {string} str */
 	read_OLD(str) { // DEPRECATED, TO BE REMOVED LATER, USE read() INSTEAD
 		if (!this.#isSafelyReadable(str)) return 'Instructions is not safely readable';

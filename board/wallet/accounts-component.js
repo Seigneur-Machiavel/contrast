@@ -13,6 +13,8 @@ const patternGenerator = new PatternGenerator({ width: 48, height: 48, scale: 1 
 export class AccountsComponent {
 	/** @type {HTMLElement} */ wrap;
 	activeAccountIndex = 0;
+	activeAccountHistoryPage = 0;
+	get totalAccountHistoryPages() { return Math.ceil(this.biw.activeAccount.historyIds.length / this.biw.historyItemsPerPage); }
 	biw;
 
 	/** @param {HTMLElement | null} wrap @param {import('./biw.js').BoardInternalWallet} biw */
@@ -64,6 +66,16 @@ export class AccountsComponent {
 	setActiveAccountIndex(index = 0) {
 		this.activeAccountIndex = index;
 		this.#updateActiveAccountLabel();
+	}
+	getHistoryTxIdsOfPage(page = this.activeAccountHistoryPage) {
+		this.activeAccountHistoryPage = page;
+		
+		const total = this.biw.activeAccount.historyIds.length;
+		const end = total - (page * this.biw.historyItemsPerPage);
+		if (end <= 0) return [];
+
+		const start = Math.max(end - this.biw.historyItemsPerPage, 0);
+		return this.biw.activeAccount.historyIds.slice(start, end).reverse();
 	}
 	#updateActiveAccountLabel() { // TO UPDATE
         const accountLabels = this.wrap.getElementsByClassName('biw-accountLabel');

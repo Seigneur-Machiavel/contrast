@@ -11,6 +11,7 @@ import { UTXO_RULES_GLOSSARY, UTXO } from '../../types/transaction.mjs';
 * @typedef {import("../../storage/storage.mjs").ContrastStorage} ContrastStorage
 * @typedef {import("../../utils/front-storage.mjs").FrontStorage} FrontStorage
 * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
+* @typedef {import("../../types/transaction.mjs").TxId} TxId
 * @typedef {import("../../types/transaction.mjs").LedgerUtxo} LedgerUtxo */
 
 class GeneratedAccount {
@@ -34,6 +35,7 @@ export class Account {
 	prefix;		// e.g., 'C'
 	b58;		// e.g., '123456'
 
+	/** @type {TxId[]} */					historyIds = [];
 	/** @type {LedgerUtxo[]} */				ledgerUtxos = [];
     /** @type {number} */ 					balance = 0;
 	/** @type {number} */					totalSent = 0;
@@ -49,6 +51,7 @@ export class Account {
     }
 
 	get address() { return `${this.prefix}${this.b58}`; }
+	get nbHistory() { return this.historyIds.length; }
 
     /** @param {Transaction} transaction */
     signTransaction(transaction) {
@@ -69,6 +72,10 @@ export class Account {
         this.balance = balance;
         this.ledgerUtxos = ledgerUtxos;
     }
+	/** @param {TxId[]} history */
+	setHistoryIds(history) {
+		this.historyIds = history;
+	}
 	/** @param {string} anchor */
 	markUTXOAsSpent(anchor) {
 		const utxo = this.ledgerUtxos.find(utxo => utxo.anchor === anchor);

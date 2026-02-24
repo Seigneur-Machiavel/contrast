@@ -45,11 +45,12 @@ class AddressChanges {
 	/** Outgoing total amount @type {number} */ 				totalOutAmount = 0;
 	/** History txIds @type {Set<TxId>} */						historyTxIds = new Set();
 
-	/** @param {'in' | 'out'} direction @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
-	add(direction, height, txIndex, vout, amount, rule) {
+	/** @param {'in' | 'out'} direction @param {TxId} txId @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
+	add(direction, txId, height, txIndex, vout, amount, rule) {
 		const serializedUtxo = serializer.serialize.ledgerUtxo(height, txIndex, vout, amount, rule);
-		const txId = `${height}:${txIndex}`;
+		//const txId = `${height}:${txIndex}`;
 		if (!this.historyTxIds.has(txId)) this.historyTxIds.add(txId);
+		
 		if (direction === 'out') {
 			this.totalOutAmount += amount;
 			this.out.push(serializedUtxo);
@@ -81,6 +82,11 @@ export class LedgersStorage {
 		for (const dirPath of dirsToCreate) fs.mkdirSync(dirPath, { recursive: true });
 		for (const address in changesByAddress)
 			applyCount += this.#applyAddressChanges(address, changesByAddress[address], safeMode);
+		/*for (const address in changesByAddress) {
+			const changes = changesByAddress[address];
+			console.log('(digest) historyTxIds:', [...changes.historyTxIds], 'size:', changes.historyTxIds.size);
+			applyCount += this.#applyAddressChanges(address, changes, safeMode);
+		}*/
 
 		return applyCount;
 	}
@@ -90,6 +96,11 @@ export class LedgersStorage {
 		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
 		for (const address in changesByAddress)
 			undoCount += this.#reverseAddressChanges(address, changesByAddress[address], true, true);
+		/*for (const address in changesByAddress) {
+			const changes = changesByAddress[address];
+			console.log('(undo) historyTxIds:', [...changes.historyTxIds], 'size:', changes.historyTxIds.size);
+			undoCount += this.#reverseAddressChanges(address, changes, true, true);
+		}*/
 
 		return undoCount;
 	}
@@ -114,20 +125,24 @@ export class LedgersStorage {
 	#extractChangesByAddress(block, involvedUTXOs) {
 		/** @type {Object<string, AddressChanges>} */
 		const r = {}; // RESULT
-		for (const utxoAnchor in involvedUTXOs) {
-			const utxo = involvedUTXOs[utxoAnchor];
-			if (!r[utxo.address]) r[utxo.address] = new AddressChanges();
+		for (let i = 2; i < block.Txs.length; i++)
+			for (const input of block.Txs[i].inputs) {
+				const utxo = involvedUTXOs[input];
+				if (!utxo) throw new Error(`UTXO with anchor ${input} not found in involvedUTXOs while extracting changes for block ${block.index}`);
+				
+				if (!r[utxo.address]) r[utxo.address] = new AddressChanges();
+				const txId = `${block.index}:${i}`;
+				const { height, txIndex, vout } = serializer.parseAnchor(input);
+				r[utxo.address].add('out', txId, height, txIndex, vout, utxo.amount, utxo.rule);
+			}
 
-			const { height, txIndex, vout } = serializer.parseAnchor(utxoAnchor);
-			r[utxo.address].add('out', height, txIndex, vout, utxo.amount, utxo.rule);
-		}
-
-		for (let txIndex = 0; txIndex < block.Txs.length; txIndex++)
-			for (let voutIndex = 0; voutIndex < block.Txs[txIndex].outputs.length; voutIndex++) {
-				const { address, amount, rule } = block.Txs[txIndex].outputs[voutIndex];
+		for (let i = 0; i < block.Txs.length; i++)
+			for (let voutIndex = 0; voutIndex < block.Txs[i].outputs.length; voutIndex++) {
+				const { address, amount, rule } = block.Txs[i].outputs[voutIndex];
 				if (!r[address]) r[address] = new AddressChanges();
 
-				r[address].add('in', block.index, txIndex, voutIndex, amount, rule);
+				const txId = `${block.index}:${i}`;
+				r[address].add('in', txId, block.index, i, voutIndex, amount, rule);
 			}
 		
 		return r;
@@ -139,7 +154,7 @@ export class LedgersStorage {
 		// PREPARE HISTORY TO ADD & CONTROL FOR SAFE MODE
 		const newHistoryBytes = serializer.serialize.txsIdsArray(changes.historyTxIds);
 		if (safeMode) { // CHECK IF ALREADY UPDATED => NO WRITE
-			if (l.historyBytes.length < newHistoryBytes.length) return 0;
+			if (l.historyBytes.length >= newHistoryBytes.length) return 0;
 			const existingHistoryEnd = l.historyBytes.subarray(l.historyBytes.length - newHistoryBytes.length);
 			if (Buffer.from(existingHistoryEnd).compare(Buffer.from(newHistoryBytes)) === 0) return 0;
 		}

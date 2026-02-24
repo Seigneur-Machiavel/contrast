@@ -101,8 +101,8 @@ export class Transfer {
 }
 
 export class Transaction {
-	/** @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {string[]} [witnesses] @param {Uint8Array | undefined} [data] @param {number} [version] Arbitrary data attached to the transaction @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] */
-	constructor(inputs, outputs, witnesses = [], data, version = TRANSACTION.VERSION, feePerByte, byteWeight) {
+	/** @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {string[]} [witnesses] @param {Uint8Array | undefined} [data] @param {number} [version] Arbitrary data attached to the transaction @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {Object<string, number>} [inAmountByAddress] */
+	constructor(inputs, outputs, witnesses = [], data, version = TRANSACTION.VERSION, feePerByte, byteWeight, inAmountByAddress) {
 		this.inputs = inputs;
 		this.outputs = outputs;
 		this.witnesses = witnesses;
@@ -110,12 +110,18 @@ export class Transaction {
 		this.version = version;
 		this.feePerByte = feePerByte;
 		this.byteWeight = byteWeight;
+		this.inAmountByAddress = inAmountByAddress;
 	}
 
 	/** @param {UTXO[]} utxos @param {TxOutput[]} outputs @param {Uint8Array | undefined} [data] */
 	static fromUTXOs(utxos, outputs, data) {
 		const inputs = utxos.map(utxo => utxo.anchor);
-		return new TRANSACTION.Transaction(inputs, outputs, [], data);
+		const inAmountByAddress = {};
+		for (const utxo of utxos)
+			if (!inAmountByAddress[utxo.address]) inAmountByAddress[utxo.address] = 0;
+			else inAmountByAddress[utxo.address] += utxo.amount;
+
+		return new TRANSACTION.Transaction(inputs, outputs, [], data, TRANSACTION.VERSION, undefined, undefined, inAmountByAddress);
 	}
 }
 

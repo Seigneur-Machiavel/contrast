@@ -1,5 +1,6 @@
 // @ts-check
 import { ADDRESS } from '../types/address.mjs';
+import { Transaction_Builder } from '../node/src/transaction.mjs';
 import { BlockFinalized, BlockCandidate } from '../types/block.mjs';
 import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from '../types/transaction.mjs';
 
@@ -224,6 +225,24 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`miniUTXOs array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
+		/** @param {Record<TxAnchor, UTXO>} utxosObj */
+		miniUTXOsObj(utxosObj) {
+			let count = 0; // fast counter without garbage (no need to create an array of keys or values)
+			for (const anchor in utxosObj) count++;
+
+			const w = new BinaryWriter(count * (lengths.anchor.bytes + lengths.miniUTXO.bytes));
+			for (const anchor in utxosObj) {
+				const utxo = utxosObj[anchor];
+				const rule = UTXO_RULES_GLOSSARY[utxo.rule];
+				if (!rule) throw new Error(`Unknown UTXO rule: ${utxo.rule}`);
+				w.writeBytes(this.anchor(anchor));
+				w.writeBytes(ADDRESS.B58_TO_BYTES(utxo.address));
+				w.writeBytes(converter.numberTo6Bytes(utxo.amount));
+				w.writeByte(rule.code);
+			}
+			if (w.isWritingComplete) return w.getBytes();
+			else throw new Error(`miniUTXOs object serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
 		/** @param {TxId[] | Set<TxId>} txsIds ex: blockHeight:txIndex */
         txsIdsArray(txsIds) {
 			const count = txsIds instanceof Set ? txsIds.size : txsIds.length;
@@ -402,6 +421,42 @@ export const serializer = {
 				for (const pubkey of entry.pubkeys) w.writeBytes(converter.hexToBytes(pubkey));
 			}
 			return w.getBytes();
+		},
+		/** @param {Record<TxId, Transaction>} txs @param {Record<TxAnchor, UTXO>} impliedUtxos */
+		transactionsResponse(txs, impliedUtxos) {
+			const modes = [];
+			const serializedTxs = [];
+			const ids = Object.keys(txs);
+			const txsValues = Object.values(txs);
+			for (const tx of txsValues) { // SERIALIZE TXs WITH SPECIAL MODE IF VALIDATOR/MINER TX
+				const mode = Transaction_Builder.isMinerOrValidatorTx(tx);
+				modes.push(!mode ? 0 : mode === 'miner' ? 1 : 2); // 0 = tx, 1 = miner, 2 = validator
+				serializedTxs.push(this.transaction(tx, mode));
+			}
+
+			const serializedUtxos = this.miniUTXOsObj(impliedUtxos);
+			const idsBytes = lengths.txId.bytes * txsValues.length;
+			const modeBytes = txsValues.length; // mode for each tx (miner/validator/tx)
+			const offsetBytes = 4 * txsValues.length; // pointer for each tx
+			const txsBytes = serializedTxs.reduce((sum, tx) => sum + tx.length, 0);
+			const totalBytes = idsBytes + modeBytes + offsetBytes + txsBytes + 4 + serializedUtxos.length;
+			
+			const w = new BinaryWriter(totalBytes);
+			w.writeBytes(converter.numberTo4Bytes(serializedUtxos.length));
+			w.writeBytes(serializedUtxos);
+
+			for (let i = 0; i < ids.length; i++) {
+				const { height, txIndex } = serializer.parseTxId(ids[i]);
+				w.writeBytes(converter.numberTo4Bytes(height));
+				w.writeBytes(converter.numberTo2Bytes(txIndex));
+				w.writeByte(modes[i]);
+
+				const serializedTx = serializedTxs[i];
+				w.writeBytes(converter.numberTo4Bytes(serializedTx.length)); // pointer
+				w.writeBytes(serializedTx);
+			}
+
+			return w.getBytes();
 		}
 	},
     deserialize: {
@@ -464,6 +519,21 @@ export const serializer = {
                 miniUTXOs.push(this.miniUTXO(serializedMiniUTXOs.slice(i, i + lengths.miniUTXO.bytes)));
             return miniUTXOs;
         },
+		/** @param {Uint8Array} serializedMiniUTXOsObj */
+		miniUTXOsObj(serializedMiniUTXOsObj) {
+			/** @type {Record<TxAnchor, { address: string, amount: number, rule: string }>} */
+			const miniUTXOsObj = {};
+			const r = new BinaryReader(serializedMiniUTXOsObj);
+			for (let i = 0; i < serializedMiniUTXOsObj.length; i += (lengths.anchor.bytes + lengths.miniUTXO.bytes)) {
+				const anchor = this.anchor(r.read(lengths.anchor.bytes));
+				const address = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
+				const amount = converter.bytes6ToNumber(r.read(6));
+				const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
+				miniUTXOsObj[anchor] = { address, amount, rule };
+			}
+
+			return miniUTXOsObj;
+		},
 		/** @param {Uint8Array} serializedTxsIds */
         txsIdsArray(serializedTxsIds) {
 			if (serializedTxsIds.length % lengths.txId.bytes !== 0) throw new Error('Serialized txIds length is invalid');
@@ -632,6 +702,38 @@ export const serializer = {
 				roundsLegitimacies.push({ address, pubkeys });
 			}
 			return roundsLegitimacies;
+		},
+		/** @param {Uint8Array} serializedResponse */
+		transactionsResponse(serializedResponse) {
+			/** @type {Record<TxId, Transaction>} */
+			const txs = {};
+			const r = new BinaryReader(serializedResponse);
+
+			/* @type {Record<TxAnchor, { address: string, amount: number, rule: string }>} */
+			/*const impliedUtxos = {};
+			const nbOfImpliedUtxos = converter.bytes4ToNumber(r.read(4));
+			for (let i = 0; i < nbOfImpliedUtxos; i++) {
+				const anchor = this.anchor(r.read(lengths.anchor.bytes));
+				const miniUtxo = this.miniUTXO(r.read(lengths.miniUTXO.bytes));
+				impliedUtxos[anchor] = miniUtxo;
+			}*/
+
+			const utxosBytes = converter.bytes4ToNumber(r.read(4));
+			const impliedUtxos = this.miniUTXOsObj(r.read(utxosBytes)); // read implied utxos
+
+			while (!r.isReadingComplete) {
+				const blockHeight = converter.bytes4ToNumber(r.read(4));
+				const txIndex = converter.bytes2ToNumber(r.read(2));
+				const modeByte = r.read(1)[0];
+				const mode = modeByte === 0 ? 'tx' : modeByte === 1 ? 'miner' : modeByte === 2 ? 'validator' : null;
+				if (!mode) throw new Error(`Invalid mode byte in transactions response: ${modeByte}`);
+
+				const txBytes = converter.bytes4ToNumber(r.read(4));
+				const tx = this.transaction(r.read(txBytes), mode);
+				txs[`${blockHeight}:${txIndex}`] = tx;
+			}
+
+			return { txs, impliedUtxos };
 		}
     }
 };

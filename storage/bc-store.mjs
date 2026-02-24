@@ -90,6 +90,27 @@ export class BlockchainStorage {
 		const { blockBytes } = this.getBlockBytes(height, false) || {};
 		if (blockBytes) return this.#extractTransactionsFromBlockBytes(blockBytes, txIndexes);
 	}
+	/** @param {TxId[]} txIds */
+	getTransactionsByIds(txIds) {
+		// Sort request by block height to minimize disk reads
+		/** @type {Map<number, number[]>} */
+		const txIdByHeight = new Map();
+		for (const txId of txIds) {
+			const { height, txIndex } = serializer.parseTxId(txId);
+			if (!txIdByHeight.has(height)) txIdByHeight.set(height, []); // @ts-ignore
+			txIdByHeight.get(height).push(txIndex);
+		}
+
+		/** key: txId, value: transaction @type {Record<TxId, Transaction>} */
+		const transactions = {};
+		for (const [height, txIndexes] of txIdByHeight.entries()) {
+			const txs = this.getTransactions(height, txIndexes)?.txs;
+			if (!txs) continue;
+			for (const txIndex of txIndexes) transactions[`${height}:${txIndex}`] = txs[txIndex];
+		}
+
+		return transactions;
+	}
 	/** @param {TxId} txId */
 	getTransaction(txId) {
 		const { height, txIndex } = serializer.parseTxId(txId);

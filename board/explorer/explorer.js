@@ -117,7 +117,8 @@ export class Explorer {
 			this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight);
 
 		// UPDATE ROUND LEGITIMACIES CHART
-		this.getAndDisplayRoundLegitimacies();
+		try { this.getAndDisplayRoundLegitimacies() } 
+		catch (/** @type {any} */ error) { console.warn(error.stack || error) }
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation
@@ -312,8 +313,9 @@ export class Explorer {
 	}
 	async getAndDisplayRoundLegitimacies() {
 		const rl = await this.connector.getRoundsLegitimacies();
-		if (!rl) throw new Error('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
-		if (rl.length === 0) return; // no data
+		//if (!rl) throw new Error('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
+		if (!rl) console.warn('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
+		if (!rl || rl.length === 0) return; // no data
 		//console.log('Explorer: Retrieved rounds legitimacies:', rl);
 		this.roundLegitimaciesChart.render(rl);
 		
