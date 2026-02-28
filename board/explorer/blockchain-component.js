@@ -11,6 +11,7 @@ class BlockComponent {
 	/** @type {string | null} */ hash = null;
 	/** @type {number | null} */ index = null;
 	/** @type {number | null} */ timestamp = null;
+	/** @type {string | null} */ lastTimeAgo = null;
 
 	constructor() {
 		this.wrap = createElement('div', ['cbe-blockWrap']);
@@ -49,7 +50,10 @@ class BlockComponent {
 	}
 	updateTimeAgo() {
 		if (!this.timestamp) return;
-		this.timeAgo.textContent = getTimeSinceBlockConfirmedString(this.timestamp);
+		const timeAgo = getTimeSinceBlockConfirmedString(this.timestamp);
+		if (this.lastTimeAgo === timeAgo) return;
+
+		this.timeAgo.textContent = timeAgo;
 	}
 	/** @param {string} hash @param {number} nbOfCharsPerLine Default: 16 */
     #splitHash(hash, nbOfCharsPerLine = 16) {
@@ -150,20 +154,19 @@ export class BlockchainComponent {
     #suckFirstBlockElement(duration = 1000) {
 		const chainWrap = eHTML.get('chainWrap');
 		if (!chainWrap) return;
-        
-        // suck the first block
+
+        // read ClientRect before animation then suck the first block
+		const lockedWidth = chainWrap.getBoundingClientRect().width;
         this.firstBlockAnimation = anime({
             targets: this.blocks[0].wrap,
             translateX: '-100%',
-            filter: 'blur(6px)',
+            //filter: 'blur(6px)',
             width: 0,
-            scale: 0.5,
+            scale: .6,
             opacity: 0,
             duration,
             easing: 'easeInOutQuad',
-            begin: () => {
-                chainWrap.style.width = `${chainWrap.getBoundingClientRect().width}px`; // lock the width of the wrap
-            },
+            begin: () => chainWrap.style.width = `${lockedWidth}px`, // lock the width of the wrap
             complete: () => {
                 this.#removeFirstBlockElement();
 				this.#addEmptyBlockAtEndIfNeeded();
@@ -172,7 +175,7 @@ export class BlockchainComponent {
         });
         
         // blur the wrap
-        this.chainWrapAnimation = anime({
+        /*this.chainWrapAnimation = anime({
             targets: chainWrap,
             filter: ['blur(.6px)', 'blur(.5px)', 'blur(.6px)'],
             duration: duration - 200,
@@ -184,7 +187,7 @@ export class BlockchainComponent {
                     easing: 'easeInOutQuad',
                 });
             }
-        });
+        });*/
     }
     #removeFirstBlockElement() {
 		if (!this.blocks.length) return;

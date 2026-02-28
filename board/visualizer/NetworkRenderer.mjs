@@ -554,6 +554,8 @@ export class NetworkRenderer {
 		setTimeout(() => this.renderer.domElement.style.cursor = 'default', 20);
 	}
 	handleMouseMove(e) {
+		if (e.target !== this.renderer.domElement) return;
+
 		if (this.isMouseDown) {
 			const deltaX = e.clientX - this.previousMousePosition.x;
 			const deltaY = e.clientY - this.previousMousePosition.y;
@@ -836,11 +838,13 @@ export class NetworkRenderer {
 			this.#updateNodesPositions(nodeIds);
 			this.#autoRotate();
 			this.#autoZoom();
+
+			// This part initialy was out of the "if", testing here to reduce lag.
+			this.connectionsStore.updateConnections(this.currentPeerId, this.hoveredNodeId, this.colors, this.options.mode);
+			this.instancedMesh.instanceMatrix.needsUpdate = true;
+			this.instancedMesh.instanceColor.needsUpdate = true;
 		}
 
-		this.connectionsStore.updateConnections(this.currentPeerId, this.hoveredNodeId, this.colors, this.options.mode);
-		this.instancedMesh.instanceMatrix.needsUpdate = true;
-		this.instancedMesh.instanceColor.needsUpdate = true;
 		this.renderer.render(this.scene, this.camera);
 	}
 }

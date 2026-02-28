@@ -274,6 +274,8 @@ export class AppsManager {
 			if (target.classList.contains('window')) break;
 			else target = target.parentElement;
 
+		if (!target || target === document.body) return { appName: null, subWindow: null };
+		
 		const appName = target.dataset.appName || null;
 		const subWindow = appName ? this.windows[appName] : null;
 		return { appName, subWindow };

@@ -14,36 +14,43 @@
 		</div>
 	</div>
 
-	<div id="cbe-blockExplorerWaitingConsensusMessage" class="show">
+	<div id="cbe-blockExplorerWaitingConsensusMessage" class="show translatableTextContent" data-translatorkey="ConsensusNotRobustMessage">
 		Consensus isn't robust - Should not be considered reliable yet.
 	</div>
 
     <div id="cbe-contrastChainExplorer">
         <div class="cbe-container">
             <div class="cbe-spacedText">
-                <h1>Chain overview</h1>
+                <h1 class="translatableTextContent" data-translatorkey="ChainOverviewTitle">Chain overview</h1>
                 <h3 class="cbe-heightText">#<span id="cbe-chainHeight">0</span></h3>
             </div>
 
-            <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
-                <h3>Circulating supply</h3>
+            <div class="cbe-spacedText cbe-textColorLight">
+                <h3 class="translatableTextContent" data-translatorkey="CirculatingSupplyTitle">Circulating supply</h3>
                 <h3><span id="cbe-circulatingSupply">0.000000</span></h3>
+				<div class="tooltip t80 translatableTextContent" data-translatorkey="CirculatingSupply">The number of contrast currently in circulation; this number increases with each block depending on the number of newly created tokens.</div>
             </div>
-            <div class="cbe-spacedText cbe-textColorLight" data-infokey="maxSupply">
-                <h3>Distribution progress</h3>
+            <div class="cbe-spacedText cbe-textColorLight">
+                <h3 class="translatableTextContent" data-translatorkey="DistributionProgressTitle">Distribution progress</h3>
                 <h3><span id="cbe-circulatingSupplyPercent">0</span>% of <span id="cbe-maxSupply" style="opacity: .6;">27,000,000.000000</span></h3>
+				<div class="tooltip t80 translatableTextContent" data-translatorkey="DistributionProgress">The percentage of the total supply that is currently in circulation.</div>
             </div>
-			<div class="cbe-spacedText cbe-textColorLight" data-infokey="targetBlockTime">
-                <h3>Target blockTime</h3>
+			<div class="cbe-spacedText cbe-textColorLight">
+                <h3 class="translatableTextContent" data-translatorkey="TargetBlockTimeTitle">Target blockTime</h3>
                 <h3 id="cbe-targetBlocktime">120s</h3>
+				<div class="tooltip t80 translatableTextContent" data-translatorkey="TargetBlockTime">The ideal time gap between two consecutive blocks, as defined by the protocol.</div>
             </div>
-            <div class="cbe-spacedText" data-infokey="lastBlocktime">
-                <h3>Last blockTime</h3>
+            <div class="cbe-spacedText">
+                <h3 class="translatableTextContent" data-translatorkey="LastBlockTimeTitle">Last blockTime</h3>
                 <h3 id="cbe-lastBlocktime">~120s</h3>
+				<div class="tooltip t80 translatableTextContent" data-translatorkey="LastBlockTime">The time gap between the last two blocks; this can fluctuate above and below the target block time.</div>
             </div>
 
             <div id="legitimaciesVssWrap">
-                <h1 class="cbe-title-with-separator">#<span id="cbe-legHeight">0</span> legitimacies <span>(lower is stronger)</span></h1>
+                <h1 class="cbe-title-with-separator">
+					#<span id="cbe-legHeight">0</span> legitimacies <span class="translatableTextContent" data-translatorkey="LowerIsStronger">(lower = stronger)</span>
+					<div class="tooltip translatableTextContent" data-translatorkey="LegitimaciesChart">Indicating the legitimacy of the candidate block prepared by validators this round</div>
+				</h1>
 
                 <div style="display: flex; justify-content: space-between; margin-bottom: 50px;">
                     <div id="cbe-roundLegitimaciesChart" class="cbe-chart"></div>
@@ -56,7 +63,10 @@
                 <div id="cbe-biggestsHoldersBalancesChart" class="cbe-chart" style="margin-bottom: 100px;"></div>-->
             </div>
 
-			<h1 class="cbe-title-with-separator">Last blocks time-gap<span id="cbe-averageBlocksTimeGap"></span></h1>
+			<h1 class="cbe-title-with-separator">
+				Last blocks time-gap<span id="cbe-averageBlocksTimeGap"></span>
+				<div class="tooltip translatableTextContent" data-translatorkey="LastBlocksTimeGap">The time gap between the 60 last blocks; this helps to control the network's stability by displaying the block time deviation.</div>
+			</h1>
             <div id="cbe-blocksTimesChart" class="cbe-chart"></div>
         </div>
     </div>

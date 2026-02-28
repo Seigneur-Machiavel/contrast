@@ -113,12 +113,16 @@ export class Explorer {
 		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
 
 		// UPDATE BLOCK TIMES CHART
-		if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
-			this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight);
+		setTimeout(() => {
+			if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
+				this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight)
+		}, 4000);
 
 		// UPDATE ROUND LEGITIMACIES CHART
-		try { this.getAndDisplayRoundLegitimacies() } 
-		catch (/** @type {any} */ error) { console.warn(error.stack || error) }
+		setTimeout(() => {
+			try { this.getAndDisplayRoundLegitimacies() }
+			catch (/** @type {any} */ error) { console.warn(error.stack || error) }
+		}, 2000);
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation

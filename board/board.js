@@ -99,7 +99,7 @@ document.addEventListener('keyup', (e) => {
 });
 document.addEventListener('mouseover', (e) => {
 	appsManager.overAppButtonsHandler(e);
-	explorer.overHandler(e)
+	explorer.overHandler(e);
 });
 document.addEventListener('dblclick', (e) => appsManager.dlbClickHandler(e));
 document.addEventListener('mousedown', (e) => {
@@ -195,8 +195,7 @@ connector.on('peer_connect', onPeerCountChange);
 connector.on('peer_disconnect', onPeerCountChange);
 
 // OPENING
+await new Promise(resolve => setTimeout(resolve, 1000));
 if (!language || hasPassword) appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP
-if (!language) {
-	await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit for the assistant to open and be ready
-	assistant.requestLanguageSelection();
-} else translator.setLanguage(language);
+if (!language) assistant.requestLanguageSelection();
+else translator.setLanguage(language);

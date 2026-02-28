@@ -790,9 +790,8 @@ export class ParticleAnimation {
      */
     initParticles() {
         this.particles = [];
-        for (let i = 0; i < this.particleConfig.number; i++) {
+        for (let i = 0; i < this.particleConfig.number; i++)
             this.particles.push(new this.Particle(this));
-        }
     }
     /**
      * Updates the connections between particles.

@@ -155,6 +155,9 @@ input.valid {
 input.correct {
     box-shadow: 0 0 0 1px var(--correct-color), inset 0 0 0 1px var(--correct-color);
 }
+div, h1, h3 {
+	position: relative;
+}
 button {
 	user-select: none;
     cursor: pointer;
@@ -193,14 +196,20 @@ h3 {
     color: var(--color2);
     border: solid var(--color3) 2px;
     padding: 4px 6px;
-    font-size: xx-small;
+
+	font-family: 'IBM Plex Mono' !important;
+    font-weight: 500 !important;
+    font-size: xx-small !important;
 
     left: 50%;
     top: 120%;
     transform: translateX(-50%);
     transition: none;
 }
-div:hover > .tooltip {
+.tooltip.t80 {
+	top: 80%;
+}
+div:hover > .tooltip, h1:hover > .tooltip, h3:hover > .tooltip {
     display: block;
     opacity: 1;
     transition: opacity .2s .2s cubic-bezier(0.4, 0, 0.2, 1);
