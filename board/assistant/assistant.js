@@ -2,8 +2,6 @@ if (false) { // For better completion
 	const anime = require('animejs');
 }
 
-const { ipcRenderer } = require('electron');
-
 /**
  * @typedef {Object<string, Function>} ChoicesActions
  * 
@@ -33,8 +31,11 @@ const userCommandsDescriptions = [
     { command: '-reset', short: '-r', description: 'Delete your private key and/or all data' }
 ]
 
-class Assistant {
+export class Assistant {
+	/** @type {import('../translator.js').Translator} */
+	translator = window.translator; // Access translator from the global scope
     isFirstMessage = true;
+	isReady = false;
     activeInput = 'idle';
     nextActiveInputTimeout = null;
     /** @type {HtmlElements} */
@@ -55,10 +56,14 @@ class Assistant {
     #userResponse = null;
     constructor(idPrefix = 'board') {
         this.idPrefix = idPrefix;
+		this.init();
     }
 
     async init() {
+		console.log('Assistant: Waiting for HTML elements to be available...');
         while (document.getElementById(`${this.idPrefix}-assistant-container`) === null) await new Promise(resolve => setTimeout(resolve, 20));
+		this.isReady = true;
+		console.log('Assistant: HTML elements found, initializing...');
 
         this.eHTML.assistantContainer = document.getElementById(`${this.idPrefix}-assistant-container`);
         this.eHTML.messagesContainer = document.getElementById(`${this.idPrefix}-messages-container`);
@@ -73,6 +78,9 @@ class Assistant {
 
         this.#setupEventListeners();
         this.#idleInfiniteAnimation();
+
+		// this.requestNewPassword(); // for testing, should be removed
+
     }
     #setupEventListeners() {
         this.eHTML.sendBtn.addEventListener('click', () => {
@@ -220,17 +228,20 @@ class Assistant {
         }
     }
 
-    requestNewPassword(failureMsg = false) {
-        if (failureMsg === false) {
-            this.sendMessage('Welcome to Contrast app, this open-source software is still in the experimental stage, and no one can be held responsible in case of difficulty or bugs.');
-            setTimeout(() => this.sendMessage('Join the community on Discord to discuss the project, get help, and make suggestions, which helps improve Contrast: https://discord.gg/4RzGEgUE7R.'), 2000);
-            setTimeout(() => this.sendMessage('Setup process take a few minutes...'), 4000);
-        }
+	async welcome(displaySetupMessage = false) {
+		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 100)); // Wait until the assistant is ready
+		setTimeout(() => this.sendMessage(this.translator.Welcome), 800);
+		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 2400);
+		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 4500);
+	}
+    async requestNewPassword(failureMsg = false) {
+        if (failureMsg === false) await this.welcome(true);
 
         setTimeout(() => {
             this.onResponse = this.#verifyNewPassword;
-            this.sendMessage(`(1) ${failureMsg || 'Please enter a new password or press enter to skip (less secure)'}:`);
-            this.#setActiveInput('password', 'Your new password...', true);
+            //this.sendMessage(`(1) ${failureMsg || 'Please enter a new password or press enter to skip (less secure):'}`);
+			this.sendMessage(`(1) ${failureMsg || this.translator.PleaseEnterNewPassword}`);
+			this.#setActiveInput('password', 'Your new password...', true);
         }, failureMsg ? 0 : 5000);
     }
     #verifyNewPassword(password = 'toto') {
@@ -383,6 +394,14 @@ class Assistant {
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
     }
 
+	requestLanguageSelection() {
+		this.sendMessage('Please select your language');
+		this.requestChoice({
+			'English': () => { this.translator.setLanguage('en'); this.idleMenu(); },
+			'Français': () => { this.translator.setLanguage('fr'); this.idleMenu(); }
+		});
+	}
+
     /** @param {ChoicesActions} choices */
     async requestChoice(choices = { "Yes": () => console.log('Yes'), "No": () => console.log('No') }) {
         this.eHTML.input.type = 'text';
@@ -401,9 +420,9 @@ class Assistant {
             await new Promise(resolve => setTimeout(resolve, 200));
         }
     }
-    idleMenu() {
-        // coming back to simple text input
-        this.#setActiveInput('text', "Type your command ('-help' for help)", true);
+    async idleMenu() { // come back to simple text input
+		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 100)); // Wait until the assistant is ready
+        this.#setActiveInput('text', this.translator.TypeYourCommand, true);
         this.onResponse = this.#processCommand;
     }
 
@@ -460,5 +479,3 @@ class Assistant {
         }
     }
 }
-
-module.exports = { Assistant };

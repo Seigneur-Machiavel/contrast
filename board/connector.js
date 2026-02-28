@@ -126,7 +126,7 @@ export class Connector {
 				for (const anchor in r.impliedUtxos) this.utxosByAnchors.set(anchor, r.impliedUtxos[anchor]);
 				for (const txId in r.txs) this.txsById.set(txId, r.txs[txId]);
 				break; // stop after the first successful response
-			} catch (/** @type {any} */ error) { throw new Error(error.stack || error.message || 'Unknown error while fetching transactions'); }
+			} catch (/** @type {any} */ error) { console.log(`Unable to fetch transactions from peer ${peerId}:`, error.stack || error.message || error); }
 		}
 
 		/** @type {Transaction[]} */

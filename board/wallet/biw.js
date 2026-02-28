@@ -107,27 +107,41 @@ export class BoardInternalWallet {
     }
 	async getAndDisplayTransactionsDetails(page = this.components.accounts.activeAccountHistoryPage) {
 		this.components.miniform.resetHistoryList();
-		
+		this.components.miniform.startHistoryLoading();
+	
 		const txIds = this.components.accounts.getHistoryTxIdsOfPage(page);
-		this.components.miniform.updatePaginationButtonsState();
-		if (txIds.length === 0 || txIds.length > this.historyItemsPerPage) throw new Error(`getAndDisplayTransactionsDetails: txIds length must be between 1 and ${this.historyItemsPerPage}`);
+		if (txIds.length === 0 || txIds.length > this.historyItemsPerPage) {
+			this.components.miniform.setHistoryMessage('No transactions found');
+			throw new Error(`getAndDisplayTransactionsDetails: txIds length must be between 1 and ${this.historyItemsPerPage}`);
+		}
 
 		const txs = await this.connector.getTransactions(txIds); // Fetch txs and associated miniUtxos
-		if (!txs) throw new Error('No transactions found for the given txIds');
+		if (!txs) {
+			this.components.miniform.setHistoryMessage('Unable to fetch transactions');
+			throw new Error('Unable to fetch transactions');
+		}
 
 		let index = 0;
 		for (let i = 0; i < txIds.length; i++) {
 			const [ txId, tx ] = [txIds[i], txs[i]];
-			const inAmount = Transaction_Builder.isMinerOrValidatorTx(tx) ? 0
+			const specialTxType = Transaction_Builder.isMinerOrValidatorTx(tx);
+			const inAmount = specialTxType ? 0
 				: tx.inputs.reduce((sum, input) => {
 					const utxo = this.connector.utxosByAnchors.get(input);
 					if (utxo?.address !== this.activeAccount.address) return sum; // only count inputs from the active account
 					return sum + (utxo ? utxo.amount : 0);
 				}, 0);
 
-			setTimeout(() => this.components.miniform.addTransactionToHistory(txId, tx, inAmount), index * 100);
+			setTimeout(() => {
+				this.components.miniform.stopHistoryLoading();
+				this.components.miniform.addTransactionToHistory(txId, tx, inAmount, specialTxType)
+				this.components.miniform.updatePaginationButtonsState(true); // lock buttons while loading
+			}, index * 100);
 			index++;
 		}
+
+		// set buttons states.
+		setTimeout(() => this.components.miniform.updatePaginationButtonsState(), index * 100);
 	}
 	/** @param {string} address */
     selectAccountLabel(address) {

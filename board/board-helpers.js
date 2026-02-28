@@ -26,10 +26,10 @@ export function createSpacedTextElement(title = '1e2...', titleClasses = ['cbe-b
 
 export function getTimeSinceBlockConfirmedString(timestamp = 0) {
     const minuteSince = Math.floor((Date.now() - timestamp) / 60000);
-    if (minuteSince >= 1) return `~${minuteSince} min ago`;
+    if (minuteSince >= 1) return `${minuteSince}min ago`;
 
     const secondsSince = Math.floor((Date.now() - timestamp) / 1000);
-    return `~${secondsSince} s ago`;
+    return `${secondsSince}s ago`;
 }
 
 export class eHTML_STORE {

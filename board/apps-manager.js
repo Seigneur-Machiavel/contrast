@@ -13,7 +13,6 @@ export class AppsManager {
 	buttonsBar;
 	tempFrontAppName = null;
 	transitionsDuration = 400;
-	appsByZindex 
 
 	/** @param {HTMLElement} windowsWrap, @param {HTMLElement} buttonsBarElement */
 	constructor(windowsWrap, buttonsBarElement) {
@@ -38,7 +37,7 @@ export class AppsManager {
 
 		const {
 			minWidth, minHeight, maxWidth, maxHeight, initWidth, initHeight,
-			initTop, initLeft, canFullScreen, autoSized
+			initTop, initLeft, canFullScreen, autoSized, backgroundDropBlur
 		} = this.appsConfig[appName];
 
 		this.windows[appName].autoSized = autoSized;
@@ -49,6 +48,7 @@ export class AppsManager {
 		this.windows[appName].initSize.height = initHeight;
 		this.windows[appName].position.top = initTop || 0;
 		this.windows[appName].position.left = initLeft || 1;
+		this.windows[appName].backgroundDropBlur = backgroundDropBlur || false;
 
 		this.windows[appName].render(this.windowsWrap, origin.x || 1, origin.y);
 		if (this.appsConfig[appName].setGlobal) window[appName] = this.windows[appName];
@@ -81,10 +81,13 @@ export class AppsManager {
 		if (!unfoldButNotFront) {  // -> don't toggle after setting front
 			const origin = this.buttonsBar.getButtonOrigin(appName);
 			const folded = this.windows[appName].toggleFold(origin.x, origin.y, this.transitionsDuration);
-			const firstUnfolded = Object.values(this.windows).find(w => w.folded === false);
-			if (folded && firstUnfolded) appToFocus = firstUnfolded.appName;
+			// Choose the app to focus after folding.
+			if (folded) for (const appName in this.ordering) {
+				if (this.windows[this.ordering[appName]].folded !== false) continue;
+				appToFocus = this.ordering[appName];
+			}
 		}
-
+		window.addEventListener('load', () => document.getElementById('demo').textContent = "toto");
 		console.log('appToFocus', appToFocus);
 		const delay = appToFocus === appName ? 0 : this.transitionsDuration;
 		setTimeout(() => this.setFrontWindow(appToFocus), delay);
@@ -103,11 +106,13 @@ export class AppsManager {
 			const an = this.ordering[i];
 			this.windows[an].element.style.zIndex = i.toString();
 
-			if (an === appName) this.windows[an].element.classList.add('front');
-			else this.windows[an].element.classList.remove('front');
-
-			if (an === appName) this.buttonsBar.buttonsByAppNames[an].classList.add('front');
-			else this.buttonsBar.buttonsByAppNames[an].classList.remove('front');
+			if (an === appName) {
+				this.windows[an].element.classList.add('front');
+				this.buttonsBar.buttonsByAppNames[an].classList.add('front');
+			} else {
+				this.windows[an].element.classList.remove('front');
+				this.buttonsBar.buttonsByAppNames[an].classList.remove('front');
+			}
 		}
 	}
 	lock() {

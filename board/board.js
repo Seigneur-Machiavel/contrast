@@ -7,31 +7,44 @@ if (false) { // For better completion
 const HiveP2P = await import('../hive-p2p.min.js');
 import { NetworkVisualizer } from './visualizer/visualizer.mjs';
 import { Connector } from './connector.js';
+import { Translator } from './translator.js';
 import { AppsManager } from './apps-manager.js';
 import { Explorer } from './explorer/explorer.js';
+import { Assistant } from './assistant/assistant.js';
 import { Dashboard } from './dashboard/dashboard.js';
 import { BoardInternalWallet } from './wallet/biw.js';
 import { FrontStorage } from '../utils/front-storage.mjs';
 import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
+//import { InfoManager } from './info-manager.js';
 
 const host = window.location.hostname;
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/time';
 const bootstraps = ['ws://localhost:27260'];
 const hiveNode = await HiveP2P.createNode({ bootstraps });
+
+const hasPassword = false; // TODO
 const boardStorage = new FrontStorage('board');
+const language = await boardStorage.load('language');
+const translator = new Translator(async (lang) => {
+	boardStorage.save('language', lang);
+	if (!language) assistant.requestNewPassword(); // FIRST TIME SETUP
+	else if (hasPassword) assistant.requestPasswordToExtract();
+	else {
+		await assistant.welcome();
+		setTimeout(() => assistant.idleMenu('toto'), 4500);
+	}
+});
+window.translator = translator; // Expose translator for debugging and global access in apps
+
 const connector = new Connector(hiveNode);
+const assistant = new Assistant();
 const explorer = new Explorer(connector);
 const dashboard = new Dashboard(connector);
 const biw = new BoardInternalWallet(connector, boardStorage);
 
 if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
 else document.body.classList.remove('dark-mode');
-
-//const { ipcRenderer } = require('electron');
-//window.ipcRenderer = ipcRenderer;
-
-//const { InfoManager } = require('./info-manager.js');
 
 //const settingsManager = new SettingsManager(settingsMenuElement);
 //const infoManager = new InfoManager();
@@ -45,6 +58,7 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.appsManager = appsManager;
 	window.hiveNode = hiveNode;
 	window.connector = connector;
+	window.assistant = assistant;
 	window.explorer = explorer;
 	window.dashboard = dashboard;
 	window.biw = biw;
@@ -179,3 +193,10 @@ const onPeerCountChange = () => {
 };
 connector.on('peer_connect', onPeerCountChange);
 connector.on('peer_disconnect', onPeerCountChange);
+
+// OPENING
+if (!language || hasPassword) appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP
+if (!language) {
+	await new Promise(resolve => setTimeout(resolve, 1000)); // Wait a bit for the assistant to open and be ready
+	assistant.requestLanguageSelection();
+} else translator.setLanguage(language);

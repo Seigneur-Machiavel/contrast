@@ -18,6 +18,7 @@
  * @property {boolean} [fullScreen] - default false
  * @property {boolean} canFullScreen - default true
  * @property {boolean} [setFront] - default false
+ * @property {boolean} [backgroundDropBlur] - default false
  */
 
 /** @param {string} appName @param {AppConfig} appConfig */
@@ -41,7 +42,8 @@ export const AppConfig = (appName, appConfig) => { // TYPE DEFINITION
 		setGlobal: appConfig.setGlobal || false,
 		fullScreen: appConfig.fullScreen || false,
 		canFullScreen: appConfig.canFullScreen === false ? false : true,
-		setFront: appConfig.setFront || false
+		setFront: appConfig.setFront || false,
+		backgroundDropBlur: appConfig.backgroundDropBlur || false,
 	}
 }
 export const appsConfig = {
@@ -57,6 +59,7 @@ export const appsConfig = {
 		title: '<span class="title-deco">❖</span>ASSISTANT<span class="title-deco">` ` \\_</span>',
 		tooltip: 'Mr Cold Coffee',
 		url_or_file: './assistant/assistant.html',
+		backgroundDropBlur: true
 	},
 	explorer: {
 		preload: true,
@@ -74,17 +77,19 @@ export const appsConfig = {
 		//content: '<iframe src="http://localhost:27270" style="width: 100%; height: 100%; border: none;"></iframe>'
 		//url_or_file: 'http://localhost:27270',
 		url_or_file: './explorer/explorer.html',
+		backgroundDropBlur: true
 	},
 	wallet: {
 		preload: true,
 		disableOnLock: false,
 		autoSized: true,
 		canFullScreen: false,
-		initTop: 56,
-		initLeft: 100,
+		initTop: 0, //56,
+		initLeft: 0, //100,
 		title: '<span class="title-deco">- )( -</span>WALLET<span class="title-deco">___\\</span>',
 		tooltip: 'Wallet',
 		url_or_file: './wallet/wallet.html',
+		backgroundDropBlur: true
 	},
 	dashboard: {
 		preload: false,
@@ -99,6 +104,7 @@ export const appsConfig = {
 		//content: '<iframe src="http://localhost:27271" style="width: 100%; height: 100%; border: none;"></iframe>'
 		//url_or_file: 'http://localhost:27271',
 		url_or_file: './dashboard/dashboard.html',
+		backgroundDropBlur: true
 	},
 	/*chat: {
 		preload: false,

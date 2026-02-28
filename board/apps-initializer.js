@@ -47,6 +47,7 @@ export class SubWindow {
 	dragStart = { x: 0, y: 0 };
 	resizeStart = { x: 0, y: 0, width: 0, height: 0 };
 	position = { left: 0, top: 0 };
+	backgroundDropBlur = false;
 	minSize = { width: 0, height: 0 };
 	initSize = { width: undefined, height: undefined };
 	windowSize = { width: 0, height: 0 };
@@ -74,6 +75,7 @@ export class SubWindow {
 		this.foldButton = 	foldButton;
 		this.expandButton = expandButton || null;
 		this.element = createElement('div', windowClasses, parentElement);
+		if (this.backgroundDropBlur) this.element.classList.add('background-drop-blur');
 		this.element.dataset.appName = this.appName;
 		this.element.appendChild(titleBar);
 		this.contentElement = createElement('div', ['content'], this.element);
@@ -112,18 +114,11 @@ export class SubWindow {
 		// Set initial position
 		if (fromX && fromY) { // START INVISIBLE
 			this.element.style.opacity = 1;
-			this.element.style.transform = `scale(0) translateX(0px) translateY(0px)`;
-
-			anime({
-				targets: this.element,
-				opacity: 0,
-				scale: .1,
-				duration: 100,
-				delay: 100,
-				complete: () => {
-					this.element.style.transform = `scale(0) translateX(${fromX}px) translateY(${fromY}px)`;
-				}
-			});
+			this.element.style.transform = `scale(1) translateX(-2000px) translateY(0px)`;
+			setTimeout(() => {
+				this.element.style.opacity = 0;
+				this.element.style.transform = `scale(.1) translateX(${fromX}px) translateY(${fromY}px)`;
+			}, 200);
 
 			// Set dark mode to the iframe according to the board body class
 			setTimeout(() => this.setDarkModeAccordingToBoard(), 800);

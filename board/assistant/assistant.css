@@ -123,6 +123,9 @@
     justify-content: center;
     gap: 40px;
 }
+#board-assistant-choices-container button:hover {
+	background-color: var(--color2);
+}
 #board-assistant-text-input-form.disabled,
 #board-assistant-choices-container.disabled,
 #board-assistant-input-idle.disabled {

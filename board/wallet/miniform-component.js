@@ -15,6 +15,8 @@ export class MiniformComponent {
 	//txDiagram = new TransactionDiagram(document.getElementById('biw-diagram-wrapper'));
 	biw;
 	eHTML;
+	/** @type {NodeJS.Timeout | null} */
+	historyLoadingInterval = null;
 
 	/** @ts-ignore @returns {'Send' | 'Stake' | 'Unstake' | 'Inscribe'} */
 	get action() { return this.eHTML.transfer.actionSelector.value; }
@@ -167,8 +169,36 @@ export class MiniformComponent {
 	resetHistoryList() {
 		this.eHTML.history.list.innerHTML = '';
 	}
-	/** @param {TxId} txId @param {Transaction} tx @param {number} inAmount */
-	addTransactionToHistory(txId, tx, inAmount) {
+	startHistoryLoading() {
+		this.resetHistoryList();
+		const loadingItem = document.createElement('div');
+		loadingItem.classList.add('biw-historyLoading');
+		loadingItem.innerText = 'Loading transactions';
+		this.eHTML.history.list.appendChild(loadingItem);
+
+		let dotCount = 0;
+		this.historyLoadingInterval = setInterval(() => {
+			if (!loadingItem && this.historyLoadingInterval) return clearInterval(this.historyLoadingInterval);
+			dotCount = (dotCount + 1) % 4;
+			loadingItem.innerText = 'Loading transactions' + '.'.repeat(dotCount);
+		}, 200);
+	}
+	stopHistoryLoading() {
+		if (this.historyLoadingInterval) {
+			clearInterval(this.historyLoadingInterval);
+			this.resetHistoryList();
+			this.historyLoadingInterval = null;
+		}
+	}
+	setHistoryMessage(msg = "No transactions to display") {
+		this.resetHistoryList();
+		const messageItem = document.createElement('div');
+		messageItem.classList.add('biw-historyMessage');
+		messageItem.innerText = msg;
+		this.eHTML.history.list.appendChild(messageItem);
+	}
+	/** @param {TxId} txId @param {Transaction} tx @param {number} inAmount @param {"miner" | "validator" | undefined} specialTxType */
+	addTransactionToHistory(txId, tx, inAmount, specialTxType) {
 		//console.log('Adding transaction to history:', txId, tx, inAmount);
 		const height = parseInt(txId.split(':')[0]);
 		const approxTimestamp = this.biw.connector.getBlockConfirmationTimestampApproximation(height);
@@ -183,7 +213,8 @@ export class MiniformComponent {
 		listItem.dataset.txId = txId;
 
 		const changeText = `${isPositive ? '+' : ''}${CURRENCY.formatNumberAsCurrency(balanceChange, this.biw.balanceDecimals)}c`;
-		createSpacedTextElement(changeText, ['biw-historyChange'], state, ['biw-historyState'], listItem);
+		const specialTxText = specialTxType ? ` (${specialTxType.toUpperCase()})` : '';
+		createSpacedTextElement(changeText + specialTxText, ['biw-historyChange'], state, ['biw-historyState'], listItem);
 		
 		const dateText = !approxTimestamp ? 'Pending'
 			: new Date(approxTimestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
@@ -199,13 +230,12 @@ export class MiniformComponent {
 
 		//this.biw.updateDisplayedTransactions(filter);
 	}
-
-	updatePaginationButtonsState() {
+	updatePaginationButtonsState(forceLock = false) {
 		const page = this.biw.components.accounts.activeAccountHistoryPage;
-		if (page <= 0) this.eHTML.history.prevPageBtn.classList.add('disabled');
+		if (page <= 0 || forceLock) this.eHTML.history.prevPageBtn.classList.add('disabled');
 		else this.eHTML.history.prevPageBtn.classList.remove('disabled');
 
-		if (page >= this.biw.components.accounts.totalAccountHistoryPages - 1) this.eHTML.history.nextPageBtn.classList.add('disabled');
+		if (page >= this.biw.components.accounts.totalAccountHistoryPages - 1 || forceLock) this.eHTML.history.nextPageBtn.classList.add('disabled');
 		else this.eHTML.history.nextPageBtn.classList.remove('disabled');
 	}
 }
