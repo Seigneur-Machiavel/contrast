@@ -75,8 +75,9 @@ export class Explorer {
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
 
 		console.log('Explorer DOM elements ready');
-		this.roundLegitimaciesChart.render(); // reset chart with 'loading' state
+		await new Promise(r => setTimeout(r, 200)); // Wait a bit for potential last DOM manipulations
 		this.bc.createEmptyBlocksUntilFillTheDiv();
+		this.roundLegitimaciesChart.render(); // reset chart with 'loading' state
 		const [supply, targetTime] = [eHTML.get('maxSupply'), eHTML.get('targetBlocktime')];
 		if (!supply || !targetTime) throw new Error('Explorer init error: required elements not found');
 		
@@ -84,10 +85,16 @@ export class Explorer {
 		targetTime.textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
 		this.connector.on('consensus_height_change', this.#onConsensusHeightChange);
 	}
+	consensusChangeAntiStuckTimestamp = 0;
 	#onConsensusHeightChange = async (newHeight = 0) => {
 		const block = this.connector.blocks.finalized[this.connector.hash];
 		if (!block) return;
 		
+		const t = performance.now();
+		this.consensusChangeAntiStuckTimestamp = t;
+		await new Promise(r => setTimeout(r, 200)); // Wait a bit for anti-stuck mechanism to trigger
+		if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
+
 		//console.log('Explorer: New consensus block:', block);
 		const consensusMsgElement = eHTML.get('blockExplorerWaitingConsensusMessage');
 		if (!consensusMsgElement) throw new Error('Explorer: consensusMsgElement not found');
@@ -109,16 +116,16 @@ export class Explorer {
 		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
 
 		// UPDATE BLOCK TIMES CHART
-		setTimeout(() => {
+		//setTimeout(() => {
 			if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
 				this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight)
-		}, 4000);
+		//}, 4000);
 
 		// UPDATE ROUND LEGITIMACIES CHART
-		setTimeout(() => {
+		//setTimeout(() => {
 			try { this.getAndDisplayRoundLegitimacies() }
 			catch (/** @type {any} */ error) { console.warn(error.stack || error) }
-		}, 2000);
+		//}, 2000);
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation

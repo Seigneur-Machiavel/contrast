@@ -240,12 +240,8 @@ button {
     animation: boxGlow .6s infinite alternate;
 }
 @keyframes boxGlow {
-    0% {
-        opacity: .4;
-    }
-    100% {
-        opacity: 1;
-    }
+    0% { opacity: .4; }
+    100% { opacity: 1; }
 }
 .cbe-blockSquare.filled {
     animation: boxHeavyToThin .44s .06s forwards;
