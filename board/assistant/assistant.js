@@ -128,7 +128,7 @@ export class Assistant {
     }
 	/** @param {string} message @param {string} sender */
     async sendMessage(message, sender = 'system') {
-        if (sender === 'system' && !this.isFirstMessage) { await new Promise(resolve => setTimeout(resolve, 600)); }
+        if (sender === 'system' && !this.isFirstMessage) { await new Promise(resolve => setTimeout(resolve, 200)); }
         this.isFirstMessage = false;
 
         const msgLower = message.toLowerCase();
@@ -234,7 +234,8 @@ export class Assistant {
     }
 
 	async welcome(displaySetupMessage = false) {
-		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 100)); // Wait until the assistant is ready
+		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 200)); // Wait until the assistant is ready
+		
 		setTimeout(() => this.sendMessage(this.translator.Welcome), 800);
 		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 2400);
 		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 4500);

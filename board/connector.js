@@ -170,10 +170,10 @@ export class Connector {
 	
 	// INTERNAL METHODS
 	async #consensusChangeDetectionLoop() {
-		while(true) {
-			await new Promise(r => setTimeout(r, 200));
+		setInterval(() => {
 			const c = this.sync.getConsensus();
-			if (this.height === c.blockHeight && this.hash === c.blockHash) continue; // No change
+			if (this.height === c.blockHeight && this.hash === c.blockHash) return; // No change
+
 			this.isConsensusRobust = !c.equality && c.count >= 1;
 			this.height = c.blockHeight;
 			this.hash = c.blockHash;
@@ -181,7 +181,7 @@ export class Connector {
 
 			if (!this.blocks.finalized[this.hash]) this.getMissingBlock();
 			for (const handler of this.listeners['consensus_height_change'] || []) handler(this.height);
-		}
+		}, 200);
 	}
 	#onPeerConnect = () => {
 		console.log(`New peer connected! Total neighbors: ${this.p2pNode.peerStore.neighborsList.length}`);

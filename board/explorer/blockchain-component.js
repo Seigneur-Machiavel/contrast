@@ -79,9 +79,6 @@ export class BlockchainComponent {
 	/** @type {BlockComponent[]} */				blocks = [];
 	/** @type {anime.AnimeInstance | null} */	firstBlockAnimation = null;
 	/** @type {anime.AnimeInstance | null} */	chainWrapAnimation = null;
-	timeAgoUpdatesInterval = setInterval(() => {
-		for (const blockComponent of this.blocks) blockComponent.updateTimeAgo();
-	}, 1000); // every second
 
 	get numberOfFilledBlocks() { return this.blocks.filter(block => block.isFilled).length; }
 	get firstFilledBlock() { return this.blocks.find(block => block.isFilled) || null; }
@@ -129,6 +126,9 @@ export class BlockchainComponent {
 		for (const blockComponent of this.blocks)
 			if (blockComponent.blockIndex.textContent !== '#...') count++;
 		return count;
+	}
+	updateTimeAgo() {
+		for (const blockComponent of this.blocks) blockComponent.updateTimeAgo();
 	}
 	reset() {
 		console.log('Resetting BlockchainComponent...');

@@ -65,6 +65,8 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 
 const update = () => { // CENTRALIZED ANIMATION LOOP
 	visualizer.networkRenderer.animate();
+	visualizer.updatePeerInfo();
+	explorer.bc.updateTimeAgo();
 	//nodeCard.update();
 	//subNodeInfoTracker.update();
 	requestAnimationFrame(update);

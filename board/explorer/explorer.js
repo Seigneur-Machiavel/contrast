@@ -95,7 +95,7 @@ export class Explorer {
 		await new Promise(r => setTimeout(r, 200)); // Wait a bit for anti-stuck mechanism to trigger
 		if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
 
-		//console.log('Explorer: New consensus block:', block);
+		console.log(`%cEXPLORER: New consensus ${newHeight}`, 'color: lightgreen; font-weight: bold');
 		const consensusMsgElement = eHTML.get('blockExplorerWaitingConsensusMessage');
 		if (!consensusMsgElement) throw new Error('Explorer: consensusMsgElement not found');
 		if (!this.connector.isConsensusRobust) consensusMsgElement.classList.add('show');
@@ -116,22 +116,25 @@ export class Explorer {
 		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
 
 		// UPDATE BLOCK TIMES CHART
-		//setTimeout(() => {
+		setTimeout(() => {
+			if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
 			if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
 				this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight)
-		//}, 4000);
+		}, 2400);
 
 		// UPDATE ROUND LEGITIMACIES CHART
-		//setTimeout(() => {
+		setTimeout(() => {
+			if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
 			try { this.getAndDisplayRoundLegitimacies() }
 			catch (/** @type {any} */ error) { console.warn(error.stack || error) }
-		//}, 2000);
+		}, 1200);
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation
-		await this.#fillBlocksFromLastUntilEnough();
+		await this.#fillBlocksFromLastUntilEnough(t);
 	}
-	async #fillBlocksFromLastUntilEnough() {
+	/** @param {number} instanceTimestamp */
+	async #fillBlocksFromLastUntilEnough(instanceTimestamp) {
 		//console.log('Explorer: Filling previous blocks until enough...');
 		while(!this.bc.isEnoughBlocksFilled) {
 			const firstBlock = this.bc.firstFilledBlock;
@@ -142,6 +145,7 @@ export class Explorer {
 				const index = firstBlock.index ? firstBlock.index - 1 : -1;
 				if (index < 0) break;
 
+				if (this.consensusChangeAntiStuckTimestamp !== instanceTimestamp) return; // Another instance of the fnc is running with a more recent consensus change
 				const retrived = await this.connector.getMissingBlock(index);
 				if (!retrived) break;
 				prevBlock = this.connector.blocks.finalized[firstBlock.prevHash];

@@ -202,15 +202,14 @@ export class NetworkRenderer {
 		
 		// Handle border updates
 		const existingBorder = this.nodeBorders[id];
-		if (isPublic) {
-			if (existingBorder) this.scene.remove(existingBorder);
-			this.nodeBorders[id] = this.#createMeshBorder({ position: existingNode.position }, this.colors.publicNodeBorder);
-			return;
+		if (existingBorder) {
+			this.scene.remove(existingBorder);
+			existingBorder.geometry.dispose();
+			existingBorder.material.dispose();
+			if (!isPublic) delete this.nodeBorders[id];
 		}
 
-		if (!existingBorder) return;
-		this.scene.remove(existingBorder);
-		delete this.nodeBorders[id];
+		if (isPublic) this.nodeBorders[id] = this.#createMeshBorder({ position: existingNode.position }, this.colors.publicNodeBorder);
 	}
 	removeNode(id) {
 		if (!this.nodesStore.has(id)) return; // Node doesn't exist
@@ -384,6 +383,8 @@ export class NetworkRenderer {
         this.isAnimating = false;
         this.scene.clear();
         this.renderer.dispose();
+		this.instancedMesh.geometry.dispose();
+		this.instancedMesh.material.dispose();
         if (this.renderer.domElement.parentNode) this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
     }
 	getNodePositionRelativeToCanvas(nodeId) {

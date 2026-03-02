@@ -14,22 +14,17 @@ export class NetworkVisualizer {
 	hidden = false;
 
 	/** @param {import('../connector.js').Connector} connector @param {import('hive-p2p').CryptoCodex} CryptoCodex @param {boolean} isSimulation */
-	constructor(connector, CryptoCodex, updateInfoInterval = 400) {
+	constructor(connector, CryptoCodex) {
 		this.connector = connector;
 		this.node = connector.p2pNode;
 		this.CryptoCodex = CryptoCodex;
-		this.#initWhileRendererReady(updateInfoInterval);
+		this.#initWhileRendererReady();
 	}
 	
-	async #initWhileRendererReady(updateInfoInterval) {
+	async #initWhileRendererReady() {
 		await this.networkRenderer.initWhileDomReady();
-
+		
 		this.#resetNetwork(connector.p2pNode.id);
-		setInterval(() => {
-			const info = this.#getPeerInfo();
-			this.#updateNetworkFromPeerInfo(info);
-			this.networkRenderer.updateStats(this.node.topologist.NEIGHBORS_TARGET);
-		}, updateInfoInterval);
 
 		// This one will not work because we needs to handle all msg types,
 		// -> but messager.on('..') => return message.data
@@ -68,6 +63,11 @@ export class NetworkVisualizer {
 	onNodeLeftClick(callback) { this.networkRenderer.onNodeLeftClick = callback; }
 	/** Param: nodeId:string */
 	onNodeRightClick(callback) { this.networkRenderer.onNodeRightClick = callback; }
+	updatePeerInfo() {
+		const info = this.#getPeerInfo();
+		this.#updateNetworkFromPeerInfo(info);
+		this.networkRenderer.updateStats(this.node.topologist.NEIGHBORS_TARGET);
+	}
 	displayDirectMessageRoute(fromId, route) {
 		if (this.hidden) return;
 		//console.log('Displaying direct message route from', fromId, 'with route:', route);

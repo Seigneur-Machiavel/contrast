@@ -223,7 +223,7 @@ export class RoundLegitimaciesChartComponent {
         if (this.#entries[i]) this.#handleClick(this.#entries[i].address);
     }
 
-    render(data = []) {
+    async render(data = []) {
         const container = document.getElementById('cbe-roundLegitimaciesChart');
         if (!container) throw new Error('RoundLegitimaciesChartComponent: container not found');
         if (data.length === 0) return;
@@ -256,22 +256,22 @@ export class RoundLegitimaciesChartComponent {
 
         ctx.font = '600 12px "IBM Plex Mono", monospace';
 		for (let i = 0; i < entries.length; i++) {
-			setTimeout(() => {
-				const d = entries[i];
-				const barW = scaleX(d.legitimacy + this.decay);
-				const y    = margin.top + i * rowH + gap / 2;
-				const grey = Math.floor((d.legitimacy / (maxLegitimacy * 1.5)) * this.minColor);
+			const d = entries[i];
+			const barW = scaleX(d.legitimacy + this.decay);
+			const y    = margin.top + i * rowH + gap / 2;
+			const grey = Math.floor((d.legitimacy / (maxLegitimacy * 1.5)) * this.minColor);
+			
+			// Bar
+			ctx.fillStyle = `rgb(${grey},${grey},${grey})`;
+			ctx.fillRect(0, y, barW, barH);
 
-				// Bar
-				ctx.fillStyle = `rgb(${grey},${grey},${grey})`;
-				ctx.fillRect(0, y, barW, barH);
-
-				// Label
-				ctx.fillStyle    = '#ffffff';
-				ctx.textAlign    = 'right';
-				ctx.textBaseline = 'middle';
-				ctx.fillText(`${d.legitimacy} | ${d.address}`, barW - 5, y + barH / 2);
-			}, i * 50); // Staggered animation
+			// Label
+			ctx.fillStyle    = '#ffffff';
+			ctx.textAlign    = 'right';
+			ctx.textBaseline = 'middle';
+			ctx.fillText(`${d.legitimacy} | ${d.address}`, barW - 5, y + barH / 2);
+			
+			await new Promise(r => setTimeout(r, 50)); // staggered animation
         }
     }
 

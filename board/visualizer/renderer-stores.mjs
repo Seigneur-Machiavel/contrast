@@ -61,6 +61,7 @@ export class NodesStore {
 }
 
 const lineMaterials = {};
+window.lineMaterials = lineMaterials; // for debug
 class PeerLineConnection {
 	/** @type {THREE.Line} */ line;
 	/** @type {number} in frames */ repaintIgnored = 0;
