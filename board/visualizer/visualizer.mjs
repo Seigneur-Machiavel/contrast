@@ -11,6 +11,7 @@ export class NetworkVisualizer {
 	lastPeerInfo;
 	networkRenderer = new NetworkRenderer();
 	peersList = {};
+	hidden = false;
 
 	/** @param {import('../connector.js').Connector} connector @param {import('hive-p2p').CryptoCodex} CryptoCodex @param {boolean} isSimulation */
 	constructor(connector, CryptoCodex, updateInfoInterval = 400) {
@@ -68,12 +69,33 @@ export class NetworkVisualizer {
 	/** Param: nodeId:string */
 	onNodeRightClick(callback) { this.networkRenderer.onNodeRightClick = callback; }
 	displayDirectMessageRoute(fromId, route) {
+		if (this.hidden) return;
 		//console.log('Displaying direct message route from', fromId, 'with route:', route);
 		this.networkRenderer.displayDirectMessageRoute(fromId, route);
 	}
-	displayGossipMessageRoute(fromId, data) { 
+	displayGossipMessageRoute(fromId, data) {
+		if (this.hidden) return;
 		//console.log('Displaying gossip message route from', fromId, 'with data:', data);
 		this.networkRenderer.displayGossipMessageRoute(fromId, data.senderId, data.topic, data.data);
+	}
+	clickHandler(e) {
+		if (e.target.id === 'vzr-toggleVisualizationBtn') {
+			this.hidden = !this.hidden;
+			this.networkRenderer.isPhysicPaused = this.hidden; // pause physic when hidden to avoid CPU overload
+			const btn = document.getElementById('vzr-toggleVisualizationBtn');
+			const [eye, eyeSlash] = btn.getElementsByTagName('img');
+			if (this.hidden) {
+				eye.classList.add('hidden');
+				eyeSlash.classList.remove('hidden');
+				this.networkRenderer.container.style.display = 'none';
+				this.networkRenderer.elements.devInfo.style.display = 'none';
+			} else {
+				eye.classList.remove('hidden');
+				eyeSlash.classList.add('hidden');
+				this.networkRenderer.container.style.display = 'block';
+				this.networkRenderer.elements.devInfo.style.display = 'block';
+			}
+		}
 	}
 	onKeyDown(e) {
 		if (e.key === 'ArrowUp') console.log('ArrowUp');
@@ -99,7 +121,7 @@ export class NetworkVisualizer {
 		}
 	}
 	#updateNetworkFromPeerInfo(peerInfo) {
-		if (!peerInfo) return;
+		if (!peerInfo || this.hidden) return;
 		this.lastPeerInfo = peerInfo;
 
 		const newlyUpdated = {};

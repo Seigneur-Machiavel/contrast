@@ -1,3 +1,4 @@
+// @ts-check
 if (false) { // For better completion
 	const anime = require('animejs');
 }
@@ -11,8 +12,9 @@ if (false) { // For better completion
  * @property {HTMLElement} inputForm
  * @property {HTMLElement} inputIdle
  * @property {HTMLElement} inputIdleText
- * @property {HTMLElement} input
- * @property {HTMLElement} sendBtn
+ * @property {HTMLInputElement} input
+ * @property {HTMLElement} possibilities
+ * @property {HTMLButtonElement} sendBtn
  * @property {HTMLElement} choicesContainer
  * 
  * @typedef {Object} UserCommandsDescription
@@ -32,28 +34,28 @@ const userCommandsDescriptions = [
 ]
 
 export class Assistant {
-	/** @type {import('../translator.js').Translator} */
+	/** @type {import('../translator.js').Translator} */ // @ts-ignore
 	translator = window.translator; // Access translator from the global scope
     isFirstMessage = true;
 	isReady = false;
     activeInput = 'idle';
-    nextActiveInputTimeout = null;
     /** @type {HtmlElements} */
-    eHTML = {
-        assistantContainer: null,
-        messagesContainer: null,
-
-        inputForm: null,
-        inputIdle: null,
-        inputIdleText: null,
-        input: null,
-        possibilities: null,
-        sendBtn: null,
-        choicesContainer: null
+    eHTML = {						// @ts-ignore
+        assistantContainer: null,	// @ts-ignore
+        messagesContainer: null,	// @ts-ignore
+        inputForm: null,			// @ts-ignore
+        inputIdle: null,			// @ts-ignore
+        inputIdleText: null,		// @ts-ignore
+        input: null,				// @ts-ignore
+        possibilities: null,		// @ts-ignore
+        sendBtn: null,				// @ts-ignore
+        choicesContainer: null		// @ts-ignore
     };
-    /** @type {Function} */
-    onResponse = null;
-    #userResponse = null;
+
+	/** @type {NodeJS.Timeout | null} */	nextActiveInputTimeout = null;
+    /** @type {Function | null} */		onResponse = null;
+	/** @type {string | null} */	#userResponse = null;
+
     constructor(idPrefix = 'board') {
         this.idPrefix = idPrefix;
 		this.init();
@@ -65,15 +67,16 @@ export class Assistant {
 		this.isReady = true;
 		console.log('Assistant: HTML elements found, initializing...');
 
-        this.eHTML.assistantContainer = document.getElementById(`${this.idPrefix}-assistant-container`);
-        this.eHTML.messagesContainer = document.getElementById(`${this.idPrefix}-messages-container`);
+		// @ts-ignore
+        this.eHTML.assistantContainer = document.getElementById(`${this.idPrefix}-assistant-container`);	// @ts-ignore
+        this.eHTML.messagesContainer = document.getElementById(`${this.idPrefix}-messages-container`);		// @ts-ignore
 
-        this.eHTML.inputForm = document.getElementById(`${this.idPrefix}-assistant-text-input-form`);
-        this.eHTML.input = document.getElementById(`${this.idPrefix}-messages-input`);
-        this.eHTML.possibilities = document.getElementById(`${this.idPrefix}-messages-input-possibilitiesList`);
-        this.eHTML.sendBtn = document.getElementById(`${this.idPrefix}-send-btn`);
-        this.eHTML.inputIdle = document.getElementById(`${this.idPrefix}-assistant-input-idle`);
-        this.eHTML.inputIdleText = this.eHTML.inputIdle.querySelector('span');
+        this.eHTML.inputForm = document.getElementById(`${this.idPrefix}-assistant-text-input-form`);		// @ts-ignore
+        this.eHTML.input = document.getElementById(`${this.idPrefix}-messages-input`);						// @ts-ignore
+        this.eHTML.possibilities = document.getElementById(`${this.idPrefix}-messages-input-possibilitiesList`); // @ts-ignore
+        this.eHTML.sendBtn = document.getElementById(`${this.idPrefix}-send-btn`);							// @ts-ignore
+        this.eHTML.inputIdle = document.getElementById(`${this.idPrefix}-assistant-input-idle`);			// @ts-ignore
+        this.eHTML.inputIdleText = this.eHTML.inputIdle.querySelector('span');								// @ts-ignore
         this.eHTML.choicesContainer = document.getElementById(`${this.idPrefix}-assistant-choices-container`);
 
         this.#setupEventListeners();
@@ -111,6 +114,7 @@ export class Assistant {
     #obfuscateString(string = '') {
         return string.replace(/./g, '•');
     }
+	/** @param {HTMLElement} messageDiv */
     #addMesasgeDeleteBtn(messageDiv) {
         const deleteBtn = document.createElement('button');
         deleteBtn.classList.add('board-delete-btn');
@@ -122,6 +126,7 @@ export class Assistant {
         this.sendMessage('*Interaction cancelled*', 'system');
         this.idleMenu();
     }
+	/** @param {string} message @param {string} sender */
     async sendMessage(message, sender = 'system') {
         if (sender === 'system' && !this.isFirstMessage) { await new Promise(resolve => setTimeout(resolve, 600)); }
         this.isFirstMessage = false;
@@ -148,14 +153,14 @@ export class Assistant {
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
 
         if (sender === 'system') return;
-        this.onResponse(message);
+        this.onResponse?.(message);
     }
 
     #updatePossibilitiesList() {
         const inputValue = this.eHTML.input.value.toLowerCase();
         this.eHTML.possibilities.innerHTML = ''; // clear previous options
         for (const ucd of userCommandsDescriptions) {
-            if (!ucd.command.includes(inputValue) && !ucd.short.includes(inputValue)) continue;
+            if (!ucd.command.includes(inputValue) && !ucd.short?.includes(inputValue)) continue;
             const option = document.createElement('option');
             option.value = ucd.command;
             option.textContent = `${ucd.command} | ${ucd.short} => ${ucd.description}`;
@@ -234,6 +239,7 @@ export class Assistant {
 		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 2400);
 		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 4500);
 	}
+	/** @param {string | false} failureMsg */
     async requestNewPassword(failureMsg = false) {
         if (failureMsg === false) await this.welcome(true);
 
@@ -289,13 +295,15 @@ export class Assistant {
         
         return hex;
     }
+	/** @param {string} str */
     #isHexadecimal(str) {
         const regex = /^[0-9a-fA-F]+$/;
         if (str && str.length % 2 === 0 && regex.test(str)) { return true; }
         return false;
     }
-    #verifyPrivateKey(privateKey = 'toto') {
-        if (!typeof privateKey === 'string') { this.sendMessage('Invalid private key. (must be a string)'); return; }
+	/** @param {string} privateKey */
+    #verifyPrivateKey(privateKey) {
+        if (typeof privateKey !== 'string') { this.sendMessage('Invalid private key. (must be a string)'); return; }
 
         //console.log('privateKey:', privateKey);
         let privKeyHex = privateKey;
@@ -356,6 +364,7 @@ export class Assistant {
         ipcRenderer.send('extract-private-key', password);
         setTimeout(() => { this.idleMenu(); }, 1000);
     }
+	/** @param {string} privateKeyHex @param {boolean} [asWords] default false */
     showPrivateKey(privateKeyHex, asWords = false) {
         if (!asWords) { this.sendMessage(privateKeyHex, 'system'); return }
 

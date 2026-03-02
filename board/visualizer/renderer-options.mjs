@@ -1,4 +1,5 @@
 export class NetworkRendererElements {
+	devInfo;
 	modeSwitchBtn;
 	fpsCountElement;
 	nodeCountElement;
@@ -9,6 +10,7 @@ export class NetworkRendererElements {
 	linesCountElement;
 
 	constructor(
+		devInfo = document.getElementById('vzr-dev-info'),
 		modeSwitchBtn = document.getElementById('vzr-modeSwitchBtn'),
 		fpsCountElement = document.getElementById('vzr-fpsCount'),
 		nodeCountElement = document.getElementById('vzr-nodeCount'),
@@ -18,6 +20,7 @@ export class NetworkRendererElements {
 		connectionsCountElement = document.getElementById('vzr-connectionsCount'),
 		linesCountElement = document.getElementById('vzr-linesCount'),
 	) {
+		this.devInfo = devInfo;
 		this.modeSwitchBtn = modeSwitchBtn;
 		this.fpsCountElement = fpsCountElement;
 		this.nodeCountElement = nodeCountElement;
@@ -26,6 +29,15 @@ export class NetworkRendererElements {
 		this.publicNeighborCountElement = publicNeighborCountElement;
 		this.connectionsCountElement = connectionsCountElement;
 		this.linesCountElement = linesCountElement;
+	}
+
+	elementTextContents = {}; // Store current text content values for each element to avoid unnecessary DOM updates
+	/** @param {string} elementId @param {string | number} value */
+	setElementTextContentAndStoreValue(elementId, value) {
+		if (!this[elementId]) return;
+		if (this.elementTextContents[elementId] === value) return; // No update needed if value is the same as current
+		this[elementId].textContent = value;
+		this.elementTextContents[elementId] = value;
 	}
 }
 

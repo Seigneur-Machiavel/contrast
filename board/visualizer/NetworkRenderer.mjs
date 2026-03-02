@@ -323,16 +323,17 @@ export class NetworkRenderer {
 	updateStats(TARGET_NEIGHBORS_COUNT = 5) {
 		const info = this.nodesStore.getInfo();
 		this.maxDistance = info.maxDistance;
-		this.elements.nodeCountElement.textContent = info.total;
+		this.elements.setElementTextContentAndStoreValue('nodeCountElement', info.total);
+		
 		const { connsCount, linesCount } = this.connectionsStore.getConnectionsCount();
-		this.elements.connectionsCountElement.textContent = connsCount;
-		this.elements.linesCountElement.textContent = linesCount;
-		this.elements.connectingCountElement.textContent = info.connecting;
+		this.elements.setElementTextContentAndStoreValue('connectionsCountElement', connsCount);
+		this.elements.setElementTextContentAndStoreValue('linesCountElement', linesCount);
+		this.elements.setElementTextContentAndStoreValue('connectingCountElement', info.connecting);
+
 		const nonPublicNeighbors = info.connected - info.connectedPublic;
 		const isTargetReached = nonPublicNeighbors >= TARGET_NEIGHBORS_COUNT;
-		//this.elements.neighborCountElement.textContent = `${nonPublicNeighbors} | +${info.connectedPublic} Public ${isTargetReached ? '🟢' : ''}`;
-		this.elements.neighborCountElement.textContent = `${nonPublicNeighbors} ${isTargetReached ? '🟢' : ''}`;
-		this.elements.publicNeighborCountElement.textContent = info.connectedPublic;
+		this.elements.setElementTextContentAndStoreValue('neighborCountElement', `${nonPublicNeighbors} ${isTargetReached ? '🟢' : ''}`);
+		this.elements.setElementTextContentAndStoreValue('publicNeighborCountElement', info.connectedPublic);
     }
 	switchMode() {
 		this.options.mode = this.options.mode === '2d' ? '3d' : '2d';
@@ -476,7 +477,6 @@ export class NetworkRenderer {
 		this.#updateCameraFromQuaternion();
 
         this.renderer.domElement.addEventListener('wheel', (e) => {
-            e.preventDefault();
             const zoomSpeed = .4;
 
 			if (this.options.mode === '3d') {
@@ -492,7 +492,7 @@ export class NetworkRenderer {
 			}
 
 			this.avoidAutoZoomUntil = Date.now() + 5000;
-        });
+        }, { passive: true });
 
 		this.elements.modeSwitchBtn.addEventListener('click', () => this.switchMode());
 		this.renderer.domElement.addEventListener('click', () => {
@@ -514,7 +514,7 @@ export class NetworkRenderer {
 			this.previousMousePosition.y = e.clientY;
 			if (this.mouseDownGrabCursorTimeout) clearTimeout(this.mouseDownGrabCursorTimeout);
 			this.mouseDownGrabCursorTimeout = setTimeout(() => this.renderer.domElement.style.cursor = 'grabbing', 200);
-		});
+		}, { passive: true });
         this.renderer.domElement.addEventListener('contextmenu', (e) => {
 			e.preventDefault();
 			if (this.renderer.domElement.style.cursor === 'grabbing') return;

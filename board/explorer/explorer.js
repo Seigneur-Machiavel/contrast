@@ -1,8 +1,4 @@
 // @ts-check
-if (false) { // THIS IS FOR DEV ONLY ( to get better code completion)
-	const anime = require('animejs');
-    const Plotly = require('plotly.js-dist-min');
-}
 
 //import { UTXO } from '../../types/transaction.mjs';
 //import { IS_VALID } from '../../types/validation.mjs';

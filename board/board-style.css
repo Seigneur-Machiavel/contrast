@@ -231,6 +231,23 @@ body {
     top: 10px;
     right: 10px;
 }
+#vzr-toggleVisualizationBtn {
+	position: absolute;
+	cursor: pointer;
+	bottom: 4px;
+	right: 12px;
+	width: 32px;
+	height: 32px;
+	transition: transform .06s ease;
+}
+#vzr-toggleVisualizationBtn:hover {
+	transform: scale(1.15);
+}
+#vzr-toggleVisualizationBtn img {
+	position: absolute;
+	pointer-events: none;
+	width: 100%;
+}
 
 #board-windows-wrap {
     user-select: none;

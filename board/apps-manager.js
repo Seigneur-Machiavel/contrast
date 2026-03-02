@@ -197,7 +197,6 @@ export class AppsManager {
 
 		this.setFrontWindow(appName);
 		if (e.target.classList.contains('title-bar')) {
-			e.preventDefault();
 			this.draggingWindow = subWindow;
 			subWindow.dragStart.x = e.clientX - subWindow.position.left;
 			subWindow.dragStart.y = e.clientY - subWindow.position.top;
@@ -205,7 +204,6 @@ export class AppsManager {
 		}
 
 		if (e.target.classList.contains('resize-button')) {
-			e.preventDefault();
 			this.resizingWindow = subWindow;
 			subWindow.resizeStart.x = e.clientX;
 			subWindow.resizeStart.y = e.clientY;
@@ -221,7 +219,6 @@ export class AppsManager {
 	moveWindowHandler(e) {
 		if (!this.draggingWindow) return;
 		
-		e.preventDefault();
 		const minTop = this.windowsWrap.offsetHeight - 32;
 		const maxLeft = this.windowsWrap.offsetWidth - 50;
 		const top = Math.max(0, e.clientY - this.draggingWindow.dragStart.y);
@@ -231,7 +228,6 @@ export class AppsManager {
 	moveResizeHandler(e) {
 		if (!this.resizingWindow) return;
 
-		e.preventDefault();
 		const minWidth = this.resizingWindow.minSize.width || 100;
 		const minHeight = this.resizingWindow.minSize.height || 100;
 		const { width, height } = this.windowsWrap.getBoundingClientRect();

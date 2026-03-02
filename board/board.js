@@ -47,7 +47,6 @@ if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-
 else document.body.classList.remove('dark-mode');
 
 //const settingsManager = new SettingsManager(settingsMenuElement);
-//const infoManager = new InfoManager();
 const visualizer = new NetworkVisualizer(connector, HiveP2P.CryptoCodex);
 const windowsWrap = document.getElementById('board-windows-wrap');
 const bottomButtonsBar = document.getElementById('board-apps-buttons-bar');
@@ -88,12 +87,12 @@ async function clickTitleBarButtonsHandler(e) {
 document.addEventListener('click', (e) => {
 	clickTitleBarButtonsHandler(e);
 	appsManager.clickHandler(e);
+	visualizer.clickHandler(e);
 	explorer.clickHandler(e);
 	biw.clickHandler(e);
 	//infoManager.clickInfoButtonHandler(e);
 	//settingsManager.clickSettingsButtonHandler(e);
 });
-
 document.addEventListener('keyup', (e) => {
 	explorer.keyUpHandler(e);
 });
@@ -105,7 +104,7 @@ document.addEventListener('dblclick', (e) => appsManager.dlbClickHandler(e));
 document.addEventListener('mousedown', (e) => {
 	appsManager.mouseDownHandler(e);
 	biw.mouseDownHandler(e);
-});
+}, { passive: true });
 document.addEventListener('mouseup', (e) => {
 	appsManager.mouseupHandler(e);
 	biw.mouseUpHandler(e);
@@ -114,7 +113,7 @@ document.addEventListener('mouseup', (e) => {
 document.addEventListener('mousemove', (e) => {
 	appsManager.mousemoveHandler(e);
 	visualizer.networkRenderer.handleMouseMove(e);
-});
+}, { passive: true });
 document.addEventListener('input', (e) => biw.inputHandler(e));
 document.addEventListener('keydown', (e) => {
 	biw.keyDownHandler(e);

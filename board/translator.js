@@ -1,7 +1,8 @@
-/**
- * @typedef {'en' | 'fr'} Language
- */
+/** @typedef {'en' | 'fr'} Language */
 
+// FIRST WE DEFINE THE TRANSLATION STRINGS FOR EACH LANGUAGE IN A STRUCTURED WAY,
+// EACH OBJECT CORRESPOND TO ONE BOARD APP.
+// NAMING CORRESPOND TO THE "data-translatorkey" ATTRIBUTE OF THE HTML ELEMENTS TO TRANSLATE.
 const assistant = {
 	TypeYourCommand: {
 		en: 'Type your command ("-help" for help):',
@@ -70,16 +71,105 @@ const explorer = {
 		en: 'The time gap between the last two blocks; this can fluctuate above and below the target block time.',
 		fr: 'L\'écart de temps entre les deux derniers blocs ; cela peut fluctuer au-dessus et en dessous du temps de bloc cible.',
 	},
-	LegitimaciesChart: {
+	Legitimacies: {
+		en: 'Legitimacies',
+		fr: 'Légitimités',
+	},
+	LegitimaciesTooltip: {
 		en: 'Indicating the legitimacy of the candidate block prepared by validators this round',
 		fr: 'Indiquant la légitimité du bloc candidat préparé par les validateurs ce tour',
 	},
 	LastBlocksTimeGap: {
+		en: 'Last blocks time-gap',
+		fr: 'Écart temporel des blocs',
+	},
+	LastBlocksTimeGapTooltip: {
 		en: 'The time gap between the 60 last blocks; this helps to control the network\'s stability by displaying the block time deviation.',
 		fr: 'L\'écart de temps entre les 60 derniers blocs ; cela aide à contrôler la stabilité du réseau en affichant la déviation du temps de bloc.',
 	},
 }
 
+const wallet = {
+		// SETTINGS
+	AutoRefresh: {
+		en: 'Auto-refresh',
+		fr: 'Actualisation automatique',
+	},
+	EnableCommands: {
+		en: 'Enable commands',
+		fr: 'Activer les commandes',
+	},
+	EnableDataField: {
+		en: 'Enable data field',
+		fr: 'Activer le champ de données',
+	},
+	RoundTo2Decimals: {
+		en: 'Round to 2 decimals',
+		fr: 'Arrondir à 2 décimales',
+	},
+	// BALANCE AND MAIN BUTTONS
+	Staked: {
+		en: 'Staked:',
+		fr: 'Verrouillé :',
+	},
+	Transfer: {
+		en: 'Transfer',
+		fr: 'Transférer',
+	},
+	Swap: {
+		en: 'Swap',
+		fr: 'Échanger',
+	},
+	History: {
+		en: 'History',
+		fr: 'Historique',
+	},
+	// SEND MINIFORM
+	Send: {
+		en: 'Send',
+		fr: 'Envoyer',
+	},
+	Stake: {
+		en: 'Stake',
+		fr: 'Verrouiller',
+	},
+	Unstake: {
+		en: 'Unstake',
+		fr: 'Déverrouiller',
+	},
+	Inscribe: {
+		en: 'Inscribe',
+		fr: 'Inscrire',
+	},
+	Amount: {
+		en: 'Amount:',
+		fr: 'Montant :',
+	},
+	To: {
+		en: 'To:',
+		fr: 'À :',
+	},
+	Data: {
+		en: 'Data:',
+		fr: 'Données :',
+	},
+	Fee: {
+		en: 'Fee:',
+		fr: 'Frais :',
+	},
+	Total: {
+		en: 'Total:',
+		fr: 'Total :',
+	},
+	Confirm: {
+		en: 'Confirm',
+		fr: 'Confirmer',
+	},
+}
+
+// THE TRANSLATOR CLASS IS USED TO MANAGE THE TRANSLATION OF THE BOARD
+// IT PROVIDES A SET OF GETTERS FOR EACH TRANSLATABLE TEXT, AND A METHOD TO SET THE LANGUAGE AND UPDATE THE TEXT CONTENT OF THE BOARD ACCORDINGLY.
+// IT ALSO DEFINES THE AVAILABLE LANGUAGES AND A CALLBACK FUNCTION THAT CAN BE CALLED WHEN THE LANGUAGE CHANGES.
 export class Translator {
 	onLanguageChange = null; // Callback function when language changes, receives new language as argument
 	availableLanguages = ['en', 'fr'];
@@ -98,7 +188,7 @@ export class Translator {
 		for (const el of elements) {
 			const key = el.dataset.translatorkey;
 			const text = this[key];
-			console.log('translating key:', key, 'to:', text);
+			// console.log('translating key:', key, 'to:', text);
 			if (!text) throw new Error(`No translation found for key "${key}" and language "${this.lang}"`);
 			el.textContent = text;
 		}
@@ -126,10 +216,30 @@ export class Translator {
 	get DistributionProgress() { return explorer.DistributionProgress[this.lang] || explorer.DistributionProgress.en; }
 	get TargetBlockTime() { return explorer.TargetBlockTime[this.lang] || explorer.TargetBlockTime.en; }
 	get LastBlockTime() { return explorer.LastBlockTime[this.lang] || explorer.LastBlockTime.en; }
-	get LegitimaciesChart() { return explorer.LegitimaciesChart[this.lang] || explorer.LegitimaciesChart.en; }
+	get Legitimacies() { return explorer.Legitimacies[this.lang] || explorer.Legitimacies.en; }
+	get LegitimaciesTooltip() { return explorer.LegitimaciesTooltip[this.lang] || explorer.LegitimaciesTooltip.en; }
 	get LastBlocksTimeGap() { return explorer.LastBlocksTimeGap[this.lang] || explorer.LastBlocksTimeGap.en; }
+	get LastBlocksTimeGapTooltip() { return explorer.LastBlocksTimeGapTooltip[this.lang] || explorer.LastBlocksTimeGapTooltip.en; }
 
 	// WALLET
+	get AutoRefresh() { return wallet.AutoRefresh[this.lang] || wallet.AutoRefresh.en; }
+	get EnableCommands() { return wallet.EnableCommands[this.lang] || wallet.EnableCommands.en; }
+	get EnableDataField() { return wallet.EnableDataField[this.lang] || wallet.EnableDataField.en; }
+	get RoundTo2Decimals() { return wallet.RoundTo2Decimals[this.lang] || wallet.RoundTo2Decimals.en; }
+	get Staked() { return wallet.Staked[this.lang] || wallet.Staked.en; }
+	get Transfer() { return wallet.Transfer[this.lang] || wallet.Transfer.en; }
+	get Swap() { return wallet.Swap[this.lang] || wallet.Swap.en; }
+	get History() { return wallet.History[this.lang] || wallet.History.en; }
+	get Send() { return wallet.Send[this.lang] || wallet.Send.en; }
+	get Stake() { return wallet.Stake[this.lang] || wallet.Stake.en; }
+	get Unstake() { return wallet.Unstake[this.lang] || wallet.Unstake.en; }
+	get Inscribe() { return wallet.Inscribe[this.lang] || wallet.Inscribe.en; }
+	get Amount() { return wallet.Amount[this.lang] || wallet.Amount.en; }
+	get To() { return wallet.To[this.lang] || wallet.To.en; }
+	get Data() { return wallet.Data[this.lang] || wallet.Data.en; }
+	get Fee() { return wallet.Fee[this.lang] || wallet.Fee.en; }
+	get Total() { return wallet.Total[this.lang] || wallet.Total.en; }
+	get Confirm() { return wallet.Confirm[this.lang] || wallet.Confirm.en; }
 
 	// DASHBOARD
 }

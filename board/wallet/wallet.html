@@ -43,39 +43,39 @@
                 <div class="biw-spaced">
                     <h3 id="biw-TransferSenderAddress">C123456</h3>
 					<select id="biw-actionSelector">
-						<option value="Send">Send</option>
-						<option value="Stake">Stake</option>
-						<option value="Unstake">Unstake</option>
-						<option value="Inscribe">Inscribe</option>
+						<option value="Send" data-translatorkey="Send" class="translatableTextContent">Send</option>
+						<option value="Stake" data-translatorkey="Stake" class="translatableTextContent">Stake</option>
+						<option value="Unstake" data-translatorkey="Unstake" class="translatableTextContent">Unstake</option>
+						<option value="Inscribe" data-translatorkey="Inscribe" class="translatableTextContent">Inscribe</option>
 					</select>
                 </div>
 
 				<div class="biw-inputs-wrap">
 					<div class="biw-spaced">
-						<h3>Amount:</h3>
+						<h3 data-translatorkey="Amount" class="translatableTextContent">Amount:</h3>
 						<input id="biw-amountInput" type="text" placeholder="Amount to send">
 					</div>
 					<div class="biw-spaced">
-						<h3>To:</h3>
+						<h3 data-translatorkey="To" class="translatableTextContent">To:</h3>
 						<input id="biw-recipientAddress" type="text" placeholder="Recipient address">
 					</div>
 					<div class="biw-spaced hidden" id="biw-dataField">
-						<h3>Data:</h3>
+						<h3 data-translatorkey="Data" class="translatableTextContent">Data:</h3>
 						<input id="biw-dataInput" type="text" placeholder="Data (optional)">
 					</div>
 				</div>
 
                 <div class="biw-spaced thinBottomBorder" style="margin-top: 40px !important;">
-                    <h3>Fee:</h3>
+                    <h3 data-translatorkey="Fee" class="translatableTextContent">Fee:</h3>
                     <h3><span class="biw-txFee">0</span>c</h3>
                 </div>
                 <div class="biw-spaced thinBottomBorder">
-                    <h3>Total:</h3>
+                    <h3 data-translatorkey="Total" class="translatableTextContent">Total:</h3>
                     <h3><span class="biw-totalSpent">0</span>c</h3>
                 </div>
             </div>
 
-            <button id="biw-sendBtn" class="biw-sendBtn biw-holdBtn" data-action="biw-confirm"><div>Confirm</div></button>
+            <button id="biw-sendBtn" class="biw-sendBtn biw-holdBtn" data-action="biw-confirm"><div data-translatorkey="Confirm" class="translatableTextContent">Confirm</div></button>
 		</div>
     </div>
 
@@ -91,32 +91,45 @@
 		<div id="biw-settings-menu" data-action="biw-toggle-settings-menu">
 			<div class="content">
 				<div class="board-settings-line">
-					<label for="biw-autoRefreshCheckbox">Auto-refresh</label>
+					<label for="biw-autoRefreshCheckbox" data-translatorkey="AutoRefresh" class="translatableTextContent">Auto-refresh</label>
 					<input type="checkbox" id="biw-autoRefreshCheckbox" checked data-action="biw-auto-refresh-toggle">
 				</div>
 				<div class="board-settings-line">
-					<label for="biw-enableCommandsCheckbox">Enable commands</label>
+					<label for="biw-enableCommandsCheckbox" data-translatorkey="EnableCommands" class="translatableTextContent">Enable commands</label>
 					<input type="checkbox" id="biw-enableCommandsCheckbox" data-action="biw-enable-commands-toggle">
 				</div>
 				<div class="board-settings-line">
-					<label for="biw-enableDataFieldCheckbox">Enable data field</label>
+					<label for="biw-enableDataFieldCheckbox" data-translatorkey="EnableDataField" class="translatableTextContent">Enable data field</label>
 					<input type="checkbox" id="biw-enableDataFieldCheckbox" data-action="biw-enable-data-field-toggle">
 				</div>
 				<div class="board-settings-line">
-					<label for="biw-roundTo2DecimalsCheckbox">Round to 2 decimals</label>
+					<label for="biw-roundTo2DecimalsCheckbox" data-translatorkey="RoundTo2Decimals" class="translatableTextContent">Round to 2 decimals</label>
 					<input type="checkbox" id="biw-roundTo2DecimalsCheckbox" checked data-action="biw-round-to-2-decimals-toggle">
 				</div>
 			</div>
 		</div>
 
         <h1><span id="biw-balanceStr">0.00</span>c</h1>
-        <h2 class="biw-stakedBalance">Staked: <span id="biw-stakedStr">0.00</span>c</h2>
+        <h2 class="biw-stakedBalance">
+			<span data-translatorkey="Staked" class="translatableTextContent">Staked:</span> <span id="biw-stakedStr">0.00</span>c
+		</h2>
 
         <div id="biw-buttonBar">
-            <button id="biw-buttonBarTransfer" data-action="biw-toggle-transfer-form"><img src="./wallet/img/send32.png" alt="Transfer">Transfer</button>
-            <button id="biw-buttonBarSwap" data-action="biw-toggle-swap-form" class="disabled hidden"><img src="./wallet/img/swap32.png" alt="Swap">Swap</button>
-			<button id="biw-buttonBarHistory" data-action="biw-toggle-history-form" class="disabled"><img src="./wallet/img/history32.png" alt="History">History</button>
-			<!--<button id="biw-buttonBarInterpreter" data-action="biw-toggle-interpreter" class="hidden"><img src="./wallet/img/category64.png" alt="Interpreter">Command</button>
+            <button id="biw-buttonBarTransfer" data-action="biw-toggle-transfer-form">
+				<img src="./wallet/img/send32.png" alt="Transfer-img">
+				<span data-translatorkey="Transfer" class="translatableTextContent">Transfer</span>
+			</button>
+            <button id="biw-buttonBarSwap" data-action="biw-toggle-swap-form" class="disabled hidden">
+				<img src="./wallet/img/swap32.png" alt="Swap-img">
+				<span data-translatorkey="Swap" class="translatableTextContent">Swap</span>
+			</button>
+			<button id="biw-buttonBarHistory" data-action="biw-toggle-history-form" class="disabled">
+				<img src="./wallet/img/history32.png" alt="History-img">
+				<span data-translatorkey="History" class="translatableTextContent">History</span>
+			</button>
+			<!--<button id="biw-buttonBarInterpreter" data-action="biw-toggle-interpreter" class="hidden">
+				<img src="./wallet/img/category64.png" alt="Interpreter" data-translatorkey="Interpreter" class="translatableTextContent">Command
+			</button>
             <div id="biw-interpreter">
 				<input type="text" id="biw-interpreterInput" placeholder="ex: Send 10 to C123456" autocomplete="off">
 				<button id="biw-buttonBarInstructions" data-action="biw-interpret-input-btn">Confirm</button>

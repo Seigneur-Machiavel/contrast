@@ -1,5 +1,14 @@
+// @ts-check
+if (false) { // For better completion
+	const anime = require('animejs');
+}
 
 import { eHTML_STORE, createElement, getTimeSinceBlockConfirmedString } from '../board-helpers.js';
+
+/**
+ * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
+ */
+
 const eHTML = new eHTML_STORE('cbe-', 'chainWrap');
 
 class BlockComponent {
@@ -139,7 +148,10 @@ export class BlockchainComponent {
 	}
 	#addEmptyBlockAtEndIfNeeded() {
 		// ADD NEW EMPTY BLOCK AT THE END IF NEEDED
-		const parentRect = eHTML.get('chainWrap').parentElement?.parentElement?.getBoundingClientRect();
+		const chainWrap = eHTML.get('chainWrap');
+		if (!chainWrap) return;
+
+		const parentRect = chainWrap?.parentElement?.parentElement?.getBoundingClientRect();
 		if (!parentRect) return;
 		
 		const lastEmptyBlockRight = this.lastEmptyBlock?.wrap.getBoundingClientRect().right || 0;
@@ -147,7 +159,7 @@ export class BlockchainComponent {
 
 		const newBlock = new BlockComponent();
 		this.blocks.push(newBlock);
-		eHTML.get('chainWrap').appendChild(newBlock.wrap);
+		chainWrap.appendChild(newBlock.wrap);
 		return true;
 	}
     /** @param {number} duration */
@@ -160,7 +172,7 @@ export class BlockchainComponent {
         this.firstBlockAnimation = anime({
             targets: this.blocks[0].wrap,
             translateX: '-100%',
-            //filter: 'blur(6px)',
+            //filter: 'blur(6px)', -> too much performance issues.
             width: 0,
             scale: .6,
             opacity: 0,
@@ -174,7 +186,7 @@ export class BlockchainComponent {
             }
         });
         
-        // blur the wrap
+        // blur the wrap -> too much performance issues.
         /*this.chainWrapAnimation = anime({
             targets: chainWrap,
             filter: ['blur(.6px)', 'blur(.5px)', 'blur(.6px)'],
