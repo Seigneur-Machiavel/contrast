@@ -16,7 +16,6 @@ export class NetworkRenderer {
 	onNodeLeftClick = null;
 	onNodeRightClick = null;
 	colors = { // 0x000000 black
-		background: 			0xf0f0f0,  	// color1_1
 		currentPeer: 			0x000000, 	// black
 		hoveredPeer: 			0xe88631, 	// orange
 		connectedPeerNeighbor: 	0x000000, 	// black
@@ -38,9 +37,6 @@ export class NetworkRenderer {
 		gossipIncomingColor: 	0xf542f5, 	// fuchsia
 		gossipOutgoingColor: 	0xf542f5, 	// dark fuchsia
 	};
-	darkThemeColors = { // 0xffffff white
-		background: 0x161616, // color1_1
-	}
 
 	// Internal state
 	scene = null;
@@ -97,13 +93,13 @@ export class NetworkRenderer {
         
 		// Renderer
 		const { antialias, precision } = this.options;
-        this.renderer = new THREE.WebGLRenderer({ antialias, precision });
+        this.renderer = new THREE.WebGLRenderer({ antialias, precision, alpha: true });
+		this.renderer.setClearColor(0x000000, 0); // alpha = 0 for transparent background
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
 		this.container.appendChild(this.renderer.domElement);
 
         // Scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(this.colors.background);
 
 		// Stores (nodes + connections)
 		this.nodesStore = new NodesStore();

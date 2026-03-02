@@ -39,7 +39,7 @@ export class MiniformComponent {
 				senderAddress: 				/** @type {HTMLElement} */		(biw.eHTML.get('TransferSenderAddress')),
 				recipientAddress: 			/** @type {HTMLInputElement} */ (biw.eHTML.get('recipientAddress')),
 				amountInput: 				/** @type {HTMLInputElement} */ (biw.eHTML.get('amountInput')),
-				dataField:					/** @type {HTMLElement} */		(biw.eHTML.get('dataField')),
+				// dataField:					/** @type {HTMLElement} */		(biw.eHTML.get('dataField')),
 				dataInput: 					/** @type {HTMLInputElement} */ (biw.eHTML.get('dataInput')),
 				txFee: 						/** @type {HTMLElement} */		(biw.eHTML.get('miniFormTransfer')?.querySelector('.biw-txFee')),
 				totalSpent: 				/** @type {HTMLElement} */		(biw.eHTML.get('miniFormTransfer')?.querySelector('.biw-totalSpent')),
@@ -87,8 +87,8 @@ export class MiniformComponent {
 	// TRANSFER FORM METHODS
 	toggleDataField(forceVisible = this.action === 'Inscribe' || this.action === 'Stake') {
 		this.eHTML.transfer.dataInput.value = '';
-		if (!forceVisible && !this.isDataFieldEnabled) this.eHTML.transfer.dataField.classList.add('hidden');
-		else this.eHTML.transfer.dataField.classList.remove('hidden');
+		if (!forceVisible && !this.isDataFieldEnabled) this.eHTML.transfer.dataInput.classList.add('hidden');
+		else this.eHTML.transfer.dataInput.classList.remove('hidden');
 	}
 	resetTransferForm() {
 		this.eHTML.transfer.recipientAddress.value = '';

@@ -42,7 +42,7 @@ export class AccountsComponent {
             const existingAccountLabel = accountLabels[i];
             if (existingAccountLabel) { // fill existing label
                 const name = h2[i];
-                const amount = h3[i * 2];
+                const amount = h3[i * 2].getElementsByTagName('span')[0];
                 const address = h3[i * 2 + 1];
 
                 if (address.innerText !== account.address) {
@@ -52,7 +52,7 @@ export class AccountsComponent {
                     accountImgWrap.appendChild(img);
                 }
 
-                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sigOrSlash']), this.biw.balanceDecimals)}c`;
+                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sigOrSlash']), this.biw.balanceDecimals)}`;
                 if (name.innerText !== accountName) name.innerText = accountName;
                 if (address.innerText !== account.address) address.innerText = account.address;
                 if (amount.innerText !== readableAmount) amount.innerText = readableAmount;
@@ -93,8 +93,8 @@ export class AccountsComponent {
 		accountLabel.dataset.value = address;
     
 		const accountImgWrap = createElement('div', ['biw-accountImgWrap'], accountLabel);
-		createElement('div', [], accountImgWrap);
-		createElement('div', [], accountImgWrap);
+		/*createElement('div', [], accountImgWrap);
+		createElement('div', [], accountImgWrap);*/
 		const img = patternGenerator.generateImage(address, UX_SETTINGS.shapes);
 		accountImgWrap.appendChild(img);
 		accountImgWrap.dataset.action = 'biw-select-account';
@@ -103,8 +103,13 @@ export class AccountsComponent {
 		const accountLabelInfoWrap = createElement('div', ['biw-accountLabelInfoWrap'], accountLabel);
 		const accountLabelAddressAndValueWrap = createElement('div', ['biw-accountLabelAddressAndValueWrap'], accountLabelInfoWrap);
 		createElement('h2', [], accountLabelAddressAndValueWrap).innerText = address;
-		createElement('h3', [], accountLabelAddressAndValueWrap).innerText = `${CURRENCY.formatNumberAsCurrency(amount, this.biw.balanceDecimals)}c`;
-		
+
+		const amountH3 = createElement('h3', [], accountLabelAddressAndValueWrap);
+		const amountValueStr = createElement('span', [], amountH3);
+		const unitSpan = createElement('span', ['unit'], amountH3);
+		amountValueStr.innerText = `${CURRENCY.formatNumberAsCurrency(amount, this.biw.balanceDecimals)}`;
+		unitSpan.innerText = 'c';
+
 		const accountLabelName = createElement('div', ['biw-accountLabelName'], accountLabelInfoWrap);
 		createElement('h3', [], accountLabelName).innerText = name;
 

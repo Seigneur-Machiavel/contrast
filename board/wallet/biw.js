@@ -158,6 +158,17 @@ export class BoardInternalWallet {
 
 		console.log(`Selected account: ${address}`);
     }
+	/** @param {string | null} action */
+	setActiveTogglerButton(action = 'biw-toggle-transfer-form') {
+		const buttonBar = eHTML.get('buttonBar');
+		if (!buttonBar) return;
+
+		const buttons = buttonBar.querySelectorAll('button');
+		for (const btn of buttons) {
+			if (btn.dataset.action === action) btn.classList.add('active');
+			else btn.classList.remove('active');
+		}
+	}
 
 	// INTERNAL METHODS
 	async #initWhileDomReady() {
@@ -291,7 +302,7 @@ export class BoardInternalWallet {
 			this.balanceDecimals = userPreferences.roundTo2Decimals ? 2 : 6;
 			//if (userPreferences.enableCommands) eHTML.get('buttonBarInterpreter')?.classList.remove('hidden');
 			if (userPreferences.enableCommands) eHTML.get('interpreterWrap')?.classList.add('active');
-			if (userPreferences.enableDataField) eHTML.get('dataField')?.classList.remove('hidden');
+			if (userPreferences.enableDataField) eHTML.get('dataInput')?.classList.remove('hidden');
 		} catch (error) { console.error('Error loading user preferences:', error); }
 	}
 
@@ -320,8 +331,8 @@ export class BoardInternalWallet {
 				this.#saveUserPreferences();
 				break;
 			case 'biw-enable-data-field-toggle':
-				if (e.target.checked) eHTML.get('dataField')?.classList.remove('hidden');
-				else eHTML.get('dataField')?.classList.add('hidden');
+				if (e.target.checked) eHTML.get('dataInput')?.classList.remove('hidden');
+				else eHTML.get('dataInput')?.classList.add('hidden');
 				this.#saveUserPreferences();
 				break;
 			case 'biw-round-to-2-decimals-toggle':
@@ -342,13 +353,17 @@ export class BoardInternalWallet {
 			case 'biw-toggle-transfer-form':
 				if (this.components.miniform.isTransferOpen) this.components.miniform.close();
 				else this.components.miniform.open('SEND');
+				if (this.components.miniform.isTransferOpen) this.setActiveTogglerButton('biw-toggle-transfer-form');
+				else this.setActiveTogglerButton(null);
 				break;
 			case 'biw-toggle-swap-form':
 				console.log('Swap not implemented yet');
+				//this.setActiveTogglerButton('biw-toggle-swap-form');
 				break;
 			case 'biw-toggle-interpreter':
 				//this.components.interpreter.toggle();
 				// OPTIONNAL: add active class to button while form is open
+				//this.setActiveTogglerButton('biw-toggle-interpreter');
 				break;
 			case 'biw-toggle-history-form':
 				if (this.components.miniform.isHistoryOpen) this.components.miniform.close();
@@ -356,6 +371,8 @@ export class BoardInternalWallet {
 					this.components.miniform.open('HISTORY');
 					this.getAndDisplayTransactionsDetails();
 				}
+				if (this.components.miniform.isHistoryOpen) this.setActiveTogglerButton('biw-toggle-history-form');
+				else this.setActiveTogglerButton(null);
 				break;
 			case 'biw-history-prev-page':
 				if (this.components.accounts.activeAccountHistoryPage <= 0) throw new Error('Already at the first page');

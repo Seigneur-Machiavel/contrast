@@ -53,15 +53,12 @@ export class PatternGenerator {
         ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
         ctx.shadowBlur = 4 * this.SCALE;
 
-        this.shapes.forEach(shape => {
+		for (const shape of this.shapes) {
             const strokeStyle = `rgb(${shape.brightness}, ${shape.brightness}, ${shape.brightness})`;
 
-            if (shape.isCircle) {
-                this.drawCircle(ctx, centerX, centerY, shape.size, strokeStyle, shape.lineWidth);
-            } else {
-                this.drawHexagon(ctx, centerX, centerY, shape.size, strokeStyle, shape.lineWidth);
-            }
-        });
+            if (shape.isCircle) this.drawCircle(ctx, centerX, centerY, shape.size, strokeStyle, shape.lineWidth);
+            else this.drawHexagon(ctx, centerX, centerY, shape.size, strokeStyle, shape.lineWidth);
+        }
 
         // Draw the outer circle with a subtle stroke
         ctx.shadowColor = 'transparent';

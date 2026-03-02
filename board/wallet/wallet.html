@@ -51,7 +51,8 @@
                 </div>
 
 				<div class="biw-inputs-wrap">
-					<div class="biw-spaced">
+					<!-- OLDER VERSION -->
+					<!--<div class="biw-spaced">
 						<h3 data-translatorkey="Amount" class="translatableTextContent">Amount:</h3>
 						<input id="biw-amountInput" type="text" placeholder="Amount to send">
 					</div>
@@ -62,7 +63,12 @@
 					<div class="biw-spaced hidden" id="biw-dataField">
 						<h3 data-translatorkey="Data" class="translatableTextContent">Data:</h3>
 						<input id="biw-dataInput" type="text" placeholder="Data (optional)">
-					</div>
+					</div>-->
+
+					<!-- NEW VERSION -->
+					<input id="biw-amountInput" type="text" placeholder="Amount to send">
+					<input id="biw-recipientAddress" type="text" placeholder="Recipient address">
+					<input id="biw-dataInput" type="text" placeholder="Data (optional)" class="hidden">
 				</div>
 
                 <div class="biw-spaced thinBottomBorder" style="margin-top: 40px !important;">
@@ -109,9 +115,9 @@
 			</div>
 		</div>
 
-        <h1><span id="biw-balanceStr">0.00</span>c</h1>
+        <h1><span id="biw-balanceStr">0.00</span><span class="unit">c</span></h1>
         <h2 class="biw-stakedBalance">
-			<span data-translatorkey="Staked" class="translatableTextContent">Staked:</span> <span id="biw-stakedStr">0.00</span>c
+			<span data-translatorkey="Staked" class="translatableTextContent">Staked:</span> <span id="biw-stakedStr">0.00</span><span class="unit">c</span>
 		</h2>
 
         <div id="biw-buttonBar">
