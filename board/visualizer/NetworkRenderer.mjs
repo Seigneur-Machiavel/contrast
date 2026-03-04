@@ -17,25 +17,24 @@ export class NetworkRenderer {
 	onNodeRightClick = null;
 	colors = { // 0x000000 black
 		currentPeer: 			0x000000, 	// black
-		hoveredPeer: 			0xe88631, 	// orange
 		connectedPeerNeighbor: 	0x000000, 	// black
-		connectingPeerNeighbor: 0x03b5fc, 	// light blue
-		knownPeer: 				0x666666, 	// gray
+		connectingPeerNeighbor: 0x7f7f7f, 	// gray
+		knownPeer: 				0xbfbfbf, 	// light gray
 		publicNode: 			0x000000,	// black
 		publicNodeBorder: 		0x000000,	// black
 		// CONNECTIONS
-		connection:				0x666666, 	// gray
+		connection:				0xbfbfbf, 	// light gray
 		currentPeerConnection: 	0x000000, 	// black
 		// DIRECT MESSAGES
 		traveledConnection: [
-			0x2803fc, 	// blue
-			0x0328fc, 	// light blue
-			0x035afc 	// lighter blue
+			0x000000, 	// black
+			0x161616, 	// darker gray
+			0x323232 	// dark gray
 		],
 		toTravelConnection: 	0x03b5fc, 	// even lighter blue for the remaining distance
 		// GOSSIP MESSAGES
-		gossipIncomingColor: 	0xf542f5, 	// fuchsia
-		gossipOutgoingColor: 	0xf542f5, 	// dark fuchsia
+		gossipIncomingColor: 	0x7f7f7f, 	// gray hashed
+		gossipOutgoingColor: 	0x7f7f7f, 	// gray hashed
 	};
 
 	// Internal state
@@ -669,17 +668,16 @@ export class NetworkRenderer {
 		//if (this.hoveredNodeId === this.currentPeerId) return;
 
 		// Set hover color
-		const instanceIndex = this.nodeIndexMap[this.hoveredNodeId];
-		if (instanceIndex === undefined) return;
-		const hoverColor = new THREE.Color(this.colors.hoveredPeer);
+		//const instanceIndex = this.nodeIndexMap[this.hoveredNodeId];
+		//if (instanceIndex === undefined) return;
 		this.renderer.domElement.style.cursor = 'pointer';
 		
 		// Set hovered connections flag
 		this.hoveredNodeRepaintInterval = setInterval(() => {
-			this.instancedMesh.setColorAt(instanceIndex, hoverColor);
-			this.instancedMesh.instanceColor.needsUpdate = true;
+			//this.instancedMesh.setColorAt(instanceIndex, hoverColor);
+			//this.instancedMesh.instanceColor.needsUpdate = true;
+
 			const hoveredNode = this.nodesStore.get(this.hoveredNodeId);
-			//console.log(`Repainting hovered node ${this.hoveredNodeId} and its neighbors`);
 			const neighbors = hoveredNode ? hoveredNode.neighbors : [];
 			for (const toId of neighbors) this.connectionsStore.setHovered(toId, this.hoveredNodeId);
 		}, 240);

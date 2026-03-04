@@ -117,7 +117,7 @@ export class SubWindow {
 			this.element.style.transform = `scale(1) translateX(-2000px) translateY(0px)`;
 			setTimeout(() => {
 				this.element.style.opacity = 0;
-				this.element.style.transform = `scale(.1) translateX(${fromX}px) translateY(${fromY}px)`;
+				this.element.style.transform = `scale(.001) translateX(${fromX}px) translateY(${fromY}px)`;
 			}, 200);
 
 			// Set dark mode to the iframe according to the board body class
@@ -184,7 +184,7 @@ export class SubWindow {
 				delay: this.folded ? duration * .5 : 0,
 				easing: 'easeOutQuad'
 			},
-			scale: { value: this.folded ? .1 : 1, duration: duration, easing: 'easeOutQuad' },
+			scale: { value: this.folded ? .001 : 1, duration: duration, easing: 'easeOutQuad' },
 			translateX: { value: toPosition.left, duration: duration, easing: 'easeOutQuad' },
 			translateY: { value: toPosition.top, duration: duration, easing: 'easeOutQuad' },
 			complete: () => {

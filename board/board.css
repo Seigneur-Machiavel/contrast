@@ -1,21 +1,18 @@
-body {
-    overflow: hidden;
-    background-color: var(--color1_1) !important;
-}
-
 /* TITLE BAR */
 .titlebar {
 	position: relative;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    height: 30px;
+    height: 32px;
     padding: 0 0px 0 6px;
-	color: var(--color1_3);
+	color: var(--color3);
+    opacity: .5;
     -webkit-app-region: drag;
 }
 #board-title {
 	z-index: 1;
+	user-select: none;
     font-family: 'Contrast', sans-serif;
 	font-size: larger;
 	position: absolute;
@@ -31,11 +28,35 @@ body {
 	/*color: var(--color1_2);*/ /* unreadable using 1_2 */
     margin-left: 2px;
 }
-#connexion-resume {
-    right: 128px;
+#board-connexion-resume {
+	user-select: none;
     font-size: smaller;
     font-family: 'IBM Plex Mono';
-	padding-right: 6px;
+	display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+	padding-right: 8px;
+}
+#board-connexion-resume .board-connexion-indicator { /* connecting */
+	width: 16px;
+    height: 16px;
+	border-radius: 50%;
+	border: solid 1px var(--color1_3);
+	background: var(--color2);
+	transition: background .3s cubic-bezier(0.68, -0.55, 0.265, 1.55), border-radius .2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+#board-connexion-resume.connecting .board-connexion-indicator {
+	border-radius: 0%;
+}
+#board-connexion-resume.bad .board-connexion-indicator {
+	background: var(--color3);
+}
+#board-connexion-resume.good .board-connexion-indicator {
+	background: var(--color1_3);
+}
+#board-connexion-resume.perfect .board-connexion-indicator {
+	background: var(--color1);
 }
 /* TITLE BAR WINDOW CONTROLS => ELECTRON ONLY */
 .titlebar .window-controls {
@@ -46,8 +67,8 @@ body {
     -webkit-app-region: no-drag;
     padding: 0;
     width: 36px;
-    height: 30px;
-    background-color: var(--color1_1);
+    height: 32px;
+    background: var(--color1_1);
     color: var(--color3);
     border: none;
     border-radius: 0;
@@ -67,7 +88,7 @@ body {
     font-weight: 900;
 }
 #maximize-btn:hover, #minimize-btn:hover {
-    background-color: var(--color1_3);
+    background: var(--color1_3);
 }
 #close-btn {
     font-size: 1.3em;
@@ -99,7 +120,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: var(--color2);
+    background: var(--color2);
     transition: .3s;
     border-radius: 4px;
 }
@@ -110,12 +131,12 @@ body {
     width: 20px;
     left: 2px;
     bottom: 2px;
-    background-color: var(--color1);
+    background: var(--color1);
     transition: .3s;
     border-radius: 3px;
 }
 .dark-mode-switch input:checked+.slider {
-    background-color: var(--color2);
+    background: var(--color2);
 }
 .dark-mode-switch input:checked+.slider:before {
     transform: translateX(22px);
@@ -123,13 +144,14 @@ body {
 
 /* SETTINGS */
 #board-settings-button {
+	user-select: none;
     z-index: 11;
     position: fixed;
-    left: 6px;
+    left: 8px;
     bottom: 32px;
-    width: calc(var(--buttons-bar-width) - 12px);
+    width: calc(var(--buttons-bar-width) - 16px);
     background: none;
-    opacity: .6;
+    opacity: .4;
 }
 #board-settings-button:hover {
     opacity: 1;
@@ -181,7 +203,8 @@ body {
     justify-content: space-between;
     align-items: baseline;
     font-size: small;
-    border-bottom: solid 1px var(--color1_1);
+    padding-bottom: 2px;
+    border-bottom: solid 1px var(--color1_3);
 }
 .board-settings-line:last-child {
     border-bottom: none;
@@ -191,17 +214,84 @@ body {
 }
 
 /* BOARD WINDOWS AREA */
+/* === VISUALIZER === */
+#vzr-container {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 10%;
+}
+body.dark-mode #vzr-container {
+	filter: invert(1);
+}
+#vzr-UI {
+	pointer-events: none;
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+.vzr-dev-info {
+	display: none; /* hidden in prod, not useful actually */
+	pointer-events: none;
+	opacity: 1;
+	position: absolute;
+	top: 3%;
+	right: 2%;
+	color: var(--color3);
+	padding: 10px;
+	border-radius: 5px;
+	font-size: 12px;
+}
+.vzr-dev-info { /* show only in debug mode */
+	pointer-events: initial;
+	animation: fadeIn 1s 1s forwards;
+}
+.vzr-dev-info pre {
+	margin: 5px 0 0 0;
+}
+#vzr-modeSwitchBtn {
+	position: absolute;
+    top: 10px;
+    right: 10px;
+}
+#vzr-toggleVisualizationBtn {
+	position: absolute;
+	cursor: pointer;
+	bottom: 4px;
+	right: 12px;
+	width: 32px;
+	height: 32px;
+	transition: transform .06s ease;
+}
+#vzr-toggleVisualizationBtn:hover {
+	transform: scale(1.15);
+}
+#vzr-toggleVisualizationBtn img {
+	position: absolute;
+	pointer-events: none;
+	width: 100%;
+	filter: invert(var(--dark-mode-boolean));
+}
+
 #board-windows-wrap {
     user-select: none;
     position: relative;
     overflow: hidden;
-    height: calc(100vh - 30px - 1px);
+    height: calc(100vh - 32px - 1px);
     width: calc(100% - var(--buttons-bar-width) - 1px);
     left: var(--buttons-bar-width);
     border-top: solid 1px var(--color1_3);
     border-left: solid 1px var(--color1_3);
     border-top-left-radius: 10px;
     /*box-shadow: 0px 0px 10px -8px black;*/
+
+	background-color: var(--bg-light);
+	background-image: radial-gradient(circle, #00000010 1px, transparent 1.5px), linear-gradient(#00000006 1px, transparent 1px), linear-gradient(90deg, #00000005 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: 0px 0px, 0px -16px, -16px 0px;
+}
+body.dark-mode #board-windows-wrap {
+	background-image: radial-gradient(circle, #ffffff10 1px, transparent 1.5px), linear-gradient(#ffffff06 1px, transparent 1px), linear-gradient(90deg, #ffffff05 1px, transparent 1px);
 }
 #board-info-panel-button {
     position: absolute;
@@ -238,7 +328,7 @@ body {
     background: var(--color1_1);
     border-left: solid 1px var(--color1_3);
     box-shadow: 100px 0 0 0 var(--color1_1);
-    height: calc(100vh - 30px - 1px);
+    height: calc(100vh - 32px - 1px);
     width: 300px;
     transform: translateX(100%);
     transition: transform .3s cubic-bezier(0.68, -0.35, 0.27, 1.25);
@@ -269,9 +359,10 @@ body {
     width: var(--buttons-bar-width);
     height: calc(100% - 80px - 100px);
     margin-bottom: 100px;
-    background-color: var(--color1_1);
-    box-shadow: 0px -11px 0px -10px var(--color1_2);
+    box-shadow: 0px -11px 0px -10px var(--color1_3);
     /*border-right: solid 1px var(--color1_3);*/
+
+	top: 33px; /* upper because we removed the info panel button */
 }
 #board-apps-buttons-bar button:first-child {
     margin-top: 12px;
@@ -287,11 +378,8 @@ body {
     border-radius: 50%;
     border: none;
     padding: 0;
-    color: var(--color1);
     opacity: 1;
-    /*background-color: var(--color1);*/
-    /*background-color: var(--color2_3);*/
-    background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 45%, var(--color1) 55%, var(--color1) 100%);
+	background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 45%, var(--bg-lighter) 55%, var(--bg-lighter) 100%);
     background-size: 220%;
     background-position: 100% 50%;
     transition: box-shadow .12s ease, background-position .12s ease, transform .06s ease, opacity .06s ease, aspect-ratio .06s ease, height .06s ease, border-radius .12s ease;
@@ -303,19 +391,19 @@ body {
     opacity: 0;
 }
 #board-apps-buttons-bar button.front {
-    box-shadow: inset 2px 0px 0px 3px var(--color2_3);
+    box-shadow: inset 1px 0px 0px 2px var(--color2_3);
 }
 #board-apps-buttons-bar button:hover {
     cursor: pointer;
     transform: scale(1.15);
     transform-origin: left;
     border-radius: 50% 6% 6% 50%;
-    /*background-color: var(--color2);*/
     background-position: 0% 50%;
-    
     transition: box-shadow .12s ease, background-position .12s ease, transform .06s ease, opacity .06s ease, aspect-ratio .06s ease, height .06s ease, border-radius .12s .06s ease;
 }
 #board-apps-buttons-bar button img {
+	user-select: none;
+	pointer-events: none;
     width: 70%;
     filter: invert(var(--dark-mode-boolean));
 }
@@ -329,11 +417,16 @@ body {
     overflow: hidden;
     position: absolute;
     border-radius: 5px;
-    background-color: var(--color1);
-    /*background-color: blue;*/ /* FOR EASY DEBUG */
-    transform-origin: bottom center;
+    /*background-color: var(--color1);*/
+	background-color: var(--bg-lighter);
+	transform-origin: top left;
+	/*transform-origin: center left;*/
     box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2);
     transition: border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
+}
+.window.background-drop-blur {
+    background: color-mix(in srgb, var(--bg-lighter) 25%, transparent);
+    backdrop-filter: blur(3px);
 }
 .window.fitContent {
     width: fit-content;
@@ -359,21 +452,45 @@ body {
     transform-origin: bottom left;
     font-size: 2em;
     letter-spacing: -24px;
+	transition: color .12s ease;
+}
+.resize-button:hover, .window.resizing .resize-button {
+	color: var(--color3);
 }
 .window.onBoard {
-    box-shadow: inset 0 0 2px 0px var(--color1_2), 0px 2px 0px 0.6px var(--color1_2);
+    /*box-shadow:
+		inset 0 0 2px 0px var(--color1_2),
+		0px 2px 0px 0.6px var(--color1_2),
+		0 4px 6px rgba(0, 0, 0, 0.25);*/
+	box-shadow: 1px 2px 0px rgba(0, 0, 0, .15);
     transition:
         box-shadow calc(var(--windows-animation-duration) * .5),
         border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
 }
 .window.onBoard.front {
-    z-index: 1;
-    box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);
+    /*box-shadow: inset 0 0 1.5px .5px var(--color2), 0 0 0.5px .5px var(--color2);*/
+	/*box-shadow:
+		0 0 0 1px rgba(0, 0, 0, 0.08),
+		0 4px 6px rgba(0, 0, 0, 0.15),
+		0 12px 24px rgba(0, 0, 0, 0.3);*/
+	box-shadow:
+		0 0 0 .25px var(--color3),
+		/*4px 6px 0 rgba(0, 0, 0, .8);*/
+		4px 6px 0 black;
 }
 .window.onBoard:not(.front).temp-front {
-    z-index: 2;
-    /*opacity: .8 !important;*/
-    box-shadow: inset 0 0 1.5px .5px var(--color2_3), 1px 1px 0px 1px var(--color2_3);
+    z-index: 10 !important;
+    /*box-shadow: inset 0 0 1.5px .5px var(--color2_3), 1px 1px 0px 1px var(--color2_3);*/
+	box-shadow:
+		inset 0 0 4px 0px var(--color1_2),
+		0 0 0 1px rgba(0, 0, 0, 0.08),
+		0 4px 6px rgba(0, 0, 0, 0.07),
+		0 12px 24px rgba(0, 0, 0, 0.12);
+}
+.window.onBoard.front.background-drop-blur, .window.onBoard:not(.front).temp-front.background-drop-blur {
+	/*background: color-mix(in srgb, var(--color1) 90%, transparent);*/
+	background: var(--bg-lighter);
+    backdrop-filter: blur(3px);
 }
 .window .title-bar {
     user-select: none;
@@ -425,11 +542,23 @@ body {
 .window.fullscreen .title-bar .background {
     opacity: 0;
 }
-.window .title-bar span {
+.window .title-bar .title-text {
     pointer-events: none;
     font-family: 'Contrast', sans-serif;
     display: flex;
     align-items: flex-end;
+}
+.window .title-bar .title-text .title-deco {
+	opacity: .1;
+}
+.window.onBoard.front .title-bar .title-text .title-deco {
+	opacity: .33;
+}
+.window .title-bar .title-text .title-deco:first-child {
+	margin-right: 10px;
+}
+.window .title-bar .title-text .title-deco:last-child {
+	margin-left: 10px;
 }
 .window .title-bar .buttons-wrap {
     display: flex;

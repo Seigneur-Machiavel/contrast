@@ -68,11 +68,20 @@
 }
 :root {
     --dark-mode-boolean: 0;
+	/*--bg1: #e7e7e7;
+	--bg1_1: #efefef;
+	--bg1_2: #f7f7f7;
+	--bg1_3: white;*/
+	--bg-dark: #e7e7e7;
+	--bg: #efefef;
+	--bg-light: #f7f7f7;
+	--bg-lighter: white;
+
     --color1: white;
     --color1_rgb: 255, 255, 255;
-    --color1_1: #f0f0f0;
-    --color1_2: #e0e0e0;
-    --color1_3: #d0d0d0;
+    --color1_1: #f7f7f7;
+    --color1_2: #efefef;
+    --color1_3: #e7e7e7;
 
     --color2: black;
     --color2_rgb: 0, 0, 0;
@@ -82,7 +91,7 @@
 
     --color3: #7b7b7b;
 
-    --invalid-color: indianred;
+    --invalid-color: red;
     --valid-color: cornflowerblue;
     --correct-color: green;
 
@@ -90,54 +99,83 @@
     --buttons-bar-width: 60px;
     --windows-animation-duration: 400ms;
 }
-::-webkit-scrollbar {
-    width: 8px;
-    height: calc(100% - 10px);
-}
-::-webkit-scrollbar-track {
-    /*box-shadow: inset 0 0 5px gray;*/
-    box-shadow: inset 0 0 5px var(--color1_3);
-    border-radius: 2px;
-}
-::-webkit-scrollbar-thumb {
-    background: var(--color1);
-    border-radius: 2px;
-    transition: box-shadow .12s;
-}
-::-webkit-scrollbar-thumb:hover {
-    box-shadow: inset 0 0 1px var(--color3);
-}
 .dark-mode {
     --dark-mode-boolean: 1;
+	/*--bg1: #484848;
+	--bg1_1: #323232;
+	--bg1_2: #161616;
+	--bg1_3: black;*/
+	/*--bg1: black;
+    --bg1_1: #161616;
+    --bg1_2: #323232;
+    --bg1_3: #484848;*/
+	--bg-dark: black;
+	--bg: #080808;
+	--bg-light: #101010;
+	--bg-lighter: #181818;
+
     --color1: black;
     --color1_1: #161616;
     --color1_2: #323232;
     --color1_3: #484848;
 
     --color2: white;
-    --color2_1: #f0f0f0;
-    --color2_2: #e0e0e0;
-    --color2_3: #d0d0d0;
+    --color2_1: #f7f7f7;
+    --color2_2: #efefef;
+    --color2_3: #e7e7e7;
+	/*--color2: white;
+    --color2_1: #f7f7f7;
+    --color2_2: #eeeeee;
+    --color2_3: #d0d0d0;*/
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: calc(100% - 10px);
+}
+::-webkit-scrollbar-track {
+    /*box-shadow: inset 0 0 5px gray;*/
+    box-shadow: inset 0 0 5px var(--bg-dark);
+    border-radius: 2px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--bg-lighter);
+    border-radius: 2px;
+    transition: box-shadow .12s;
+}
+::-webkit-scrollbar-thumb:hover {
+    box-shadow: inset 0 0 1px var(--color3);
 }
 body {
-    background-color: var(--color1);
-    color: var(--color2);
-    margin: 0;
-    /*font-family: 'IBM Plex Mono', sans-serif;*/
+	overflow: hidden;
+	font-size: initial;
+	box-sizing: border-box;
     font-family: "IBM Plex Mono", monospace;
+    background-color: var(--bg);
+    color: var(--color2);
+	margin: 0;
+    padding: 0;
+    transition: background-color .2s, color .2s;
 }
 input {
-    padding: 2px 12px;
-    font-size: 1em; /* same as h2 */
+	box-sizing: border-box;
     text-align: center;
     background-color: var(--color2);
     color: var(--color1);
-    border-radius: 6px;
+    border-radius: 2px;
     border-style: none;
+	height: 28px;
+    padding: 2px 12px;
+    font-size: .9em;
+}
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 input:focus {
     outline: none;
-    box-shadow: 0 0 0 2px var(--color3);
+    box-shadow: 0 0 0 1px var(--color3);
 }
 input.invalid {
     box-shadow: 0 0 0 1px var(--invalid-color), inset 0 0 0 1px var(--invalid-color);
@@ -148,16 +186,37 @@ input.valid {
 input.correct {
     box-shadow: 0 0 0 1px var(--correct-color), inset 0 0 0 1px var(--correct-color);
 }
+input[type="checkbox"] {
+	accent-color: var(--color2);
+}
+div, h1, h3 {
+	position: relative;
+}
 button {
+	user-select: none;
     cursor: pointer;
     border: none;
-    background: var(--color2);
+    background: var(--bg-lighter);
     color: var(--color1);
     font-family: 'IBM Plex Mono', monospace;
     font-weight: 500;
-    border-radius: 4px;
-    padding: 4px 10px;
+    border-radius: 4px; /* 6px? */
+    padding: 4px 10px; /* 5px? */
     font-size: .86em; /* same as h2 */
+}
+img {
+	user-select: none;
+}
+h1 {
+    font-size: 1.5em;
+    font-weight: 500;
+}
+h3 {
+    font-size: 1em;
+    font-weight: 400;
+}
+.unit {
+	opacity: .25;
 }
 
 .hidden {
@@ -170,18 +229,24 @@ button {
     display: block;
     opacity: 0;
     position: absolute;
-    background: var(--color1);
+    background: var(--bg);
     color: var(--color2);
     border: solid var(--color3) 2px;
     padding: 4px 6px;
-    font-size: xx-small;
+
+	font-family: 'IBM Plex Mono' !important;
+    font-weight: 500 !important;
+    font-size: xx-small !important;
 
     left: 50%;
     top: 120%;
     transform: translateX(-50%);
     transition: none;
 }
-div:hover > .tooltip {
+.tooltip.t80 {
+	top: 80%;
+}
+div:hover > .tooltip, h1:hover > .tooltip, h3:hover > .tooltip {
     display: block;
     opacity: 1;
     transition: opacity .2s .2s cubic-bezier(0.4, 0, 0.2, 1);
