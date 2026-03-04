@@ -39,6 +39,10 @@
 	<script src="node/src/sync.mjs" type="module"></script>
 	<script src="utils/networking.mjs" type="module"></script>
 	<!-- PRE CALL BOARD MODULES -->
+	<script src="visualizer/visualizer.mjs" type="module"></script>
+	<script src="visualizer/NetworkRenderer.mjs" type="module"></script>
+	<script src="visualizer/renderer-options.mjs" type="module"></script>
+	<script src="visualizer/renderer-stores.mjs" type="module"></script>
 	<script src="apps-initializer.js" type="module"></script>
 	<script src="apps-config.js" type="module"></script>
 	<script src="htmlAnimations.js" type="module"></script>
@@ -49,6 +53,8 @@
 	<script src="utils/front-storage.mjs" type="module"></script>
 	<script src="utils/hive-p2p-config.mjs" type="module"></script>
 	<!-- PRE CALL EXPLORER MODULES -->
+	<script src="translator.js" type="module"></script>
+	<script src="assistant/assistant.js" type="module"></script>
 	<script src="explorer/blockchain-component.js" type="module"></script>
 	<script src="utils/currency.mjs" type="module"></script>
 	<script src="explorer/modal-component.js" type="module"></script>
@@ -64,7 +70,11 @@
 <body>
 	<div class="titlebar">
         <div id="board-title">CONTRAST<span id="board-version">v0.0.0</span></div>
-        <span id="connexion-resume">Connecting network 🔴</span>
+        <!--<span id="connexion-resume">Connecting network <div id="connexion-status-indicator" class="connecting"></div></span>-->
+		<div id="board-connexion-resume" class="connecting">
+			<span id="board-connexion-status-text">Connecting network...</span>
+			<div class="board-connexion-indicator"></div>
+		</div>
         <div class="window-controls">
             <button id="minimize-btn">─</button>
             <button id="maximize-btn">▭</button>

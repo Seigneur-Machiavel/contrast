@@ -88,12 +88,10 @@ export class NetworkVisualizer {
 				eye.classList.add('hidden');
 				eyeSlash.classList.remove('hidden');
 				this.networkRenderer.container.style.display = 'none';
-				this.networkRenderer.elements.devInfo.style.display = 'none';
 			} else {
 				eye.classList.remove('hidden');
 				eyeSlash.classList.add('hidden');
 				this.networkRenderer.container.style.display = 'block';
-				this.networkRenderer.elements.devInfo.style.display = 'block';
 			}
 		}
 	}

@@ -1,8 +1,4 @@
-if (false) { // For better completion
-	const anime = require('animejs');
-	const ChatUI = require('../../apps/chat/front-scripts/chat-renderer.js');
-}
-
+// IMPORTS
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('../hive-p2p.min.js');
 import { NetworkVisualizer } from './visualizer/visualizer.mjs';
@@ -17,6 +13,7 @@ import { FrontStorage } from '../utils/front-storage.mjs';
 import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 //import { InfoManager } from './info-manager.js';
 
+// INIT P2P NODE AND CORE COMPONENTS
 const host = window.location.hostname;
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/time';
@@ -26,6 +23,8 @@ const hiveNode = await HiveP2P.createNode({ bootstraps });
 const hasPassword = false; // TODO
 const boardStorage = new FrontStorage('board');
 const language = await boardStorage.load('language');
+
+// ON LANGAGE SET CALLBACK => TRIGGER BY "OPENING" SECTION AT THE END OF THIS FILE
 const translator = new Translator(async (lang) => {
 	boardStorage.save('language', lang);
 	if (!language) assistant.requestNewPassword(); // FIRST TIME SETUP
@@ -37,6 +36,7 @@ const translator = new Translator(async (lang) => {
 });
 window.translator = translator; // Expose translator for debugging and global access in apps
 
+// INIT OTHER MANAGERS AND COMPONENTS
 const connector = new Connector(hiveNode);
 const assistant = new Assistant();
 const explorer = new Explorer(connector);
@@ -63,7 +63,8 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.biw = biw;
 }
 
-const update = () => { // CENTRALIZED ANIMATION LOOP
+// CENTRALIZED ANIMATION LOOP
+const update = () => {
 	visualizer.networkRenderer.animate();
 	visualizer.updatePeerInfo();
 	explorer.bc.updateTimeAgo();
@@ -73,7 +74,7 @@ const update = () => { // CENTRALIZED ANIMATION LOOP
 };
 requestAnimationFrame(update);
 
-// Implementation with less DOM event listeners
+// CENTRALIZED EVENT HANDLING
 async function clickTitleBarButtonsHandler(e) {
 	const button = e.target.closest('button');
 	if (!button) return;
@@ -180,22 +181,25 @@ window.addEventListener('message', function(e) { // TODO
 
 // CONNECTOR EVENTS
 const onPeerCountChange = () => {
-	console.log(`Peer count changed: ${connector.p2pNode.peerStore.neighborsList.length} neighbors`);
-	const resumeElement = document.getElementById('connexion-resume');
-	if (!resumeElement) return;
-
-	// 0: red, 1: orange, 2-3: yellow, 4+: green
 	const totalPeers = connector.p2pNode.peerStore.neighborsList.length;
 	const connectedBootstraps = connector.p2pNode.peerStore.publicNeighborsList.length;
-	if (totalPeers < 1 ) resumeElement.innerText = 'Connecting network... 🔴';
-	else if (totalPeers < 2)resumeElement.innerText = `${totalPeers} peer [${connectedBootstraps}bstrap] 🟠`;
-	else if (totalPeers < 4) resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟡`;
-	else resumeElement.innerText = `${totalPeers} peers [${connectedBootstraps}bstrap] 🟢`;
+	const connexionResume = document.getElementById('board-connexion-resume');
+	const connexionStatusText = document.getElementById('board-connexion-status-text');
+	if (!connexionResume || !connexionStatusText) return;
+
+	if (totalPeers < 1 ) connexionResume.classList = 'connecting';
+	else if (totalPeers < 2) connexionResume.classList = 'bad';
+	else if (totalPeers < 4) connexionResume.classList = 'good';
+	else connexionResume.classList = 'perfect';
+
+	if (totalPeers < 1 ) connexionStatusText.textContent = 'Connecting network...';
+	else if (totalPeers < 2) connexionStatusText.textContent = `${totalPeers} peer [${connectedBootstraps}bstrap]`;
+	else connexionStatusText.textContent = `${totalPeers} peers [${connectedBootstraps}bstrap]`;
 };
 connector.on('peer_connect', onPeerCountChange);
 connector.on('peer_disconnect', onPeerCountChange);
 
-// OPENING
+// OPENING => HANDLE PASSWORD AND LANGUAGE SELECTION
 await new Promise(resolve => setTimeout(resolve, 1000));
 if (!language || hasPassword) appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP
 if (!language) assistant.requestLanguageSelection();

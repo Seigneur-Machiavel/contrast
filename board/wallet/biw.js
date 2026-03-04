@@ -108,16 +108,19 @@ export class BoardInternalWallet {
 	async getAndDisplayTransactionsDetails(page = this.components.accounts.activeAccountHistoryPage) {
 		this.components.miniform.resetHistoryList();
 		this.components.miniform.startHistoryLoading();
+		this.components.miniform.updatePaginationButtonsState(true); // lock buttons while loading
 	
 		const txIds = this.components.accounts.getHistoryTxIdsOfPage(page);
 		if (txIds.length === 0 || txIds.length > this.historyItemsPerPage) {
 			this.components.miniform.setHistoryMessage('No transactions found');
+			this.components.miniform.updatePaginationButtonsState();
 			throw new Error(`getAndDisplayTransactionsDetails: txIds length must be between 1 and ${this.historyItemsPerPage}`);
 		}
 
 		const txs = await this.connector.getTransactions(txIds); // Fetch txs and associated miniUtxos
 		if (!txs) {
 			this.components.miniform.setHistoryMessage('Unable to fetch transactions');
+			this.components.miniform.updatePaginationButtonsState();
 			throw new Error('Unable to fetch transactions');
 		}
 
@@ -375,10 +378,12 @@ export class BoardInternalWallet {
 				else this.setActiveTogglerButton(null);
 				break;
 			case 'biw-history-prev-page':
+				if (e.target.classList.contains('disabled')) return;
 				if (this.components.accounts.activeAccountHistoryPage <= 0) throw new Error('Already at the first page');
 				this.getAndDisplayTransactionsDetails(this.components.accounts.activeAccountHistoryPage - 1);
 				break;
 			case 'biw-history-next-page':
+				if (e.target.classList.contains('disabled')) return;
 				if (this.components.accounts.activeAccountHistoryPage >= this.components.accounts.totalAccountHistoryPages - 1) throw new Error('Already at the last page');
 				this.getAndDisplayTransactionsDetails(this.components.accounts.activeAccountHistoryPage + 1);
 				break;

@@ -4,15 +4,6 @@
     --cbe-search-menu-width-default: calc(420px - 12px);
 }
 
-body {
-    font-family: "IBM Plex Mono", monospace;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    background-color: var(--color1);
-    color: var(--color2);
-    transition: background-color .2s, color .2s;
-}
 /* FROM HTML */
 button {
     font-family: 'IBM Plex Mono';

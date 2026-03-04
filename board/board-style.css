@@ -1,8 +1,3 @@
-body {
-    overflow: hidden;
-    background-color: var(--color1_1) !important;
-}
-
 /* TITLE BAR */
 .titlebar {
 	position: relative;
@@ -11,7 +6,8 @@ body {
     justify-content: flex-end;
     height: 32px;
     padding: 0 0px 0 6px;
-	color: var(--color1_3);
+	color: var(--color3);
+    opacity: .5;
     -webkit-app-region: drag;
 }
 #board-title {
@@ -32,12 +28,35 @@ body {
 	/*color: var(--color1_2);*/ /* unreadable using 1_2 */
     margin-left: 2px;
 }
-#connexion-resume {
+#board-connexion-resume {
 	user-select: none;
-    right: 128px;
     font-size: smaller;
     font-family: 'IBM Plex Mono';
-	padding-right: 6px;
+	display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+	padding-right: 8px;
+}
+#board-connexion-resume .board-connexion-indicator { /* connecting */
+	width: 16px;
+    height: 16px;
+	border-radius: 50%;
+	border: solid 1px var(--color1_3);
+	background: var(--color2);
+	transition: background .3s cubic-bezier(0.68, -0.55, 0.265, 1.55), border-radius .2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+#board-connexion-resume.connecting .board-connexion-indicator {
+	border-radius: 0%;
+}
+#board-connexion-resume.bad .board-connexion-indicator {
+	background: var(--color3);
+}
+#board-connexion-resume.good .board-connexion-indicator {
+	background: var(--color1_3);
+}
+#board-connexion-resume.perfect .board-connexion-indicator {
+	background: var(--color1);
 }
 /* TITLE BAR WINDOW CONTROLS => ELECTRON ONLY */
 .titlebar .window-controls {
@@ -49,7 +68,7 @@ body {
     padding: 0;
     width: 36px;
     height: 32px;
-    background-color: var(--color1_1);
+    background: var(--color1_1);
     color: var(--color3);
     border: none;
     border-radius: 0;
@@ -69,7 +88,7 @@ body {
     font-weight: 900;
 }
 #maximize-btn:hover, #minimize-btn:hover {
-    background-color: var(--color1_3);
+    background: var(--color1_3);
 }
 #close-btn {
     font-size: 1.3em;
@@ -101,7 +120,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: var(--color2);
+    background: var(--color2);
     transition: .3s;
     border-radius: 4px;
 }
@@ -112,12 +131,12 @@ body {
     width: 20px;
     left: 2px;
     bottom: 2px;
-    background-color: var(--color1);
+    background: var(--color1);
     transition: .3s;
     border-radius: 3px;
 }
 .dark-mode-switch input:checked+.slider {
-    background-color: var(--color2);
+    background: var(--color2);
 }
 .dark-mode-switch input:checked+.slider:before {
     transform: translateX(22px);
@@ -214,7 +233,6 @@ body {
 	position: absolute;
 	top: 3%;
 	right: 2%;
-	/* background: var(--bg-header); */
 	color: var(--color3);
 	padding: 10px;
 	border-radius: 5px;
@@ -262,7 +280,7 @@ body {
     border-top-left-radius: 10px;
     /*box-shadow: 0px 0px 10px -8px black;*/
 
-	background-color: var(--color1);
+	background-color: var(--bg-light);
 	background-image: radial-gradient(circle, #00000010 1px, transparent 1.5px), linear-gradient(#00000006 1px, transparent 1px), linear-gradient(90deg, #00000005 1px, transparent 1px);
     background-size: 32px 32px;
     background-position: 0px 0px, 0px -16px, -16px 0px;
@@ -333,8 +351,7 @@ body {
     width: var(--buttons-bar-width);
     height: calc(100% - 80px - 100px);
     margin-bottom: 100px;
-    background-color: var(--color1_1);
-    box-shadow: 0px -11px 0px -10px var(--color1_2);
+    box-shadow: 0px -11px 0px -10px var(--color1_3);
     /*border-right: solid 1px var(--color1_3);*/
 
 	top: 33px; /* upper because we removed the info panel button */
@@ -355,8 +372,6 @@ body {
     padding: 0;
     color: var(--color1);
     opacity: 1;
-    /*background-color: var(--color1);*/
-    /*background-color: var(--color2_3);*/
     background: linear-gradient(90deg, var(--color2) 0%, var(--color2) 45%, var(--color1) 55%, var(--color1) 100%);
     background-size: 220%;
     background-position: 100% 50%;
@@ -376,9 +391,7 @@ body {
     transform: scale(1.15);
     transform-origin: left;
     border-radius: 50% 6% 6% 50%;
-    /*background-color: var(--color2);*/
     background-position: 0% 50%;
-    
     transition: box-shadow .12s ease, background-position .12s ease, transform .06s ease, opacity .06s ease, aspect-ratio .06s ease, height .06s ease, border-radius .12s .06s ease;
 }
 #board-apps-buttons-bar button img {
@@ -397,15 +410,14 @@ body {
     overflow: hidden;
     position: absolute;
     border-radius: 5px;
-    background-color: var(--color1);
-    /*background-color: blue;*/ /* FOR EASY DEBUG */
-    /*transform-origin: bottom center;*/
+    /*background-color: var(--color1);*/
+	background-color: var(--bg-lighter);
 	transform-origin: top left;
     box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2);
     transition: border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
 }
 .window.background-drop-blur {
-    background: color-mix(in srgb, var(--color1) 25%, transparent);
+    background: color-mix(in srgb, var(--bg-lighter) 25%, transparent);
     backdrop-filter: blur(3px);
 }
 .window.fitContent {
@@ -454,8 +466,9 @@ body {
 		0 4px 6px rgba(0, 0, 0, 0.15),
 		0 12px 24px rgba(0, 0, 0, 0.3);*/
 	box-shadow:
-		0 0 0 1px rgba(0, 0, 0, 0.08),
-		4px 6px 0 rgba(0, 0, 0, .6);
+		0 0 0 .25px var(--color3),
+		/*4px 6px 0 rgba(0, 0, 0, .8);*/
+		4px 6px 0 black;
 }
 .window.onBoard:not(.front).temp-front {
     z-index: 10 !important;
@@ -468,7 +481,7 @@ body {
 }
 .window.onBoard.front.background-drop-blur, .window.onBoard:not(.front).temp-front.background-drop-blur {
 	/*background: color-mix(in srgb, var(--color1) 90%, transparent);*/
-	background: var(--color1);
+	background: var(--bg-lighter);
     backdrop-filter: blur(3px);
 }
 .window .title-bar {

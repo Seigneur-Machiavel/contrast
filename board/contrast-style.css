@@ -68,11 +68,20 @@
 }
 :root {
     --dark-mode-boolean: 0;
+	/*--bg1: #e7e7e7;
+	--bg1_1: #efefef;
+	--bg1_2: #f7f7f7;
+	--bg1_3: white;*/
+	--bg-dark: #e7e7e7;
+	--bg: #efefef;
+	--bg-light: #f7f7f7;
+	--bg-lighter: white;
+
     --color1: white;
     --color1_rgb: 255, 255, 255;
-    --color1_1: #f0f0f0;
-    --color1_2: #e0e0e0;
-    --color1_3: #d0d0d0;
+    --color1_1: #f7f7f7;
+    --color1_2: #efefef;
+    --color1_3: #e7e7e7;
 
     --color2: black;
     --color2_rgb: 0, 0, 0;
@@ -90,6 +99,36 @@
     --buttons-bar-width: 60px;
     --windows-animation-duration: 400ms;
 }
+.dark-mode {
+    --dark-mode-boolean: 1;
+	/*--bg1: #484848;
+	--bg1_1: #323232;
+	--bg1_2: #161616;
+	--bg1_3: black;*/
+	/*--bg1: black;
+    --bg1_1: #161616;
+    --bg1_2: #323232;
+    --bg1_3: #484848;*/
+	--bg-dark: black;
+	--bg: #080808;
+	--bg-light: #101010;
+	--bg-lighter: #181818;
+
+    --color1: black;
+    --color1_1: #161616;
+    --color1_2: #323232;
+    --color1_3: #484848;
+
+    --color2: white;
+    --color2_1: #f7f7f7;
+    --color2_2: #efefef;
+    --color2_3: #e7e7e7;
+	/*--color2: white;
+    --color2_1: #f7f7f7;
+    --color2_2: #eeeeee;
+    --color2_3: #d0d0d0;*/
+}
+
 ::-webkit-scrollbar {
     width: 8px;
     height: calc(100% - 10px);
@@ -107,24 +146,16 @@
 ::-webkit-scrollbar-thumb:hover {
     box-shadow: inset 0 0 1px var(--color3);
 }
-.dark-mode {
-    --dark-mode-boolean: 1;
-    --color1: black;
-    --color1_1: #161616;
-    --color1_2: #323232;
-    --color1_3: #484848;
-
-    --color2: white;
-    --color2_1: #f0f0f0;
-    --color2_2: #e0e0e0;
-    --color2_3: #d0d0d0;
-}
 body {
-    background-color: var(--color1);
-    color: var(--color2);
-    margin: 0;
-    font-family: "IBM Plex Mono", monospace;
+	overflow: hidden;
 	font-size: initial;
+	box-sizing: border-box;
+    font-family: "IBM Plex Mono", monospace;
+    background-color: var(--bg);
+    color: var(--color2);
+	margin: 0;
+    padding: 0;
+    transition: background-color .2s, color .2s;
 }
 input {
 	box-sizing: border-box;
@@ -198,7 +229,7 @@ h3 {
     display: block;
     opacity: 0;
     position: absolute;
-    background: var(--color1);
+    background: var(--bg);
     color: var(--color2);
     border: solid var(--color3) 2px;
     padding: 4px 6px;
