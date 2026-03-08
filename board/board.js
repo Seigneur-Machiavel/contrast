@@ -75,7 +75,7 @@ const update = () => {
 requestAnimationFrame(update);
 
 // CENTRALIZED EVENT HANDLING
-async function clickTitleBarButtonsHandler(e) {
+async function clickTitleBarButtonsHandler(e) { // DEPRECATED
 	const button = e.target.closest('button');
 	if (!button) return;
 	try {
@@ -88,7 +88,7 @@ async function clickTitleBarButtonsHandler(e) {
 	} catch (error) {}
 }
 document.addEventListener('click', (e) => {
-	clickTitleBarButtonsHandler(e);
+	//clickTitleBarButtonsHandler(e);
 	appsManager.clickHandler(e);
 	visualizer.clickHandler(e);
 	explorer.clickHandler(e);

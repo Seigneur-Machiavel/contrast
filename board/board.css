@@ -101,7 +101,7 @@
 /* DARK MODE SWITCH */
 .dark-mode-switch {
     z-index: 11;
-    position: fixed;
+    position: absolute;
     left: 6px;
     bottom: 6px;
     display: inline-block;
@@ -142,7 +142,7 @@
     transform: translateX(22px);
 }
 
-/* SETTINGS */
+/* SETTINGS - REMOVED IN HTML */
 #board-settings-button {
 	user-select: none;
     z-index: 11;
@@ -226,14 +226,18 @@ body.dark-mode #vzr-container {
 }
 #vzr-UI {
 	pointer-events: none;
+	display: none;
 	position: absolute;
 	width: 100%;
 	height: 100%;
 }
+#vzr-UI.active {
+	display: block;
+}
 .vzr-dev-info {
 	display: none; /* hidden in prod, not useful actually */
 	pointer-events: none;
-	opacity: 1;
+	pointer-events: initial;
 	position: absolute;
 	top: 3%;
 	right: 2%;
@@ -241,10 +245,6 @@ body.dark-mode #vzr-container {
 	padding: 10px;
 	border-radius: 5px;
 	font-size: 12px;
-}
-.vzr-dev-info { /* show only in debug mode */
-	pointer-events: initial;
-	animation: fadeIn 1s 1s forwards;
 }
 .vzr-dev-info pre {
 	margin: 5px 0 0 0;
@@ -293,64 +293,11 @@ body.dark-mode #vzr-container {
 body.dark-mode #board-windows-wrap {
 	background-image: radial-gradient(circle, #ffffff10 1px, transparent 1.5px), linear-gradient(#ffffff06 1px, transparent 1px), linear-gradient(90deg, #ffffff05 1px, transparent 1px);
 }
-#board-info-panel-button {
-    position: absolute;
-    top: 30.8px;
-    left: 12px;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    border-radius: 25%;
-    background: var(--color1);
-    box-shadow: inset 0 0 0 2px var(--color1);
-    transition: transform .12s ease, box-shadow .12s ease;
-}
-#board-info-panel-button:hover {
-    box-shadow: inset 0 0 0 2px var(--color3);
-}
-#board-info-panel-button:hover .tooltip {
-    top: 20%;
-}
-#board-info-panel-button.active {
-    box-shadow: inset 0 0 0 2px var(--color2);
-}
-#board-info-panel-button img {
-    pointer-events: none;
-    width: 100%;
-    transform: scale(.6);
-    filter: invert(var(--dark-mode-boolean));
-}
-#board-info-panel {
-    position: fixed;
-    z-index: 1;
-    bottom: 0;
-    right: 0;
-    background: var(--color1_1);
-    border-left: solid 1px var(--color1_3);
-    box-shadow: 100px 0 0 0 var(--color1_1);
-    height: calc(100vh - 32px - 1px);
-    width: 300px;
-    transform: translateX(100%);
-    transition: transform .3s cubic-bezier(0.68, -0.35, 0.27, 1.25);
-}
-#board-info-panel.active {
-    transform: translateX(0%);
-}
-#board-info-panel h3 {
-    font-size: 1em;
-    margin: 20px 10px;
-    color: var(--color3);
-}
-#board-info-panel p {
-    font-size: .8em;
-    margin: 6px;
-    color: var(--color3);
-}
 
 #board-apps-buttons-bar {
     z-index: 10;
     pointer-events: none;
-    position: fixed;
+    position: absolute;
     display: flex;
     align-items: center;
     flex-direction: column;
@@ -416,17 +363,18 @@ body.dark-mode #board-windows-wrap {
     pointer-events: auto;
     overflow: hidden;
     position: absolute;
+	top: 0px;
+	left: 1px;
     border-radius: 5px;
-    /*background-color: var(--color1);*/
-	background-color: var(--bg-lighter);
+	background: var(--bg-lighter);
 	transform-origin: top left;
 	/*transform-origin: center left;*/
-    box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2);
+    box-shadow: inset 0px 0px 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2);
     transition: border-radius calc(var(--windows-animation-duration) * .5) calc(var(--windows-animation-duration) * .5);
 }
 .window.background-drop-blur {
-    background: color-mix(in srgb, var(--bg-lighter) 25%, transparent);
-    backdrop-filter: blur(3px);
+    background: color-mix(in srgb, var(--bg-lighter) 60%, transparent);
+	backdrop-filter: blur(3px); /* Very expensive */
 }
 .window.fitContent {
     width: fit-content;
@@ -434,20 +382,20 @@ body.dark-mode #board-windows-wrap {
 }
 .window:not(.onBoard) {
     pointer-events: none !important;
+	left: -9999px !important; /* move it out of the screen instead of display none to keep the animation possible */
 }
 .window.fullscreen {
     box-shadow: inset 0 0 0px 0px var(--color1_2), 0px 0px 0px 0px var(--color1_2) !important;
     border-radius: 0 !important;
 }
 .resize-button {
-    z-index: 1000;
     cursor: nw-resize;
     position: absolute;
     bottom: 0;
     right: 0;
     width: 22px;
     background: var(--color1_1);
-    color: var(--color1_3);
+    color: color-mix(in srgb, var(--color3) 80%, transparent);
     transform: rotate(45deg);
     transform-origin: bottom left;
     font-size: 2em;
@@ -458,10 +406,6 @@ body.dark-mode #board-windows-wrap {
 	color: var(--color3);
 }
 .window.onBoard {
-    /*box-shadow:
-		inset 0 0 2px 0px var(--color1_2),
-		0px 2px 0px 0.6px var(--color1_2),
-		0 4px 6px rgba(0, 0, 0, 0.25);*/
 	box-shadow: 1px 2px 0px rgba(0, 0, 0, .15);
     transition:
         box-shadow calc(var(--windows-animation-duration) * .5),
@@ -488,19 +432,21 @@ body.dark-mode #board-windows-wrap {
 		0 12px 24px rgba(0, 0, 0, 0.12);
 }
 .window.onBoard.front.background-drop-blur, .window.onBoard:not(.front).temp-front.background-drop-blur {
-	/*background: color-mix(in srgb, var(--color1) 90%, transparent);*/
+	/*background: color-mix(in srgb, var(--bg-lighter) 90%, transparent);*/
+    /*backdrop-filter: blur(3px);*/ /* Very expensive */
+	/* WITH OPAC BACKGROUND WE DON'T NEED THE BLUR. */
 	background: var(--bg-lighter);
-    backdrop-filter: blur(3px);
+	backdrop-filter: none;
 }
 .window .title-bar {
     user-select: none;
+	position: relative;
     cursor: move;
     color: var(--color1);
     padding: 5px 10px;
     height: calc(32px - 10px);
     display: flex;
     justify-content: space-between;
-    filter: invert(0);
     transition: filter var(--windows-animation-duration), box-shadow var(--windows-animation-duration);
     box-shadow: 0px 0px 0px 0px var(--color1);
 }
@@ -580,7 +526,7 @@ body.dark-mode #board-windows-wrap {
     cursor: pointer;
 }
 .window .content {
-    position: absolute;
+    /*position: absolute;*/
     width: 100%;
     height: calc(100% - 32px);
 }

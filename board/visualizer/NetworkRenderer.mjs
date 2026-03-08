@@ -7,6 +7,7 @@ export class NetworkRenderer {
 	avoidPanning = true;
 	avoidAutoZoomUntil = 0;
 	lastAutoZoomDistance = 0;
+	widthDecay = 32 + 12; // avoid overriding of the "vzr-toggleVisualizationBtn" button.
 	maxVisibleConnections = 500; // to avoid performance issues
 	#autoRotateEnabled = true;
 	autoRotateSpeed = .001; // .001
@@ -94,7 +95,7 @@ export class NetworkRenderer {
 		const { antialias, precision } = this.options;
         this.renderer = new THREE.WebGLRenderer({ antialias, precision, alpha: true });
 		this.renderer.setClearColor(0x000000, 0); // alpha = 0 for transparent background
-        this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+        this.renderer.setSize(this.container.clientWidth - this.widthDecay, this.container.clientHeight);
 		this.container.appendChild(this.renderer.domElement);
 
         // Scene
@@ -538,7 +539,7 @@ export class NetworkRenderer {
 	handleWindowResize() {
 		this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
 		this.camera.updateProjectionMatrix();
-		this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+		this.renderer.setSize(this.container.clientWidth - this.widthDecay, this.container.clientHeight);
 	}
 	handleMouseUp(e) {
 		this.isMouseDown = false;
@@ -682,7 +683,7 @@ export class NetworkRenderer {
 			for (const toId of neighbors) this.connectionsStore.setHovered(toId, this.hoveredNodeId);
 		}, 240);
 	}
-	#showTooltip(x, y, nodeId, element = document.getElementById('node-tooltip')) {
+	#showTooltip(x, y, nodeId) {
 		const node = this.nodesStore.get(nodeId);
 		if (!node) return;
 
@@ -694,13 +695,13 @@ export class NetworkRenderer {
 			IsPublic: node.isPublic
 		};
 
-		element.innerHTML = `<pre>${JSON.stringify(json, null, 2)}</pre>`;
-		element.style.left = x + 10 + 'px';
-		element.style.top = y + 10 + 'px';
-		element.style.display = 'block';
+		this.elements.nodeTooltip.innerHTML = `<pre>${JSON.stringify(json, null, 2)}</pre>`;
+		this.elements.nodeTooltip.style.marginTop = y + 10 + 'px';
+		this.elements.nodeTooltip.style.marginLeft = x + 10 + 'px';
+		this.elements.UI.classList.add('active');
 	}
-	#hideTooltip(element = document.getElementById('node-tooltip')) {
-		element.style.display = 'none';
+	#hideTooltip() {
+		this.elements.UI.classList.remove('active');
 	}
     #getNodeColor(peerId) {
 		const { status, isPublic } = this.nodesStore.get(peerId);
@@ -809,6 +810,7 @@ export class NetworkRenderer {
         }
 	}
 
+	fpsCountElementLastValue = null;
 	lastPhysicUpdate = 0;
 	lastFpsUpdate = 0;
 	frameCount = 60;
@@ -821,11 +823,15 @@ export class NetworkRenderer {
 		if (currentTime - this.lastFpsUpdate >= 1000) {
 			if (this.frameCount < 60 * .98) this.updateBatchMax = Math.round(Math.max(100, this.updateBatchMax * .9));
 			this.fps = 0 + this.frameCount;
-			this.elements.fpsCountElement.textContent = this.fps;
+			if (this.fps !== this.fpsCountElementLastValue) {
+				this.elements.fpsCountElement.textContent = this.fps;
+				this.fpsCountElementLastValue = this.fps;
+			}
 			this.frameCount = 0;
 			this.lastFpsUpdate = currentTime;
 		}
 		
+		let needsRender = false;
 		const shouldUpdatePhysic = currentTime - this.lastPhysicUpdate >= 1000 / 60;
 		if (shouldUpdatePhysic && !this.isPhysicPaused) {
 			this.lastPhysicUpdate = currentTime;
@@ -838,8 +844,9 @@ export class NetworkRenderer {
 			this.connectionsStore.updateConnections(this.currentPeerId, this.hoveredNodeId, this.colors, this.options.mode);
 			this.instancedMesh.instanceMatrix.needsUpdate = true;
 			this.instancedMesh.instanceColor.needsUpdate = true;
+			needsRender = true;
 		}
 
-		this.renderer.render(this.scene, this.camera);
+		if (needsRender) this.renderer.render(this.scene, this.camera);
 	}
 }

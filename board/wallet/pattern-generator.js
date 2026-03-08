@@ -43,7 +43,13 @@ export class PatternGenerator {
 
         this.drawShapes(ctx, centerX, centerY);
 
-        return drawingCanvas;
+        //return drawingCanvas;
+		// RETURN AS IMAGE ELEMENT TO PREVENT LAYERING ISSUES WITH CANVAS
+		const img = document.createElement('img');
+		img.width = this.width;
+		img.height = this.height;
+		img.src = drawingCanvas.toDataURL();
+		return img;
     }
 
     drawShapes(ctx, centerX, centerY) {

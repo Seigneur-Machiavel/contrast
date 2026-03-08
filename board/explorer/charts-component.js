@@ -202,28 +202,22 @@ export class RoundLegitimaciesChartComponent {
     decay = 10;
     width = 400;
     height = 300;
-
-    // Store last entries for click detection
-    #entries = [];
     #canvas = null;
+	#img = null; // lighter to display when built.
 
     #getCanvas(container) {
         if (this.#canvas) return this.#canvas;
         this.#canvas = document.createElement('canvas');
-        this.#canvas.addEventListener('click', e => this.#onClick(e));
+		this.#canvas.style.display = 'none';
+        //this.#canvas.addEventListener('click', e => this.#onClick(e));
         container.appendChild(this.#canvas);
+
+		this.#img = document.createElement('img');
+		container.appendChild(this.#img);
         return this.#canvas;
     }
 
-    #onClick(e) {
-        const rect = this.#canvas.getBoundingClientRect();
-        const y = e.clientY - rect.top;
-        const barH = (this.height - 20) / this.#entries.length; // margin.top = 20
-        const i = Math.floor(y / barH);
-        if (this.#entries[i]) this.#handleClick(this.#entries[i].address);
-    }
-
-    async render(data = []) {
+    render(data = []) {
         const container = document.getElementById('cbe-roundLegitimaciesChart');
         if (!container) throw new Error('RoundLegitimaciesChartComponent: container not found');
         if (data.length === 0) return;
@@ -241,8 +235,6 @@ export class RoundLegitimaciesChartComponent {
             address: e.address || '-------',
             legitimacy: i,
         }));
-
-        this.#entries = entries; // save for click detection
 
         const maxLegitimacy = entries.length;
         const total         = maxLegitimacy + this.decay;
@@ -270,23 +262,24 @@ export class RoundLegitimaciesChartComponent {
 			ctx.textAlign    = 'right';
 			ctx.textBaseline = 'middle';
 			ctx.fillText(`${d.legitimacy} | ${d.address}`, barW - 5, y + barH / 2);
-			
-			await new Promise(r => setTimeout(r, 50)); // staggered animation
         }
+
+		// BUILT, FILL IMG AND SHOW IT INSTEAD OF CANVAS FOR BETTER PERFORMANCE (NO MORE REPAINT ON HOVER)
+		const img = this.#img;
+		img.width = this.width;
+		img.height = this.height;
+		img.src = canvas.toDataURL();
     }
 
     reset() {
-        this.#entries = [];
-        this.#canvas  = null;
-        const container = document.getElementById('cbe-roundLegitimaciesChart');
-        if (container) container.innerHTML = '';
-    }
-
-    #handleClick(address) {
-        document.dispatchEvent(new CustomEvent('addressClick', { detail: { address } }));
+        /*const container = document.getElementById('cbe-roundLegitimaciesChart');
+        if (container) container.innerHTML = '';*/
     }
 }
+
 export class BlocksTimesChartComponent {
+	#canvas = null;
+	#img = null; // lighter to display when built.
     maxChartLength = 60;
     /** @type {number[]} */ heights = [];
     /** @type {number[]} */ timestamps = [];
@@ -312,17 +305,24 @@ export class BlocksTimesChartComponent {
         return `rgb(${grey},${grey},${grey})`;
     }
 
+	#getCanvas(container) {
+        if (this.#canvas) return this.#canvas;
+        this.#canvas = document.createElement('canvas');
+		this.#canvas.style.display = 'none';
+        //this.#canvas.addEventListener('click', e => this.#onClick(e));
+        container.appendChild(this.#canvas);
+
+		this.#img = document.createElement('img');
+		container.appendChild(this.#img);
+        return this.#canvas;
+    }
+
     #render() {
         const container = document.getElementById('cbe-blocksTimesChart');
         if (!container) throw new Error('BlocksTimesChartComponent: container not found');
 
         // Reuse or create canvas
-        let canvas = container.querySelector('canvas');
-        if (!canvas) {
-            canvas = document.createElement('canvas');
-            container.appendChild(canvas);
-        }
-
+        const canvas = this.#getCanvas(container);
         const gaps = this.#calculateGaps();
         if (gaps.length < 1) return;
 
@@ -362,6 +362,8 @@ export class BlocksTimesChartComponent {
             ctx.stroke();
             ctx.fillText(val, 2, y + 3);
         }
+		
+		// await new Promise(r => setTimeout(r, 20)); // avoid spamming microtasks
 
         // X axis ticks (every 5 blocks)
         ctx.save();
@@ -380,7 +382,9 @@ export class BlocksTimesChartComponent {
             ctx.fillText(`#${displayHeights[i]}`, 0, 0);
             ctx.restore();
         }
+
         ctx.restore();
+		// await new Promise(r => setTimeout(r, 20)); // avoid spamming microtasks
 
         // Axis lines
         ctx.beginPath();
@@ -407,27 +411,35 @@ export class BlocksTimesChartComponent {
             ctx.fillStyle = this.#getColorForGap(gaps[i]);
             ctx.fill();
         }
+		
+		// await new Promise(r => setTimeout(r, 20)); // avoid spamming microtasks
 
         // Average text
         const avgText = document.getElementById('cbe-averageBlocksTimeGap');
         if (avgText) avgText.textContent = ` | average: ${avgGap.toFixed(2)}s`;
+
+		// BUILT, FILL IMG AND SHOW IT INSTEAD OF CANVAS FOR BETTER PERFORMANCE (NO MORE REPAINT ON HOVER)
+		const img = this.#img;
+		img.width = canvas.width;
+		img.height = canvas.height;
+		img.src = canvas.toDataURL();
     }
 
     get lastHeight() { return this.heights.at(-1) ?? null; }
 
-    appendBlockTimeIfCorresponding(height = 0, timestamp = 0) {
+    appendBlockTimeIfCorresponding(height = 0, timestamp = 0, render = true) {
         if (this.lastHeight !== null && height !== this.lastHeight + 1) return;
         this.#pruneIfNeeded();
         this.heights.push(height);
         this.timestamps.push(timestamp);
-        this.#render();
+        if (render) this.#render();
         return true;
     }
 
     reset() {
         this.heights = [];
         this.timestamps = [];
-        const container = document.getElementById('cbe-blocksTimesChart');
-        if (container) container.innerHTML = '';
+        /*const container = document.getElementById('cbe-blocksTimesChart');
+        if (container) container.innerHTML = '';*/
     }
 }

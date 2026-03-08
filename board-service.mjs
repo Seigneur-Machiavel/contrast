@@ -29,6 +29,7 @@ app.get('/board.mjs', (req, res) => { // PATCH board.mjs TO SET THE RIGHT BOOTST
 app.use((req, res, next) => { // CSP Middleware
     const csp = `
         default-src 'self';
+		img-src 'self' data:;
         style-src 'self' 'unsafe-inline';
         connect-src 'self' ${wsProtocol}://${hostname}:${nodePort} ws://127.0.0.1:27261 https://time.cloudflare.com https://time.google.com https://pool.ntp.org;
     `.replace(/\s+/g, ' ').trim();

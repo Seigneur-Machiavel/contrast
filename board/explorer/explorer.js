@@ -72,7 +72,7 @@ export class Explorer {
 	// INTERNAL METHODS
 	async #initWhileDomReady() {
 		if (!eHTML.isReady) console.log('Explorer awaiting DOM elements...');
-		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
+		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 500));
 
 		console.log('Explorer DOM elements ready');
 		await new Promise(r => setTimeout(r, 200)); // Wait a bit for potential last DOM manipulations
@@ -116,18 +116,14 @@ export class Explorer {
 		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
 
 		// UPDATE BLOCK TIMES CHART
-		setTimeout(() => {
-			if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
-			if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
-				this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight)
-		}, 2400);
+		if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
+		if (!this.blocksTimesChart.appendBlockTimeIfCorresponding(block.index, block.timestamp))
+			this.getAndDisplayBlocksTimegaps(Math.max(0, newHeight - 60), newHeight)
 
 		// UPDATE ROUND LEGITIMACIES CHART
-		setTimeout(() => {
-			if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
-			try { this.getAndDisplayRoundLegitimacies() }
-			catch (/** @type {any} */ error) { console.warn(error.stack || error) }
-		}, 1200);
+		if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
+		try { this.getAndDisplayRoundLegitimacies() }
+		catch (/** @type {any} */ error) { console.warn(error.stack || error) }
 
 		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
 		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation
@@ -320,7 +316,7 @@ export class Explorer {
 		if (!tg) throw new Error('Explorer: getAndDisplayBlocksTimegaps => Unable to get blocks timestamps gaps');
 		//console.log('Explorer: Retrieved blocks timestamps gaps:', tg);
 		for (let i = 0; i < tg.heights.length; i++)
-			this.blocksTimesChart.appendBlockTimeIfCorresponding(tg.heights[i], tg.timestamps[i]);
+			this.blocksTimesChart.appendBlockTimeIfCorresponding(tg.heights[i], tg.timestamps[i], i === tg.heights.length - 1);
 	}
 	async getAndDisplayRoundLegitimacies() {
 		const rl = await this.connector.getRoundsLegitimacies();

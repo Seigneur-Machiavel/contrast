@@ -3,7 +3,6 @@
 }
 
 .biw-container {
-    position: relative;
     font-family: "Consolas", monospace;
     width: var(--biw-form-width);
     transition: width .24s cubic-bezier(0.68, -0.35, 0.27, 1.25);
@@ -12,7 +11,7 @@
     width: calc(var(--biw-form-width) * 2);
 }
 .biw-container h1 {
-    margin: 40px 0 0px 0;
+    margin: -12px 0 0 0;
     font-size: x-large;
 }
 .biw-container h2 {
@@ -35,31 +34,16 @@
     cursor: not-allowed;
 }
 .biw-container .wrap {
-    position: relative;
     width: 100%;
     height: 100%;
     /*height: 180px !important;*/
 	height: 230px !important;
 }
-.biw-container .biw-miniFormsWrap {
-	opacity: 0;
-    position: absolute;
-    right: 0;
-    width: var(--biw-form-width);
-	transition: opacity .12s ease-in-out;
-}
-.biw-container.expand .biw-miniFormsWrap {
-	opacity: 1;
-	transition: opacity .24s .12s ease-in-out;
-}
 .biw-container #biw-mainForm {
-    z-index: 2;
-    position: relative;
     display: flex;
     align-items: center;
     flex-direction: column;
     width: var(--biw-form-width);
-    left: 0;
 }
 .biw-holdBtn {
     box-shadow: inset 0px 0px 0px 2px var(--color2);
@@ -79,11 +63,21 @@
 }
 
 .biw-miniFormsWrap {
-    pointer-events: none;
+	display: none;
     position: absolute;
-    width: 100%;
-    height: 100%;
+	right: 0;
+    width: var(--biw-form-width);
+    height: calc(100% - 32px);
     overflow: hidden;
+}
+.biw-container.expand .biw-miniFormsWrap {
+	display: block;
+	animation: fadeInMiniFormsWrap .32s ease-in-out;
+}
+@keyframes fadeInMiniFormsWrap {
+	0% { opacity: 0; }
+	33% { opacity: 0; }
+	100% { opacity: 1; }
 }
 .biw-textInfo {
     z-index: 1;
@@ -126,7 +120,6 @@
     padding: 0 0 10px 0;
 }
 #biw-buttonBar button {
-    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -181,78 +174,17 @@
     transition: filter .06s .06s ease-in-out;
 }
 
-#biw-buttonBarInterpreter {
-	transition: transform .12s .06s ease-in-out;
-}
-#biw-buttonBarInterpreter:hover {
-    box-shadow: none;
-    background: var(--color2);
-    color: var(--color1);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-}
-#biw-buttonBarInterpreter.open {
-	border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-	transform: translateY(10px);
-}
-#biw-buttonBarInterpreter:not(.active):not(.open):hover img {
-    filter: invert(var(--dark-mode-boolean));
-    /*transition: none;*/
-}
-#biw-interpreter {
-    pointer-events: none;
-    z-index: 2;
-    position: absolute;
-    display: flex;
-    flex-direction: column;
-	top: 100%;
-    right: 5px;
-    width: 260px;
-    background: var(--color2);
-    color: var(--color1);
-    opacity: 0;
-    border-radius: 10px 0 10px 10px;
-	transform: translateY(-10px);
-	transition: opacity .12s .06s ease-in-out, transform .12s .06s ease-in-out;
-}
-#biw-interpreter.open {
-    pointer-events: all;
-    opacity: 1;
-	transform: translateY(0px);
-}
-#biw-interpreter button {
-	text-align: center;
-    display: block;
-    height: 32px;
-    width: auto;
-    margin: 8px 10px;
-    border-radius: 4px;
-    padding: 0px 20px;
-    align-items: baseline;
-    transition: height .06s ease-in-out, border .06s ease-in-out;
-}
-#biw-interpreter input {
-    margin: 8px 10px 0px;
-    border-radius: 4px;
-	background-color: var(--color1);
-	color: var(--color2);
-}
-
-
 .biw-miniForm {
+	display: none;
     pointer-events: all;
-    position: absolute;
-    top: 0;
 
     width: var(--biw-form-width);
     height: 100%;
-    opacity: 0;
     box-shadow: inset 4px 0 4px -4px var(--color1_3);
 }
 .biw-miniForm.active {
+	display: block;
     z-index: 1;
-    opacity: 1;
 }
 .biw-flexWrap {
     display: flex;
@@ -295,18 +227,11 @@
 
 /* TRANSFER FORM */
 #biw-interpreterWrap {
-	pointer-events: none;
-	opacity: 0;
 	padding-bottom: 28px;
 	margin-bottom: 24px;
-	height: 0;
-}
-#biw-interpreterWrap.active {
-	pointer-events: all;
-	opacity: 1;
-	height: auto;
 }
 #biw-interpreterInput {
+	display: none;
 	width: 80%;
 	background-color: var(--color2_2);
 }
@@ -314,11 +239,16 @@
 	background-color: var(--color2);
 }
 #biw-interpretBtn {
+	display: none;
 	width: 38px;
 	height: 28px;
 	border-radius: 6px;
 	padding: 0 5px;
 	background: var(--color2_2);
+}
+#biw-interpreterWrap.active #biw-interpreterInput,
+#biw-interpreterWrap.active #biw-interpretBtn {
+	display: block;
 }
 #biw-interpretBtn:hover {
 	transform: scale(1.1, 1);
@@ -384,14 +314,12 @@
 }
 
 /* HISTORY FORM */
-#biw-miniFormHistory {
+#biw-miniFormHistory.active {
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
     justify-content: space-between;
-	height: calc(100% - 28px);
-}
-#biw-miniFormHistory .biw-flexWrap {
-	margin-top: 6px;
+	padding: 6px 0 30px 0;
 }
 .biw-historyHeader {
 	display: flex;
@@ -434,19 +362,12 @@
 	animation: biw-historyItemAppear 0.2s ease-in-out;
 }
 @keyframes biw-historyItemAppear {
-	from {
-		opacity: 0;
-		transform: translateY(10px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
+	from { opacity: 0; transform: translateY(10px);}
+	to { opacity: 1; transform: translateY(0); }
 }
 .biw-historyChange, .biw-historyState {
-	color: var(--color2) !important;
 	font-weight: bold !important;
-	opacity: .6;
+	color: color-mix(in srgb, var(--color2) 60%, transparent) !important;
 }
 .biw-historyTxId, .biw-historyDate {
 	color: var(--color3) !important;
@@ -470,15 +391,19 @@
 	color: var(--color2);
 }
 #biw-historyPagination button.disabled {
-	background: var(--bg-light);
-	color: var(--color2);
-	opacity: .25;
+	background: none;
+	color: color-mix(in srgb, var(--color2) 25%, transparent);
 }
 
 /* OTHER ELEMENTS */
+.biw-header-buttons-wrapper {
+	box-sizing: border-box;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 12px 10px;
+}
 #biw-buttonRefresh, #biw-buttonSettings {
-    position: absolute;
-    top: 12px;
     width: 26px;
     height: 26px;
     padding: 0;
@@ -487,10 +412,6 @@
 #biw-buttonRefresh {
 	width: 24px;
     height: 24px;
-	left: 10px;
-}
-#biw-buttonSettings {
-	right: 10px;
 }
 #biw-buttonSettings .tooltip {
 	left: auto;
@@ -530,22 +451,20 @@
 }
 
 #biw-settings-menu {
-	pointer-events: none;
+	display: none;
 	z-index: 1000;
 	position: absolute;
 	top: 0;
 	left: 0;
 	width: 100%;
 	height: 100%;
-	opacity: 0;
 	backdrop-filter: brightness(.8) blur(1px);
 }
 .biw-container.expand #biw-settings-menu {
 	width: 200%;
 }
 #biw-settings-menu.open {
-	pointer-events: all;
-	opacity: 1;
+	display: block;
 }
 #biw-settings-menu .content {
 	top: 50%;
@@ -571,7 +490,6 @@
 }
 
 #biw-accountsWrap {
-    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -582,17 +500,6 @@
     /*margin: 0 2%;*/
 	margin: 1% 2% 0%;
 }
-#biw-accountsWrap-box {
-    z-index: 1;
-    position: absolute;
-    pointer-events: none;
-    height: 100%;
-    width: 96%;
-    border-radius: 2px;
-    margin: 0 2%;
-    /*box-shadow: inset 0px 0px 4px -2px black;*/
-	box-shadow: inset 0px 0px 0px 2px var(--color1_1);
-}
 .biw-accountLabel {
 	cursor: pointer;
     display: flex;
@@ -602,7 +509,6 @@
     margin-top: 10px;
     padding: 2px 12px;
     border-radius: 2px;
-    transition: box-shadow .12s .06s ease-in-out;
     width: 86%;
     /*box-shadow: inset 0px 0px 6px -4px var(--color2), -.2px -.2px 0px 1px var(--color2);*/
 	box-shadow: inset 0px 0px 6px -4px var(--color1_1), -.2px -.2px 0px 1px var(--color1_1);
@@ -612,10 +518,8 @@
 }
 .biw-accountLabel .biw-accountImgWrap {
     cursor: pointer;
-    position: relative;
-    width: 52px;
-    height: 52px;
-    transition: filter 0.12s ease-in-out;
+    width: 48px;
+    height: 48px;
 }
 .biw-accountLabel:not(.active):hover {
 	box-shadow: inset 0px 0px 6px -4px var(--color3), -.2px -.2px 0px 1px var(--color3);
@@ -624,118 +528,16 @@
     /*transform: scale(1.02);*/
     filter: invert(.5);
 }
-.biw-accountLabel .biw-accountImgWrap div {
+.biw-accountLabel .biw-accountImgWrap img {
     pointer-events: none;
-    position: absolute;
-    border-radius: 50%;
-    box-shadow: inset 3px 3px 10px var(--neumo-color1), inset -5px -5px 10px var(--neumo-color2);
-    width: 100%;
-    height: 100%;
-    transition: box-shadow 0.12s ease-in-out;
-}
-.biw-accountLabel:not(.active):hover .biw-accountImgWrap div,
-.biw-accountLabel:not(.active) .biw-accountImgWrap:hover div {
-    box-shadow: 0px 0px 1px 2px var(--color3), inset 0px 0px 2px -1px var(--color3);
-    transition: box-shadow 0.12s ease-in-out;
-}
-.biw-accountLabel.active .biw-accountImgWrap div:first-child {
-    animation: biw-spinTransformGlowShadowA 9.9s infinite alternate-reverse cubic-bezier(.71,.93,.86,.7) !important
-}
-.biw-accountLabel.active .biw-accountImgWrap div {
-    display: none !important;
-    animation: biw-spinTransformGlowShadowB 10.9s infinite alternate cubic-bezier(.08,.62,.86,.42);
-}
-@keyframes biw-spinTransformGlowShadowA {
-    0% {
-        box-shadow: 0px 0px 4px var(--color1);
-        transform: rotate(0deg) skew(0deg, 14deg) scale(.8);
-        filter: brightness(1) drop-shadow(0px 2px 1px var(--color2)) blur(1px);
-    }
-    40% {
-        box-shadow: 0px 2px 8px var(--color1);
-        transform: rotate(216deg) skew(2deg, 0deg) scale(.76);
-        filter: brightness(.8) drop-shadow(0px 0px 2px var(--color2)) blur(1.05px);
-    }
-    50% {
-        box-shadow: 3px 2px 6px var(--color1);
-        transform: rotate(144deg) skew(4deg, 2deg) scale(.8);
-        filter: brightness(.6) drop-shadow(2px 2px 3px var(--color2)) blur(1.2px);
-    }
-    60% {
-        box-shadow: 5px 2px 2px var(--color1);
-        transform: rotate(216deg) skew(2deg, 4deg) scale(.86);
-        filter: brightness(1) drop-shadow(0px 0px 4px var(--color2)) blur(1.35px);
-    }
-    70% {
-        box-shadow: 1px 2px 2px var(--color1);
-        transform: rotate(288deg) skew(0deg, 2deg) scale(.8);
-        filter: brightness(1.15) drop-shadow(0px 2px 5px var(--color2)) blur(2.5px);
-    }
-    100% {
-        box-shadow: 5px 0px 3px var(--color1);
-        transform: rotate(144deg) skew(14deg, 2deg) scale(.92); 
-        filter: brightness(.9) drop-shadow(0px 2px 10px var(--color2)) blur(3px);
-    }
-}
-@keyframes biw-spinTransformGlowShadowB {
-    0% {
-        box-shadow: 0px 0px 4px var(--color1);
-        transform: rotate(0deg) skew(0deg, 0deg) scale(.92);
-        filter: brightness(1) drop-shadow(0px 2px 1px var(--color2)) blur(1px);
-    }
-    20% {
-        box-shadow: 0px 2px 2px var(--color1);
-        transform: rotate(72deg) skew(0deg, 0deg) scale(.8);
-        filter: brightness(.8) drop-shadow(0px 0px 2px var(--color2)) blur(1.05px);
-    }
-    40% {
-        box-shadow: 3px 2px 1px var(--color1);
-        transform: rotate(144deg) skew(2deg, 7deg) scale(.86);
-        filter: brightness(.6) drop-shadow(2px 2px 3px var(--color2)) blur(1.2px);
-    }
-    60% {
-        box-shadow: 5px 2px 2px var(--color1);
-        transform: rotate(216deg) skew(2deg, -20deg) scale(.86);
-        filter: brightness(0.3) drop-shadow(0px 0px 4px var(--color2)) blur(1.35px);
-    }
-    80% {
-        box-shadow: 1px 2px 2px var(--color1);
-        transform: rotate(288deg) skew(0deg, 2deg) scale(.9);
-        filter: brightness(.8) drop-shadow(0px 2px 5px var(--color2)) blur(2.5px);
-    }
-    100% {
-        box-shadow: 2px 0px 3px var(--color1);
-        transform: rotate(360deg) scale(.82);
-        filter: brightness(.9) drop-shadow(0px 2px 10px var(--color2)) blur(3px);
-    }
-}
-.biw-accountLabel .biw-accountImgWrap canvas {
-    pointer-events: none;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    /*border-radius: 50%;*/
 	border-radius: 10%;
     filter: brightness(.5) invert(calc(1 - var(--dark-mode-boolean)));
-    transition: box-shadow 0.12s ease-in-out, filter 0.12s ease-in-out;
+    transition: filter .12s ease-in-out;
 }
-.biw-accountLabel.active .biw-accountImgWrap canvas {
+.biw-accountLabel.active .biw-accountImgWrap img {
     /*box-shadow: 0px 0px 1px 2px white;*/
 	box-shadow: 0px 0px 0px 1px var(--color3);
     filter: brightness(1) invert(calc(1 - var(--dark-mode-boolean)));
-    animation: biw-brightnessGlow 2s infinite;
-}
-@keyframes biw-brightnessGlow {
-    0% {
-        filter: brightness(1.06) invert(calc(1 - var(--dark-mode-boolean)));
-    }
-    40% {
-        filter: brightness(1.27) invert(calc(1 - var(--dark-mode-boolean)));
-    }
-    100% {
-        filter: brightness(.96) invert(calc(1 - var(--dark-mode-boolean)));
-    }
 }
 .biw-accountLabelInfoWrap {
     pointer-events: none;
@@ -748,8 +550,7 @@
     margin-top: 2px;
 }
 .biw-accountLabelAddressAndValueWrap h2 {
-    color: var(--color2);
-    opacity: .7;
+	color: color-mix(in srgb, var(--color2) 70%, transparent);
     font-size: .8em;
 }
 .biw-accountLabelAddressAndValueWrap h3 {
@@ -757,7 +558,7 @@
     font-weight: 600;
 }
 .biw-accountLabelAddressAndValueWrap h3 span:not(.unit) {
-	opacity: .6;
+	color: color-mix(in srgb, var(--color2) 60%, transparent);
 }
 .biw-accountLabelName {
 	pointer-events: none;
@@ -768,10 +569,9 @@
 }
 .biw-accountLabelName h3 {
     font-size: .9em;
-    color: var(--color2);
     text-align: right;
     margin: 0 0 4px 0;
-    opacity: .6;
+    color: color-mix(in srgb, var(--color2) 60%, transparent);
 }
 .biw-accountLabelName button {
     pointer-events: all;
@@ -780,7 +580,7 @@
     height: 20px;
     background: none;
     border-radius: 50%;
-    opacity: .6;
+    opacity: .5;
 	margin: -1px -1px 0 0;
     transition: opacity .24s;
 }
@@ -793,7 +593,6 @@
     filter: invert(calc(1 - var(--dark-mode-boolean)));
 }
 #biw-newAddressBtn {
-    position: relative;
     margin-top: 6px;
     margin-bottom: 10px;
     width: 34px;
@@ -824,4 +623,14 @@
         background-size: 103% 100%;
         background-position: 50% 100%;
     }
+}
+#biw-accountsWrap-box {
+    position: absolute;
+    pointer-events: none;
+    height: 100%;
+    width: 96%;
+    border-radius: 2px;
+    margin: 0 2%;
+    /*box-shadow: inset 0px 0px 4px -2px black;*/
+	box-shadow: inset 0px 0px 0px 2px var(--color1_1);
 }

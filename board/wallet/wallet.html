@@ -84,14 +84,16 @@
     </div>
 
     <div id="biw-mainForm">
-        <button id="biw-buttonRefresh" data-action="biw-refresh">
-			<img src="./wallet/img/refresh64.png" alt="Refresh">
-			<div class="tooltip">Refresh balances</div>
-		</button>
-		<button id="biw-buttonSettings" data-action="biw-toggle-settings-menu">
-			<img src="assets/settings64.png" alt="Settings">
-			<div class="tooltip">Settings</div>
-		</button>
+		<div class="biw-header-buttons-wrapper">
+			<button id="biw-buttonRefresh" data-action="biw-refresh">
+				<img src="./wallet/img/refresh64.png" alt="Refresh">
+				<div class="tooltip">Refresh balances</div>
+			</button>
+			<button id="biw-buttonSettings" data-action="biw-toggle-settings-menu">
+				<img src="assets/settings64.png" alt="Settings">
+				<div class="tooltip">Settings</div>
+			</button>
+		</div>
 		<div id="biw-settings-menu" data-action="biw-toggle-settings-menu">
 			<div class="content">
 				<div class="board-settings-line">
@@ -131,23 +133,14 @@
 				<img src="./wallet/img/history32.png" alt="History-img">
 				<span data-translatorkey="History" class="translatableTextContent">History</span>
 			</button>
-			<!--<button id="biw-buttonBarInterpreter" data-action="biw-toggle-interpreter" class="hidden">
-				<img src="./wallet/img/category64.png" alt="Interpreter" data-translatorkey="Interpreter" class="translatableTextContent">Command
-			</button>
-            <div id="biw-interpreter">
-				<input type="text" id="biw-interpreterInput" placeholder="ex: Send 10 to C123456" autocomplete="off">
-				<button id="biw-buttonBarInstructions" data-action="biw-interpret-input-btn">Confirm</button>
-            </div>-->
         </div>
 
         <div class="wrap">
-            <div id="biw-accountsWrap-box"></div>
-            <div id="biw-accountsWrap">
-                <button id="biw-newAddressBtn" data-action="biw-new-address">+</button>
+			<div id="biw-accountsWrap">
+				<button id="biw-newAddressBtn" data-action="biw-new-address">+</button>
             </div>
         </div>
 
-        <h3 style="position: absolute; font-size: .84em; color: var(--color1_2); bottom: 0;">v0.0.1</h3>
         <div id="biw-globalTextInfo" class="biw-textInfo"></div>
     </div>
 </div>

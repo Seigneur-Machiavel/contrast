@@ -104,15 +104,14 @@ export class ModalComponent {
         if (!modalContent || !contentWrap) { console.error('error: modalContent or modalContentWrap not found'); return; }
         modalContent.classList.add('cbe-blockContent');
 
-        // spacing the contentWrap to avoid the fixedTopElement to hide the content
-        const fixedTopElement = createSpacedTextElement(block.hash, ['cbe-blockHash'], `#${block.index}`, ['cbe-blockIndex'], contentWrap);
+        // spacing the contentWrap to avoid the blockHashElement to hide the content
+        const blockHashElement = createSpacedTextElement(block.hash, ['cbe-blockHash'], `#${block.index}`, ['cbe-blockIndex'], contentWrap);
         const twoContainerWrap = createElement('div', ['cbe-twoContainerWrap'], contentWrap);
 		const leftContainer = createElement('div', ['cbe-leftContainer'], twoContainerWrap);
-		//createSpacedTextElement('Supply', [], `${CURRENCY.formatNumberAsCurrency(block.supply)}`, [], leftContainer);
-        contentWrap.style = 'margin-top: 56px; padding-top: 0; height: calc(100% - 76px);';
-        fixedTopElement.children[0].dataset.action = 'copy_block_hash';
-		fixedTopElement.children[0].dataset.hash = block.hash;
-		fixedTopElement.classList.add('cbe-fixedTop');
+		// createSpacedTextElement('Supply', [], `${CURRENCY.formatNumberAsCurrency(block.supply)}`, [], leftContainer);
+        // contentWrap.style = 'margin-top: 56px; padding-top: 0; height: calc(100% - 76px);';
+        blockHashElement.children[0].dataset.action = 'copy_block_hash';
+		blockHashElement.children[0].dataset.hash = block.hash;
         
 		const rewards = BlockFinalized.calculateRewards(block);
         const readableLocalDate = new Date(block.timestamp).toLocaleString();
@@ -259,9 +258,8 @@ export class ModalComponent {
 	/** @param {string} address @param {AddressLedger} ledger */
 	fillContentWithLedger(address, ledger) {
 		const contentWrap = eHTML.get('modalContentWrap');
-		const addressTitle = createElement('div', ['cbe-addressTitle', 'cbe-fixedTop'], contentWrap);
+		const addressTitle = createElement('div', ['cbe-addressTitle'], contentWrap);
         addressTitle.textContent = address;
-
         contentWrap.style = 'margin-top: 56px; padding-top: 0; height: calc(100% - 76px);';
 
 		const addressInfoElement = createElement('div', [], contentWrap);

@@ -1,4 +1,6 @@
 export class NetworkRendererElements {
+	UI;
+	nodeTooltip;
 	devInfo;
 	modeSwitchBtn;
 	fpsCountElement;
@@ -10,6 +12,8 @@ export class NetworkRendererElements {
 	linesCountElement;
 
 	constructor(
+		UI = document.getElementById('vzr-UI'),
+		nodeTooltip = document.getElementById('node-tooltip'),
 		devInfo = document.getElementById('vzr-dev-info'),
 		modeSwitchBtn = document.getElementById('vzr-modeSwitchBtn'),
 		fpsCountElement = document.getElementById('vzr-fpsCount'),
@@ -20,6 +24,8 @@ export class NetworkRendererElements {
 		connectionsCountElement = document.getElementById('vzr-connectionsCount'),
 		linesCountElement = document.getElementById('vzr-linesCount'),
 	) {
+		this.UI = UI;
+		this.nodeTooltip = nodeTooltip;
 		this.devInfo = devInfo;
 		this.modeSwitchBtn = modeSwitchBtn;
 		this.fpsCountElement = fpsCountElement;

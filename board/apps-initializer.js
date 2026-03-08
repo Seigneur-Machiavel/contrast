@@ -95,8 +95,13 @@ export class SubWindow {
 			this.contentElement.appendChild(iframe);
 		}
 
-		if (this.autoSized) this.contentElement.style.position = 'relative';
+		/*if (this.autoSized) this.contentElement.style.position = 'relative';
 		else {
+			const resizeButton = createElement('div', ['resize-button'], this.element);
+			resizeButton.dataset.appName = this.appName;
+			resizeButton.innerText = '||';
+		}*/
+		if (!this.autoSized) {
 			const resizeButton = createElement('div', ['resize-button'], this.element);
 			resizeButton.dataset.appName = this.appName;
 			resizeButton.innerText = '||';
@@ -112,17 +117,10 @@ export class SubWindow {
 		if (this.initSize.height) this.element.style.height = this.initSize.height + 'px';
 		
 		// Set initial position
-		if (fromX && fromY) { // START INVISIBLE
-			this.element.style.opacity = 1;
-			this.element.style.transform = `scale(1) translateX(-2000px) translateY(0px)`;
-			setTimeout(() => {
-				this.element.style.opacity = 0;
-				this.element.style.transform = `scale(.001) translateX(${fromX}px) translateY(${fromY}px)`;
-			}, 200);
+		// ...
 
-			// Set dark mode to the iframe according to the board body class
-			setTimeout(() => this.setDarkModeAccordingToBoard(), 800);
-		}
+		// Set dark mode to the iframe according to the board body class
+		setTimeout(() => this.setDarkModeAccordingToBoard(), 200);
 	}
 	/** @param {string} title @param {boolean} expandable Default: true @param {boolean} isUrl Default: false */
 	newTitleBar(title, expandable = true, isUrl = false) {
@@ -165,17 +163,28 @@ export class SubWindow {
 	}
 	toggleFold(originX, originY, duration = 400) {
 		this.folded = !this.folded;
-		if (!this.folded) this.element.classList.add('onBoard');
-
+		
 		// COMBINED ANIMATION
 		if (this.animation) this.animation.pause();
+		
+		this.element.style.top = '0px';
+		this.element.style.left = '1px';
 
+		// Origin is the button center position.
 		const toPosition = { left: originX, top: originY };
-		if (!this.folded) {
+		if (!this.folded) { // => OPENNING
+			this.element.classList.add('onBoard');
+			this.element.style.transform = `scale(.001) translateX(${originX}px) translateY(${originY}px)`;
 			toPosition.left = this.isFullScreen ? 0 : this.position.left;
 			toPosition.top = this.isFullScreen ? 0 : this.position.top;
-		};
+		} else				// => CLOSING
+			this.element.style.transform = `scale(1) translateX(${this.isFullScreen ? 0 : this.position.left}px) translateY(${this.isFullScreen ? 0 : this.position.top}px)`;
 
+		// Windows are parked off-screen via top/left at rest.
+		// During animation, transform handles movement, then top/left
+		// is updated at complete() and transform cleared to avoid
+		// persistent composite layer promotion.
+		// this complexity is necessary to minimize layering.
 		this.animation = anime({
 			targets: this.element,
 			opacity: this.animationsComplexity < 1 ? null : {
@@ -189,6 +198,10 @@ export class SubWindow {
 			translateY: { value: toPosition.top, duration: duration, easing: 'easeOutQuad' },
 			complete: () => {
 				if (this.folded) this.element.classList.remove('onBoard');
+				this.element.style.top = this.folded ? '0px' : `${toPosition.top}px`;
+				this.element.style.left = this.folded ? '1px' : `${toPosition.left}px`;
+				this.element.style.transform = '';
+				this.element.style.opacity = '';
 			}
 		});
 

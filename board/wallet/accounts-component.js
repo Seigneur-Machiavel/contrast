@@ -48,8 +48,9 @@ export class AccountsComponent {
                 if (address.innerText !== account.address) {
                     const img = patternGenerator.generateImage(account.address, UX_SETTINGS.shapes);
                     const accountImgWrap = existingAccountLabel.getElementsByClassName('biw-accountImgWrap')[0];
-                    accountImgWrap.removeChild(accountImgWrap.getElementsByTagName('canvas')[0]);
-                    accountImgWrap.appendChild(img);
+                    const currentImg = accountImgWrap.getElementsByTagName('img')[0];
+					if (currentImg) accountImgWrap.replaceChild(img, currentImg);
+					else accountImgWrap.appendChild(img);
                 }
 
                 const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sigOrSlash']), this.biw.balanceDecimals)}`;

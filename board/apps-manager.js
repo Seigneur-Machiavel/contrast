@@ -89,6 +89,7 @@ export class AppsManager {
 		}
 		window.addEventListener('load', () => document.getElementById('demo').textContent = "toto");
 		console.log('appToFocus', appToFocus);
+
 		const delay = appToFocus === appName ? 0 : this.transitionsDuration;
 		setTimeout(() => this.setFrontWindow(appToFocus), delay);
 	}
@@ -223,7 +224,9 @@ export class AppsManager {
 		const maxLeft = this.windowsWrap.offsetWidth - 50;
 		const top = Math.max(0, e.clientY - this.draggingWindow.dragStart.y);
 		const left = Math.max(1, e.clientX - this.draggingWindow.dragStart.x);
-		this.draggingWindow.element.style.transform = `scale(1) translateX(${Math.min(left, maxLeft)}px) translateY(${Math.min(top, minTop)}px)`;
+		//this.draggingWindow.element.style.transform = `scale(1) translateX(${Math.min(left, maxLeft)}px) translateY(${Math.min(top, minTop)}px)`;
+		this.draggingWindow.element.style.top = Math.min(top, minTop) + 'px';
+		this.draggingWindow.element.style.left = Math.min(left, maxLeft) + 'px';
 	}
 	moveResizeHandler(e) {
 		if (!this.resizingWindow) return;

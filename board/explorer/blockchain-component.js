@@ -87,7 +87,7 @@ export class BlockchainComponent {
 	get lastEmptyBlock() { return [...this.blocks].reverse().find(block => !block.isFilled) || null; }
 	get isEnoughBlocksFilled() { return this.numberOfFilledBlocks >= this.MAX_BLOCKS_FILLED; }
 
-    /** @param {number} maxNbBlocks */
+    /** Complete the chain of block @param {number} maxNbBlocks */
     createEmptyBlocksUntilFillTheDiv(maxNbBlocks = 16) {
         for (let i = 0; i < maxNbBlocks; i++) if (!this.#addEmptyBlockAtEndIfNeeded()) break;
     }
@@ -146,7 +146,9 @@ export class BlockchainComponent {
 		if (index <= this.MAX_BLOCKS_FILLED) return;
 		this.#suckFirstBlockElement();
 	}
-	#addEmptyBlockAtEndIfNeeded() {
+	#addEmptyBlockAtEndIfNeeded(minBlocks = 6) {
+		if (this.blocks.length < minBlocks) return this.#addEmptyBlockAtEnd();
+
 		// ADD NEW EMPTY BLOCK AT THE END IF NEEDED
 		const chainWrap = eHTML.get('chainWrap');
 		if (!chainWrap) return;
@@ -157,18 +159,25 @@ export class BlockchainComponent {
 		const lastEmptyBlockRight = this.lastEmptyBlock?.wrap.getBoundingClientRect().right || 0;
 		if (lastEmptyBlockRight >= parentRect.right) return;
 
+		return this.#addEmptyBlockAtEnd();
+	}
+	#addEmptyBlockAtEnd() {
+		const chainWrap = eHTML.get('chainWrap');
+		if (!chainWrap) return;
+
 		const newBlock = new BlockComponent();
 		this.blocks.push(newBlock);
 		chainWrap.appendChild(newBlock.wrap);
 		return true;
 	}
     /** @param {number} duration */
-    #suckFirstBlockElement(duration = 1000) {
+    #suckFirstBlockElement(duration = 0) {
 		const chainWrap = eHTML.get('chainWrap');
 		if (!chainWrap) return;
 
         // read ClientRect before animation then suck the first block
 		const lockedWidth = chainWrap.getBoundingClientRect().width;
+		chainWrap.style.width = `${lockedWidth}px`; // lock the width of the wrap to avoid layout shift during the animation
         this.firstBlockAnimation = anime({
             targets: this.blocks[0].wrap,
             translateX: '-100%',
@@ -178,7 +187,6 @@ export class BlockchainComponent {
             opacity: 0,
             duration,
             easing: 'easeInOutQuad',
-            begin: () => chainWrap.style.width = `${lockedWidth}px`, // lock the width of the wrap
             complete: () => {
                 this.#removeFirstBlockElement();
 				this.#addEmptyBlockAtEndIfNeeded();

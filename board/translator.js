@@ -40,16 +40,16 @@ const explorer = {
 		fr: 'Offre en circulation',
 	},
 	DistributionProgressTitle: {
-		en: 'Distribution progress',
-		fr: 'Progression de la distribution',
+		en: 'Progress',
+		fr: 'Progression',
 	},
 	TargetBlockTimeTitle: {
 		en: 'Target blockTime',
 		fr: 'Temps de bloc cible',
 	},
 	LastBlockTimeTitle: {
-		en: 'Last blockTime',
-		fr: 'Dernier temps de bloc',
+		en: 'Last block',
+		fr: 'Dernier bloc',
 	},
 	LowerIsStronger: {
 		en: '(lower = stronger)',
