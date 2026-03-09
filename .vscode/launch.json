@@ -42,6 +42,14 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Test: Solving",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/tests/test-solving.mjs",
+			"args": ["--max-old-space-size=16384"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Test: Sync",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/tests/test_sync.mjs",

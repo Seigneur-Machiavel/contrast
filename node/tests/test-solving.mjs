@@ -1,5 +1,4 @@
 import { HashFunctions } from '../src/conCrypto.mjs';
-import { convert } from '../../utils/converters.mjs';
 import { solving, conditionnals } from '../../utils/conditionals.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
@@ -76,12 +75,19 @@ function rndHash(len = 64) {
     const randomBytes = crypto.getRandomValues(new Uint8Array(len / 2));
     return Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
+function hexToBits(hexString = 'ffff') {
+	return hexString.split('').reduce((bits, hexChar) => {
+		const hexValue = parseInt(hexChar, 16);
+		const binaryString = hexValue.toString(2).padStart(4, '0');
+		return bits + binaryString;
+	}, '');
+}
 
 let pauseTime = 0;
 async function simulatedPow(hps = 10) {
     const startTime = performance.now();
     const hash = rndHash(64);
-    const bitsArray = convert.hex.toBits(hash);
+	const bitsArray = hexToBits(hash);
 
     if (!pauseTime) pauseTime = 1000 / hps; // init
     else { // adjust to reach exactly the target hps
