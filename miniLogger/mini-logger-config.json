@@ -4,8 +4,8 @@
     "activeCategories": {
         "global": true,
         "main": true,
-		"miner": true,
-		"mining-functions": true,
+		"solver": true,
+		"solving-functions": true,
         "shortcuts": true,
         "chat": true,
         "P2PNetwork": true,
@@ -20,8 +20,8 @@
     },
 	"colors": {
 		"blockchain": "color: cyan",
-		"miner": "color: darkseagreen",
-		"mining-functions": "color: darkseagreen",
+		"solver": "color: darkseagreen",
+		"solving-functions": "color: darkseagreen",
 		"node": "color: deepskyblue; font-weight: bold",
 		"storage": "color: white",
 		"validation": "color: green",

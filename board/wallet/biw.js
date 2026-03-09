@@ -127,7 +127,7 @@ export class BoardInternalWallet {
 		let index = 0;
 		for (let i = 0; i < txIds.length; i++) {
 			const [ txId, tx ] = [txIds[i], txs[i]];
-			const specialTxType = Transaction_Builder.isMinerOrValidatorTx(tx);
+			const specialTxType = Transaction_Builder.isSolverOrValidatorTx(tx);
 			const inAmount = specialTxType ? 0
 				: tx.inputs.reduce((sum, input) => {
 					const utxo = this.connector.utxosByAnchors.get(input);

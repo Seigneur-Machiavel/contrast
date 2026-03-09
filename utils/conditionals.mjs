@@ -33,8 +33,8 @@ export const conditionnals = {
     }
 };
  
- const logger = new MiniLogger('mining-functions');
-export const mining = {
+ const logger = new MiniLogger('solving-functions');
+export const solving = {
     /** @param {BlockFinalized} lastBlock @param {number} averageBlockTimeMS @param {number} [targetBlockTime] */
     difficultyAdjustment: (lastBlock, averageBlockTimeMS, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime, logs = true) => {
         const blockIndex = lastBlock.index;
@@ -137,8 +137,8 @@ export const mining = {
 
     /** @param {string} HashBitsAsString @param {BlockFinalized} block */
     verifyBlockHashConformToDifficulty: (HashBitsAsString = '', block) => {
-		const { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty } = mining.getBlockFinalDifficulty(block);
-        const { zeros, adjust } = mining.decomposeDifficulty(finalDifficulty);
+		const { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty } = solving.getBlockFinalDifficulty(block);
+        const { zeros, adjust } = solving.decomposeDifficulty(finalDifficulty);
         const result = { conform: false, message: 'na', difficulty, timeDiffAdjustment, legitimacy, finalDifficulty, zeros, adjust };
 		if (typeof HashBitsAsString !== 'string') {
 			result.message = 'invalid HashBitsAsString';

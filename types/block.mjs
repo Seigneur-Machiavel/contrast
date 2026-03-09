@@ -44,7 +44,7 @@ export class BlockFinalized extends BlockFinalizedHeader {
 
 	// HELPERS
 	/** @param {BlockFinalized} block */
-	static minerAddress(block) { return block.Txs[0].outputs[0].address; }
+	static solverAddress(block) { return block.Txs[0].outputs[0].address; }
 	/** @param {BlockFinalized} block */
 	static validatorAddress(block) { return block.Txs[1].outputs[0].address; }
 	/** @param {BlockFinalized} block */
@@ -57,7 +57,7 @@ export class BlockFinalized extends BlockFinalizedHeader {
 	}
 }
 
-export class BlockMiningData {
+export class BlockSolvingData {
 	/** @param {number} index - The block height @param {number} difficulty - The difficulty of the block @param {number} timestamp - The timestamp of the block @param {number} posTimestamp - The timestamp of the block's creation */
 	constructor(index, difficulty, timestamp, posTimestamp) {
 		this.index = index;
@@ -73,5 +73,5 @@ export const BLOCK = {
 	BlockFinalizedHeader,
 	BlockCandidate,
 	BlockFinalized,
-	BlockMiningData,
+	BlockSolvingData,
 };

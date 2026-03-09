@@ -20,8 +20,8 @@ const { Converter } = HiveP2P;
 * @typedef {Object} NodeSetting
 * @property {string} privateKey
 * @property {string} validatorRewardAddress
-* @property {string} minerAddress
-* @property {number} minerThreads */
+* @property {string} solverAddress
+* @property {number} solverThreads */
 
 const converter = new Converter();
 const isNode = typeof self === 'undefined';
@@ -139,10 +139,10 @@ export const serializer = {
 	dataPositions,
 	/** Routing of mode for transaction serialization
 	 * - In candidate blocks, the first tx is always the validator tx
-	 * - In finalized blocks, the first tx is always the miner (coinbase) tx, the second is the validator tx
-	 * @type {Object<string, Object<string, 'miner' | 'validator' | undefined>>} */
+	 * - In finalized blocks, the first tx is always the solver (coinbase) tx, the second is the validator tx
+	 * @type {Object<string, Object<string, 'solver' | 'validator' | undefined>>} */
 	specialMode: { // Routing of mode for transaction serialization
-		finalized: { 0: 'miner', 1: 'validator' },
+		finalized: { 0: 'solver', 1: 'validator' },
 		candidate: { 0: 'validator' }
 	},
 	/** @param {TxId} txId ex: blockHeight:txIndex */
@@ -286,15 +286,15 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Witnesses array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-        /** @param {Transaction} tx @param {'tx' | 'validator' | 'miner'} [mode] default: tx */
+        /** @param {Transaction} tx @param {'tx' | 'validator' | 'solver'} [mode] default: tx */
         transaction(tx, mode = 'tx') {
-			if (mode === 'miner' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.nonce.str)) throw new Error('Invalid coinbase transaction');
+			if (mode === 'solver' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.nonce.str)) throw new Error('Invalid coinbase transaction');
             if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.hash.str)) throw new Error('Invalid transaction: validator input must be address + posHash');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
 			
 			const witnessesBytes = tx.witnesses.length * lengths.witness.bytes;
 			let inputBytes = lengths.anchor.bytes;
-			if (mode === 'miner') inputBytes = 4; 			// input = nonce
+			if (mode === 'solver') inputBytes = 4; 			// input = nonce
 			if (mode === 'validator') inputBytes = lengths.hash.bytes; // posHash
 			const inputsBytes = tx.inputs.length * inputBytes;
 			const outputsBytes = tx.outputs.length * lengths.miniUTXO.bytes;
@@ -307,9 +307,9 @@ export const serializer = {
 			w.writeBytes(converter.numberTo2Bytes(tx.inputs.length)); 			// nb of inputs
 			w.writeBytes(converter.numberTo2Bytes(tx.outputs.length));			// nb of outputs
 			w.writeBytes(converter.numberTo2Bytes(tx.data?.length || 0)); 		// data: bytes
-			if (mode !== 'miner') w.writeBytes(this.witnessesArray(tx.witnesses));	// witnesses
+			if (mode !== 'solver') w.writeBytes(this.witnessesArray(tx.witnesses));	// witnesses
 			if (mode === 'tx') w.writeBytes(this.anchorsArray(tx.inputs));			// inputs
-			if (mode === 'miner' || mode === 'validator')						// input miner/validator
+			if (mode === 'solver' || mode === 'validator')						// input solver/validator
 				w.writeBytes(converter.hexToBytes(tx.inputs[0])); 				// nonce | posHash (hex)
 			w.writeBytes(this.miniUTXOsArray(tx.outputs));						// outputs
 			if (tx.data) w.writeBytes(tx.data);									// data
@@ -384,8 +384,8 @@ export const serializer = {
 			const w = new BinaryWriter(32 + lengths.address.bytes + lengths.address.bytes + 1);
 			w.writeBytes(converter.hexToBytes(nodeSetting.privateKey));
 			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.validatorRewardAddress));
-			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.minerAddress));
-			w.writeByte(nodeSetting.minerThreads);
+			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.solverAddress));
+			w.writeByte(nodeSetting.solverThreads);
             return w.getBytes();
         },
 		/** @param {number} fromHeight @param {number} toHeight */
@@ -429,14 +429,14 @@ export const serializer = {
 			const ids = Object.keys(txs);
 			const txsValues = Object.values(txs);
 			for (const tx of txsValues) { // SERIALIZE TXs WITH SPECIAL MODE IF VALIDATOR/MINER TX
-				const mode = Transaction_Builder.isMinerOrValidatorTx(tx);
-				modes.push(!mode ? 0 : mode === 'miner' ? 1 : 2); // 0 = tx, 1 = miner, 2 = validator
+				const mode = Transaction_Builder.isSolverOrValidatorTx(tx);
+				modes.push(!mode ? 0 : mode === 'solver' ? 1 : 2); // 0 = tx, 1 = solver, 2 = validator
 				serializedTxs.push(this.transaction(tx, mode));
 			}
 
 			const serializedUtxos = this.miniUTXOsObj(impliedUtxos);
 			const idsBytes = lengths.txId.bytes * txsValues.length;
-			const modeBytes = txsValues.length; // mode for each tx (miner/validator/tx)
+			const modeBytes = txsValues.length; // mode for each tx (solver/validator/tx)
 			const offsetBytes = 4 * txsValues.length; // pointer for each tx
 			const txsBytes = serializedTxs.reduce((sum, tx) => sum + tx.length, 0);
 			const totalBytes = idsBytes + modeBytes + offsetBytes + txsBytes + 4 + serializedUtxos.length;
@@ -575,7 +575,7 @@ export const serializer = {
 			}
 			return witnesses;
 		},
-		/** @param {Uint8Array} serializedTx @param {'tx' | 'validator' | 'miner'} [mode] default: normal */
+		/** @param {Uint8Array} serializedTx @param {'tx' | 'validator' | 'solver'} [mode] default: normal */
 		transaction(serializedTx, mode = 'tx') {
 			const r = new BinaryReader(serializedTx);
 			const version = converter.bytes2ToNumber(r.read(2));
@@ -583,9 +583,9 @@ export const serializer = {
 			const nbOfInputs = converter.bytes2ToNumber(r.read(2));
 			const nbOfOutputs = converter.bytes2ToNumber(r.read(2));
 			const dataLength = converter.bytes2ToNumber(r.read(2));
-			const witnesses = mode !== 'miner' ? this.witnessesArray(r.read(nbOfWitnesses * lengths.witness.bytes)) : [];
+			const witnesses = mode !== 'solver' ? this.witnessesArray(r.read(nbOfWitnesses * lengths.witness.bytes)) : [];
 			const inputs = mode === 'tx' ? this.anchorsArray(r.read(nbOfInputs * lengths.anchor.bytes)) : [];
-			if (mode === 'miner') inputs.push(converter.bytesToHex(r.read(4), 4)); // nonce
+			if (mode === 'solver') inputs.push(converter.bytesToHex(r.read(4), 4)); // nonce
 			if (mode === 'validator') inputs.push(converter.bytesToHex(r.read(lengths.hash.bytes))); // posHash
 
 			const outputs = this.miniUTXOsArray(r.read(nbOfOutputs * lengths.miniUTXO.bytes));
@@ -665,9 +665,9 @@ export const serializer = {
 			const r = new BinaryReader(serializedNodeSetting);
 			const privateKey = converter.bytesToHex(r.read(32));
 			const validatorRewardAddress = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
-			const minerAddress = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
-			const minerThreads = r.read(1)[0];
-            return { privateKey, validatorRewardAddress, minerAddress, minerThreads };
+			const solverAddress = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
+			const solverThreads = r.read(1)[0];
+            return { privateKey, validatorRewardAddress, solverAddress, solverThreads };
         },
 		/** @param {Uint8Array} serializedRequest */
 		blocksTimestampsRequest(serializedRequest) {
@@ -725,7 +725,7 @@ export const serializer = {
 				const blockHeight = converter.bytes4ToNumber(r.read(4));
 				const txIndex = converter.bytes2ToNumber(r.read(2));
 				const modeByte = r.read(1)[0];
-				const mode = modeByte === 0 ? 'tx' : modeByte === 1 ? 'miner' : modeByte === 2 ? 'validator' : null;
+				const mode = modeByte === 0 ? 'tx' : modeByte === 1 ? 'solver' : modeByte === 2 ? 'validator' : null;
 				if (!mode) throw new Error(`Invalid mode byte in transactions response: ${modeByte}`);
 
 				const txBytes = converter.bytes4ToNumber(r.read(4));

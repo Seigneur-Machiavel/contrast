@@ -24,7 +24,7 @@ const ACTIONS = {
     REVALIDATE: 'revalidate',
     RESET_WALLET: 'reset_wallet',
     FORCE_RESTART: 'force_restart',
-    SET_MINER_ADDRESS: 'set_miner_address',
+    SET_MINER_ADDRESS: 'set_solver_address',
     SET_VALIDATOR_ADDRESS: 'set_validator_address'
 };
 
@@ -206,7 +206,7 @@ function connectWS() {
                 displayNodeInfo(data);
                 nodeId = data.nodeId;
                 validatorUTXOs = data.validatorUTXOs;
-                minerUTXOs = data.minerUTXOs;
+                solverUTXOs = data.solverUTXOs;
                 
                 break;
             case 'state_updated':
@@ -236,7 +236,7 @@ function connectWS() {
                 //console.log('balance_updated', data);
                 return; // not used anymore, we fetch node_info frequently
                 if(trigger === eHTML.validatorAddress.textContent) { eHTML.validatorBalance.textContent = convert.formatNumberAsCurrency(data); }
-                if(trigger === eHTML.minerAddress.textContent) { eHTML.minerBalance.textContent = convert.formatNumberAsCurrency(data); }
+                if(trigger === eHTML.solverAddress.textContent) { eHTML.solverBalance.textContent = convert.formatNumberAsCurrency(data); }
                 break;
             default:
                 console.error(`Unknown message type: ${message.type}`);

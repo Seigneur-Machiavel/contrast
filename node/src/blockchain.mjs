@@ -17,7 +17,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 * @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
-* @typedef {import("../../types/block.mjs").BlockMiningData} BlockMiningData
+* @typedef {import("../../types/block.mjs").BlockSolvingData} BlockSolvingData
 * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */
 
 export class Blockchain {
@@ -73,8 +73,8 @@ export class Blockchain {
 			node.memPool.removeFinalizedBlocksTransactions(block);
 			
 			const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
-			const [minerAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
-			this.logger.log(`${statePrefix}#${block.index} (${block.Txs.length} Txs, ${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {v: ${validatorAddress} | m: ${minerAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
+			const [solverAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
+			this.logger.log(`${statePrefix}#${block.index} (${block.Txs.length} Txs, ${validationResult.size} bytes, ${(performance.now() - startTime).toFixed(2)} ms) -> {v: ${validatorAddress} | m: ${solverAddress}} - (diff[${hashConfInfo.difficulty}]+timeAdj[${hashConfInfo.timeDiffAdjustment}]+leg[${hashConfInfo.legitimacy}])=${hashConfInfo.finalDifficulty} | z: ${hashConfInfo.zeros} | a: ${hashConfInfo.adjust} | PosPow: ${timeBetweenPosPow}s`, (m, c) => console.info(m, c));
 			node.updateState("idle", "applying finalized block");
 			node.sync.setAndshareMyStatus(block);
 		} catch (/** @type {any} */ error) {

@@ -1,7 +1,7 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
 import { TxValidation } from './tx-validation.mjs';
-import { mining } from '../../utils/conditionals.mjs';
+import { solving } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
@@ -78,7 +78,7 @@ export class BlockValidation {
 		if (block.index > currentHeight + 1) throw new Error(`Rejected: #${block.index} > #${currentHeight + 1}(last+1)`);
 
 		// VALIDATE BLOCK HASH
-        const { hex, bitsArrayAsString } = await BlockUtils.getMinerHash(block);
+        const { hex, bitsArrayAsString } = await BlockUtils.getSolverHash(block);
         if (block.hash !== hex) throw new Error(`!applyOffense! Invalid pow hash (not corresponding): ${block.hash} - expected: ${hex}`);
 
 		// VALIDATE BLOCK PREVHASH
@@ -94,11 +94,11 @@ export class BlockValidation {
         if (block.difficulty !== newDifficulty) throw new Error(failureErrorMessages.invalidDifficulty(block.difficulty, newDifficulty));
         
 		// VALIDATE BLOCK POW HASH AGAINST DIFFICULTY
-		const hashConfInfo = mining.verifyBlockHashConformToDifficulty(bitsArrayAsString, block);
+		const hashConfInfo = solving.verifyBlockHashConformToDifficulty(bitsArrayAsString, block);
         if (!hashConfInfo.conform) throw new Error(failureErrorMessages.invalidPowHash(block.difficulty, block.hash, hashConfInfo.message));
         
 		// POS/POW REWARDS & TRANSACTION VALIDATION
-		const expectedCoinBase = mining.calculateNextCoinbaseReward(lastBlock || block);
+		const expectedCoinBase = solving.calculateNextCoinbaseReward(lastBlock || block);
         if (block.coinBase !== expectedCoinBase) throw new Error(failureErrorMessages.invalidCoinbase(block.index, block.coinBase, expectedCoinBase));
 
 		// UTXOs INVOLVED EXTRACTION & VALIDATION
@@ -160,7 +160,7 @@ export class BlockValidation {
         const utxoSpent = new Set();
         for (let i = 0; i < block.Txs.length; i++) {
             const tx = block.Txs[i];
-            const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : undefined;
+            const specialTx = i < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined;
             if (specialTx) continue; // coinbase Tx / validator Tx
 
             for (const input of tx.inputs)
@@ -179,7 +179,7 @@ export class BlockValidation {
         const validationStart = Date.now();
 		for (let i = 0; i < block.Txs.length; i++) {
             const tx = block.Txs[i];
-			const specialTx = i < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
+			const specialTx = i < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
         	TxValidation.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
 			const fee = specialTx ? 0 : TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
 			TxValidation.controlTransactionOutputsRulesConditions(tx);

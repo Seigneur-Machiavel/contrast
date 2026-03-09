@@ -168,9 +168,9 @@ export class Transaction_Builder {
         else return { fee, change };
     }
     /** @param {Transaction} transaction */
-    static isMinerOrValidatorTx(transaction) {
+    static isSolverOrValidatorTx(transaction) {
         if (transaction.inputs.length !== 1) return;
-        if (transaction.inputs[0].length === serializer.lengths.nonce.str) return 'miner'; // nonce length is 8
+        if (transaction.inputs[0].length === serializer.lengths.nonce.str) return 'solver'; // nonce length is 8
         if (transaction.inputs[0].length === serializer.lengths.hash.str) return 'validator'; // address length 20 + : + posHash length is 64
     }
     /** @param {Transaction} transaction */

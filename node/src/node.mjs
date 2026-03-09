@@ -1,8 +1,7 @@
 // @ts-check
 import HiveP2P from "hive-p2p";
-import { Vss } from './vss.mjs';
 import { Sync } from './sync.mjs';
-import { Miner } from './miner.mjs';
+import { Solver } from './solver.mjs';
 import { MemPool } from './mempool.mjs';
 import { BlockUtils } from './block.mjs';
 import { TaskQueue } from './task-queue.mjs';
@@ -53,12 +52,12 @@ export class ContrastNode {
 
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
-	/** @type {{ validator: string | null, miner: string | null }} */
-	rewardAddresses = { validator: null, miner: null };
+	/** @type {{ validator: string | null, solver: string | null }} */
+	rewardAddresses = { validator: null, solver: null };
 
 	mainStorage; blockchain;
 	taskQueue; memPool; p2p;
-	miner; sync;
+	solver; sync;
 	verb;
 
 	/** @type {Account | undefined} */
@@ -81,7 +80,7 @@ export class ContrastNode {
 		this.mainStorage = storage;
 		this.verb = verb;
 		this.p2p = p2pNode;
-		this.miner = new Miner(this);
+		this.solver = new Solver(this);
 		this.sync = new Sync(this);
 		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort);
 
@@ -137,11 +136,11 @@ export class ContrastNode {
 		await this.start();
 	}
 
-	/** Associate a wallet with this node (for miner and validator functions) @param {Wallet} wallet */
+	/** Associate a wallet with this node (for solver and validator functions) @param {Wallet} wallet */
 	associateWallet(wallet) { 
 		this.account = wallet.accounts[0];
 		this.rewardAddresses.validator = wallet.accounts[0].address;
-		this.rewardAddresses.miner = wallet.accounts[1].address;
+		this.rewardAddresses.solver = wallet.accounts[1].address;
 	}
 	async createAndShareMyBlockCandidate() {
 		try {
@@ -149,9 +148,9 @@ export class ContrastNode {
 			const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
 			if (!myCandidate) throw new Error('Failed to create block candidate');
 
-			//const updated = this.miner.updateBestCandidate(myCandidate);
-			//if (!updated) throw new Error('The miner rejected the created block candidate');
-			this.miner.updateBestCandidate(myCandidate); // throw if not updated
+			//const updated = this.solver.updateBestCandidate(myCandidate);
+			//if (!updated) throw new Error('The solver rejected the created block candidate');
+			this.solver.updateBestCandidate(myCandidate); // throw if not updated
 			
 			const serialized = serializer.serialize.block(myCandidate, 'candidate');
 			this.p2p.broadcast(serialized, { topic: 'block_candidate' });
@@ -166,20 +165,20 @@ export class ContrastNode {
 	async #stackExecution() {
 		while (this.running) {
 			await this.#executeNextTask();
-			await this.miner.tick();
+			await this.solver.tick();
 			await new Promise(r => setTimeout(r, 10));
 		}
 	}
 	#executeNextTask = async () => {
 		const task = this.taskQueue.nextTask;
-		if (!task) { this.miner.canProceedMining = true; return; } // no task to process
+		if (!task) { this.solver.canProceedSolving = true; return; } // no task to process
 
 		if (task.type === 'PushTxs') 			// as batch of transactions
 			for (const tx of task.data)
 				try { this.memPool.pushTransaction(this, tx); }
 				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'NewCandidate') 	//@ts-ignore: task.data = BlockCandidate
-			try { this.miner.updateBestCandidate(task.data); }
+			try { this.solver.updateBestCandidate(task.data); }
 			catch (/** @type {any} */ error) { this.logger.log(`[P2P->MINER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'DigestBlock') 	//@ts-ignore: task.data = BlockFinalizedSerialized
 			await this.blockchain.digestFinalizedBlock(this, task.data);
@@ -233,7 +232,7 @@ export class ContrastNode {
 			const txs = this.blockchain.blockStorage.getTransactionsByIds(request);
 			const impliedAnchors = [];
 			for (const tx in txs)
-				if (Transaction_Builder.isMinerOrValidatorTx(txs[tx])) continue;
+				if (Transaction_Builder.isSolverOrValidatorTx(txs[tx])) continue;
 				else impliedAnchors.push(...txs[tx].inputs);
 				
 			const impliedUtxos = this.blockchain.blockStorage.getUtxos(impliedAnchors);

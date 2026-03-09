@@ -22,7 +22,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 const miniLogger = new MiniLogger('validation');
 export class TxValidation {
     /** ==> First validation, low computation cost. - control format of : amount, address, rule, version, TxID, UTXOs spendable
-     * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {'miner' | 'validator'} [specialTx] */
+     * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {'solver' | 'validator'} [specialTx] */
     static isConformTransaction(involvedUTXOs, transaction, specialTx) {
         if (!transaction) throw new Error(`missing transaction: ${transaction}`);
         if (typeof transaction.version !== 'number') throw new Error('Invalid version !== number');
@@ -52,7 +52,7 @@ export class TxValidation {
             if (specialTx && typeof input !== 'string') throw new Error('Invalid coinbase/validator input type');
 			if (specialTx && !IS_VALID.HEX(input)) throw new Error(`Invalid coinbase/validator input(not HEX): ${input}`);
 			if (specialTx === 'validator' && input.length !== serializer.lengths.hash.str) throw new Error('Invalid validator input length');
-			if (specialTx === 'miner' && input.length !== serializer.lengths.nonce.str) throw new Error('Invalid coinbase input length');
+			if (specialTx === 'solver' && input.length !== serializer.lengths.nonce.str) throw new Error('Invalid coinbase input length');
 			if (specialTx) continue; // skip further checks for special txs
 
             const anchor = input;
@@ -80,7 +80,7 @@ export class TxValidation {
      * 
      * --- NO COINBASE OR FEE TRANSACTION ---
      * - control : input > output
-     * - control the fee > 0 or = 0 for miner's txs
+     * - control the fee > 0 or = 0 for solver's txs
      * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction */
     static calculateRemainingAmount(involvedUTXOs, transaction) {
         // AT THIS STAGE WE HAVE ENSURED THAT THE TRANSACTION IS CONFORM
@@ -140,7 +140,7 @@ export class TxValidation {
 	 * - Control the derivation of addresses<>pubKeys
 	 * - Throw if any problem found
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
-     * @param {Transaction} tx @param {'miner' | 'validator'} [specialTx]
+     * @param {Transaction} tx @param {'solver' | 'validator'} [specialTx]
 	 * Key: Address, Value: PubKeys @param {Map<string, Set<string>>} [involvedIdentities] Pass it for loop validation (avoid re-fetching) */
     static controlAddressesOwnership(node, involvedUTXOs, tx, specialTx, involvedIdentities = new Map()) {
 		/** Key: PubKey, Value: Address @type {Map<string, string>} */
@@ -220,7 +220,7 @@ export class TxValidation {
 
     /** ==> Sequencially call the set of validations
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
-     * @param {Transaction} transaction @param {'miner' | 'validator'} [specialTx]
+     * @param {Transaction} transaction @param {'solver' | 'validator'} [specialTx]
 	 * @param {Map<string, Set<string>>} [involvedIdentities] Key: Address, Value: PubKey */
     static transactionValidation(node, involvedUTXOs, transaction, specialTx, involvedIdentities = new Map()) {
         this.isConformTransaction(involvedUTXOs, transaction, specialTx); // also check spendable UTXOs

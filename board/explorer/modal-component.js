@@ -118,11 +118,11 @@ export class ModalComponent {
         createSpacedTextElement('Size', [], `${(weight / 1024).toFixed(2)} KB`, [], leftContainer);
         createSpacedTextElement('Transactions', [], `${block.Txs.length}`, [], leftContainer);
         
-        const minerAddressElmnt = createSpacedTextElement('Miner', [], '', [], leftContainer);
-        const minerAddressSpanElmnt = createElement('span', ['cbe-addressSpan'], minerAddressElmnt.children[1]);
-		minerAddressSpanElmnt.textContent = BlockFinalized.minerAddress(block);
-        minerAddressSpanElmnt.dataset.action = 'display_address_details';
-		minerAddressSpanElmnt.dataset.address = BlockFinalized.minerAddress(block);
+        const solverAddressElmnt = createSpacedTextElement('Solver', [], '', [], leftContainer);
+        const solverAddressSpanElmnt = createElement('span', ['cbe-addressSpan'], solverAddressElmnt.children[1]);
+		solverAddressSpanElmnt.textContent = BlockFinalized.solverAddress(block);
+        solverAddressSpanElmnt.dataset.action = 'display_address_details';
+		solverAddressSpanElmnt.dataset.address = BlockFinalized.solverAddress(block);
 
         const validatorAddressElmnt = createSpacedTextElement('Validator', [], '', [], leftContainer);
         const validatorAddressSpanElmnt = createElement('span', ['cbe-addressSpan'], validatorAddressElmnt.children[1]);
@@ -134,7 +134,7 @@ export class ModalComponent {
         createSpacedTextElement('Legitimacy', [], block.legitimacy, [], rightContainer);
         createSpacedTextElement('CoinBase', [], `${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, [], rightContainer);
     	createSpacedTextElement('Total fees', [], `${CURRENCY.formatNumberAsCurrency(rewards.totalFees)}`, [], rightContainer);
-        createSpacedTextElement('Miner reward', [], `${CURRENCY.formatNumberAsCurrency(rewards.powReward)}`, [], rightContainer);
+        createSpacedTextElement('Solver reward', [], `${CURRENCY.formatNumberAsCurrency(rewards.powReward)}`, [], rightContainer);
         createSpacedTextElement('Validator reward', [], `${CURRENCY.formatNumberAsCurrency(rewards.posReward)}`, [], rightContainer);
         
         this.#newTransactionsTable(block, ['cbe-TxsTable', 'cbe-Table'], contentWrap);
@@ -160,11 +160,11 @@ export class ModalComponent {
 	/** @param {number} blockIndex @param {number} txIndex @param {Transaction} tx @param {HTMLElement} tbodyDiv */
     #newTransactionOfTable(blockIndex, txIndex, tx, tbodyDiv) {
         const outputsAmount = tx.outputs.reduce((a, b) => a + b.amount, 0);
-        const specialTx = txIndex < 2 ? Transaction_Builder.isMinerOrValidatorTx(tx) : undefined;
+        const specialTx = txIndex < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined;
 		const s = serializer.serialize.transaction(tx, specialTx);
 		const row = createElement('tr', ['cbe-TxRow'], tbodyDiv);
 		let indexText = txIndex.toString();
-		if (specialTx === 'miner') indexText = `${txIndex} (CoinBase)`;
+		if (specialTx === 'solver') indexText = `${txIndex} (CoinBase)`;
 		else if (specialTx === 'validator') indexText = `${txIndex} (Validator)`;
 
 		row.dataset.txId = `${blockIndex}:${txIndex}`;
@@ -185,7 +185,7 @@ export class ModalComponent {
         const txDetails = createElement('tr');
 		eHTML.add(txDetails, 'TxDetails');
 
-		const specialTx = Transaction_Builder.isMinerOrValidatorTx(tx);
+		const specialTx = Transaction_Builder.isSolverOrValidatorTx(tx);
 		const txInfoWrap = createElement('td', ['cbe-TxInfoWrap'], txDetails);
 		createElement('h3', [], txInfoWrap).textContent = 'Version';
 		createElement('div', [], txInfoWrap).textContent = tx.version.toString();
@@ -193,7 +193,7 @@ export class ModalComponent {
 		const inputsWrap = createElement('td', ['cbe-TxInputsWrap'], txDetails);
 		const isValidatorTx = tx.inputs[0].split(':').length === 2;
 		const titleText =
-			 specialTx === 'miner' ? 'Miner nonce'
+			 specialTx === 'solver' ? 'Solver nonce'
 			 : specialTx === 'validator' ? 'Validator hash'
 			 : `Inputs (${isValidatorTx ? 0 : tx.inputs.length})`;
 		createElement('h3', [], inputsWrap).textContent = titleText;
@@ -201,7 +201,7 @@ export class ModalComponent {
             if (isValidatorTx) continue;
 
 			const inputDiv = createElement('div', ['cbe-TxInput'], inputsWrap);
-			if (specialTx === 'miner') { inputDiv.textContent = anchor; continue; }
+			if (specialTx === 'solver') { inputDiv.textContent = anchor; continue; }
 			if (specialTx === 'validator') { inputDiv.textContent = `${anchor.slice(0, 6)}...${anchor.slice(-4)}`; continue; }
 			
 			const anchorSpan = createElement('span', ['cbe-anchorSpan'], inputDiv);

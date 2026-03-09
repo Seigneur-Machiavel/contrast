@@ -4,7 +4,7 @@ import { newWorker } from './unified-worker-initializer.mjs';
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
-export class MinerWorker {
+export class SolverWorker {
 	/** @type {BlockCandidate} */	blockCandidate = null;
 	/** @type {BlockFinalized} */	result = null;
 
@@ -17,7 +17,7 @@ export class MinerWorker {
 		this.rewardAddress = rewardAddress;
 		this.bet = bet;
 		this.timeOffset = timeOffset;
-		this.worker = newWorker('./miner-worker-nodejs.mjs');
+		this.worker = newWorker('./solver-worker-nodejs.mjs');
 		this.worker.addEventListener('message', this.#onMessage);
 	}
 
@@ -25,7 +25,7 @@ export class MinerWorker {
 		const message = event.data || event;
 		if (message.paused === true || message.paused === false) {
 			this.paused = message.paused;
-			console.log('MinerWorker paused new state:', message.paused);
+			console.log('SolverWorker paused new state:', message.paused);
 			return;
 		}
 		if (message.hashRate) { this.hashRate = message.hashRate; return; }
@@ -101,7 +101,7 @@ export class MinerWorker {
 		// NODEJS GRACEFUL SHUTDOWN
 		return new Promise((resolve) => {
 			const forceTerminate = setTimeout(async () => {
-				console.error('MinerWorker timeout -> forcing termination');
+				console.error('SolverWorker timeout -> forcing termination');
 				await this.worker.terminate();
 				resolve();
 			}, 10000);
@@ -109,7 +109,7 @@ export class MinerWorker {
 			this.worker.addEventListener('exit', () => {
 				clearTimeout(forceTerminate);
 				this.worker.removeEventListener('message', this.#onMessage);
-				console.log('MinerWorker exited gracefully');
+				console.log('SolverWorker exited gracefully');
 				resolve();
 			});
 

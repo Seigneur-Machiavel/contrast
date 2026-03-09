@@ -197,7 +197,7 @@ export class MiniformComponent {
 		messageItem.innerText = msg;
 		this.eHTML.history.list.appendChild(messageItem);
 	}
-	/** @param {TxId} txId @param {Transaction} tx @param {number} inAmount @param {"miner" | "validator" | undefined} specialTxType */
+	/** @param {TxId} txId @param {Transaction} tx @param {number} inAmount @param {"solver" | "validator" | undefined} specialTxType */
 	addTransactionToHistory(txId, tx, inAmount, specialTxType) {
 		//console.log('Adding transaction to history:', txId, tx, inAmount);
 		const height = parseInt(txId.split(':')[0]);

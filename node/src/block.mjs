@@ -2,7 +2,7 @@
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 import { BlockFinalizedHeader, BlockFinalized,
 	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
-import { mining } from '../../utils/conditionals.mjs';
+import { solving } from '../../utils/conditionals.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
@@ -21,9 +21,9 @@ export class BlockUtils {
 		for (const tx of block.Txs)
 			txsSignables.push(Transaction_Builder.getTransactionSignableString(tx));
 
-        let firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : undefined;
+        let firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isSolverOrValidatorTx(block.Txs[0]) : undefined;
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
-        firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) : undefined;
+        firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isSolverOrValidatorTx(block.Txs[0]) : undefined;
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
 
         const txsIDStr = txsSignables.join('');
@@ -33,7 +33,7 @@ export class BlockUtils {
     static #calculateTxsTotalFees(involvedUTXOs, Txs) {
         let totalFees = 0;
         for (const Tx of Txs)
-            if (Transaction_Builder.isMinerOrValidatorTx(Tx)) continue;
+            if (Transaction_Builder.isSolverOrValidatorTx(Tx)) continue;
             else totalFees += TxValidation.calculateRemainingAmount(involvedUTXOs, Tx);
 
         return totalFees;
@@ -52,11 +52,11 @@ export class BlockUtils {
 		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator);
 		const signedPosFeeTx = account.signTransaction(posFeeTx);
 		block.Txs.unshift(signedPosFeeTx);
-		block.powReward = powReward; // Reward for the miner
+		block.powReward = powReward; // Reward for the solver
 	}
 
 	// PUBLIC STATIC METHODS
-    /** Get the block signature used for mining
+    /** Get the block signature used for solving
      * @param {BlockCandidate | BlockFinalized} block
      * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp
      * @returns {Promise<string>} signature Hex */
@@ -69,7 +69,7 @@ export class BlockUtils {
         return await HashFunctions.SHA256(signatureStr);
     }
     /** @param {BlockFinalized} block */
-    static async getMinerHash(block) {
+    static async getSolverHash(block) {
         if (typeof block.Txs[0].inputs[0] !== 'string') throw new Error('Invalid coinbase nonce');
         const signatureHex = await this.getBlockSignature(block);
         const headerNonce = block.nonce;
@@ -77,19 +77,19 @@ export class BlockUtils {
         const nonce = `${headerNonce}${coinbaseNonce}`;
 		//console.log(`%c${signatureHex}:${nonce}`, 'color: orange;');
         const argon2Fnc = HashFunctions.Argon2;
-        const blockHash = await mining.hashBlockSignature(argon2Fnc, signatureHex, nonce);
+        const blockHash = await solving.hashBlockSignature(argon2Fnc, signatureHex, nonce);
         if (!blockHash) throw new Error('Invalid block hash');
 
         return { hex: blockHash.hex, bitsArrayAsString: blockHash.bitsString };
     }
     /** @param {BlockCandidate | BlockFinalized} block @param {Transaction} coinbaseTx */
     static setCoinbaseTransaction(block, coinbaseTx) {
-        if (Transaction_Builder.isMinerOrValidatorTx(coinbaseTx) !== 'miner')
+        if (Transaction_Builder.isSolverOrValidatorTx(coinbaseTx) !== 'solver')
 			throw new Error('Invalid coinbase transaction');
 
 		// REMOVE EXISTING COINBASE IF ANY
-		const isFirstTxMiner = block.Txs[0] && Transaction_Builder.isMinerOrValidatorTx(block.Txs[0]) === 'miner';
-		if (isFirstTxMiner) block.Txs.shift();
+		const isFirstTxSolver = block.Txs[0] && Transaction_Builder.isSolverOrValidatorTx(block.Txs[0]) === 'solver';
+		if (isFirstTxSolver) block.Txs.shift();
 
 		// SET NEW COINBASE TX
         block.Txs.unshift(coinbaseTx);
@@ -114,8 +114,8 @@ export class BlockUtils {
         const olderBlock = node.blockchain.getBlock(olderBlockHeight);
         if (!olderBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
 
-		const averageBlockTime = mining.calculateAverageBlockTime(lastBlock, olderBlock);
-        const newDifficulty = mining.difficultyAdjustment(lastBlock, averageBlockTime, undefined, logs);
+		const averageBlockTime = solving.calculateAverageBlockTime(lastBlock, olderBlock);
+        const newDifficulty = solving.difficultyAdjustment(lastBlock, averageBlockTime, undefined, logs);
         return { averageBlockTime, newDifficulty };
     }
 	/** @param {BlockCandidate} block */
@@ -131,7 +131,7 @@ export class BlockUtils {
 	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
-		const { blockchain, memPool, account, miner, time } = node;
+		const { blockchain, memPool, account, solver, time } = node;
 		if (typeof time !== 'number') throw new Error('Invalid node time');
 		if (!account || !account.pubKey) throw new Error('Node account not set');
 
@@ -140,16 +140,16 @@ export class BlockUtils {
 		
 		// CHOOSE TO RETURN NULL IF NOT ELIGIBLE TO MINE
 		const prevHash = blockchain.lastBlock.hash;
-		const minerBestIndex = miner.bestCandidateIndex !== -1 ? miner.bestCandidateIndex : null;
+		const solverBestIndex = solver.bestCandidateIndex !== -1 ? solver.bestCandidateIndex : null;
 		const myLegitimacy = await blockchain.vss.getPubkeyLegitimacy(account.pubKey, prevHash);
 		node.info.lastLegitimacy = myLegitimacy;
-		if (minerBestIndex !== null && minerBestIndex < blockchain.lastBlock.index) return null;
-		if (minerBestIndex !== null && minerBestIndex > blockchain.lastBlock.index + 1) return null;
+		if (solverBestIndex !== null && solverBestIndex < blockchain.lastBlock.index) return null;
+		if (solverBestIndex !== null && solverBestIndex > blockchain.lastBlock.index + 1) return null;
 		if (myLegitimacy > BLOCKCHAIN_SETTINGS.validatorsPerRound) return null;
 
 		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
 		node.info.averageBlockTime = averageBlockTime;
-		const coinBaseReward = mining.calculateNextCoinbaseReward(blockchain.lastBlock);
+		const coinBaseReward = solving.calculateNextCoinbaseReward(blockchain.lastBlock);
 		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch();
 		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, txs, posTimestamp);
 	}

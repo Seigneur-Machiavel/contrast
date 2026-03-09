@@ -1,6 +1,6 @@
 import { HashFunctions } from '../src/conCrypto.mjs';
 import { convert } from '../../utils/converters.mjs';
-import { mining, conditionnals } from '../../utils/conditionals.mjs';
+import { solving, conditionnals } from '../../utils/conditionals.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
 
 const testStart = Date.now();
@@ -18,7 +18,7 @@ let powCounter = 0;
 let posTimestamp = 0;
 let success = 0;
 
-const hashPerSecond = speedHash; // SIMULATION, set false for real mining
+const hashPerSecond = speedHash; // SIMULATION, set false for real solving
 const expectedHashtime = 1000 / hashPerSecond; // 1000ms / 32 = 31.25ms
 const adjustDiffEveryCrop = 0; // init: 30 blocks, then 15 + 15 = 30 blocks // 0 to disable adjustment
 const betRange = { min: .7, max: .9 }
@@ -27,7 +27,7 @@ const disableBet = false; // disable bet time adjustment
 /** @param {string} signatureHex @param {string} nonce */
 async function mineBlock(signatureHex, nonce) {
     try {
-        const blockHash = await mining.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
+        const blockHash = await solving.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
         if (!blockHash) throw new Error('Invalid block hash');
         return { bitsArrayAsString: blockHash.bitsString };
     } catch (err) { throw err; }
@@ -62,7 +62,7 @@ class hashrateCalculator {
     }
 }
 function verify(HashBitsAsString = 'toto', finalDiff = 0) {
-    const { zeros, adjust } = mining.decomposeDifficulty(finalDiff);
+    const { zeros, adjust } = solving.decomposeDifficulty(finalDiff);
     const condition1 = conditionnals.binaryStringStartsWithZeros(HashBitsAsString, zeros);
     if (!condition1) return false;
 
@@ -101,8 +101,8 @@ async function simulatedPow(hps = 10) {
 async function realPow(limitHashPerSecond = 1) {
     const startTime = performance.now();
     const signatureHex = rndHash(64);
-    const headerNonce = mining.generateRandomNonce().Hex;
-    const coinbaseNonce = mining.generateRandomNonce().Hex;
+    const headerNonce = solving.generateRandomNonce().Hex;
+    const coinbaseNonce = solving.generateRandomNonce().Hex;
     const nonce = `${headerNonce}${coinbaseNonce}`;
     const mined = await mineBlock(signatureHex, nonce);
     if (!mined) throw new Error('Invalid block hash');
@@ -126,9 +126,9 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
                 return bitsArrayAsString;
             }
             
-            // simulate the bet of miner logic to be more accurate
+            // simulate the bet of solver logic to be more accurate
             const { min, max } = betRange;
-            let betTime = mining.betPowTime(min, max); // rnd from .4 to .8 (randomize bet time)
+            let betTime = solving.betPowTime(min, max); // rnd from .4 to .8 (randomize bet time)
             if (disableBet) betTime = 0; // disable bet time adjustment
 
             const bet = Math.round(posTimestamp + betTime + 1);
@@ -137,14 +137,14 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
 
             const betBlockCandidate = { difficulty: baseDifficulty, legitimacy: 0, posTimestamp, timestamp: powTimestamp };
             let diffWL = baseDifficulty + (betBlockCandidate.legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy);
-            let finalDiff = mining.getBlockFinalDifficulty(betBlockCandidate, targetBlockTime).finalDifficulty;
+            let finalDiff = solving.getBlockFinalDifficulty(betBlockCandidate, targetBlockTime).finalDifficulty;
             const conform = verify(await computeHash(), finalDiff);
             if (!conform) continue;
             
             // If powTimestamp the future, try normal pow (simulated pow only)
             while (hps && powTimestamp > Date.now() + expectedHashtime) {
                 const noBetBlockCandidate = { difficulty: baseDifficulty, legitimacy: 0, posTimestamp, timestamp: Date.now() };
-                const noBetFinalDiff = mining.getBlockFinalDifficulty(noBetBlockCandidate, targetBlockTime).finalDifficulty;
+                const noBetFinalDiff = solving.getBlockFinalDifficulty(noBetBlockCandidate, targetBlockTime).finalDifficulty;
                 const noBetConform = verify(await computeHash(), noBetFinalDiff);
                 if (!noBetConform) continue;
                 
@@ -165,11 +165,11 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
             const sessionElapsedTime = Date.now() - sessionStart;
             const hashRate = (powCounter / (sessionElapsedTime / 1000)).toFixed(2);
             const avgSuccessTime = sessionElapsedTime / success;
-            const newDiff = mining.difficultyAdjustment({ index: success + adjustDiffEveryCrop, difficulty: baseDifficulty }, avgSuccessTime, targetBlockTime);
+            const newDiff = solving.difficultyAdjustment({ index: success + adjustDiffEveryCrop, difficulty: baseDifficulty }, avgSuccessTime, targetBlockTime);
             const averageFinalDiff = sessionFinalDiffs.reduce((a, b) => a + b, 0) / sessionFinalDiffs.length;
             const avgDiffWL = sessionDiffWL.reduce((a, b) => a + b, 0) / sessionDiffWL.length;
-            //const estGlobalHasrate = mining.estimateGlobalHashrate(averageFinalDiff, avgSuccessTime, targetBlockTime, success + adjustDiffEveryCrop);
-            const estGlobalHasrate = mining.estimateGlobalHashrate(avgDiffWL, avgSuccessTime, targetBlockTime);
+            //const estGlobalHasrate = solving.estimateGlobalHashrate(averageFinalDiff, avgSuccessTime, targetBlockTime, success + adjustDiffEveryCrop);
+            const estGlobalHasrate = solving.estimateGlobalHashrate(avgDiffWL, avgSuccessTime, targetBlockTime);
             console.log(`avgFD: ${averageFinalDiff.toFixed(2)} | EGH: ${estGlobalHasrate.toFixed(2)} H/s | betTime: ${betTime.toFixed(2)}`);
             
             //if (baseDifficulty === newDiff) continue; // no adjustment needed

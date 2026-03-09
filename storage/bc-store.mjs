@@ -292,8 +292,8 @@ export class BlockchainStorage {
 	#extractTransactionsFromBlockBytes(blockBytes, txIndexes) {
 		/** key: txIndex, value: transaction @type {Object<number, Transaction>} */
 		const txs = {};
-		/** @type {Object<number, 'miner' | 'validator'>} */
-		const specialMode = { 0: 'miner', 1: 'validator' }; // finalized block only
+		/** @type {Object<number, 'solver' | 'validator'>} */
+		const specialMode = { 0: 'solver', 1: 'validator' }; // finalized block only
 		const nbOfTxs = this.converter.bytes2ToNumber(blockBytes.subarray(0, 2));
 		const timestampOffset = serializer.dataPositions.timestampInFinalizedBlock;
 		const timestamp = this.converter.bytes6ToNumber(blockBytes.subarray(timestampOffset, timestampOffset + 6));

@@ -2,9 +2,9 @@
 import { parentPort } from 'worker_threads';
 import { BlockUtils } from '../src/block.mjs';
 import { HashFunctions } from '../src/conCrypto.mjs';
-import { mining } from '../../utils/conditionals.mjs';
+import { solving } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
-if (parentPort === null) throw new Error('No parent port in miner worker');
+if (parentPort === null) throw new Error('No parent port in solver worker');
 
 /**
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
@@ -50,34 +50,34 @@ class hashrateCalculator {
 	}
 }
 async function mineBlockUntilValid() {
-	if (parentPort === null) throw new Error('No parent port in miner worker');
+	if (parentPort === null) throw new Error('No parent port in solver worker');
 
 	const hashRateCalculator = new hashrateCalculator(parentPort);
 	while (true) {
-		if (minerVars.exiting) return { error: 'Exiting' };
-		if (minerVars.paused) { await new Promise((resolve) => setTimeout(resolve, 100)); continue; }
+		if (solverVars.exiting) return { error: 'Exiting' };
+		if (solverVars.paused) { await new Promise((resolve) => setTimeout(resolve, 100)); continue; }
 
 		// IF PAUSED MORE THAN A MINUTE AGO, WE NEED TO WAIT AN UPDATE OF BLOCK CANDIDATE
 		// ON NEW CANDIDATE, PAUSE TIME IS RESET
-		while (minerVars.pausedAtTime && minerVars.pausedAtTime > Date.now() - 60000)
+		while (solverVars.pausedAtTime && solverVars.pausedAtTime > Date.now() - 60000)
 			await new Promise((resolve) => setTimeout(resolve, 100));
 
-		if (minerVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
-		if (minerVars.timeOffset === 0) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
-		if (minerVars.testMiningSpeedPenality) await new Promise((resolve) => setTimeout(resolve, minerVars.testMiningSpeedPenality));
+		if (solverVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
+		if (solverVars.timeOffset === 0) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
+		if (solverVars.testSolvingSpeedPenality) await new Promise((resolve) => setTimeout(resolve, solverVars.testSolvingSpeedPenality));
 
 		try {
 			const startTime = performance.now();
-			const { signatureHex, nonce, block } = await prepareBlockCandidateBeforeMining();
-			const blockHash = await mining.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
+			const { signatureHex, nonce, block } = await prepareBlockCandidateBeforeSolving();
+			const blockHash = await solving.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
 			if (!blockHash) throw new Error('Invalid block hash');
 			
 			block.hash = blockHash.hex;
 			hashRateCalculator.newHash(performance.now() - startTime);
 			//console.log('hashTime', Math.round(performance.now() - startTime), 'ms');
 			
-			if (!mining.verifyBlockHashConformToDifficulty(blockHash.bitsString, block).conform) continue;
-			const now = Date.now() + minerVars.timeOffset;
+			if (!solving.verifyBlockHashConformToDifficulty(blockHash.bitsString, block).conform) continue;
+			const now = Date.now() + solverVars.timeOffset;
 			const blockReadyIn = Math.max(block.timestamp - now, 0);
 			await new Promise((resolve) => setTimeout(resolve, blockReadyIn));
 			return block;
@@ -87,22 +87,22 @@ async function mineBlockUntilValid() {
 		}
 	}
 }
-async function prepareBlockCandidateBeforeMining() {
+async function prepareBlockCandidateBeforeSolving() {
 	//let time = performance.now();
 	//console.log(`prepareNextBlock: ${performance.now() - time}ms`); time = performance.now();
 	/** @ts-ignore Candidate transmute to Finalized @type {BlockFinalized | null} */
-	const block = minerVars.blockCandidate;
+	const block = solverVars.blockCandidate;
 	if (block === null) throw new Error('No block candidate available');
 
 	/** @ts-ignore Candidate transmute to Finalized @type {number} */
 	const powReward = block.powReward;
-	const headerNonce = mining.generateRandomNonce().Hex;
-	const coinbaseNonce = mining.generateRandomNonce().Hex;
+	const headerNonce = solving.generateRandomNonce().Hex;
+	const coinbaseNonce = solving.generateRandomNonce().Hex;
 	block.nonce = headerNonce;
 
-	const now = Date.now() + minerVars.timeOffset;
-	block.timestamp = Math.max(block.posTimestamp + 1 + minerVars.bet, now);
-	const coinbaseTx = await Transaction_Builder.createCoinbase(coinbaseNonce, minerVars.rewardAddress, powReward);
+	const now = Date.now() + solverVars.timeOffset;
+	block.timestamp = Math.max(block.posTimestamp + 1 + solverVars.bet, now);
+	const coinbaseTx = await Transaction_Builder.createCoinbase(coinbaseNonce, solverVars.rewardAddress, powReward);
 	BlockUtils.setCoinbaseTransaction(block, coinbaseTx); // Will replace existing coinbase if any
 
 	const signatureHex = await BlockUtils.getBlockSignature(block);
@@ -113,7 +113,7 @@ async function prepareBlockCandidateBeforeMining() {
 	return { signatureHex, nonce, block };
 }
 
-const minerVars = {
+const solverVars = {
 	exiting: false,
 	working: false,
 
@@ -125,46 +125,46 @@ const minerVars = {
 	/** @type {BlockCandidate | null} */	blockCandidate: null,
 	/** @type {number | null} */			pausedAtTime: 0,
 
-	testMiningSpeedPenality: 0 // TODO: set to 0 after testing
+	testSolvingSpeedPenality: 0 // TODO: set to 0 after testing
 };
 
 parentPort.on('message', async (task) => {
-	if (parentPort === null) throw new Error('No parent port in miner worker');
+	if (parentPort === null) throw new Error('No parent port in solver worker');
 
 	const response = {};
     switch (task.type) {
 		case 'updateInfo':
-			minerVars.rewardAddress = task.rewardAddress;
-			minerVars.bet = task.bet;
-			minerVars.timeOffset = task.timeOffset;
+			solverVars.rewardAddress = task.rewardAddress;
+			solverVars.bet = task.bet;
+			solverVars.timeOffset = task.timeOffset;
 			return;
         case 'newCandidate':
-			minerVars.highestBlockHeight = task.blockCandidate.index;
-			minerVars.blockCandidate = task.blockCandidate;
-			minerVars.pausedAtTime = null;
+			solverVars.highestBlockHeight = task.blockCandidate.index;
+			solverVars.blockCandidate = task.blockCandidate;
+			solverVars.pausedAtTime = null;
 			return;
 		case 'mineUntilValid':
-			if (minerVars.working) return;
+			if (solverVars.working) return;
 			
-			minerVars.working = true;
-			minerVars.rewardAddress = task.rewardAddress;
-			minerVars.bet = task.bet;
-			minerVars.timeOffset = task.timeOffset;
+			solverVars.working = true;
+			solverVars.rewardAddress = task.rewardAddress;
+			solverVars.bet = task.bet;
+			solverVars.timeOffset = task.timeOffset;
 
 			const finalizedBlock = await mineBlockUntilValid();
 			response.result = finalizedBlock;
 			break;
 		case 'pause':
-			minerVars.paused = true;
-			minerVars.pausedAtTime = Date.now();
+			solverVars.paused = true;
+			solverVars.pausedAtTime = Date.now();
 			parentPort.postMessage({ paused: true });
 			return;
 		case 'resume':
-			minerVars.paused = false;
+			solverVars.paused = false;
 			parentPort.postMessage({ paused: false });
 			return;
 		case 'terminate':
-			minerVars.exiting = true;
+			solverVars.exiting = true;
 			parentPort.close(); // close the worker
 			break;
         default:
@@ -172,8 +172,8 @@ parentPort.on('message', async (task) => {
             break;
     }
 
-	if (minerVars.exiting) return;
+	if (solverVars.exiting) return;
 	
-	minerVars.working = false;
+	solverVars.working = false;
 	parentPort.postMessage(response);
 });

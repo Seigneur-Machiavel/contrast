@@ -1,33 +1,32 @@
 // @ts-check
-import { BlockUtils } from './block.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
+import { solving } from '../../utils/conditionals.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { mining } from '../../utils/conditionals.mjs';
-import { MinerWorker } from '../workers/miner-worker-wrapper.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { SolverWorker } from '../workers/solver-worker-wrapper.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
-export class Miner {
+export class Solver {
 	node;
 	address;
 	version = 1;
 	nbOfWorkers = 1;
 	terminated = false;
 	useBetTimestamp = true;
-	logger = new MiniLogger('miner');
+	logger = new MiniLogger('solver');
 	
 	/** @type {string[]} */								addressOfCandidatesBroadcasted = [];
 	/** @type {BlockCandidate | null} */				bestCandidate = null;
-	/** @type {MinerWorker[]} */						workers = [];
+	/** @type {SolverWorker[]} */						workers = [];
 	/** @type {number[]} */								bets = [];
 	/** @type {{min: number, max: number}} will bet between 70% and 90% of the expected blockTime */
 	betRange = { min: .7, max: .9 };
 	powBroadcastState = { foundHeight: -1, sentTryCount: 0, maxTryCount: 1 };
-	canProceedMining = true;
+	canProceedSolving = true;
 	hashPeriodStart = 0;
 	hashCount = 0;
 	hashRate = 0; // hash rate in H/s
@@ -35,7 +34,7 @@ export class Miner {
     /** @param {ContrastNode} node */
     constructor(node) {
         this.node = node;
-        this.address = node.rewardAddresses.miner;
+        this.address = node.rewardAddresses.solver;
     }
 
     get bestCandidateIndex() { return this.bestCandidate ? this.bestCandidate.index : -1; }
@@ -65,8 +64,8 @@ export class Miner {
         else if (this.bestCandidate.prevHash !== prevHash)
             reasonChange = '(replacing invalid prevHash)';
         else if (block.index === this.bestCandidate.index) {
-            const newCandidateFinalDiff = mining.getBlockFinalDifficulty(block).finalDifficulty;
-            const bestCandidateFinalDiff = mining.getBlockFinalDifficulty(this.bestCandidate).finalDifficulty;
+            const newCandidateFinalDiff = solving.getBlockFinalDifficulty(block).finalDifficulty;
+            const bestCandidateFinalDiff = solving.getBlockFinalDifficulty(this.bestCandidate).finalDifficulty;
             if (newCandidateFinalDiff > bestCandidateFinalDiff) throw new Error(`Ignored candidate (#${block.index} | v:${validatorAddress}) | new final diff ${newCandidateFinalDiff} > best final diff ${bestCandidateFinalDiff}`);
             if (newCandidateFinalDiff < bestCandidateFinalDiff) reasonChange = `(easier block: ${newCandidateFinalDiff} < ${bestCandidateFinalDiff})`;
             // if everything is the same, then check the powReward to decide
@@ -94,7 +93,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 	async tick() {
 		if (this.terminated) return;
 
-		const rewardAddress = this.node.rewardAddresses.miner;
+		const rewardAddress = this.node.rewardAddresses.solver;
 		const blockCandidate = this.bestCandidate;
 		if (!rewardAddress || !blockCandidate) return;
 		if (blockCandidate.index !== this.bestCandidateIndex) {
@@ -128,7 +127,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 				await this.#broadcastFinalizedBlock(finalizedBlock);
 			}
 
-			if (!this.canProceedMining) continue;
+			if (!this.canProceedSolving) continue;
 			worker.mineUntilValid();
 		}
 		
@@ -153,7 +152,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 
         const { min, max } = this.betRange;
         const bets = [];
-        for (let i = 0; i < nbOfBets; i++) bets.push(mining.betPowTime(min, max));
+        for (let i = 0; i < nbOfBets; i++) bets.push(solving.betPowTime(min, max));
 
         this.bets = bets;
     }
@@ -171,7 +170,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         }
         
         const validatorAddress = block.Txs[1].inputs[0].split(':')[0];
-		const minerAddress = block.Txs[0].outputs[0].address;
+		const solverAddress = block.Txs[0].outputs[0].address;
         if (this.addressOfCandidatesBroadcasted.includes(validatorAddress)) {
         	if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized already sent (Height: ${block.index})`, (m, c) => console.info(m, c));
             return;
@@ -192,14 +191,14 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		// Ensure the block timestamp is not in the future
 		const t = this.node.time || Date.now();
 		if (block.timestamp > t + 990) await new Promise((resolve) => setTimeout(resolve, block.timestamp - (t + 990)));
-        if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorAddress} | miner: ${minerAddress}
+        if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorAddress} | solver: ${solverAddress}
 			(Height: ${block.index}) | Diff = ${block.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));
-			if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorAddress} | M:${minerAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
+			if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorAddress} | M:${solverAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
 		
 		// THEN SHARE THE FINALIZED BLOCK
 		const serialized = serializer.serialize.block(block, 'finalized');
         this.node.p2p.broadcast(serialized, { topic: 'block_finalized' });
-		//console.log(`[MINER:${minerAddress}] Broadcasted #${block.index}`); // DEBUG
+		//console.log(`[MINER:${solverAddress}] Broadcasted #${block.index}`); // DEBUG
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
 		//const deserializedBlock = serializer.deserialize.blockFinalized(serialized); // DEBUG
 		this.node.taskQueue.pushFirst('DigestBlock', serialized);
@@ -216,7 +215,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
             const workerIndex = readyWorkers + i;
             const blockBet = this.bets?.[workerIndex] || 0;
 			const timeOffset = Date.now() - this.node.time;
-            this.workers.push(new MinerWorker(rewardAddress, blockBet, timeOffset));
+            this.workers.push(new SolverWorker(rewardAddress, blockBet, timeOffset));
             readyWorkers++;
         }
 
