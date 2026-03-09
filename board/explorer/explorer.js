@@ -113,8 +113,13 @@ export class Explorer {
 
 		// UPDATE BLOCKCHAIN COMPONENT
 		const weight = this.connector.blockWeightByHash[block.hash] || 0;
-		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
-		this.bc.createEmptyBlocksUntilFillTheDiv();
+		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset(); // FAILED => START FRESH
+		else { // SUCCESS => ADD EMPTY BLOCKS UNTIL FILL THE DIV AND WAIT A BIT FOR THE ANIMATION TO END
+			this.bc.createEmptyBlocksUntilFillTheDiv();
+			await new Promise(r => setTimeout(r, 1000));
+		}
+
+		await this.#fillBlocksFromLastUntilEnough(t);
 
 		// UPDATE BLOCK TIMES CHART
 		if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
@@ -123,12 +128,8 @@ export class Explorer {
 
 		// UPDATE ROUND LEGITIMACIES CHART
 		if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change
-		try { this.getAndDisplayRoundLegitimacies() }
+		try { await this.getAndDisplayRoundLegitimacies() }
 		catch (/** @type {any} */ error) { console.warn(error.stack || error) }
-
-		// UNABLE TO COMPLETE THE CHAIN, REFRESH ALL BLOCKS SHOWN
-		//await new Promise(r => setTimeout(r, 1000)); // wait a bit for the animation
-		await this.#fillBlocksFromLastUntilEnough(t);
 	}
 	/** @param {number} instanceTimestamp */
 	async #fillBlocksFromLastUntilEnough(instanceTimestamp) {
