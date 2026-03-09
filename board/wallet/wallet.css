@@ -460,13 +460,11 @@
 	height: 100%;
 	backdrop-filter: brightness(.8) blur(1px);
 }
-.biw-container.expand #biw-settings-menu {
-	width: 200%;
-}
 #biw-settings-menu.open {
 	display: block;
 }
 #biw-settings-menu .content {
+	position: absolute;
 	top: 50%;
 	left: 50%;
 	width: 250px;

@@ -1,8 +1,8 @@
-import { NetworkRenderer } from './NetworkRenderer.mjs';
+import { NetworkRenderer } from './NetworkRenderer.js';
 
 /**
- * @typedef {import('../../node_modules/hive-p2p/core/unicast.mjs').DirectMessage} DirectMessage
- * @typedef {import('../../node_modules/hive-p2p/core/gossip.mjs').GossipMessage} GossipMessage
+ * @typedef {import('hive-p2p/core/unicast.mjs').DirectMessage} DirectMessage
+ * @typedef {import('hive-p2p/core/gossip.mjs').GossipMessage} GossipMessage
  */
 
 export class NetworkVisualizer {

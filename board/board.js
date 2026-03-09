@@ -1,7 +1,7 @@
 // IMPORTS
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('../hive-p2p.min.js');
-import { NetworkVisualizer } from './visualizer/visualizer.mjs';
+import { NetworkVisualizer } from './visualizer/visualizer.js';
 import { Connector } from './connector.js';
 import { Translator } from './translator.js';
 import { AppsManager } from './apps-manager.js';

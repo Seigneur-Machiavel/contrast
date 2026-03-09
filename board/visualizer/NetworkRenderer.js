@@ -1,5 +1,5 @@
-import { NetworkRendererElements, NetworkRendererOptions } from './renderer-options.mjs';
-import { Node, NodesStore, ConnectionsStore } from './renderer-stores.mjs';
+import { NetworkRendererElements, NetworkRendererOptions } from './renderer-options.js';
+import { Node, NodesStore, ConnectionsStore } from './renderer-stores.js';
 
 export class NetworkRenderer {
 	container;

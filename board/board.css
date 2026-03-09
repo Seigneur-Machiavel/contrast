@@ -526,7 +526,6 @@ body.dark-mode #board-windows-wrap {
     cursor: pointer;
 }
 .window .content {
-    /*position: absolute;*/
     width: 100%;
     height: calc(100% - 32px);
 }

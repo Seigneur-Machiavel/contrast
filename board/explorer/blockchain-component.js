@@ -135,13 +135,10 @@ export class BlockchainComponent {
 		// REMOVE ALL BLOCK ELEMENTS
 		for (const blockComponent of this.blocks) blockComponent.wrap.remove();
 		this.blocks = [];
-
-		// RECREATE EMPTY BLOCKS
-		this.createEmptyBlocksUntilFillTheDiv();
 	}
 
+	/** IF INDEX OF LAST FILLED BLOCK > MAX, SUCK THE FIRST ONE, THEN ADD A NEW EMPTY BLOCK AT THE END */
 	#pruneBlockIfNeeded() {
-		// IF INDEX OF LAST FILLED BLOCK > MAX, SUCK THE FIRST ONE, THEN ADD A NEW EMPTY BLOCK AT THE END
 		const index = this.numberOfFilledBlocks + (this.blocks[0]?.isFilled ? 0 : 1);
 		if (index <= this.MAX_BLOCKS_FILLED) return;
 		this.#suckFirstBlockElement();
@@ -171,7 +168,7 @@ export class BlockchainComponent {
 		return true;
 	}
     /** @param {number} duration */
-    #suckFirstBlockElement(duration = 0) {
+    #suckFirstBlockElement(duration = 1000) {
 		const chainWrap = eHTML.get('chainWrap');
 		if (!chainWrap) return;
 

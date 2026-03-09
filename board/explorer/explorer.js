@@ -114,6 +114,7 @@ export class Explorer {
 		// UPDATE BLOCKCHAIN COMPONENT
 		const weight = this.connector.blockWeightByHash[block.hash] || 0;
 		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset();
+		this.bc.createEmptyBlocksUntilFillTheDiv();
 
 		// UPDATE BLOCK TIMES CHART
 		if (this.consensusChangeAntiStuckTimestamp !== t) return; // Another instance of the fnc is running with a more recent consensus change

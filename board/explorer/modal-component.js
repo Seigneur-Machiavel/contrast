@@ -109,7 +109,6 @@ export class ModalComponent {
         const twoContainerWrap = createElement('div', ['cbe-twoContainerWrap'], contentWrap);
 		const leftContainer = createElement('div', ['cbe-leftContainer'], twoContainerWrap);
 		// createSpacedTextElement('Supply', [], `${CURRENCY.formatNumberAsCurrency(block.supply)}`, [], leftContainer);
-        // contentWrap.style = 'margin-top: 56px; padding-top: 0; height: calc(100% - 76px);';
         blockHashElement.children[0].dataset.action = 'copy_block_hash';
 		blockHashElement.children[0].dataset.hash = block.hash;
         
@@ -260,7 +259,6 @@ export class ModalComponent {
 		const contentWrap = eHTML.get('modalContentWrap');
 		const addressTitle = createElement('div', ['cbe-addressTitle'], contentWrap);
         addressTitle.textContent = address;
-        contentWrap.style = 'margin-top: 56px; padding-top: 0; height: calc(100% - 76px);';
 
 		const addressInfoElement = createElement('div', [], contentWrap);
 		eHTML.add(addressInfoElement, 'addressExhaustiveData');
