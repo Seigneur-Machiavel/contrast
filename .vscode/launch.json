@@ -19,7 +19,7 @@
 			"request": "launch",
 			"name": "Test: Run 2 Nodes",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/tests/run_2_nodes.mjs",
+			"program": "${workspaceFolder}/tests/run_2_nodes.mjs",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
@@ -27,7 +27,7 @@
 			"request": "launch",
 			"name": "Test: Worst TXs Validations",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/tests/test-worst-txs-validations.mjs",
+			"program": "${workspaceFolder}/tests/test-worst-txs-validations.mjs",
 			"args": ["--max-old-space-size=16384"],
 			"runtimeArgs": ["--inspect"]
 		},
@@ -36,7 +36,7 @@
 			"request": "launch",
 			"name": "Test: Staking",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/tests/test-staking.mjs",
+			"program": "${workspaceFolder}/tests/test-staking.mjs",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
@@ -44,7 +44,7 @@
 			"request": "launch",
 			"name": "Test: Solving",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/tests/test-solving.mjs",
+			"program": "${workspaceFolder}/tests/test-solving.mjs",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
@@ -52,7 +52,7 @@
 			"request": "launch",
 			"name": "Test: Sync",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/node/tests/test_sync.mjs",
+			"program": "${workspaceFolder}/tests/test_sync.mjs",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
@@ -62,63 +62,6 @@
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/storage/storage.mjs",
 			"args": ["--max-old-space-size=16384"]
-		},
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Debug Main Process",
-            "runtimeExecutable": "electron",
-            "program": "${workspaceFolder}/main.js",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "env": {},
-            "sourceMaps": false,
-            "outFiles": ["${workspaceFolder}/**/*.js"],
-            "runtimeArgs": ["--js-flags=--max-old-space-size=16384"]
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Debug Electron (packaged dist)",
-            "program": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
-            "args": ["--inspect=9222"],
-            "stopOnEntry": false,
-            "cwd": "${workspaceFolder}",
-            "runtimeExecutable": "${workspaceFolder}/dist/win-unpacked/Contrast.exe",
-            "windows": {
-                "runtimeExecutable": "${workspaceFolder}/dist/win-unpacked/Contrast.exe"
-            },
-            "sourceMaps": true,
-            "outputCapture": "std"
-        },
-        {
-            "type": "node",
-            "request": "launch",
-            "name": "Debug Electron (packaged test-setup)",
-            "program": "${workspaceFolder}/node_modules/electron/dist/electron.exe",
-            "args": ["--inspect=9222"],
-            "stopOnEntry": false,
-            "cwd": "${workspaceFolder}",
-            "runtimeExecutable": "${workspaceFolder}/test-setup/Contrast.exe",
-            "windows": {
-                "runtimeExecutable": "${workspaceFolder}/test-setup/Contrast.exe"
-            },
-            "sourceMaps": true,
-            "outputCapture": "std"
-        },
-        {
-            "name": "Debug Electron (packaged-like)",
-            "type": "node",
-            "request": "launch",
-            "cwd": "${workspaceFolder}",
-            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
-            "windows": {
-                "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron.cmd"
-            },
-            "program": "${workspaceFolder}/main.js",
-            "args" : ["${workspaceFolder}/dist"],
-            "outputCapture": "std",
-            "sourceMaps": true
-        }
+		}
     ]
 }

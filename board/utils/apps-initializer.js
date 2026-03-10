@@ -235,6 +235,9 @@ export class SubWindow {
 		this.element.classList.remove('fullscreen');
 		this.expandButton.dataset.action = 'expand';
 		this.expandButton.src = 'assets/expand_64.png';
+		// SET WIDTH/HEIGHT IN PIXEL TO ANIMATE FROM CURRENT TO NEW SIZE.
+		this.element.style.top = '0px';
+		this.element.style.left = '1px';
 		this.element.style.width = this.element.offsetWidth + 'px';
 		this.element.style.height = this.element.offsetHeight + 'px';
 		this.animation = anime({
@@ -244,7 +247,12 @@ export class SubWindow {
 			translateX: this.position.left + 'px',
 			translateY: this.position.top + 'px',
 			duration,
-			easing: 'easeOutQuad'
+			easing: 'easeOutQuad',
+			complete: () => {
+				this.element.style.top = this.position.top + 'px';
+				this.element.style.left = this.position.left + 'px';
+				this.element.style.transform = '';
+			}
 		});
 	}
 }

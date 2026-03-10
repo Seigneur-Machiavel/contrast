@@ -12,18 +12,19 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
 const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
+const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : undefined;
 const clearOnStart = true;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 
-import { Wallet } from '../src/wallet.mjs';
-import { createContrastNode } from '../src/node.mjs';
-import { serializer } from '../../utils/serializer.mjs';
-import { ContrastStorage } from '../../storage/storage.mjs';
-import { Transaction_Builder } from "../src/transaction.mjs";
+import { Wallet } from '../node/src/wallet.mjs';
+import { createContrastNode } from '../node/src/node.mjs';
+import { serializer } from '../utils/serializer.mjs';
+import { ContrastStorage } from '../storage/storage.mjs';
+import { Transaction_Builder } from "../node/src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";
-import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
-import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
+import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
+import { UTXO_RULES_GLOSSARY } from '../types/transaction.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 //HiveP2P.CONFIG.SIMULATION.USE_TEST_TRANSPORTS = true;
 
@@ -36,7 +37,7 @@ await bootstrapWallet.deriveAccounts(2, 'C', bootstrapStorage);
 
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
 // @ts-ignore
-const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
+const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort, chachaSeedHex });
 await bootstrapNode.start(bootstrapWallet);
 
 const bootstraps = bootstrapNode.p2p.publicUrl ? [bootstrapNode.p2p.publicUrl] : [];
@@ -62,7 +63,7 @@ async function createClientNode(seed = 'toto') {
 	return clientNode;
 }
 
-/** @type {import("../src/node.mjs").ContrastNode[]} */
+/** @type {import("../node/src/node.mjs").ContrastNode[]} */
 const clientNodes = [];
 for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 
@@ -70,7 +71,7 @@ for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 // TESTS
 // -------------------------------------------------------------------------------------
 let height = -1;
-/** @param {import("../src/blockchain.mjs").BlockFinalized} block */
+/** @param {import("../node/src/blockchain.mjs").BlockFinalized} block */
 const onBlockConfirmed = (block) => {
 	if (block.index === height) return; // already processed
 	height = block.index;

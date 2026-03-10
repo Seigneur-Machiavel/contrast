@@ -3,13 +3,13 @@ if (false) { const anime = require('animejs'); } // For completion
 
 import { Interpreter } from './interpreter.js';
 import { ADDRESS } from '../../types/address.mjs';
-import { eHTML_STORE } from '../board-helpers.js';
+import { eHTML_STORE } from '../utils/board-helpers.js';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { MiniformComponent } from './miniform-component.js';
 import { AccountsComponent } from './accounts-component.js';
 import { Wallet, Account } from '../../node/src/wallet.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-import { ButtonHoldAnimation, horizontalBtnLoading } from '../htmlAnimations.js';
+import { ButtonHoldAnimation, horizontalBtnLoading } from '../utils/htmlAnimations.js';
 import { Transaction_Builder } from '../../node/src/transaction.mjs';
 
 /** 
@@ -43,7 +43,7 @@ export class BoardInternalWallet {
 
 	get activeAccount() { return this.wallet.accounts[this.components.accounts.activeAccountIndex]; }
 
-	/** @param {import('../connector.js').Connector} connector @param {import('../../utils/front-storage.mjs').FrontStorage} boardStorage */
+	/** @param {import('../utils/connector.js').Connector} connector @param {import('../../utils/front-storage.mjs').FrontStorage} boardStorage */
 	constructor(connector, boardStorage) {
 		this.connector = connector;
 		this.boardStorage = boardStorage;

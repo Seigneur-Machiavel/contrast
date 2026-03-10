@@ -1,16 +1,16 @@
 // @ts-check
-import { Sync } from '../node/src/sync.mjs';
-import { serializer } from '../utils/serializer.mjs';
-import { PendingRequest } from '../utils/networking.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../utils/blockchain-settings.mjs';
+import { Sync } from '../../node/src/sync.mjs';
+import { serializer } from '../../utils/serializer.mjs';
+import { PendingRequest } from '../../utils/networking.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
 
 /**
- * @typedef {import("../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
- * @typedef {import("../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
- * @typedef {import("../storage/ledgers-store.mjs").AddressLedger} AddressLedger
- * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
- * @typedef {import("../types/transaction.mjs").Transaction} Transaction
- * @typedef {import("../types/transaction.mjs").TxId} TxId
+ * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
+ * @typedef {import("../../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
+ * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
+ * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
+ * @typedef {import("../../types/transaction.mjs").TxId} TxId
  */
 
 export class Connector {

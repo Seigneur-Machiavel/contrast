@@ -1,6 +1,6 @@
 //import { Transaction_Builder, UTXO } from '../src/transaction.mjs';
 //import { convert } from '../../utils/converters.mjs';
-import { eHTML_STORE } from '../board-helpers.js';
+import { eHTML_STORE } from '../utils/board-helpers.js';
 import { serializer } from '../../utils/serializer.mjs';
 
 /**

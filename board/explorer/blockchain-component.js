@@ -3,7 +3,7 @@ if (false) { // For better completion
 	const anime = require('animejs');
 }
 
-import { eHTML_STORE, createElement, getTimeSinceBlockConfirmedString } from '../board-helpers.js';
+import { eHTML_STORE, createElement, getTimeSinceBlockConfirmedString } from '../utils/board-helpers.js';
 
 /**
  * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized

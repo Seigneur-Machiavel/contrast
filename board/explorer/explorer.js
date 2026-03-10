@@ -1,23 +1,14 @@
 // @ts-check
 
-//import { UTXO } from '../../types/transaction.mjs';
 //import { IS_VALID } from '../../types/validation.mjs';
 import { ADDRESS } from '../../types/address.mjs';
-import { eHTML_STORE } from '../board-helpers.js';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { ModalComponent } from './modal-component.js';
 import { serializer } from '../../utils/serializer.mjs';
+import { eHTML_STORE } from '../utils/board-helpers.js';
 import { BlockchainComponent } from './blockchain-component.js';
 import { BlocksTimesChartComponent, RoundLegitimaciesChartComponent } from './charts-component.js';
 import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
-
-/**
-* @typedef {import("../../types/block.mjs").BlockCandidateHeader} BlockCandidateHeader
-* @typedef {import("../../types/block.mjs").BlockFinalizedHeader} BlockFinalizedHeader
-* @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
-* @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
-* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
-* @typedef {import("../../types/transaction.mjs").UTXO} UTXO */
 
 const eHTML = new eHTML_STORE('cbe-', 'maxSupply');
 export class Navigator {
@@ -62,7 +53,7 @@ export class Explorer {
 	navigator = new Navigator();
 	connector;
 
-	/** @param {import('../connector.js').Connector} connector */
+	/** @param {import('../utils/connector.js').Connector} connector */
 	constructor(connector) {
 		this.connector = connector;
 		this.connector.on('connection_established', () => setTimeout(this.getAndDisplayBlocksTimegaps, 2000));

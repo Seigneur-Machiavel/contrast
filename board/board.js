@@ -2,9 +2,9 @@
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('../hive-p2p.min.js');
 import { NetworkVisualizer } from './visualizer/visualizer.js';
-import { Connector } from './connector.js';
-import { Translator } from './translator.js';
-import { AppsManager } from './apps-manager.js';
+import { Connector } from './utils/connector.js';
+import { Translator } from './utils/translator.js';
+import { AppsManager } from './utils/apps-manager.js';
 import { Explorer } from './explorer/explorer.js';
 import { Assistant } from './assistant/assistant.js';
 import { Dashboard } from './dashboard/dashboard.js';
@@ -34,24 +34,23 @@ const translator = new Translator(async (lang) => {
 		setTimeout(() => assistant.idleMenu('toto'), 4500);
 	}
 });
-window.translator = translator; // Expose translator for debugging and global access in apps
 
 // INIT OTHER MANAGERS AND COMPONENTS
 const connector = new Connector(hiveNode);
-const assistant = new Assistant();
 const explorer = new Explorer(connector);
 const dashboard = new Dashboard(connector);
 const biw = new BoardInternalWallet(connector, boardStorage);
+const assistant = new Assistant(biw, translator);
 
 if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
 else document.body.classList.remove('dark-mode');
 
-//const settingsManager = new SettingsManager(settingsMenuElement);
 const visualizer = new NetworkVisualizer(connector, HiveP2P.CryptoCodex);
-const windowsWrap = document.getElementById('board-windows-wrap');
-const bottomButtonsBar = document.getElementById('board-apps-buttons-bar');
+const boardVersionElement = document.getElementById('board-version');
+const windowsWrapElement = document.getElementById('board-windows-wrap');
 const settingsMenuElement = document.getElementById('board-settings-menu');
-const appsManager = new AppsManager(windowsWrap, bottomButtonsBar);
+const bottomButtonsBarElement = document.getElementById('board-apps-buttons-bar');
+const appsManager = new AppsManager(windowsWrapElement, bottomButtonsBarElement);
 if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.networkVisualizer = visualizer; // Expose for debugging
 	window.appsManager = appsManager;
@@ -138,7 +137,7 @@ document.addEventListener('change', (event) => {
 });
 window.addEventListener('resize', function(e) { // Trigger on main window resize event only
 	visualizer.networkRenderer.handleWindowResize();
-	const { width, height } = windowsWrap.getBoundingClientRect();
+	const { width, height } = windowsWrapElement.getBoundingClientRect();
 	for (const app in appsManager.windows) {
 		appsManager.windows[app].element.style.maxWidth = width + 'px';
 		appsManager.windows[app].element.style.maxHeight = height + 'px';

@@ -30,6 +30,7 @@ import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 * @property {string} [domain] - The domain name for the node (Public only).
 * @property {number} [port] - The port number for the node to listen on (Public only).
 * @property {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable)
+* @property {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation
 * @property {string[]} bootstraps - An array of bootstrap node addresses. */
 
 /** @param {NodeOptions} [options] */
@@ -72,8 +73,9 @@ export class ContrastNode {
 	/** Node instance should be created with "createContrastNode" method, not using "new" constructor.
 	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance.
 	 * @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence.
-	 * @param {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable) */
-	constructor(p2pNode, storage, verb = 2, controllerPort) {
+	 * @param {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable)
+	 * @param {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation */
+	constructor(p2pNode, storage, verb = 2, controllerPort, chachaSeedHex) {
 		this.blockchain = new Blockchain(storage);
 		this.memPool = new MemPool(this.blockchain);
 		this.taskQueue = new TaskQueue();
@@ -82,7 +84,7 @@ export class ContrastNode {
 		this.p2p = p2pNode;
 		this.solver = new Solver(this);
 		this.sync = new Sync(this);
-		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort);
+		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort, chachaSeedHex);
 
 		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);

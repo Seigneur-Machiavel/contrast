@@ -2,7 +2,7 @@
 //import { serializer } from '../../utils/serializer.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { PatternGenerator } from './pattern-generator.js';
-import { eHTML_STORE, createElement, createSpacedTextElement } from '../board-helpers.js';
+import { eHTML_STORE, createElement, createSpacedTextElement } from '../utils/board-helpers.js';
 
 /**
  * @typedef {import('../../node/src/wallet.mjs').Account} Account

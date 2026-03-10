@@ -8,3 +8,6 @@ board-extension/dist
 board-extension/extension.zip
 win-unpacked
 test-setup
+
+build/*.blob
+start/*.exe

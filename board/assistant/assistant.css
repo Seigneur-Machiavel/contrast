@@ -3,7 +3,7 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-	height: calc(300px - 32px);
+	height: calc(100% - 32px);
 }
 #board-messages-container {
     overflow-y: auto;
@@ -169,6 +169,7 @@
 #board-assistant-choices-container button {
     padding: 4px 20px;
     opacity: 0;
+	background: var(--color2);
     animation: choiceAppear .4s .8s forwards;
 }
 @keyframes choiceAppear {

@@ -1,3 +1,4 @@
+// ts-check
 import { WebSocketServer } from 'ws';
 
 /** 
@@ -16,12 +17,12 @@ export class NodeController {
 	wsServer;
 	node;
 
-	/** @param {ContrastNode} node @param {number} [port] */
-	constructor(node, port = 27261) {
+	/** @param {ContrastNode} node @param {number} [port] @param {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation */
+	constructor(node, port = 27261, chachaSeedHex) {
 		this.node = node;
 		this.wsServer = new WebSocketServer({ port });
 		this.wsServer.on('connection', this.#handleConnection);
-		this.myKeypair = this.node.p2p.cryptoCodex.generateEphemeralX25519Keypair();
+		this.myKeypair = this.node.p2p.cryptoCodex.generateEphemeralX25519Keypair(chachaSeedHex);
 		console.log(`[NodeController] started on port ${port}`);
 		console.log(`[NodeController] unsafeMode is ${this.unsafeMode ? 'ENABLED' : 'DISABLED'}`);
 		console.log('[NodeController] waiting for client connection...');

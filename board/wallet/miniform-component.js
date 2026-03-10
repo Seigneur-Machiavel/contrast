@@ -4,7 +4,7 @@ import { CURRENCY } from "../../utils/currency.mjs";
 import { serializer } from "../../utils/serializer.mjs";
 //import { TransactionDiagram } from './tx-diagram.js'; // PROTOTYPE, TO BE IMPLEMENTED LATER
 import { Transaction_Builder } from "../../node/src/transaction.mjs";
-import { createSpacedTextElement } from "../board-helpers.js";
+import { createSpacedTextElement } from "../utils/board-helpers.js";
 
 /**
  * @typedef {import('../../types/transaction.mjs').Transaction} Transaction

@@ -4,6 +4,11 @@ if (false) { // For better completion
 }
 
 /**
+ * @typedef {import('../wallet/biw.js').BoardInternalWallet} BoardInternalWallet
+ * @typedef {import('../utils/translator.js').Translator} Translator
+ */
+
+/**
  * @typedef {Object<string, Function>} ChoicesActions
  * 
  * @typedef {Object} HtmlElements
@@ -27,6 +32,7 @@ if (false) { // For better completion
 const userCommandsDescriptions = [
     { command: '-help', short: '-h', description: 'Show available commands' },
     { command: '-cancel', short: '-c', description: 'Cancel current interaction' },
+	{ command: '-language', short: '-lang', description: 'Change the language' },
     { command: '-copy_logs_history', short: '-clh', description: 'Copy logs history to clipboard' },
     { command: '-change_password', short: '-cpass', description: 'Change your password' },
     { command: '-extract_my_private_key', short: '-epk', description: 'Extract your private key' },
@@ -34,8 +40,9 @@ const userCommandsDescriptions = [
 ]
 
 export class Assistant {
-	/** @type {import('../translator.js').Translator} */ // @ts-ignore
-	translator = window.translator; // Access translator from the global scope
+	idPrefix = 'board'
+	biw;
+	translator;
     isFirstMessage = true;
 	isReady = false;
     activeInput = 'idle';
@@ -53,11 +60,13 @@ export class Assistant {
     };
 
 	/** @type {NodeJS.Timeout | null} */	nextActiveInputTimeout = null;
-    /** @type {Function | null} */		onResponse = null;
-	/** @type {string | null} */	#userResponse = null;
+    /** @type {Function | null} */			onResponse = null;
+	/** @type {string | null} */			#userResponse = null;
 
-    constructor(idPrefix = 'board') {
-        this.idPrefix = idPrefix;
+	/** @param {BoardInternalWallet} biw @param {Translator} translator */
+    constructor(biw, translator) {
+		this.biw = biw;
+		this.translator = translator;
 		this.init();
     }
 
@@ -91,10 +100,11 @@ export class Assistant {
             this.sendMessage(this.eHTML.input.value, 'user');
             this.eHTML.input.value = '';
         });
-        this.eHTML.inputForm.addEventListener('submit', (event) => {
-            event.preventDefault();
+        this.eHTML.inputForm.addEventListener('submit', (e) => {
+            e.preventDefault();
             this.eHTML.input.blur(); // blur the input to hide the possibilities list
         });
+		//this.eHTML.inputForm.addEventListener('change', () => console.log('change'));
 
         this.eHTML.input.addEventListener('focus', () => this.#updatePossibilitiesList());
         this.eHTML.input.addEventListener('input', () => this.#updatePossibilitiesList());
@@ -160,6 +170,11 @@ export class Assistant {
         const inputValue = this.eHTML.input.value.toLowerCase();
         this.eHTML.possibilities.innerHTML = ''; // clear previous options
         for (const ucd of userCommandsDescriptions) {
+			 // exact match => auto submit
+			if (ucd.command === inputValue || ucd.short === inputValue)
+				return this.eHTML.sendBtn.click();
+
+			 // partial match => show in possibilities
             if (!ucd.command.includes(inputValue) && !ucd.short?.includes(inputValue)) continue;
             const option = document.createElement('option');
             option.value = ucd.command;
@@ -201,6 +216,12 @@ export class Assistant {
             case 'c':
                 this.#cancelInteraction();
                 break;
+
+			case '-language':
+			case '-lang':
+			case 'language':
+				this.requestLanguageSelection();
+				break;
 
             case '-copy_logs_history':
             case '-clh':
@@ -367,14 +388,14 @@ export class Assistant {
     }
 	/** @param {string} privateKeyHex @param {boolean} [asWords] default false */
     showPrivateKey(privateKeyHex, asWords = false) {
-        if (!asWords) { this.sendMessage(privateKeyHex, 'system'); return }
+        if (!asWords) return this.sendMessage(privateKeyHex, 'system');
 
         /** @type {string} */
         const wordsList = bip39.entropyToMnemonic(privateKeyHex);
         const hexFromList = bip39.mnemonicToEntropy(wordsList).toString('hex');
         if (hexFromList !== privateKeyHex) return this.sendMessage('Error while extracting the private key!', 'system');
         
-        //this.sendMessage(wordsList, 'system'); just to test: ok
+        // this.sendMessage(wordsList, 'system'); just to test: ok
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('board-message');
         messageDiv.classList.add('board-wordslist');
