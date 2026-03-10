@@ -1,1 +1,1 @@
-require('module').runMain('launcher.mjs');
+require('module').runMain('./launcher.mjs');
