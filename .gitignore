@@ -10,4 +10,4 @@ win-unpacked
 test-setup
 
 build/*.blob
-start/*.exe
+build/*.exe
