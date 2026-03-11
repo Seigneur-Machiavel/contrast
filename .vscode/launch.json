@@ -17,6 +17,13 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Build Release",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/build-release.mjs"
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Test: Run 2 Nodes",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/tests/run_2_nodes.mjs",

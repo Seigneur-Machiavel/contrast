@@ -62,8 +62,10 @@ export class NodeManager {
 // ---- UPDATER -----------------------------------------------------------------------
 export class Updater {
 	#api;
-	/** @param {string} githubApi */
-	constructor(githubApi) { this.#api = githubApi; }
+	#ignorePreRelease;
+
+	/** @param {string} githubApi @param {boolean} ignorePreRelease */
+	constructor(githubApi, ignorePreRelease) { this.#api = githubApi; this.#ignorePreRelease = ignorePreRelease; }
 
 	/** @param {string} url @returns {Promise<Buffer>} */
 	async #get(url) {
@@ -86,6 +88,8 @@ export class Updater {
 	async run(exePath, node, force = false) {
 		console.log('[update] checking for updates...');
 		const release = JSON.parse((await this.#get(this.#api)).toString());
+		if (this.#ignorePreRelease && release.prerelease) { console.log('[update] pre-release ignored'); return false; }
+
 		const version = release.tag_name;
 		const exeAsset = release.assets.find((/** @type {any} */ a) => a.name === 'contrast.exe');
 		const sumAsset = release.assets.find((/** @type {any} */ a) => a.name === 'checksums.sha256');

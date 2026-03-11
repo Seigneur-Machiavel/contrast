@@ -13,9 +13,9 @@ const NEUTRALINO_EXE = path.join(__dirname, 'neutralino-win_x64.exe');
 const GITHUB_API = 'https://api.github.com/repos/Seigneur-Machiavel/contrast/releases/latest';
 
 // ---- CONFIG ------------------------------------------------------------------------
-/** @typedef {{ autoUpdate: boolean, installedVersion?: string }} LauncherConfig */
+/** @typedef {{ autoUpdate: boolean, ignorePreRelease: boolean, installedVersion?: string }} LauncherConfig */
 /** @type {LauncherConfig} */
-const DEFAULT_CONFIG = { autoUpdate: true };
+const DEFAULT_CONFIG = { autoUpdate: true, ignorePreRelease: true };
 
 /** @returns {LauncherConfig} */
 function loadConfig() {
@@ -40,7 +40,7 @@ const stopNodeAndExit = async (node) => {
 async function main() {
 	const cfg = loadConfig();
 	const node = new NodeManager(CONTRAST_EXE);
-	const updater = new Updater(GITHUB_API);
+	const updater = new Updater(GITHUB_API, cfg.ignorePreRelease);
 
 	// Auto-update check before starting
 	if (cfg.autoUpdate)
