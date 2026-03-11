@@ -16,15 +16,14 @@ const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : undefined;
 const clearOnStart = true;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 
 import { Wallet } from '../node/src/wallet.mjs';
-import { createContrastNode } from '../node/src/node.mjs';
 import { serializer } from '../utils/serializer.mjs';
 import { ContrastStorage } from '../storage/storage.mjs';
+import { createContrastNode } from '../node/src/node.mjs';
 import { Transaction_Builder } from "../node/src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";
 import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
-import { UTXO_RULES_GLOSSARY } from '../types/transaction.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 //HiveP2P.CONFIG.SIMULATION.USE_TEST_TRANSPORTS = true;
 

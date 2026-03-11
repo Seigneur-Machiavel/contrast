@@ -8,16 +8,16 @@ const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const clearOnStart = true; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 
-import { Wallet } from '../src/wallet.mjs';
-import { createContrastNode } from '../src/node.mjs';
-import { Transfer } from "../../types/transaction.mjs";
-import { serializer } from '../../utils/serializer.mjs';
-import { ContrastStorage } from '../../storage/storage.mjs';
-import { Transaction_Builder } from "../src/transaction.mjs";
+import { Wallet } from '../node/src/wallet.mjs';
+import { createContrastNode } from '../node/src/node.mjs';
+import { Transfer } from "../types/transaction.mjs";
+import { serializer } from '../utils/serializer.mjs';
+import { ContrastStorage } from '../storage/storage.mjs';
+import { Transaction_Builder } from "../node/src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";
-import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
+import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 // TEST CONFIG
@@ -44,7 +44,7 @@ await bootstrapNode.start(bootstrapWallet);
 // -------------------------------------------------------------------------------------
 // TESTS
 // -------------------------------------------------------------------------------------
-/** @param {import("../src/blockchain.mjs").BlockFinalized} block */
+/** @param {import("../node/src/blockchain.mjs").BlockFinalized} block */
 const onBlockConfirmed = (block) => {
 	// TEST: SEND TRANSACTION WITH MULTI OUTPUTS
 	if (block.index % 2 === 1) { // ONLY ON ODD BLOCKS

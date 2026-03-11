@@ -59,7 +59,7 @@ export class AppsManager {
 		const { fullScreen, setFront } = this.appsConfig[appName];
 		if (fullScreen || setFront) {
 			setTimeout(() => {
-				if (fullScreen) this.windows[appName].setFullScreen(this.#boardSize, 0);
+				if (fullScreen) this.windows[appName].setFullScreen(this.windowsWrap, this.#boardSize, 0);
 				if (!setFront || startHidden) return;
 				this.windows[appName].toggleFold(origin.x, origin.y, 600);
 				this.setFrontWindow(appName);
@@ -173,10 +173,10 @@ export class AppsManager {
 				this.toggleAppWindow(e.target.dataset.appName);
 				return;
 			case 'expand':
-				this.windows[e.target.dataset.appName].setFullScreen(this.#boardSize, this.transitionsDuration);
+				this.windows[e.target.dataset.appName].setFullScreen(this.windowsWrap, this.#boardSize, this.transitionsDuration);
 				return;
 			case 'detach':
-				this.windows[e.target.dataset.appName].unsetFullScreen(this.transitionsDuration);
+				this.windows[e.target.dataset.appName].unsetFullScreen(this.windowsWrap, this.transitionsDuration);
 				return;
 		}
 
@@ -189,8 +189,8 @@ export class AppsManager {
 		if (!e.target.classList.contains('title-bar')) return;
 
 		const { subWindow } = this.#getElementParentWindow(e.target);
-		if (subWindow.isFullScreen) subWindow.unsetFullScreen(this.transitionsDuration);
-		else subWindow.setFullScreen(this.#boardSize, this.transitionsDuration);
+		if (subWindow.isFullScreen) subWindow.unsetFullScreen(this.windowsWrap, this.transitionsDuration);
+		else subWindow.setFullScreen(this.windowsWrap, this.#boardSize, this.transitionsDuration);
 	}
 	mouseDownHandler(e) {
 		const { appName, subWindow } = this.#getElementParentWindow(e.target);

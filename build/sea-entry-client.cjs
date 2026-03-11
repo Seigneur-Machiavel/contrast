@@ -1,1 +1,0 @@
-require('module').runMain('../tests/test-staking.mjs');

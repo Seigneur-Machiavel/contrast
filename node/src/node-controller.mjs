@@ -106,6 +106,6 @@ export class NodeController {
 	}
 	/** @param {string} type @param {any} data */
 	handleDecryptedMessage(type, data) {
-				
+		
 	}
 }

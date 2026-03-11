@@ -73,6 +73,7 @@ export class Assistant {
     async init() {
 		console.log('Assistant: Waiting for HTML elements to be available...');
         while (document.getElementById(`${this.idPrefix}-assistant-container`) === null) await new Promise(resolve => setTimeout(resolve, 20));
+		
 		this.isReady = true;
 		console.log('Assistant: HTML elements found, initializing...');
 

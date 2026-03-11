@@ -12,15 +12,15 @@ const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
 const clearOnStart = true;		// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 const transactionTest = false; 	// ENABLE TRANSACTION TESTING MODE - FOR TEST PURPOSES ONLY!
 
-import { Wallet } from '../src/wallet.mjs';
-import { createContrastNode } from '../src/node.mjs';
-import { serializer } from '../../utils/serializer.mjs';
-import { ContrastStorage } from '../../storage/storage.mjs';
-import { Transaction_Builder } from "../src/transaction.mjs";
+import { Wallet } from '../node/src/wallet.mjs';
+import { serializer } from '../utils/serializer.mjs';
+import { ContrastStorage } from '../storage/storage.mjs';
+import { createContrastNode } from '../node/src/node.mjs';
+import { Transaction_Builder } from "../node/src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";
-import { HIVE_P2P_CONFIG } from '../../utils/hive-p2p-config.mjs';
+import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 // BOOTSTRAP NODE
@@ -63,7 +63,7 @@ for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 // -------------------------------------------------------------------------------------
 // TESTS
 // -------------------------------------------------------------------------------------
-/** @param {import("../src/blockchain.mjs").BlockFinalized} block */
+/** @param {import("../node/src/blockchain.mjs").BlockFinalized} block */
 const onBlockConfirmed = (block) => {
 	if (!transactionTest) return;
 

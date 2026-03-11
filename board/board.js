@@ -139,8 +139,8 @@ window.addEventListener('resize', function(e) { // Trigger on main window resize
 	visualizer.networkRenderer.handleWindowResize();
 	const { width, height } = windowsWrapElement.getBoundingClientRect();
 	for (const app in appsManager.windows) {
-		appsManager.windows[app].element.style.maxWidth = width + 'px';
-		appsManager.windows[app].element.style.maxHeight = height + 'px';
+		appsManager.windows[app].element.style.maxWidth = width - 4 + 'px';
+		appsManager.windows[app].element.style.maxHeight = height - 6 + 'px';
 	}
 });
 window.addEventListener('message', function(e) { // TODO
@@ -199,7 +199,7 @@ connector.on('peer_connect', onPeerCountChange);
 connector.on('peer_disconnect', onPeerCountChange);
 
 // OPENING => HANDLE PASSWORD AND LANGUAGE SELECTION
-await new Promise(resolve => setTimeout(resolve, 1000));
 if (!language || hasPassword) appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP
+while (!assistant.isReady) await new Promise(resolve => setTimeout(resolve, 20));
 if (!language) assistant.requestLanguageSelection();
 else translator.setLanguage(language);

@@ -405,6 +405,9 @@ body.dark-mode #board-windows-wrap {
 .resize-button:hover, .window.resizing .resize-button {
 	color: var(--color3);
 }
+.window.fullscreen .resize-button {
+	display: none;
+}
 .window.onBoard {
 	box-shadow: 1px 2px 0px rgba(0, 0, 0, .15);
     transition:

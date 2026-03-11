@@ -9,5 +9,8 @@ board-extension/extension.zip
 win-unpacked
 test-setup
 
-build/*.blob
-build/*.exe
+neutralino
+client/.tmp
+client/sea-prep.blob
+client/neutralinojs.log
+client/launcher-config.json

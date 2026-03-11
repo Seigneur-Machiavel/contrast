@@ -111,8 +111,8 @@ export class SubWindow {
 		this.element.style.minHeight = this.minSize.height ? `${this.minSize.height}px` : 'auto';
 
 		const { width, height } = parentElement.getBoundingClientRect();
-		this.element.style.maxWidth = `${width}px`;
-		this.element.style.maxHeight = `${height}px`;
+		this.element.style.maxWidth = `${width - 4}px`;
+		this.element.style.maxHeight = `${height - 6}px`;
 		if (this.initSize.width) this.element.style.width = this.initSize.width + 'px';
 		if (this.initSize.height) this.element.style.height = this.initSize.height + 'px';
 		
@@ -207,9 +207,12 @@ export class SubWindow {
 
 		return this.folded;
 	}
-	setFullScreen(boardSize = { width: 0, height: 0 }, duration = 400) {
+	setFullScreen(parentElement = document.body, boardSize = { width: 0, height: 0 }, duration = 400) {
 		if (!this.canFullScreen || this.isFullScreen) return;
 
+		const { width, height } = parentElement.getBoundingClientRect();
+		this.element.style.maxWidth = `${width}px`;
+		this.element.style.maxHeight = `${height}px`;
 		this.element.classList.add('fullscreen');
 		this.expandButton.dataset.action = 'detach';
 		this.expandButton.src = 'assets/detach_window_64.png';
@@ -229,13 +232,17 @@ export class SubWindow {
 			}
 		});
 	}
-	unsetFullScreen(duration = 400) {
+	unsetFullScreen(parentElement = document.body, duration = 400) {
 		if (!this.canFullScreen || !this.isFullScreen) return;
 
 		this.element.classList.remove('fullscreen');
+
 		this.expandButton.dataset.action = 'expand';
 		this.expandButton.src = 'assets/expand_64.png';
 		// SET WIDTH/HEIGHT IN PIXEL TO ANIMATE FROM CURRENT TO NEW SIZE.
+		const { width, height } = parentElement.getBoundingClientRect();
+		this.element.style.maxWidth = `${width - 4}px`;
+		this.element.style.maxHeight = `${height - 6}px`;
 		this.element.style.top = '0px';
 		this.element.style.left = '1px';
 		this.element.style.width = this.element.offsetWidth + 'px';

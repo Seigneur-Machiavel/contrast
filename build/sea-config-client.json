@@ -1,5 +1,0 @@
-{
-  "main": "build/sea-entry-client.cjs",
-  "output": "build/sea-prep-client.blob",
-  "disableExperimentalSEAWarning": true
-}

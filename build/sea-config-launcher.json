@@ -1,5 +1,0 @@
-{
-  "main": "build/sea-entry-launcher.cjs",
-  "output": "build/sea-prep-launcher.blob",
-  "disableExperimentalSEAWarning": true
-}
