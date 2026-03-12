@@ -1,5 +1,6 @@
 // @ts-check
 import fs from 'fs';
+import path from 'path';
 import https from 'https';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
@@ -27,7 +28,7 @@ export class NodeManager {
 		if (this.isRunning) { console.log('[node] already running'); return; }
 		if (!fs.existsSync(this.#exePath)) { console.log('[node] contrast.exe not found — run update first'); return; }
 
-		this.#process = spawn(this.#exePath, ['--mode=node', '-cs', this.seed], { stdio: ['ignore', 'pipe', 'pipe'] });
+		this.#process = spawn(this.#exePath, ['--mode=run-client', '-cs', this.seed], { stdio: ['ignore', 'pipe', 'pipe'] });
 		this.#process.stdout?.on('data', d => process.stdout.write(d));
 		this.#process.stderr?.on('data', d => process.stderr.write(d));
 		this.#process.on('exit', (code) => {
@@ -84,42 +85,53 @@ export class Updater {
 	/** @param {string} filePath @returns {string} */
 	#sha256(filePath) { return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex'); }
 
-	/** @param {string} exePath @param {NodeManager} node @param {boolean} [force] @returns {Promise<boolean>} */
-	async run(exePath, node, force = false) {
+	/** @param {string} resourcesDir @param {NodeManager} node @param {boolean} [force] @returns {Promise<boolean>} */
+	async run(resourcesDir, node, force = false) {
 		console.log('[update] checking for updates...');
 		const release = JSON.parse((await this.#get(this.#api)).toString());
 		if (this.#ignorePreRelease && release.prerelease) { console.log('[update] pre-release ignored'); return false; }
 
-		const version = release.tag_name;
-		const exeAsset = release.assets.find((/** @type {any} */ a) => a.name === 'contrast.exe');
-		const sumAsset = release.assets.find((/** @type {any} */ a) => a.name === 'checksums.sha256');
-		if (!exeAsset) { console.log('[update] no contrast.exe in latest release'); return false; }
+		// Download manifest only (~2KB)
+		const manifestAsset = release.assets.find((/** @type {any} */ a) => a.name === 'manifest.json');
+		if (!manifestAsset) { console.log('[update] no manifest.json in latest release'); return false; }
+		const manifest = JSON.parse((await this.#get(manifestAsset.browser_download_url)).toString());
 
-		let installedVersion = '';
-		try { installedVersion = JSON.parse(fs.readFileSync(exePath + '/../launcher-config.json', 'utf8')).installedVersion ?? ''; }
+		// Compare local version
+		let localVersion = '';
+		try { localVersion = JSON.parse(fs.readFileSync(path.join(resourcesDir, '..', 'launcher-config.json'), 'utf8')).installedVersion ?? ''; }
 		catch { /* no config yet */ }
+		if (!force && localVersion === manifest.version) { console.log(`[update] already on ${manifest.version}`); return false; }
 
-		if (!force && installedVersion === version) { console.log(`[update] already on ${version}`); return false; }
+		// Download resources.zip
+		const zipAsset = release.assets.find((/** @type {any} */ a) => a.name === 'resources.zip');
+		if (!zipAsset) { console.log('[update] no resources.zip in latest release'); return false; }
+		console.log(`[update] downloading resources.zip ${manifest.version}...`);
+		const zipData = await this.#get(zipAsset.browser_download_url);
 
-		console.log(`[update] downloading contrast.exe ${version}...`);
-		const tmpPath = exePath + '.tmp';
-		fs.writeFileSync(tmpPath, await this.#get(exeAsset.browser_download_url));
+		// Verify checksum
+		const actual = crypto.createHash('sha256').update(zipData).digest('hex');
+		if (actual !== manifest.resourcesChecksum) { console.log('[update] checksum mismatch — aborting'); return false; }
+		console.log('[update] checksum verified ✓');
 
-		if (sumAsset) {
-			const lines = (await this.#get(sumAsset.browser_download_url)).toString().split('\n');
-			const expected = lines.find(l => l.includes('contrast.exe'))?.split(/\s+/)[0];
-			if (expected && this.#sha256(tmpPath) !== expected) {
-				fs.unlinkSync(tmpPath);
-				console.log('[update] checksum mismatch — aborting');
-				return false;
-			}
-			console.log('[update] checksum verified ✓');
-		}
-
+		// Stop node, extract zip
 		if (node.isRunning) await node.stop();
-		if (fs.existsSync(exePath)) fs.unlinkSync(exePath);
-		fs.renameSync(tmpPath, exePath);
-		console.log(`[update] updated to ${version}`);
+		const tmpZip = path.join(resourcesDir, '..', 'resources.tmp.zip');
+		fs.writeFileSync(tmpZip, zipData);
+
+		const AdmZip = (await import('adm-zip')).default;
+		const zip = new AdmZip(tmpZip);
+		zip.extractAllTo(resourcesDir, true);
+		fs.unlinkSync(tmpZip);
+
+		// Save installed version
+		const cfgPath = path.join(resourcesDir, '..', 'launcher-config.json');
+		let cfg = {};
+		try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch { /* no config yet */ }
+		cfg.installedVersion = manifest.version;
+		fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+
+		console.log(`[update] updated to ${manifest.version}`);
+		node.start();
 		return true;
 	}
 }

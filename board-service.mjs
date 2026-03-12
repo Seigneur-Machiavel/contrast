@@ -1,53 +1,106 @@
-// THIS FILE IS USED TO DEBUG THE FRONT BOARD IN A LOCAL ENVIRONMENT
-// BY SERVING THE BOARD FILES WITH EXPRESS AND PATCHING THE BOOTSTRAP NODE URL
-
-// --> NODES NEEDS TO BE RUNS SEPARATELY, NODE PUB_KEY CAN BE COPY FROM THE LOGS WHILE STARTING ONE
-// FOR DEBUGGING THE FRONT BOARD WITHOUT HAVING TO BUILD THE EXTENSION OR ELECTRON EVERY TIME
+// THIS FILE SERVES THE FRONT BOARD TO THE CONTRAST APP ONLY
+// DATA IS ENCRYPTED VIA CHACHA — BROWSER ACCESS IS FORBIDDEN
 
 import fs from 'fs';
 import path from 'path';
-import express from 'express';
-import { CLOCK } from 'hive-p2p';
+import http from 'node:http';
+import HiveP2P from "hive-p2p";
 import { fileURLToPath } from 'url';
-await CLOCK.sync(); // Start time synchronization
+import { ContrastStorage } from './storage/storage.mjs';
+await HiveP2P.CLOCK.sync();
+
+// LOAD BOOTSTRAP URLS FROM "contrast/bootstraps.json" IF EXISTS, OTHERWISE USE DEFAULT
+const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
+const bootstraps = startupStorage.loadJSON('bootstraps', true) || ['ws://localhost:27260'];
 
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2);
 const hostname = args.includes('-nh') ? nextArg('-nh') : 'localhost';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const wsProtocol = args.includes('-wss') ? 'wss' : 'ws'; // force wss in prod (probably useless since we use sym encryption)
+const wsProtocol = args.includes('-wss') ? 'wss' : 'ws';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 const PORT = 27262;
-const app = express();
-const boardMjs = fs.readFileSync(path.join(__dirname, 'board/board.js'), 'utf8');
-app.get('/board.mjs', (req, res) => { // PATCH board.mjs TO SET THE RIGHT BOOTSTRAP NODE URL
-    const wsUrl = `${wsProtocol}://${hostname}:${nodePort}`;
-    const patched = boardMjs.replace(
-        /const bootstraps = \[.*?\];/,
-        `const bootstraps = ['${wsUrl}'];`
-    );
-    res.type('application/javascript').send(patched);
-});
-app.use((req, res, next) => { // CSP Middleware
-    const csp = `
-        default-src 'self';
-		img-src 'self' data:;
-        style-src 'self' 'unsafe-inline';
-        connect-src 'self' ${wsProtocol}://${hostname}:${nodePort} ws://127.0.0.1:27261 https://time.cloudflare.com https://time.google.com https://pool.ntp.org;
-    `.replace(/\s+/g, ' ').trim();
-    
-    res.setHeader('Content-Security-Policy', csp);
-    next();
-});
-app.get('/api/time', (req, res) => res.json({ time: CLOCK.time }));
-app.use('/', express.static(path.join(__dirname, 'board')));
-app.use('/libs', express.static(path.join(__dirname, 'libs')));
-app.use('/node', express.static(path.join(__dirname, 'node')));
-app.use('/types', express.static(path.join(__dirname, 'types')));
-app.use('/utils', express.static(path.join(__dirname, 'utils')));
-app.use('/miniLogger', express.static(path.join(__dirname, 'miniLogger')));
-app.get('/', (req, res) => res.sendFile('board.html', { root: path.join(__dirname, 'board') }));
-app.get('/hive-p2p.min.js', (req, res) => res.sendFile(path.join(__dirname, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js')));
 
-app.listen(PORT, () => console.log(`Board service is running at http://localhost:${PORT}`));
+const CSP_BASE = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';`;
+const CSP_CONNECT = [
+    `connect-src 'self'`,
+    `https://time.cloudflare.com`,
+    `https://time.google.com`,
+    `https://pool.ntp.org`,
+    `ws://127.0.0.1:27261`,
+	...bootstraps
+].join(' ');
+const CSP = `${CSP_BASE} ${CSP_CONNECT};`;
+
+const MIME = {
+    '.js': 'application/javascript', '.mjs': 'application/javascript',
+    '.html': 'text/html', '.css': 'text/css',
+    '.json': 'application/json', '.png': 'image/png',
+    '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+};
+
+// Static roots mapped to URL prefixes
+const STATIC = [
+    { prefix: '/libs/',       dir: path.join(__dirname, 'libs') },
+    { prefix: '/node/',       dir: path.join(__dirname, 'node') },
+    { prefix: '/types/',      dir: path.join(__dirname, 'types') },
+    { prefix: '/utils/',      dir: path.join(__dirname, 'utils') },
+    { prefix: '/miniLogger/', dir: path.join(__dirname, 'miniLogger') },
+    { prefix: '/',            dir: path.join(__dirname, 'board') }, // catch-all last
+];
+
+//const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ${wsProtocol}://${hostname}:${nodePort} ws://127.0.0.1:27261 https://time.cloudflare.com https://time.google.com https://pool.ntp.org;`;
+
+/** @param {http.ServerResponse} res @param {number} code */
+function send404(res, code = 404) { res.writeHead(code).end(); }
+
+/** @param {http.IncomingMessage} req @param {http.ServerResponse} res */
+function serveStatic(req, res) {
+    for (const { prefix, dir } of STATIC) {
+		if (req.method !== 'GET') return send404(res);
+		
+        if (!req.url?.startsWith(prefix)) continue;
+        const rel = req.url.slice(prefix.length) || 'index.html';
+        // Prevent path traversal attacks
+		const filePath = path.resolve(dir, rel);
+		if (!filePath.startsWith(path.resolve(dir))) return send404(res, 403);
+        if (!filePath.startsWith(dir)) return send404(res, 403);
+        if (!fs.existsSync(filePath)) continue; // try next root
+        const mime = MIME[path.extname(filePath)] ?? 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': mime, 'Content-Security-Policy': CSP });
+        fs.createReadStream(filePath).pipe(res);
+        return;
+    }
+    send404(res);
+}
+
+const boardMjs = fs.readFileSync(path.join(__dirname, 'board/board.js'), 'utf8');
+
+http.createServer((req, res) => {
+	const url = (req.url ?? '/').split('?')[0];
+
+    // Patch board.mjs bootstrap URL on the fly
+    if (url === '/board.js') {
+		const patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
+        res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
+        return res.end(patched);
+    }
+
+    if (url === '/api/time') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ time: HiveP2P.CLOCK.time }));
+    }
+
+    if (url === '/hive-p2p.min.js') {
+        const filePath = path.join(__dirname, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js');
+        res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
+        return fs.createReadStream(filePath).pipe(res);
+    }
+
+    if (url === '/' || url === '/index.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': CSP });
+        return fs.createReadStream(path.join(__dirname, 'board/board.html')).pipe(res);
+    }
+
+    serveStatic(req, res);
+}).listen(PORT, () => console.log(`Board service running at http://localhost:${PORT}`));

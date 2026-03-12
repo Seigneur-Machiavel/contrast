@@ -2,16 +2,13 @@
   "name": "contrast",
   "version": "0.6.1",
   "description": "All-in-one Contrast application",
-  "main": "main.js",
+  "main": "node/run.mjs",
   "keywords": [],
   "author": "The Contrast Team",
   "license": "ISC",
   "dependencies": {
     "adm-zip": "^0.5.16",
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "hive-p2p": "^1.0.94",
-    "ws": "^8.18.0"
+    "hive-p2p": "^1.0.95"
   },
   "devDependencies": {
     "archiver": "^7.0.1",

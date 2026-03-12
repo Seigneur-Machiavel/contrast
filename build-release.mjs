@@ -15,13 +15,18 @@ const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 
 // ---- WHAT GOES IN resources.zip (updates) ----------------------------------------
 /** @type {{in: string, out?: string}[]} */
-const RESOURCES_FILES = [];
+const RESOURCES_FILES = [
+	{ in: 'board-service.mjs' },
+];
 const RESOURCES_FOLDERS = [
+	{ in: 'board' },
+	{ in: 'libs' },
+    { in: 'miniLogger' },
     { in: 'node' },
     { in: 'storage' },
-    { in: 'utils' },
+	{ in: 'tests' },
     { in: 'types' },
-    { in: 'miniLogger' }
+    { in: 'utils' }
 ];
 // node_modules prod only (exclude devDependencies)
 const DEV_DEPS = ['archiver', 'esbuild', '@yao-pkg/pkg', 'postject'];

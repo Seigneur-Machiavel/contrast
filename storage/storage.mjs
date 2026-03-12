@@ -8,16 +8,12 @@ import crypto from 'crypto';
 import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
-/**
- * @typedef {import("../types/transaction.mjs").TxId} TxId
-*/
-
 /** THE COMMON CLASS TO HANDLE THE STORAGE PATHS */
 class StorageRoot {
 	/** The local identifier used as subFolder */	localIdentifier;
 	/** Is running in electron environment */		  isElectronEnv;
-	/** Root folder path @type {string} */				 rootFolder;
-	/** Paths used for storage */							   PATH;
+	/** Root folder path @type {string} */				 rootFolder; // 'contrast/'
+	/** Paths used for storage */							   PATH; // 'constrat-storage/'
 
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
 	constructor(masterHex = null) {
@@ -35,6 +31,7 @@ class StorageRoot {
 			/** path to the storage.mjs file */
 			BASE_FILE: filePath,
 			/** path to the storage folder (out of the root directory) */
+			CONTRAST: this.rootFolder,
 			STORAGE: basePath,
 			TRASH: path.join(basePath, 'trash'),
 			LEDGERS: path.join(basePath, 'ledgers'),
@@ -95,7 +92,7 @@ export class ContrastStorage extends StorageRoot {
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
 	constructor(masterHex = null) { super(masterHex); }
 
-	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} directoryPath */
+	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} [directoryPath] */
 	saveBinary(fileName, serializedData, directoryPath, skipMkdir = false) {
 		try {
 			const d = directoryPath || this.PATH.STORAGE;
@@ -121,7 +118,7 @@ export class ContrastStorage extends StorageRoot {
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false; }
 		return true;
 	}
-	/** @param {string} fileName @param {string} directoryPath @returns {Uint8Array | null} */
+	/** @param {string} fileName @param {string} [directoryPath] @returns {Uint8Array | null} */
 	loadBinary(fileName, directoryPath, logError = true) {
 		const filePath = path.join(directoryPath || this.PATH.STORAGE, `${fileName}.bin`);
 		try { return fs.readFileSync(filePath) } // work as Uint8Array
@@ -178,9 +175,10 @@ export class ContrastStorage extends StorageRoot {
 		} catch (/**@type {any}*/ error) { this.miniLogger.log(error.stack, (m, c) => console.info(m, c)); return false }
 	}
 	/** @param {string} fileName - The name of the file @returns {any|boolean} */
-	loadJSON(fileName) {
+	loadJSON(fileName, fromRoot = false) {
+		const folderPath = fromRoot ? this.rootFolder : this.PATH.STORAGE;
 		// @ts-ignore: readFileSync() on .json file returns string
-		try { return JSON.parse(fs.readFileSync(path.join(this.PATH.STORAGE, `${fileName}.json`))) }
+		try { return JSON.parse(fs.readFileSync(path.join(folderPath, `${fileName}.json`))) }
 		catch (/**@type {any}*/ error) { return false }
 	}
 	/** @param {string} fileNameWithExtension - ex: 'toto.bin' @param {string} [directoryPath] - default is this.PATH.STORAGE */

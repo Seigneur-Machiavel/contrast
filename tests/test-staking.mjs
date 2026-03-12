@@ -34,9 +34,13 @@ if (clearOnStart) bootstrapStorage.clear(); // start fresh
 const bootstrapWallet = new Wallet(bootstrapSeed);
 await bootstrapWallet.deriveAccounts(2, 'C', bootstrapStorage);
 
-const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
-// @ts-ignore
-const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort, chachaSeedHex });
+const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed); // @ts-ignore
+const bootstrapNode = await createContrastNode({
+	controllerPort: 27263,
+	cryptoCodex: bootstrapCodex,
+	storage: bootstrapStorage,
+	domain, port: nodePort, chachaSeedHex
+});
 await bootstrapNode.start(bootstrapWallet);
 
 const bootstraps = bootstrapNode.p2p.publicUrl ? [bootstrapNode.p2p.publicUrl] : [];
