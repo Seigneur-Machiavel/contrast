@@ -27,7 +27,10 @@ const RESOURCES_FOLDERS = [
     { in: 'storage' },
 	{ in: 'tests' },
     { in: 'types' },
-    { in: 'utils' }
+    { in: 'utils' },
+	{ in: 'client/launcher.mjs' },		// launcher patching
+    { in: 'client/launcher-core.mjs' }, // launcher patching
+    { in: 'client/main.mjs' },			// launcher patching
 ];
 // node_modules prod only (exclude devDependencies)
 const DEV_DEPS = ['archiver', 'esbuild', '@yao-pkg/pkg', 'postject'];
