@@ -1,7 +1,8 @@
 // @ts-check
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
-const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : undefined;
+const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : '31ba0b522136530dd340d856d7eaa7ab4f5c53f763ff0696ff1fa9fcea464281';
+console.log(`[run-client] chachaSeedHex: ${chachaSeedHex}`);
 
 import { Wallet } from './src/wallet.mjs';
 import { createContrastNode } from './src/node.mjs';

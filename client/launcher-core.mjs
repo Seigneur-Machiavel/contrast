@@ -24,14 +24,15 @@ export class NodeManager {
 	constructor(exePath, autoRestart = true) {
 		this.#exePath = exePath;
 		this.#autoRestart = autoRestart;
-		const codex = new CryptoCodex(); // empty codex just to generate the keypair for auto-logging
 		
+		const codex = new CryptoCodex(); // empty codex just to generate the keypair for auto-logging
 		const keypair = codex.generateEphemeralX25519Keypair(this.seed);
 		if (!keypair?.myPub) return;
 
 		this.pubKeyHex = codex.converter.bytesToHex(keypair.myPub);
-		console.log('[NodeManager] generated ephemeral keyPair and assigned pubKeyHex.');
-		console.log('[NodeManager] ready for auto-logging from the board.');
+		console.log('[NodeManager] generated ephemeral keyPair and assigned pubKeyHex:');
+		console.log(`[NodeManager] pubkey ${this.pubKeyHex}`);
+		console.log(`[NodeManager] privKey ${codex.converter.bytesToHex(keypair.myPriv)}`);
 	}
 
 	start() {

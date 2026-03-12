@@ -18,6 +18,9 @@ const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 const RESOURCES_FILES = [
 	{ in: 'board-service.mjs' },
 	{ in: 'package.json' }, // for version
+	{ in: 'client/launcher.mjs' },		// launcher patching
+	{ in: 'client/launcher-core.mjs' }, // launcher patching
+	{ in: 'client/main.mjs' },			// launcher patching
 ];
 const RESOURCES_FOLDERS = [
 	{ in: 'board' },
@@ -28,9 +31,6 @@ const RESOURCES_FOLDERS = [
 	{ in: 'tests' },
     { in: 'types' },
     { in: 'utils' },
-	{ in: 'client/launcher.mjs' },		// launcher patching
-    { in: 'client/launcher-core.mjs' }, // launcher patching
-    { in: 'client/main.mjs' },			// launcher patching
 ];
 // node_modules prod only (exclude devDependencies)
 const DEV_DEPS = ['archiver', 'esbuild', '@yao-pkg/pkg', 'postject'];

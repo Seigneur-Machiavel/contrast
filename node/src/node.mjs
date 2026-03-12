@@ -42,7 +42,7 @@ export async function createContrastNode(options = { bootstraps: [] }) {
 	if (options.autoStart === undefined) options.autoStart = true; // set default autoStart to true
 	
 	const p2pNode = asPublic ? await HiveP2P.createPublicNode(options) : await HiveP2P.createNode(options);
-	return new ContrastNode(p2pNode, options.storage, verb, options.controllerPort);
+	return new ContrastNode(p2pNode, options.storage, verb, options.controllerPort, options.chachaSeedHex);
 }
 
 export class ContrastNode {
