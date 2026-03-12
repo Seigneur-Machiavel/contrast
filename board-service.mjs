@@ -20,6 +20,7 @@ const args = process.argv.slice(2);
 const hostname = args.includes('-nh') ? nextArg('-nh') : 'localhost';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const wsProtocol = args.includes('-wss') ? 'wss' : 'ws';
+const hostPubkeyStr = args.includes('-hpk') ? nextArg('-hpk') : undefined;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 27262;
 
@@ -85,6 +86,7 @@ http.createServer((req, res) => {
     if (url === '/board.js') {
 		let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
 		patched = boardMjs.replace(/const version = '.*?';/, `const version = '${version}';`);
+		if (hostPubkeyStr) patched = patched.replace(/const hostPubkeyStr = null;/, `const hostPubkeyStr = '${hostPubkeyStr}';`);
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
         return res.end(patched);
     }

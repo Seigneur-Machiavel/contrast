@@ -42,11 +42,12 @@ export class Dashboard {
 	myKeypair;
 	connector;
 
-	/** @param {import('../connector.js').Connector} connector */
-	constructor(connector) {
+	/** @param {import('../connector.js').Connector} connector @param {string | null} [hostPubkeyStr] */
+	constructor(connector, hostPubkeyStr) {
 		this.connector = connector;
-		this.#initWhileDomReady();
+		this.hostPubkeyStr = hostPubkeyStr;
 		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair();
+		this.#initWhileDomReady();
 	}
 
 	// INTERNAL METHODS
@@ -55,11 +56,13 @@ export class Dashboard {
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
 		console.log('Dashboard DOM elements ready.');
 		
-		this.hostPubkeyStr = await this.#pubkeyFromStorage();
+		// if not already set, try to load pubkey from storage if exists.
+		if (!this.hostPubkeyStr) this.hostPubkeyStr = await this.#pubkeyFromStorage();
 		this.wsInitInterval = setInterval(() => this.initWebSocketIfNot(), 1000);
 	}
 	async initWebSocketIfNot() {
 		if (this.ws) return;
+		// WebSocket will throw an error if the server is not up yet.
 		this.ws = new WebSocket(`${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
 		this.ws.binaryType = 'arraybuffer';
 		this.ws.onmessage = (message) => this.#handleMessage(message);
@@ -72,9 +75,22 @@ export class Dashboard {
 		this.isWsAccessible = true;
 		eHTML.get('establishing-connection-text').classList.add('hidden');
 		setTimeout(() => eHTML.get('node-pubkey-input').classList.remove('hidden'), 1200);
+		
+		if (this.hostPubkeyStr) this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr));
 		this.ws.send(this.myKeypair.myPub);
-		this.#setPubkeyFromInput();
-		if (!this.sharedSecret) this.buildSharedSecretFromPubkey();
+		//this.#setPubkeyFromInput();
+		//if (!this.sharedSecret) this.buildSharedSecretFromPubkey();
+	}
+	/** @param {string} [reason] */
+	#handleClose = (reason) => {
+		this.ws = null;
+		this.wsConnection = null;
+		this.sharedSecret = null;
+		this.isConnected = false;
+		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair(); // Prepare new keypair for next connection
+		eHTML.get('dashboard-wrapper').classList.add('connecting');
+		if (reason) console.log(`[NodeController] WebSocket connection closed: ${reason}`);
+		else console.log('[NodeController] WebSocket connection closed.');
 	}
 	#setPubkeyFromInput() {
 		try {
@@ -115,7 +131,7 @@ export class Dashboard {
 	#setConnected() {
 		this.isConnected = true;
 		//this.sendEncryptedMessage('getNodeHeight');
-		eHTML.get('establishing-connection').classList.add('hidden');
+		eHTML.get('dashboard-wrapper').classList.remove('connecting');
 		console.log('[NodeController] Key exchange completed - secure channel established');
 	}
 	/** @param {Uint8Array} encryptedData */
@@ -126,17 +142,6 @@ export class Dashboard {
 			const decodedStr = this.textDecoder.decode(decrypted);
 			return JSON.parse(decodedStr);
 		} catch (error) { return null; }
-	}
-	/** @param {string} [reason] */
-	#handleClose = (reason) => {
-		this.ws = null;
-		this.wsConnection = null;
-		this.sharedSecret = null;
-		this.isConnected = false;
-		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair(); // Prepare new keypair for next connection
-		eHTML.get('establishing-connection').classList.remove('hidden');
-		if (reason) console.log(`[NodeController] WebSocket connection closed: ${reason}`);
-		else console.log('[NodeController] WebSocket connection closed.');
 	}
 	/** @param {string} data */
 	#handleStateUpdate = (data) => {

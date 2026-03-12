@@ -1,28 +1,4 @@
 /* Remove spinner arrows from number inputs in WebKit browsers */
-
-#cnd-establishing-connection {
-	z-index: 1;
-	opacity: 1;
-	position: absolute;
-	width: 100%;
-	height: 100%;
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	background: var(--color1);
-	transition: opacity .4s ease;
-}
-#cnd-establishing-connection.hidden {
-	opacity: 0;
-	pointer-events: none;
-}
-#cnd-establishing-connection-text.hidden {
-	display: none;
-}
-#cnd-node-pubkey-input.hidden {
-	display: none;
-}
-
 .cnd-dashboard-wrapper {
 	position: relative;
     display: flex;
@@ -30,10 +6,26 @@
     align-items: center;
 	width: 100%;
 	height: 100%;
-    background-color: var(--color1);
     color: var(--color2);
-    transition: background-color .2s, color .2s;
 	overflow: hidden scroll;
+}
+.cnd-establishing-connection {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	display: hidden;
+	justify-content: center;
+	align-items: center;
+}
+.cnd-dashboard-wrapper.connecting .cnd-establishing-connection {
+	display: flex;
+	pointer-events: none;
+}
+#cnd-establishing-connection-text.hidden {
+	display: none;
+}
+#cnd-node-pubkey-input.hidden {
+	display: none;
 }
 .cnd-containers-wrap {
 	box-sizing: border-box;
@@ -43,6 +35,9 @@
     align-items: center;
     width: 100%;
 	padding: 0 20px;
+}
+.cnd-dashboard-wrapper.connecting .cnd-containers-wrap {
+	display: none;
 }
 .cnd-container {
     width: 100%;

@@ -12,6 +12,9 @@ const CONTRAST_EXE = path.join(__dirname, 'contrast.exe');
 const RESOURCES_DIR = path.join(__dirname, '..');
 const NEUTRALINO_EXE = path.join(__dirname, 'neutralino-win_x64.exe');
 const GITHUB_API = 'https://api.github.com/repos/Seigneur-Machiavel/contrast/releases';
+const pkg = JSON.parse(fs.readFileSync(path.join(RESOURCES_DIR, 'package.json'), 'utf8'));
+const version = pkg.version; // ex: '0.6.12'
+let tryUpdateInterval = null;
 
 // ---- CONFIG ------------------------------------------------------------------------
 /** @typedef {{ autoUpdate: boolean, ignorePreRelease: boolean, installedVersion?: string }} LauncherConfig */
@@ -25,10 +28,14 @@ function loadConfig() {
 	catch { return { ...DEFAULT_CONFIG }; }
 }
 
-// ---- AUTO-STARTUP ------------------------------------------------------------------
 function enableAutoStart() {
 	const cmd = `reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v Contrast /t REG_SZ /d "${process.execPath}" /f`;
 	try { execSync(cmd); console.log('[autostart] enabled'); }
+	catch (/** @type {any} */ e) { console.log('[autostart] failed:', e.message); }
+}
+function disableAutoStart() {
+	const cmd = `reg delete HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v Contrast /f`;
+	try { execSync(cmd); console.log('[autostart] disabled'); }
 	catch (/** @type {any} */ e) { console.log('[autostart] failed:', e.message); }
 }
 
@@ -41,10 +48,10 @@ const stopNodeAndExit = async (node) => {
 async function main() {
 	const cfg = loadConfig();
 	const node = new NodeManager(CONTRAST_EXE);
-	const updater = new Updater(GITHUB_API, CONFIG_PATH, cfg.ignorePreRelease);
+	const updater = new Updater(GITHUB_API, version, cfg.ignorePreRelease);
 
 	// Auto-update check before starting
-	if (true) //cfg.autoUpdate)
+	if (cfg.autoUpdate)
 		try { await updater.run(RESOURCES_DIR, node); }
 		catch (/** @type {any} */ e) { console.log('[update] check failed:', e.message); }
 
@@ -52,12 +59,11 @@ async function main() {
 	await import('../board-service.mjs');
 
 	// Spawn Neutralino window
-	if (!fs.existsSync(NEUTRALINO_EXE)) console.log('[launcher] neutralino not found, skipping window');
-	else {
-		const neutralinoProcess = spawn(NEUTRALINO_EXE, [], { cwd: __dirname, stdio: 'ignore', detached: false });
-		neutralinoProcess.on('exit', () => stopNodeAndExit(node));
-	}
-		
+	const neutralinoProcess = !fs.existsSync(NEUTRALINO_EXE) ? null
+		:spawn(NEUTRALINO_EXE, [], { cwd: __dirname, stdio: 'ignore', detached: false });
+
+	if (!neutralinoProcess) console.log('[launcher] neutralino not found, skipping window');
+	else neutralinoProcess.on('exit', () => stopNodeAndExit(node));
 
 	// Start node subprocess with auto-restart
 	node.start();
@@ -65,6 +71,11 @@ async function main() {
 	// Graceful shutdown on process exit
 	process.on('SIGTERM', async () => await stopNodeAndExit(node));
 	process.on('SIGINT', async () => await stopNodeAndExit(node));
-}
 
+	// autoUpdate interval setup (check every 20 minutes)
+	if (cfg.autoUpdate) tryUpdateInterval = setInterval(async () => {
+		try { await updater.run(RESOURCES_DIR, node); }
+		catch (/** @type {any} */ e) { console.log('[update] check failed:', e.message); }
+	}, 20 * 60 * 1000);
+}
 main().catch(e => console.error('[launcher] fatal:', e));

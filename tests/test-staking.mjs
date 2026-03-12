@@ -13,7 +13,7 @@ const args = process.argv.slice(2); // digest the start args
 const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : undefined;
-const clearOnStart = true;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
+const clearOnStart = false;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 
 import { Wallet } from '../node/src/wallet.mjs';
 import { serializer } from '../utils/serializer.mjs';

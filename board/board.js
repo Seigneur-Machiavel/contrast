@@ -20,6 +20,7 @@ if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/
 
 const version = '0.6.12'; // Overwrite by board-service.mjs on the fly, based on "contrast-storage/package.json" version field. Used for display in the UI and for update checks.
 const bootstraps = ['ws://localhost:27260'];
+const hostPubkeyStr = null; // Pass from launcher args to board-service.
 const hiveNode = await HiveP2P.createNode({ bootstraps });
 
 const hasPassword = false; // TODO
@@ -40,7 +41,7 @@ const translator = new Translator(async (lang) => {
 // INIT OTHER MANAGERS AND COMPONENTS
 const connector = new Connector(hiveNode);
 const explorer = new Explorer(connector);
-const dashboard = new Dashboard(connector);
+const dashboard = new Dashboard(connector, hostPubkeyStr);
 const biw = new BoardInternalWallet(connector, boardStorage);
 const assistant = new Assistant(biw, translator);
 

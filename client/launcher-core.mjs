@@ -63,13 +63,38 @@ export class NodeManager {
 // ---- UPDATER -----------------------------------------------------------------------
 export class Updater {
 	#api;
-	#configPath;
+	#localVersion;
 	#ignorePreRelease;
 
-	/** @param {string} githubApi @param {string} configPath @param {boolean} ignorePreRelease */
-	constructor(githubApi, configPath, ignorePreRelease) { this.#api = githubApi; this.#configPath = configPath; this.#ignorePreRelease = ignorePreRelease; }
+	/** @param {string} githubApi @param {string} localVersion @param {boolean} ignorePreRelease */
+	constructor(githubApi, localVersion, ignorePreRelease) { this.#api = githubApi; this.#localVersion = localVersion; this.#ignorePreRelease = ignorePreRelease; }
 
-	/** @param {string} url @returns {Promise<Buffer>} */
+	/** @param {string} resourcesDir @param {NodeManager} node @param {boolean} [force] */
+	async run(resourcesDir, node, force = false) {
+		const updateInfo = await this.#checkForUpdates(force);
+		if (typeof updateInfo === 'string') {
+			console.info(updateInfo);
+			return;
+		}
+
+		// Stop node, extract zip
+		if (node.isRunning) await node.stop();
+
+		const { manifest, zipData } = updateInfo;
+		const tmpZip = path.join(resourcesDir, '..', 'resources.tmp.zip');
+		fs.writeFileSync(tmpZip, zipData);
+
+		const AdmZip = (await import('adm-zip')).default;
+		const zip = new AdmZip(tmpZip);
+		zip.extractAllTo(resourcesDir, true);
+		fs.unlinkSync(tmpZip);
+
+		this.#localVersion = manifest.version;
+		console.info(`[update] updated to ${manifest.version}`);
+		node.start();
+		return true;
+	}
+		/** @param {string} url @returns {Promise<Buffer>} */
 	async #get(url) {
 		return new Promise((resolve, reject) => {
 			https.get(url, { headers: { 'User-Agent': 'contrast-launcher' } }, (res) => {
@@ -82,57 +107,34 @@ export class Updater {
 			}).on('error', reject);
 		});
 	}
-
-	/** @param {string} filePath @returns {string} */
-	#sha256(filePath) { return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex'); }
-
-	/** @param {string} resourcesDir @param {NodeManager} node @param {boolean} [force] @returns {Promise<boolean>} */
-	async run(resourcesDir, node, force = false) {
+	async #checkForUpdates(force = false) {
 		console.log('[update] checking for updates...');
 		const releases = JSON.parse((await this.#get(this.#api)).toString());
-		const release = releases[0];
-		if (this.#ignorePreRelease && release.prerelease) { console.log('[update] pre-release ignored'); return false; }
+		const release = !this.#ignorePreRelease ? releases[0]
+			: releases.find((/** @type {any} */ r) => !r.prerelease);
+		if (!release) return '[update-success] no suitable release found';
 
 		// Download manifest only (~2KB)
 		const manifestAsset = release.assets.find((/** @type {any} */ a) => a.name === 'manifest.json');
-		if (!manifestAsset) { console.log('[update] no manifest.json in latest release'); return false; }
+		if (!manifestAsset) return '[update-failure] no manifest.json in latest release';
 		const manifest = JSON.parse((await this.#get(manifestAsset.browser_download_url)).toString());
 
 		// Compare local version
-		let localVersion = '';
-		try { localVersion = JSON.parse(fs.readFileSync(this.#configPath, 'utf8')).installedVersion ?? ''; }
-		catch { /* no config yet */ }
-		if (!force && localVersion === manifest.version) { console.log(`[update] already on ${manifest.version}`); return false; }
+		if (!force && this.#localVersion === manifest.version)
+			return `[update-success] already on version ${manifest.version}`;
 
 		// Download resources.zip
 		const zipAsset = release.assets.find((/** @type {any} */ a) => a.name === 'resources.zip');
-		if (!zipAsset) { console.log('[update] no resources.zip in latest release'); return false; }
+		if (!zipAsset) return '[update-failure] no resources.zip in latest release';
 		console.log(`[update] downloading resources.zip ${manifest.version}...`);
 		const zipData = await this.#get(zipAsset.browser_download_url);
 
 		// Verify checksum
 		const actual = crypto.createHash('sha256').update(zipData).digest('hex');
-		if (actual !== manifest.resourcesChecksum) { console.log('[update] checksum mismatch — aborting'); return false; }
+		if (actual !== manifest.resourcesChecksum)
+			return `[update-failure] checksum mismatch (expected ${manifest.resourcesChecksum}, got ${actual}) — aborted`;
+		
 		console.log('[update] checksum verified ✓');
-
-		// Stop node, extract zip
-		if (node.isRunning) await node.stop();
-		const tmpZip = path.join(resourcesDir, '..', 'resources.tmp.zip');
-		fs.writeFileSync(tmpZip, zipData);
-
-		const AdmZip = (await import('adm-zip')).default;
-		const zip = new AdmZip(tmpZip);
-		zip.extractAllTo(resourcesDir, true);
-		fs.unlinkSync(tmpZip);
-
-		// Save installed version
-		let cfg = {};
-		try { cfg = JSON.parse(fs.readFileSync(this.#configPath, 'utf8')); } catch { /* no config yet */ }
-		cfg.installedVersion = manifest.version;
-		fs.writeFileSync(this.#configPath, JSON.stringify(cfg, null, 2));
-
-		console.log(`[update] updated to ${manifest.version}`);
-		node.start();
-		return true;
+		return { manifest, zipData };
 	}
 }
