@@ -4,6 +4,7 @@ import path from 'path';
 import https from 'https';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
+import { CryptoCodex } from 'hive-p2p';
 
 /** @typedef {{ autoUpdate: boolean, installedVersion?: string }} LauncherConfig */
 
@@ -11,6 +12,7 @@ import { spawn } from 'child_process';
 export class NodeManager {
 	// Ephemeral seed generated once at launcher start — never written to disk
 	seed = crypto.randomBytes(32).toString('hex');
+	pubKeyHex; // to access from launcher.mjs
 	/** @type {import('child_process').ChildProcess | null} */
 	#process = null;
 	#exePath;
@@ -22,6 +24,10 @@ export class NodeManager {
 	constructor(exePath, autoRestart = true) {
 		this.#exePath = exePath;
 		this.#autoRestart = autoRestart;
+		const codex = new CryptoCodex(); // empty codex just to generate the keypair for auto-logging
+		
+		const keypair = codex.generateEphemeralX25519Keypair(this.seed);
+		if (keypair?.myPub) this.pubKeyHex = Buffer.from(keypair.myPub).toString('hex');
 	}
 
 	start() {

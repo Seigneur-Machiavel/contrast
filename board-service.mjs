@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const hostname = args.includes('-nh') ? nextArg('-nh') : 'localhost';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const wsProtocol = args.includes('-wss') ? 'wss' : 'ws';
-const hostPubkeyStr = args.includes('-hpk') ? nextArg('-hpk') : undefined;
+const hostPubkey = args.includes('-hpk') ? nextArg('-hpk') : undefined;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 27262;
 
@@ -79,33 +79,37 @@ function serveStatic(req, res) {
 
 const boardMjs = fs.readFileSync(path.join(__dirname, 'board/board.js'), 'utf8');
 
-http.createServer((req, res) => {
-	const url = (req.url ?? '/').split('?')[0];
+/** @param {string} [hostPubkeyStr] */
+export function startBoardService(hostPubkeyStr = null) {
+	const hpkStr = hostPubkeyStr || hostPubkey || null;
+	http.createServer((req, res) => {
+		const url = (req.url ?? '/').split('?')[0];
 
-    // Patch board.mjs bootstrap URL on the fly
-    if (url === '/board.js') {
-		let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
-		patched = boardMjs.replace(/const version = '.*?';/, `const version = '${version}';`);
-		if (hostPubkeyStr) patched = patched.replace(/const hostPubkeyStr = null;/, `const hostPubkeyStr = '${hostPubkeyStr}';`);
-        res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
-        return res.end(patched);
-    }
+		// Patch board.mjs bootstrap URL on the fly
+		if (url === '/board.js') {
+			let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
+			patched = boardMjs.replace(/const version = '.*?';/, `const version = '${version}';`);
+			if (hpkStr) patched = patched.replace(/const hostPubkeyStr = null;/, `const hostPubkeyStr = '${hpkStr}';`);
+			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
+			return res.end(patched);
+		}
 
-    if (url === '/api/time') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ time: HiveP2P.CLOCK.time }));
-    }
+		if (url === '/api/time') {
+			res.writeHead(200, { 'Content-Type': 'application/json' });
+			return res.end(JSON.stringify({ time: HiveP2P.CLOCK.time }));
+		}
 
-    if (url === '/hive-p2p.min.js') {
-        const filePath = path.join(__dirname, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js');
-        res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
-        return fs.createReadStream(filePath).pipe(res);
-    }
+		if (url === '/hive-p2p.min.js') {
+			const filePath = path.join(__dirname, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js');
+			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
+			return fs.createReadStream(filePath).pipe(res);
+		}
 
-    if (url === '/' || url === '/index.html') {
-        res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': CSP });
-        return fs.createReadStream(path.join(__dirname, 'board/board.html')).pipe(res);
-    }
+		if (url === '/' || url === '/index.html') {
+			res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': CSP });
+			return fs.createReadStream(path.join(__dirname, 'board/board.html')).pipe(res);
+		}
 
-    serveStatic(req, res);
-}).listen(PORT, () => console.log(`Board service running at http://localhost:${PORT}`));
+		serveStatic(req, res);
+	}).listen(PORT, () => console.log(`Board service running at http://localhost:${PORT}`));
+}

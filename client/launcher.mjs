@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { NodeManager, Updater } from './launcher-core.mjs';
+import { startBoardService } from '../board-service.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, 'launcher-config.json');
@@ -27,7 +28,6 @@ function loadConfig() {
 	try { return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) }; }
 	catch { return { ...DEFAULT_CONFIG }; }
 }
-
 function enableAutoStart() {
 	const cmd = `reg add HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run /v Contrast /t REG_SZ /d "${process.execPath}" /f`;
 	try { execSync(cmd); console.log('[autostart] enabled'); }
@@ -55,8 +55,8 @@ async function main() {
 		try { await updater.run(RESOURCES_DIR, node); }
 		catch (/** @type {any} */ e) { console.log('[update] check failed:', e.message); }
 
-	// Start board service in same process
-	await import('../board-service.mjs');
+	// Start board service in same process with the hostPubkeyStr passed as an argument for the board to auto-connect to the node on startup.
+	startBoardService(node.pubKeyHex);
 
 	// Spawn Neutralino window
 	const neutralinoProcess = !fs.existsSync(NEUTRALINO_EXE) ? null
