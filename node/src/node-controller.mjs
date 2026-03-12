@@ -67,8 +67,8 @@ export class NodeController {
 		const codex = this.node.p2p.cryptoCodex;
 		const sharedSecret = codex.computeX25519SharedSecret(this.myKeypair.myPriv, data);
 		this.sharedSecret = sharedSecret;
-		if (this.unsafeMode) this.wsConnection.send(this.myKeypair.myPub); // share the pubkey back in unsafe mode
 		if (this.authTimeout) { clearTimeout(this.authTimeout); this.authTimeout = null; }
+		if (this.unsafeMode) this.wsConnection.send(this.myKeypair.myPub); // share the pubkey back in unsafe mode
 		console.log('[NodeController] Key exchange completed - secure channel established');
 	}
 	/** @param {Uint8Array} encryptedData */

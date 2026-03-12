@@ -27,7 +27,11 @@ export class NodeManager {
 		const codex = new CryptoCodex(); // empty codex just to generate the keypair for auto-logging
 		
 		const keypair = codex.generateEphemeralX25519Keypair(this.seed);
-		if (keypair?.myPub) this.pubKeyHex = Buffer.from(keypair.myPub).toString('hex');
+		if (!keypair?.myPub) return;
+
+		this.pubKeyHex = codex.converter.bytesToHex(keypair.myPub);
+		console.log('[NodeManager] generated ephemeral keyPair and assigned pubKeyHex.');
+		console.log('[NodeManager] ready for auto-logging from the board.');
 	}
 
 	start() {
