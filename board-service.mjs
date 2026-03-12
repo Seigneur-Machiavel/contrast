@@ -12,6 +12,8 @@ await HiveP2P.CLOCK.sync();
 // LOAD BOOTSTRAP URLS FROM "contrast/bootstraps.json" IF EXISTS, OTHERWISE USE DEFAULT
 const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
 const bootstraps = startupStorage.loadJSON('bootstraps', true) || ['ws://localhost:27260'];
+const pkg = startupStorage.loadJSON('package', true);
+const version = pkg.version // '0.6.12'
 
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2);
@@ -81,7 +83,8 @@ http.createServer((req, res) => {
 
     // Patch board.mjs bootstrap URL on the fly
     if (url === '/board.js') {
-		const patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
+		let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
+		patched = boardMjs.replace(/const version = '.*?';/, `const version = '${version}';`);
         res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
         return res.end(patched);
     }

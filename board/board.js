@@ -17,6 +17,8 @@ import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 const host = window.location.hostname;
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/time';
+
+const version = '0.6.12'; // Overwrite by board-service.mjs on the fly, based on "contrast-storage/package.json" version field. Used for display in the UI and for update checks.
 const bootstraps = ['ws://localhost:27260'];
 const hiveNode = await HiveP2P.createNode({ bootstraps });
 
@@ -45,8 +47,9 @@ const assistant = new Assistant(biw, translator);
 if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
 else document.body.classList.remove('dark-mode');
 
-const visualizer = new NetworkVisualizer(connector, HiveP2P.CryptoCodex);
 const boardVersionElement = document.getElementById('board-version');
+if (boardVersionElement) boardVersionElement.textContent = `v${version}`;
+const visualizer = new NetworkVisualizer(connector, HiveP2P.CryptoCodex);
 const windowsWrapElement = document.getElementById('board-windows-wrap');
 const settingsMenuElement = document.getElementById('board-settings-menu');
 const bottomButtonsBarElement = document.getElementById('board-apps-buttons-bar');
