@@ -41,7 +41,7 @@ const stopNodeAndExit = async (node) => {
 async function main() {
 	const cfg = loadConfig();
 	const node = new NodeManager(CONTRAST_EXE);
-	const updater = new Updater(GITHUB_API, cfg.ignorePreRelease);
+	const updater = new Updater(GITHUB_API, CONFIG_PATH, cfg.ignorePreRelease);
 
 	// Auto-update check before starting
 	if (true) //cfg.autoUpdate)

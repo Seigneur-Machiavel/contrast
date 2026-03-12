@@ -63,10 +63,11 @@ export class NodeManager {
 // ---- UPDATER -----------------------------------------------------------------------
 export class Updater {
 	#api;
+	#configPath;
 	#ignorePreRelease;
 
-	/** @param {string} githubApi @param {boolean} ignorePreRelease */
-	constructor(githubApi, ignorePreRelease) { this.#api = githubApi; this.#ignorePreRelease = ignorePreRelease; }
+	/** @param {string} githubApi @param {string} configPath @param {boolean} ignorePreRelease */
+	constructor(githubApi, configPath, ignorePreRelease) { this.#api = githubApi; this.#configPath = configPath; this.#ignorePreRelease = ignorePreRelease; }
 
 	/** @param {string} url @returns {Promise<Buffer>} */
 	async #get(url) {
@@ -99,7 +100,7 @@ export class Updater {
 
 		// Compare local version
 		let localVersion = '';
-		try { localVersion = JSON.parse(fs.readFileSync(path.join(resourcesDir, '..', 'launcher-config.json'), 'utf8')).installedVersion ?? ''; }
+		try { localVersion = JSON.parse(fs.readFileSync(this.#configPath, 'utf8')).installedVersion ?? ''; }
 		catch { /* no config yet */ }
 		if (!force && localVersion === manifest.version) { console.log(`[update] already on ${manifest.version}`); return false; }
 
@@ -125,11 +126,10 @@ export class Updater {
 		fs.unlinkSync(tmpZip);
 
 		// Save installed version
-		const cfgPath = path.join(resourcesDir, '..', 'launcher-config.json');
 		let cfg = {};
-		try { cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); } catch { /* no config yet */ }
+		try { cfg = JSON.parse(fs.readFileSync(this.#configPath, 'utf8')); } catch { /* no config yet */ }
 		cfg.installedVersion = manifest.version;
-		fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
+		fs.writeFileSync(this.#configPath, JSON.stringify(cfg, null, 2));
 
 		console.log(`[update] updated to ${manifest.version}`);
 		node.start();

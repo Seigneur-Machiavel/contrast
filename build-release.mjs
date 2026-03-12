@@ -17,6 +17,7 @@ const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 /** @type {{in: string, out?: string}[]} */
 const RESOURCES_FILES = [
 	{ in: 'board-service.mjs' },
+	{ in: 'package.json' }, // for version
 ];
 const RESOURCES_FOLDERS = [
 	{ in: 'board' },
