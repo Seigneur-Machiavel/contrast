@@ -11,7 +11,7 @@ const CONFIG_PATH = path.join(__dirname, 'launcher-config.json');
 const CONTRAST_EXE = path.join(__dirname, 'contrast.exe');
 const RESOURCES_DIR = path.join(__dirname, '..');
 const NEUTRALINO_EXE = path.join(__dirname, 'neutralino-win_x64.exe');
-const GITHUB_API = 'https://api.github.com/repos/Seigneur-Machiavel/contrast/releases/latest';
+const GITHUB_API = 'https://api.github.com/repos/Seigneur-Machiavel/contrast/releases';
 
 // ---- CONFIG ------------------------------------------------------------------------
 /** @typedef {{ autoUpdate: boolean, ignorePreRelease: boolean, installedVersion?: string }} LauncherConfig */
@@ -44,7 +44,7 @@ async function main() {
 	const updater = new Updater(GITHUB_API, cfg.ignorePreRelease);
 
 	// Auto-update check before starting
-	if (cfg.autoUpdate)
+	if (true) //cfg.autoUpdate)
 		try { await updater.run(RESOURCES_DIR, node); }
 		catch (/** @type {any} */ e) { console.log('[update] check failed:', e.message); }
 

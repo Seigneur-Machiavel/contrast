@@ -88,7 +88,8 @@ export class Updater {
 	/** @param {string} resourcesDir @param {NodeManager} node @param {boolean} [force] @returns {Promise<boolean>} */
 	async run(resourcesDir, node, force = false) {
 		console.log('[update] checking for updates...');
-		const release = JSON.parse((await this.#get(this.#api)).toString());
+		const releases = JSON.parse((await this.#get(this.#api)).toString());
+		const release = releases[0];
 		if (this.#ignorePreRelease && release.prerelease) { console.log('[update] pre-release ignored'); return false; }
 
 		// Download manifest only (~2KB)
