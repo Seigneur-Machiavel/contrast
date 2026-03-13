@@ -1,7 +1,10 @@
 // @ts-ignore
 // NODEJS VERSION OF THE MINI LOGGER
 
-const isNode = typeof self === 'undefined';let fs;
+const supportsAnsi = typeof process !== 'undefined' && process.stdout.isTTY && process.env.TERM !== 'dumb';
+const isNode = typeof self === 'undefined';
+let fs;
+let url;
 let path;
 let __dirname;
 let basePath = __dirname;
@@ -9,7 +12,6 @@ let basePath = __dirname;
     if (!isNode) return;
     try { path = await import('path'); } catch (error) { path = window.path; }
     try { fs = await import('fs'); } catch (error) { fs = window.fs; }
-    let url;
     try { url = await import('url'); } catch (error) { url = window.url; }
 
     while (!url) { await new Promise(resolve => setTimeout(resolve, 10)); }
@@ -142,7 +144,10 @@ export class MiniLogger {
     log(message, callback = (m, c) => console.log(m, c)) {
         const type = callback.toString().split('console.')[1].split('(')[0].trim();
         if (isNode) this.#saveLog(type, message);
-        if (this.shouldLog && typeof callback === 'function') callback(`%c${message}`, this.color);
+        //if (this.shouldLog && typeof callback === 'function') callback(`%c${message}`, this.color);
+		if (this.shouldLog && typeof callback === 'function')
+			if (supportsAnsi) callback(`${cssToAnsi(this.color)}${message}\x1b[0m`, '')
+			else callback(`%c${message}`, this.color);
     }
     getReadableHistory() {
         return this.history.map(entry => {
@@ -151,4 +156,25 @@ export class MiniLogger {
             return `[${formattedDate}] [${entry.type}] ${entry.message}`;
         });
     }
+}
+
+// AINSI ADAPTER FOR MAXIMAL SUPPORT ------------------------------------
+// Maps a subset of CSS color names + properties to ANSI codes
+const ANSI_COLORS = {
+    cyan: '\x1b[36m', darkseagreen: '\x1b[32m', deepskyblue: '\x1b[34m',
+    white: '\x1b[37m', green: '\x1b[32m', yellow: '\x1b[33m',
+    fuchsia: '\x1b[35m', red: '\x1b[31m', reset: '\x1b[0m',
+};
+const ANSI_STYLES = { bold: '\x1b[1m', dim: '\x1b[2m' };
+
+// Parse "color: deepskyblue; font-weight: bold" → ANSI prefix string
+function cssToAnsi(cssString) {
+    if (!cssString) return '';
+    let ansi = '';
+    for (const part of cssString.split(';')) {
+        const [prop, val] = part.split(':').map(s => s.trim());
+        if (prop === 'color') ansi += ANSI_COLORS[val] ?? '';
+        if (prop === 'font-weight' && val === 'bold') ansi += ANSI_STYLES.bold;
+    }
+    return ansi;
 }

@@ -148,10 +148,6 @@ window.addEventListener('resize', function(e) { // Trigger on main window resize
 	}
 });
 window.addEventListener('message', function(e) { // TODO
-	/*function formatedUrl(urlStr = 'http://127.0.0.1:27271/') { // ERASE THIS PLEASE...
-		const url = new URL(urlStr);
-		return `${url.protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-	}*/
 	//console.log('message received:', e.data);
 	//console.log(e);
 	if (e.data?.type === 'iframeClick') {
@@ -164,7 +160,7 @@ window.addEventListener('message', function(e) { // TODO
 	}
 
 	if (e.data?.type === 'copy_text') {
-		const authorizedCopyTextOrigins = ['https://cybercon.app', 'http://pinkparrot.science:27280', 'http://localhost:27270', 'http://localhost:27271'];
+		const authorizedCopyTextOrigins = ['https://cybercon.app'];
 		if (!authorizedCopyTextOrigins.includes(formatedUrl(e.origin))) {
 			console.error('Unauthorized origin for copy_text:', e.origin);
 			return;

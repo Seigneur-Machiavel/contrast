@@ -1,8 +1,9 @@
 // @ts-check
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
+const controllerPort = args.includes('-cp') ? parseInt(nextArg('-cp')) : 27261;
 const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : '31ba0b522136530dd340d856d7eaa7ab4f5c53f763ff0696ff1fa9fcea464281';
-console.log(`[run-client] chachaSeedHex: ${chachaSeedHex}`);
+// console.log(`[run-client] chachaSeedHex: ${chachaSeedHex}`);
 
 import { Wallet } from './src/wallet.mjs';
 import { createContrastNode } from './src/node.mjs';
@@ -26,7 +27,7 @@ const wallet = new Wallet(seedHex);
 await wallet.deriveAccounts(2, 'C', storage);
 
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
-const clientNode = await createContrastNode({ cryptoCodex, storage, bootstraps, chachaSeedHex });
+const clientNode = await createContrastNode({ cryptoCodex, storage, bootstraps, chachaSeedHex, controllerPort });
 await clientNode.start(wallet);
 
 // PERSIST THE SEED FOR NEXT STARTUPS IF NODE IS ABLE TO START SUCCESSFULLY

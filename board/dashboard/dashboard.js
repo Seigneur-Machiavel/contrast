@@ -74,9 +74,9 @@ export class Dashboard {
 		this.wsConnection = ws;
 		this.isWsAccessible = true;
 		eHTML.get('establishing-connection-text').classList.add('hidden');
-		setTimeout(() => eHTML.get('node-pubkey-input').classList.remove('hidden'), 1200);
 		
 		if (this.hostPubkeyStr) this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr));
+		else eHTML.get('node-pubkey-input').classList.remove('hidden');
 		this.ws.send(this.myKeypair.myPub);
 		//this.#setPubkeyFromInput();
 		//if (!this.sharedSecret) this.buildSharedSecretFromPubkey();
@@ -89,6 +89,9 @@ export class Dashboard {
 		this.isConnected = false;
 		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair(); // Prepare new keypair for next connection
 		eHTML.get('dashboard-wrapper').classList.add('connecting');
+		eHTML.get('establishing-connection-text').classList.remove('hidden');
+		eHTML.get('node-pubkey-input').classList.add('hidden');
+		
 		if (reason) console.log(`[NodeController] WebSocket connection closed: ${reason}`);
 		else console.log('[NodeController] WebSocket connection closed.');
 	}

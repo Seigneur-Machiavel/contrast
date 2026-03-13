@@ -20,7 +20,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 export class Sync {
 	logger = new MiniLogger('sync');
 	/** @type {PendingRequest | null} */
-	pendingRequest = null;
+	pendingBlockRequest = null;
 	/** @type {Uint8Array | null} */
 	myStatusSerialized = null;
 	/** Key: peerId, value: BHH @type {Object<string, BlockHeightHashStr>} */
@@ -60,29 +60,43 @@ export class Sync {
 			// ROLLBACK UNTIL CONSENSUS BLOCK AND CATCH UP
 			const peersToAsk = this.getPeersToAskList(c.blockHeight, c.blockHash);
 			if (!attempts) this.logger.log(`Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
-			try { bc.undoBlock() } catch {} // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
-			while (bc.currentHeight > c.blockHeight) bc.undoBlock();
+			bc.undoBlock(true); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
+			while (bc.currentHeight > c.blockHeight) bc.undoBlock(true);
 
 			// DOWNLOAD AND APPLY BLOCKS UNTIL REASONABLE GAP
+			/** @type {string | null} */
+			let peerIdToRestore = null;
 			this.node.updateState(`Syncing from #${bc.currentHeight} to #${c.blockHeight}`);
 			while (bc.currentHeight < c.blockHeight) {
+				if (c.count < 6) { // Small network: tolerance to fetching from the same peer multiple times.
+					if (peerIdToRestore) peersToAsk.push(peerIdToRestore);
+					peerIdToRestore = null;
+				}
+
 				const nextHeight = bc.currentHeight + 1;
 				const index = Math.floor(Math.random() * peersToAsk.length);
 				const peerId = peersToAsk[index];
-				if (!peerId) {
+				if (!peerId || (peerIdToRestore && peerId === peerIdToRestore)) {
 					await new Promise(r => setTimeout(r, 2000)); // wait a bit before retrying
 					break;
 				}
+				
+				peersToAsk.splice(index, 1); // Don't use same peer for next block
+				if (peerIdToRestore) peersToAsk.push(peerIdToRestore); // restore previously removed peer (if any) to try again later
 
 				this.logger.log(`Fetching block #${nextHeight} from peer ${peerId}`, (m, c) => console.log(m, c));
 				const blockBytes = await this.fetchBlockFromPeer(peerId, nextHeight);
-				if (!blockBytes) this.logger.log(`Failed to fetch block #${nextHeight} from peer ${peerId}`, (m, c) => console.error(m, c));
-				
-				const success = blockBytes ? await bc.digestFinalizedBlock(this.node, blockBytes, { isSync: true }) : false;
-				if (success) continue;
-				
-				peersToAsk.splice(index, 1); // remove peer from the list to avoid further issues
-				if (blockBytes) bc.undoBlock(); // undo last block, retry from previous
+				if (!blockBytes) { // failed to fetch block from this peer, try another
+					this.logger.log(`Fetch failure for block #${nextHeight} from peer ${peerId}`, (m, c) => console.error(m, c));
+					continue;
+				}
+
+				const success = await bc.digestFinalizedBlock(this.node, blockBytes, { isSync: true });
+				if (success) { peerIdToRestore = peerId; continue; } // Able to digest > continue routine.
+
+				// Unable to digest >  undo last block, retry from previous
+				this.logger.log(`Failed #${nextHeight} digest => undo one block`, (m, c) => console.error(m, c));
+				bc.undoBlock(true); // if undo fails, just reset everything to be sure
 			}
 			
 			attempts++;
@@ -125,19 +139,19 @@ export class Sync {
 		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
 		const peersToAsk = []; // All consensus peers except self
 		for (const peerId of this.peersByBHH[bhh] || new Set())
-			if (peerId !== this.node.p2p.id) peersToAsk.push(peerId);
+			if (peerId !== this.node.p2p.id) peersToAsk.push(peerId); // Don't ask self
 		return peersToAsk;
 	}
-	/** @param {string} peerId @param {number} height */
-	async fetchBlockFromPeer(peerId, height, timeout = 3000) {
+	/** @param {string} peerId @param {number} height @returns {Promise<Uint8Array | undefined>} */
+	async fetchBlockFromPeer(peerId, height, timeout = 2000) {
 		try {
-			this.pendingRequest = new PendingRequest(peerId, 'block', timeout);
+			this.pendingBlockRequest = new PendingRequest(peerId, 'block', timeout);
 			const heightInt32 = serializer.converter.numberTo4Bytes(height);
 			this.node.p2p.messager.sendUnicast(peerId, heightInt32, 'block_request', 1);
-			const serializedBlock = await this.pendingRequest.promise;
+			const serializedBlock = await this.pendingBlockRequest.promise;
 			return serializedBlock;
 		} catch (error) {}
-		this.pendingRequest = null;
+		this.pendingBlockRequest = null;
 	}
 	/** @param {BlockFinalized} block */
 	setAndshareMyStatus(block) {
@@ -174,19 +188,25 @@ export class Sync {
 	}
 	/** @param {DirectMessage} msg */
 	#onBlockRequest = async (msg) => {
-		const { senderId, data } = msg;
 		if (!this.node.blockchain) return;
+
+		const { senderId, data, route } = msg;
+		this.logger.log(`[SYNC] Received block request from ${senderId} (${route})`, (m, c) => console.log(m, c));
+		
 		if (!(data instanceof Uint8Array) || data.length !== 4) return; // invalid request
 		const height = serializer.converter.bytes4ToNumber(data);
 		const b = this.node.blockchain.blockStorage.getBlockBytes(height, false)?.blockBytes;
 		if (b) this.node.p2p.messager.sendUnicast(senderId, b, 'block', 1);
+		if (b) this.logger.log(`[SYNC] Sent block #${height} to ${senderId}`, (m, c) => console.log(m, c));
 	}
 	/** @param {DirectMessage} msg */
 	#onBlock = async (msg) => {
-		const { senderId, data } = msg;
-		if (this.pendingRequest?.peerId !== senderId) return; // not the expected sender
+		const { senderId, data, route } = msg;
+		this.logger.log(`[SYNC] Received block data from ${senderId} (${route})`, (m, c) => console.log(m, c));
+
+		if (this.pendingBlockRequest?.peerId !== senderId) return; // not the expected sender
 		if (!(data instanceof Uint8Array)) return; // invalid data type
-		this.pendingRequest.complete(data);
-		this.pendingRequest = null;
+		this.pendingBlockRequest.complete(data);
+		this.pendingBlockRequest = null;
 	}
 }

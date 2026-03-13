@@ -30,18 +30,16 @@ export class NodeManager {
 		if (!keypair?.myPub) return;
 
 		this.pubKeyHex = codex.converter.bytesToHex(keypair.myPub);
-		console.log('[NodeManager] generated ephemeral keyPair and assigned pubKeyHex:');
-		console.log(`[NodeManager] pubkey ${this.pubKeyHex}`);
-		console.log(`[NodeManager] privKey ${codex.converter.bytesToHex(keypair.myPriv)}`);
+		console.log('[NodeManager] generated ephemeral keyPair and assigned pubKeyHex');
+		// console.log(`[NodeManager] pubkey ${this.pubKeyHex}`);
+		// console.log(`[NodeManager] privKey ${codex.converter.bytesToHex(keypair.myPriv)}`);
 	}
 
 	start() {
 		if (this.isRunning) { console.log('[node] already running'); return; }
 		if (!fs.existsSync(this.#exePath)) { console.log('[node] contrast.exe not found — run update first'); return; }
 
-		this.#process = spawn(this.#exePath, ['--mode=run-client', '-cs', this.seed], { stdio: ['ignore', 'pipe', 'pipe'] });
-		this.#process.stdout?.on('data', d => process.stdout.write(d));
-		this.#process.stderr?.on('data', d => process.stderr.write(d));
+		this.#process = spawn(this.#exePath, ['--mode=run-client', '-cs', this.seed], { stdio: ['ignore', 'inherit', 'inherit'] });
 		this.#process.on('exit', (code) => {
 			this.#process = null;
 			console.log(`[node] exited (code ${code})`);

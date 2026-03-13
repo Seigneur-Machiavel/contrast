@@ -209,6 +209,7 @@ export class BlockchainStorage {
         if (fs.existsSync(this.storage.PATH.BLOCKCHAIN)) fs.rmSync(this.storage.PATH.BLOCKCHAIN, { recursive: true });
         fs.mkdirSync(this.storage.PATH.BLOCKCHAIN);
         this.lastBlockIndex = -1;
+		this.idxsHandler = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, 'blockchain.idx'));
     }
 
 	// INTERNAL METHODS

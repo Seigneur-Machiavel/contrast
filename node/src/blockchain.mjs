@@ -58,9 +58,11 @@ export class Blockchain {
 		if (this.currentHeight > 10 && Math.random() < this.simulateFailureRate)
 			return console.log(`%c[DEBUG] Simulated failure of digestFinalizedBlock #${this.currentHeight}`, 'color: orange;');
 		
+		let blockIndex = null;
 		try {
 			// VALIDATE BLOCK
 			block = serializer.deserialize.blockFinalized(serializedBlock);
+			blockIndex = block.index;
 			node.updateState(`${statePrefix}block-validation #${block.index}`);
 			const validationResult = await BlockValidation.validateBlockProposal(node, block, serializedBlock);
 			const { hashConfInfo, involvedAnchors, involvedUTXOs } = validationResult;
@@ -79,7 +81,7 @@ export class Blockchain {
 			node.sync.setAndshareMyStatus(block);
 		} catch (/** @type {any} */ error) {
 			const shouldLog = !error.message.includes('(outdated)');
-			if (shouldLog) this.logger.log(`Failed to digest finalized block: ${error.stack}`, (m, c) => console.error(m, c));
+			if (shouldLog) this.logger.log(`Failed to digest finalized block #${blockIndex}: ${error.stack}`, (m, c) => console.error(m, c));
 			
 			const isOffense = error.message.startsWith('!applyOffense!');
 			if (isOffense) this.logger.log(`!!! Offense detected while digesting finalized block: ${error.message}`, (m, c) => console.warn(m, c));
@@ -128,25 +130,33 @@ export class Blockchain {
 	getUtxos(anchors, breakOnSpent = false) {
 		return this.blockStorage.getUtxos(anchors, breakOnSpent);
 	}
-	undoBlock() {
+	undoBlock(resetOnFailure = false) {
 		const block = this.lastBlock;
-		if (!block) throw new Error('Blockchain.undoBlock: no block to undo.');
-		if (block.index !== this.currentHeight) throw new Error('Blockchain.undoBlock: last block index mismatch.');
+		if (!block)
+			if (resetOnFailure) return this.reset('Blockchain.undoBlock: no block to undo.');
+			else throw new Error('Blockchain.undoBlock: no block to undo.');
+		
+		if (block.index !== this.currentHeight)
+			if (resetOnFailure) return this.reset('Blockchain.undoBlock: last block index mismatch.');
+			else throw new Error(`Blockchain.undoBlock: last block index mismatch.`);
 		
 		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
 		const involvedUTXOs = this.getUtxos(involvedAnchors, false);
-		if (!involvedUTXOs) throw new Error('Blockchain.undoBlock: unable to retrieve all involved UTXOs for the last block.');
+		if (!involvedUTXOs)
+			if (resetOnFailure) return this.reset('Blockchain.undoBlock: unable to retrieve involved UTXOs.');
+			else throw new Error('Blockchain.undoBlock: unable to retrieve all involved UTXOs for the last block.');
 
 		this.ledgersStorage.undoBlock(block, involvedUTXOs);
 		this.identityStore.undoBlock(block, involvedUTXOs);
 		this.blockStorage.undoBlock(involvedAnchors);
 		this.vss.undoBlockStakes(block);
 		this.ledgersStorage.cache.clear();
-		if (this.currentHeight === -1) this.reset();
+
+		if (this.currentHeight === -1) this.reset('Blockchain.undoBlock: no more blocks after undo.');
 		else this.lastBlock = this.getBlock() || null;
 	}
-	reset() {
-		this.logger.log('RESETTING BLOCKCHAIN...', (m, c) => console.warn(m, c));
+	reset(reason = '') {
+		this.logger.log(`RESETTING BLOCKCHAIN... ${reason}`, (m, c) => console.warn(m, c));
 		this.vss.reset();
         this.blockStorage.reset();
 		this.identityStore.reset();
@@ -158,6 +168,9 @@ export class Blockchain {
 	// INTERNAL METHODS
 	/** Ensure the blockchain storage consistency by checking the last block */
 	#ensureConsistency() {
+		// ZERO: if no blocks, just reset everything to be sure
+		if (this.currentHeight === -1) { this.reset('#ensureConsistency: currentHeight === -1'); return; }
+
 		// FIRST: CHECK BLOCKCHAIN FILE LENGTH MATCHES THE LAST INDEXED BLOCK OFFSET
 		// IF: IDX = OK, BLOCKCHAIN = BAD => RESIZE BLOCKCHAIN AND UNDO IDX. (LEDGERS AND IDENTITIES SHOULD BE GOOD)
 		const isLastBlockConsistent = this.blockStorage.checkBlockchainBytesLengthConsistency();

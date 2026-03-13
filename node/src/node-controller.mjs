@@ -26,8 +26,8 @@ export class NodeController {
 		console.log(`[NodeController] started on port ${port}`);
 		console.log(`[NodeController] unsafeMode is ${this.unsafeMode ? 'ENABLED' : 'DISABLED'}`);
 		console.log('[NodeController] waiting for client connection...');
-		console.log(`[NodeController] Public key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPub)}`);
-		console.log(`[NodeController] Private key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPriv)}`);
+		//console.log(`[NodeController] Public key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPub)}`);
+		//console.log(`[NodeController] Private key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPriv)}`);
 		this.pingInterval = setInterval(() => {
 			if (!this.wsConnection || !this.sharedSecret) return;
 			this.sendEncryptedMessage('currentHeight', this.node.blockchain.currentHeight);

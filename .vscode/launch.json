@@ -3,6 +3,14 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Run-client",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/run-client.mjs",
+			"args": ["-cp", "27259"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Board Service",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/board-service.mjs"

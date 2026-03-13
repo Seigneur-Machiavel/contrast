@@ -18,6 +18,8 @@ class StorageRoot {
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
 	constructor(masterHex = null) {
 		this.localIdentifier = masterHex ? this.#getLocalIdentifier(masterHex) : null;
+		console.log(`Storage localIdentifier: ${this.localIdentifier}`);
+
 		const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
 		this.isElectronEnv = filePath.includes('app.asar');
 
@@ -39,7 +41,8 @@ class StorageRoot {
 			IDENTITIES: path.join(basePath, 'identities'),
 			TEST_STORAGE: path.join(basePath, 'test')
 		};
-		this.#init();
+
+		if (masterHex) this.#init();
 	}
 	#init() {
 		// create the contrast-storage folder if it doesn't exist, and any of subfolder

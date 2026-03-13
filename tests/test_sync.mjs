@@ -7,8 +7,6 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
 const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const observerPort = args.includes('-op') ? parseInt(nextArg('-op')) : 27270;
-const dashboardPort = args.includes('-dp') ? parseInt(nextArg('-dp')) : 27271;
 const clearOnStart = true;		// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 const transactionTest = false; 	// ENABLE TRANSACTION TESTING MODE - FOR TEST PURPOSES ONLY!
 
