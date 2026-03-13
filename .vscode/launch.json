@@ -34,7 +34,7 @@
 			"request": "launch",
 			"name": "Test: Run 2 Nodes",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/run_2_nodes.mjs",
+			"program": "${workspaceFolder}/tests/run_2_nodes.js",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
@@ -42,7 +42,7 @@
 			"request": "launch",
 			"name": "Test: Worst TXs Validations",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test-worst-txs-validations.mjs",
+			"program": "${workspaceFolder}/tests/test-worst-txs-validations.js",
 			"args": ["--max-old-space-size=16384"],
 			"runtimeArgs": ["--inspect"]
 		},
@@ -51,7 +51,7 @@
 			"request": "launch",
 			"name": "Test: Staking",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test-staking.mjs",
+			"program": "${workspaceFolder}/tests/test-staking.js",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
@@ -59,7 +59,7 @@
 			"request": "launch",
 			"name": "Test: Solving",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test-solving.mjs",
+			"program": "${workspaceFolder}/tests/test-solving.js",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
@@ -67,7 +67,7 @@
 			"request": "launch",
 			"name": "Test: Sync",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test_sync.mjs",
+			"program": "${workspaceFolder}/tests/test_sync.js",
 			"args": ["--max-old-space-size=16384"]
 		},
 		{
