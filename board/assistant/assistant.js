@@ -258,9 +258,9 @@ export class Assistant {
 	async welcome(displaySetupMessage = false) {
 		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 200)); // Wait until the assistant is ready
 		
-		setTimeout(() => this.sendMessage(this.translator.Welcome), 800);
-		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 2400);
-		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 4500);
+		setTimeout(() => this.sendMessage(this.translator.Welcome), 600);
+		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 1600);
+		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 2200);
 	}
 	/** @param {string | false} failureMsg */
     async requestNewPassword(failureMsg = false) {

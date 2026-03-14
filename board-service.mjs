@@ -18,6 +18,7 @@ console.info(`[BOARD SERVICE] Version: ${version} - ${bootstraps.length} bootstr
 
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2);
+const start = args.includes('--start') || args.includes('-s');
 const hostname = args.includes('-nh') ? nextArg('-nh') : 'localhost';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const wsProtocol = args.includes('-wss') ? 'wss' : 'ws';
@@ -80,18 +81,21 @@ function serveStatic(req, res) {
 
 const boardMjs = fs.readFileSync(path.join(__dirname, 'board/board.js'), 'utf8');
 
-/** @param {string} [hostPubkeyStr] */
-export function startBoardService(hostPubkeyStr = null) {
+/** @param {string} [safeConnexionToken] @param {string} [hostPubkeyStr] */
+export function startBoardService(safeConnexionToken = null, hostPubkeyStr = null) {
 	const hpkStr = hostPubkeyStr || hostPubkey || null;
 	http.createServer((req, res) => {
-		const url = (req.url ?? '/').split('?')[0];
+		const url = (req.url ?? '/').split('?')[0]; // http://localhost:27262?token=abc123
+		const { searchParams } = new URL(req.url, 'http://localhost');
+		const token = searchParams.get('token');
+		const isSafeSource = token && safeConnexionToken && token === safeConnexionToken;
 
 		// Patch board.js bootstrap URL on the fly
 		if (url === '/board.js') {
-			console.log('Serving board.js with bootstraps:', bootstraps);
 			let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
-			patched = boardMjs.replace(/const version = '.*?';/, `const version = '${version}';`);
-			if (hpkStr) patched = patched.replace(/const hostPubkeyStr = null;/, `const hostPubkeyStr = '${hpkStr}';`);
+			patched = patched.replace(/const version = '.*?';/, `const version = '${version}';`);
+			if (hpkStr && isSafeSource)
+				patched = patched.replace(/const hostPubkeyStr = null;/, `const hostPubkeyStr = '${hpkStr}';`);
 			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
 			return res.end(patched);
 		}
@@ -115,3 +119,5 @@ export function startBoardService(hostPubkeyStr = null) {
 		serveStatic(req, res);
 	}).listen(PORT, () => console.log(`Board service running at http://localhost:${PORT}`));
 }
+
+if (start) startBoardService();

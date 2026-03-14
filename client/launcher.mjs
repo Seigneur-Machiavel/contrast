@@ -1,12 +1,14 @@
 // @ts-check
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { spawn } from 'child_process';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { NodeManager, Updater } from './launcher-core.mjs';
 import { startBoardService } from '../board-service.mjs';
 
+const safeConnexionToken = crypto.randomBytes(32).toString('hex');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, 'launcher-config.json');
 const CONTRAST_EXE = path.join(__dirname, 'contrast.exe');
@@ -55,8 +57,7 @@ async function main() {
 		try { await updater.run(RESOURCES_DIR, node); }
 		catch (/** @type {any} */ e) { console.log('[update] check failed:', e.message); }
 
-	// Start board service in same process with the hostPubkeyStr passed as an argument for the board to auto-connect to the node on startup.
-	startBoardService(node.pubKeyHex);
+	startBoardService(safeConnexionToken, node.pubKeyHex);
 
 	// Spawn Neutralino window
 	const neutralinoProcess = !fs.existsSync(NEUTRALINO_EXE) ? null
