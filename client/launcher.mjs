@@ -5,8 +5,7 @@ import crypto from 'crypto';
 import { spawn } from 'child_process';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { NodeManager, Updater } from './launcher-core.mjs';
-import { startBoardService } from '../board-service.mjs';
+import { Updater } from './updater.mjs';
 
 const safeConnexionToken = crypto.randomBytes(32).toString('hex');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,21 +41,24 @@ function disableAutoStart() {
 }
 
 // ---- MAIN --------------------------------------------------------------------------
-/** @param {NodeManager} node */
+/** @param {import('./node-manager.mjs').NodeManager} node */
 const stopNodeAndExit = async (node) => {
 	await node.stop();
 	process.exit(0);
 }
 async function main() {
 	const cfg = loadConfig();
-	const node = new NodeManager(CONTRAST_EXE);
 	const updater = new Updater(GITHUB_API, version, cfg.ignorePreRelease);
 
 	// Auto-update check before starting
 	if (cfg.autoUpdate)
-		try { await updater.run(RESOURCES_DIR, node); }
+		try { await updater.run(RESOURCES_DIR); }
 		catch (/** @type {any} */ e) { console.log('[update] check failed:', e.message); }
 
+	const { NodeManager } = await import('./node-manager.mjs');
+	const node = new NodeManager(CONTRAST_EXE);
+
+	const { startBoardService } = await import('../board-service.mjs');
 	startBoardService(safeConnexionToken, node.pubKeyHex);
 
 	// Spawn Neutralino window

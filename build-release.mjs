@@ -20,7 +20,8 @@ const RESOURCES_FILES = [
 	{ in: 'package.json' }, 			// for version display and update checks
 	{ in: 'bootstraps.json' },			// bootstraps URLs list
 	{ in: 'client/launcher.mjs' },		// launcher patching
-	{ in: 'client/launcher-core.mjs' }, // launcher patching
+	{ in: 'client/node-manager.mjs' },  // launcher patching
+	{ in: 'client/updater.mjs' },		// launcher patching
 	{ in: 'client/main.mjs' },			// launcher patching
 ];
 const RESOURCES_FOLDERS = [
@@ -45,7 +46,8 @@ const CONTRAST_CLIENT_FILES = [
     { in: 'client/neutralino.config.json' },
     { in: 'client/contrast_32.png' },
     { in: 'client/launcher.mjs' },
-    { in: 'client/launcher-core.mjs' },
+    { in: 'client/node-manager.mjs' },
+	{ in: 'client/updater.mjs' },
     { in: 'client/main.mjs' },
     { in: 'client/sea-entry.cjs' },
 ];
