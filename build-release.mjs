@@ -16,8 +16,9 @@ const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 // ---- WHAT GOES IN resources.zip (updates) ----------------------------------------
 /** @type {{in: string, out?: string}[]} */
 const RESOURCES_FILES = [
-	{ in: 'board-service.mjs' },
-	{ in: 'package.json' }, // for version
+	{ in: 'board-service.mjs' },		
+	{ in: 'package.json' }, 			// for version display and update checks
+	{ in: 'bootstraps.json' },			// bootstraps URLs list
 	{ in: 'client/launcher.mjs' },		// launcher patching
 	{ in: 'client/launcher-core.mjs' }, // launcher patching
 	{ in: 'client/main.mjs' },			// launcher patching

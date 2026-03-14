@@ -53,15 +53,18 @@ export class Sync {
 		do {
 			// UPDATE CONSENSUS STATUS
 			const c = this.getConsensus();
+			if (attempts && c.blockHash === bc.lastBlock?.hash) this.logger.log(`IN CONSENSUS at block #${c.blockHeight}`, (m, c) => console.log(m, c));
 			if (c.equality || c.count === 0) return; // No clear consensus
 			if (c.blockHash === bc.lastBlock?.hash) return; // We are in consensus
 			if (bc.currentHeight === c.blockHeight + 1) return; // We are just ahead
 
 			// ROLLBACK UNTIL CONSENSUS BLOCK AND CATCH UP
 			const peersToAsk = this.getPeersToAskList(c.blockHeight, c.blockHash);
-			if (!attempts) this.logger.log(`Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
 			bc.undoBlock(true); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
 			while (bc.currentHeight > c.blockHeight) bc.undoBlock(true);
+
+			if (!attempts) this.logger.log(`Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
+			attempts++;
 
 			// DOWNLOAD AND APPLY BLOCKS UNTIL REASONABLE GAP
 			/** @type {string | null} */
@@ -98,8 +101,6 @@ export class Sync {
 				this.logger.log(`Failed #${nextHeight} digest => undo one block`, (m, c) => console.error(m, c));
 				bc.undoBlock(true); // if undo fails, just reset everything to be sure
 			}
-			
-			attempts++;
 		} while (attempts < maxAttempts);
 	}
 	getConsensus() {

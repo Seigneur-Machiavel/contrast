@@ -14,6 +14,7 @@ const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
 const bootstraps = startupStorage.loadJSON('bootstraps', true) || ['ws://localhost:27260'];
 const pkg = startupStorage.loadJSON('package', true);
 const version = pkg.version // '0.6.12'
+console.info(`[BOARD SERVICE] Version: ${version} - ${bootstraps.length} bootstraps`);
 
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2);
@@ -85,8 +86,9 @@ export function startBoardService(hostPubkeyStr = null) {
 	http.createServer((req, res) => {
 		const url = (req.url ?? '/').split('?')[0];
 
-		// Patch board.mjs bootstrap URL on the fly
+		// Patch board.js bootstrap URL on the fly
 		if (url === '/board.js') {
+			console.log('Serving board.js with bootstraps:', bootstraps);
 			let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
 			patched = boardMjs.replace(/const version = '.*?';/, `const version = '${version}';`);
 			if (hpkStr) patched = patched.replace(/const hostPubkeyStr = null;/, `const hostPubkeyStr = '${hpkStr}';`);
