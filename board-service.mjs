@@ -86,10 +86,20 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 	const hpkStr = hostPubkeyStr || hostPubkey || null;
 	http.createServer((req, res) => {
 		const url = (req.url ?? '/').split('?')[0]; // http://localhost:27262?token=abc123
-		const { searchParams } = new URL(req.url, 'http://localhost');
+		const { searchParams } = new URL(req.url, `http://${req.headers.host}`);
 		const token = searchParams.get('token');
 		const isSafeSource = token && safeConnexionToken && token === safeConnexionToken;
 
+		if (url === '/' || url === '/index.html') {
+			if (isSafeSource) console.log('[BOARD SERVICE] SERVING INDEX.HTML TO SAFE SOURCE');
+			else console.warn('[BOARD SERVICE] SERVING INDEX.HTML TO UNSAFE SOURCE');
+
+			let html = fs.readFileSync(path.join(__dirname, 'board/board.html'), 'utf8');
+    		if (isSafeSource) html = html.replace('src="board.js"', `src="/board.js?token=${token}"`);
+			res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': CSP });
+			return res.end(html);
+		}
+		
 		// Patch board.js bootstrap URL on the fly
 		if (url === '/board.js') {
 			let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
@@ -109,11 +119,6 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 			const filePath = path.join(__dirname, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js');
 			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
 			return fs.createReadStream(filePath).pipe(res);
-		}
-
-		if (url === '/' || url === '/index.html') {
-			res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': CSP });
-			return fs.createReadStream(path.join(__dirname, 'board/board.html')).pipe(res);
 		}
 
 		serveStatic(req, res);

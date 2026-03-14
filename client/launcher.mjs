@@ -18,6 +18,11 @@ const pkg = JSON.parse(fs.readFileSync(path.join(RESOURCES_DIR, 'package.json'),
 const version = pkg.version; // ex: '0.6.12'
 let tryUpdateInterval = null;
 
+process.on('uncaughtException', async (err) => {
+	console.error('Uncaught Exception:', err);
+	setTimeout(() => process.exit(1), 5000); // allow log reading, then force exit.
+});
+
 // ---- CONFIG ------------------------------------------------------------------------
 /** @typedef {{ autoUpdate: boolean, ignorePreRelease: boolean, installedVersion?: string }} LauncherConfig */
 /** @type {LauncherConfig} */
@@ -61,9 +66,10 @@ async function main() {
 	const { startBoardService } = await import('../board-service.mjs');
 	startBoardService(safeConnexionToken, node.pubKeyHex);
 
-	// Spawn Neutralino window
+	// Spawn Neutralino window with token in query for secure board.js access, if available
+	const neutralinoArgs = safeConnexionToken ? [`--url=http://localhost:27262?token=${safeConnexionToken}`] : [];
 	const neutralinoProcess = !fs.existsSync(NEUTRALINO_EXE) ? null
-		:spawn(NEUTRALINO_EXE, [], { cwd: __dirname, stdio: 'ignore', detached: false });
+		:spawn(NEUTRALINO_EXE, neutralinoArgs, { cwd: __dirname, stdio: 'ignore', detached: false });
 
 	if (!neutralinoProcess) console.log('[launcher] neutralino not found, skipping window');
 	else neutralinoProcess.on('exit', () => stopNodeAndExit(node));

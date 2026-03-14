@@ -45,8 +45,9 @@ export class NodeManager {
 			console.log('[node] restarting in 3s...');
 			setTimeout(() => this.start(), 3_000);
 		});
+
 		console.log(`[node] started (pid ${this.#process.pid})`);
-		console.log(`[node] ephemeral seed: ${this.seed}`);
+		// console.log(`[node] ephemeral seed: ${this.seed}`);
 	}
 
 	async stop(delay = 5_000) {
