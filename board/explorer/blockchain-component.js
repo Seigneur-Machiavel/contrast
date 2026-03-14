@@ -130,8 +130,8 @@ export class BlockchainComponent {
 	updateTimeAgo() {
 		for (const blockComponent of this.blocks) blockComponent.updateTimeAgo();
 	}
-	reset() {
-		console.log('Resetting BlockchainComponent...');
+	reset(reason = '') {
+		console.log(`Resetting BlockchainComponent. ${reason}`);
 		// REMOVE ALL BLOCK ELEMENTS
 		for (const blockComponent of this.blocks) blockComponent.wrap.remove();
 		this.blocks = [];

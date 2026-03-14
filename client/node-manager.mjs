@@ -50,7 +50,7 @@ export class NodeManager {
 		// console.log(`[node] ephemeral seed: ${this.seed}`);
 	}
 
-	async stop(delay = 5_000) {
+	async stop(delay = 1_000) {
 		this.#autoRestart = false; // prevent restart on intentional stop
 		if (!this.isRunning) { console.log('[node] not running'); return; }
 		this.#process?.kill('SIGTERM');

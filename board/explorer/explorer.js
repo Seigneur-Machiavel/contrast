@@ -104,7 +104,7 @@ export class Explorer {
 
 		// UPDATE BLOCKCHAIN COMPONENT
 		const weight = this.connector.blockWeightByHash[block.hash] || 0;
-		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset(); // FAILED => START FRESH
+		if (!this.bc.appendBlockIfCorresponding(block, weight)) this.bc.reset('unable to append block'); // FAILED => START FRESH
 		else { // SUCCESS => ADD EMPTY BLOCKS UNTIL FILL THE DIV AND WAIT A BIT FOR THE ANIMATION TO END
 			this.bc.createEmptyBlocksUntilFillTheDiv();
 			await new Promise(r => setTimeout(r, 1000));
