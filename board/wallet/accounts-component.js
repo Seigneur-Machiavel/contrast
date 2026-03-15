@@ -102,17 +102,17 @@ export class AccountsComponent {
 		accountImgWrap.dataset.value = address;
     
 		const accountLabelInfoWrap = createElement('div', ['biw-accountLabelInfoWrap'], accountLabel);
-		const accountLabelAddressAndValueWrap = createElement('div', ['biw-accountLabelAddressAndValueWrap'], accountLabelInfoWrap);
-		createElement('h2', [], accountLabelAddressAndValueWrap).innerText = address;
+		const accountLabelNameAndValue = createElement('div', ['biw-accountLabelNameAndValue'], accountLabelInfoWrap);
+		createElement('h2', [], accountLabelNameAndValue).innerText = name;
 
-		const amountH3 = createElement('h3', [], accountLabelAddressAndValueWrap);
+		const amountH3 = createElement('h3', [], accountLabelNameAndValue);
 		const amountValueStr = createElement('span', [], amountH3);
 		const unitSpan = createElement('span', ['unit'], amountH3);
 		amountValueStr.innerText = `${CURRENCY.formatNumberAsCurrency(amount, this.biw.balanceDecimals)}`;
 		unitSpan.innerText = 'c';
 
-		const accountLabelName = createElement('div', ['biw-accountLabelName'], accountLabelInfoWrap);
-		createElement('h3', [], accountLabelName).innerText = name;
+		const accountLabelAddress = createElement('div', ['biw-accountLabelAddress'], accountLabelInfoWrap);
+		createElement('h3', [], accountLabelAddress).innerText = address;
 
         const copyAddressBtn = document.createElement('button');
         const btnImg = document.createElement('img');
@@ -122,7 +122,7 @@ export class AccountsComponent {
             navigator.clipboard.writeText(address);
             this.biw.textInfo('Address copied to clipboard');
         });
-        accountLabelName.appendChild(copyAddressBtn);
+        accountLabelAddress.appendChild(copyAddressBtn);
     
         return accountLabel;
     }

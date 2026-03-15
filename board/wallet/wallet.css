@@ -541,37 +541,40 @@
     pointer-events: none;
     width: calc(100% - 64px);
 }
-.biw-accountLabelAddressAndValueWrap {
+/* accountLabelAddress <> accountLabelNameAndValue */
+.biw-accountLabelNameAndValue {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-top: 2px;
 }
-.biw-accountLabelAddressAndValueWrap h2 {
+.biw-accountLabelNameAndValue h2 {
 	color: color-mix(in srgb, var(--color2) 70%, transparent);
     font-size: .8em;
+	margin: 6px 0 10px;
 }
-.biw-accountLabelAddressAndValueWrap h3 {
+.biw-accountLabelNameAndValue h3 {
     font-size: .8em;
     font-weight: 600;
+	margin: 6px 0 10px;
 }
-.biw-accountLabelAddressAndValueWrap h3 span:not(.unit) {
+.biw-accountLabelNameAndValue h3 span:not(.unit) {
 	color: color-mix(in srgb, var(--color2) 60%, transparent);
 }
-.biw-accountLabelName {
+.biw-accountLabelAddress {
 	pointer-events: none;
     display: flex;
     justify-content: space-between;
 	width: fit-content;
     gap: 8px;
 }
-.biw-accountLabelName h3 {
+.biw-accountLabelAddress h3 {
     font-size: .9em;
     text-align: right;
-    margin: 0 0 4px 0;
+    margin: 0 0 6px 0;
     color: color-mix(in srgb, var(--color2) 60%, transparent);
 }
-.biw-accountLabelName button {
+.biw-accountLabelAddress button {
     pointer-events: all;
     padding: 0;
     width: 20px;
@@ -582,10 +585,10 @@
 	margin: -1px -1px 0 0;
     transition: opacity .24s;
 }
-.biw-accountLabelName button:hover {
+.biw-accountLabelAddress button:hover {
     opacity: .9 !important;
 }
-.biw-accountLabelName button img {
+.biw-accountLabelAddress button img {
     pointer-events: none;
     width: 100%;
     filter: invert(calc(1 - var(--dark-mode-boolean)));
