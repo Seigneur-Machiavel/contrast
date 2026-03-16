@@ -70,7 +70,7 @@ export class VssStorage {
 		this.vssHandler.close();
 		fs.renameSync(tempPath, path.join(this.storage.PATH.STORAGE, 'vss.bin'));
 		this.vssHandler = new BinaryHandler(path.join(this.storage.PATH.STORAGE, 'vss.bin'));
-		this.logger.log(`Removed ${anchors.length} stakes`, (m, c) => console.info(m, c));
+		//this.logger.log(`Removed ${anchors.length} stakes`, (m, c) => console.info(m, c));
 	}
 	/** @param {number} index */
 	getStakeAnchor(index) {

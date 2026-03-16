@@ -152,6 +152,7 @@ export class Blockchain {
 		this.vss.undoBlockStakes(block);
 		this.ledgersStorage.cache.clear();
 
+		this.logger.log(`Block undone: #${block.index}, hash=${block.hash.slice(0, 8)}..., currentHeight=#${this.currentHeight}`, (m, c) => console.info(m, c));
 		if (this.currentHeight === -1) this.reset('Blockchain.undoBlock: no more blocks after undo.');
 		else this.lastBlock = this.getBlock() || null;
 	}

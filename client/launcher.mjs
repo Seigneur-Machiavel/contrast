@@ -2,10 +2,10 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { spawn } from 'child_process';
-import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 import { Updater } from './updater.mjs';
+import { execSync } from 'child_process';
 
 const safeConnexionToken = crypto.randomBytes(32).toString('hex');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
