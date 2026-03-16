@@ -14,10 +14,10 @@ const FILES = [
 	{ in: 'board-extension/background.js', out: 'background.js' },
 	{ in: 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js', out: 'hive-p2p.min.js' },
 
-	{ in: 'libs/d3.v7.min.js' },
-	{ in: 'libs/anime.min.js' },
-	{ in: 'libs/three-4.5.min.js' },
-	{ in: 'libs/bip39-3.1.0.min.js' },
+	{ in: 'ext-libs/d3.v7.min.js' },
+	{ in: 'ext-libs/anime.min.js' },
+	{ in: 'ext-libs/three-4.5.min.js' },
+	{ in: 'ext-libs/bip39-3.1.0.min.js' },
 
 	{ in: 'utils/currency.mjs' },
 	{ in: 'utils/serializer.mjs' },

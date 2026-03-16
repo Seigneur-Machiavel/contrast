@@ -26,7 +26,7 @@ const RESOURCES_FILES = [
 ];
 const RESOURCES_FOLDERS = [
 	{ in: 'board' },
-	{ in: 'libs' },
+	{ in: 'ext-libs' },
     { in: 'miniLogger' },
     { in: 'node' },
     { in: 'storage' },

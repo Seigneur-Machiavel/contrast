@@ -46,7 +46,7 @@ const MIME = {
 
 // Static roots mapped to URL prefixes
 const STATIC = [
-    { prefix: '/libs/',       dir: path.join(__dirname, 'libs') },
+    { prefix: '/ext-libs/',       dir: path.join(__dirname, 'ext-libs') },
     { prefix: '/node/',       dir: path.join(__dirname, 'node') },
     { prefix: '/types/',      dir: path.join(__dirname, 'types') },
     { prefix: '/utils/',      dir: path.join(__dirname, 'utils') },
