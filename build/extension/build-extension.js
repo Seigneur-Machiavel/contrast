@@ -1,17 +1,21 @@
 import fs from 'fs';
+import url from 'url';
 import path from 'path';
 import archiver from 'archiver';
 import { createWriteStream } from 'fs';
 
 const CREATE_ZIP = true;
-const currentPath = process.cwd();
-// if not "/contrast" => come back to reach it
-if (!currentPath.endsWith('contrast')) process.chdir(path.join(currentPath, 'contrast'));
-const SRC_DIR = './';
-const DIST_DIR = 'board-extension/dist';
+const filePath = url.fileURLToPath(import.meta.url);
+let rootFolder = filePath; // loop until we find "contrast" folder
+while (!rootFolder.endsWith('contrast'))
+	if (rootFolder === path.dirname(rootFolder)) throw new Error('Could not find contrast root folder');
+	else rootFolder = path.dirname(rootFolder);
+
+const EXT_DIR = path.join(rootFolder, 'build/extension');
+const DIST_DIR = path.join(rootFolder, 'build/extension/dist');
 const FILES = [
-	{ in: 'board-extension/manifest.json', out: 'manifest.json' },
-	{ in: 'board-extension/background.js', out: 'background.js' },
+	{ in: 'build/extension/manifest.json', out: 'manifest.json' },
+	{ in: 'build/extension/background.js', out: 'background.js' },
 	{ in: 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js', out: 'hive-p2p.min.js' },
 
 	{ in: 'ext-libs/d3.v7.min.js' },
@@ -53,7 +57,7 @@ fs.mkdirSync(DIST_DIR, { recursive: true });
 
 // Copy files
 for (const file of FILES) {
-  const src = path.join(SRC_DIR, file.in);
+  const src = path.join(rootFolder, file.in);
   const dest = path.join(DIST_DIR, file.out || file.in);
   if (fs.existsSync(src)) {
     fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -63,14 +67,14 @@ for (const file of FILES) {
 
 // Copy folders
 for (const folder of FOLDERS) {
-	const srcFolder = path.join(SRC_DIR, folder.in);
+	const srcFolder = path.join(rootFolder, folder.in);
 	const destFolder = path.join(DIST_DIR, folder.out || folder.in);
 	if (fs.existsSync(srcFolder)) fs.cpSync(srcFolder, destFolder, { recursive: true });
 }
 
 // Optional: create zip
 if (CREATE_ZIP) {
-	const output = createWriteStream('board-extension/extension.zip');
+	const output = createWriteStream('build/extension/extension.zip');
 	const archive = archiver('zip', { zlib: { level: 9 } });
 	
 	output.on('close', () => console.log(`✓ Extension packaged (${archive.pointer()} bytes)`));

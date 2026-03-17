@@ -172,24 +172,31 @@ export class Blockchain {
 		// ZERO: if no blocks, just reset everything to be sure
 		if (this.currentHeight === -1) { this.reset('#ensureConsistency: currentHeight === -1'); return; }
 
+		/** @type {BlockFinalized | undefined} */
+		let block = undefined;
+		/** @type {string[] | undefined} */
+		let involvedAnchors = undefined;
+		let repeatedAnchorsCount = 0;
+
 		// FIRST: CHECK BLOCKCHAIN FILE LENGTH MATCHES THE LAST INDEXED BLOCK OFFSET
 		// IF: IDX = OK, BLOCKCHAIN = BAD => RESIZE BLOCKCHAIN AND UNDO IDX. (LEDGERS AND IDENTITIES SHOULD BE GOOD)
 		const isLastBlockConsistent = this.blockStorage.checkBlockchainBytesLengthConsistency();
-		if (!isLastBlockConsistent) {
-			const block = this.getBlock(this.currentHeight);
-			const involvedAnchors = block ? BlockUtils.extractInvolvedAnchors(block, 'blockFinalized').involvedAnchors : undefined;
+		try {
+			block = this.getBlock(this.currentHeight);
+			const extracted = block ? BlockUtils.extractInvolvedAnchors(block, 'blockFinalized') : undefined;
+			involvedAnchors = extracted?.involvedAnchors;
+			repeatedAnchorsCount = extracted?.repeatedAnchorsCount || 0;
+		} catch (/** @type {any} */ error) { };
+
+		if (!block || !isLastBlockConsistent) {
 			this.blockStorage.undoBlock(involvedAnchors);
-			if (!involvedAnchors) this.logger.log('Critical: blockchain truncated without UTXO restoration', (m, c) => console.error(m, c));
-        	else this.logger.log('Blockchain file repaired', (m, c) => console.warn(m, c));
+			this.logger.log('Blockchain file repaired', (m, c) => console.warn(m, c));
 			return;
 		}
 
 		// SECOND: ENSURE IDENTITIES CONSISTENCY
-		const block = this.getBlock(this.currentHeight);
-    	if (!block) throw new Error('Blockchain consistency check failed: unable to retrieve last block.');
-
-		const { involvedAnchors, repeatedAnchorsCount } = BlockUtils.extractInvolvedAnchors(block, 'blockFinalized');
 		if (repeatedAnchorsCount > 0) throw new Error('Blockchain consistency check failed: repeated UTXO anchors found.');
+		if (!block || !involvedAnchors) throw new Error('Blockchain consistency check failed: unable to retrieve the last block or its involved anchors.');
 
 		const involvedUTXOs = this.getUtxos(involvedAnchors, false);
 		if (!involvedUTXOs) throw new Error('Blockchain consistency check failed: unable to retrieve all involved UTXOs for the last block.');

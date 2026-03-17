@@ -21,7 +21,7 @@
 			"request": "launch",
 			"name": "Build Extension",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/board-extension/build-extension.mjs"
+			"program": "${workspaceFolder}/build/extension/build-extension.js"
 		},
 		{
 			"type": "node",

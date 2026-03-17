@@ -31,8 +31,7 @@ export class Sync {
 
 	/** @param {ContrastNode | MinimalContrastNode} node */
 	constructor(node) {
-		this.node = node;
-		// @ts-ignore
+		this.node = node;	// @ts-ignore
 		node.p2p.onPeerConnect(() => setTimeout(() => this.shareMyStatus(1), 1_000));
 		node.p2p.gossip.on('sync_status', this.#onSyncStatus);
 		node.p2p.messager.on('block_request', this.#onBlockRequest);
@@ -50,8 +49,7 @@ export class Sync {
 
 		const bc = this.node.blockchain;
 		let attempts = 0;
-		do {
-			// UPDATE CONSENSUS STATUS
+		do {	// UPDATE CONSENSUS STATUS
 			const c = this.getConsensus();
 			if (attempts && c.blockHash === bc.lastBlock?.hash) this.logger.log(`IN CONSENSUS at block #${c.blockHeight}`, (m, c) => console.log(m, c));
 			if (c.equality || c.count === 0) return; // No clear consensus

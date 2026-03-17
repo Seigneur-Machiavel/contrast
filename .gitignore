@@ -1,13 +1,11 @@
 node_modules
-package-lock.json
 not_published
-miniLogger/mini-logger-config-custom.json
+package-lock.json
 miniLogger/history
+miniLogger/mini-logger-config-custom.json
 
-board-extension/dist
-board-extension/extension.zip
-win-unpacked
-test-setup
+build/extension/dist
+build/extension/extension.zip
 
 neutralino
 client/.tmp
