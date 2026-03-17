@@ -6,10 +6,10 @@ miniLogger/mini-logger-config-custom.json
 
 build/extension/dist
 build/extension/extension.zip
+build/desktop/release
 
 neutralino
-client/.tmp
-client/sea-prep.blob
-client/neutralinojs.log
-client/launcher-config.json
-release
+app/.tmp
+app/sea-prep.blob
+app/neutralinojs.log
+app/launcher-config.json

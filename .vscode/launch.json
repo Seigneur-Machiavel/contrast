@@ -21,14 +21,14 @@
 			"request": "launch",
 			"name": "Build Extension",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/build/extension/build-extension.js"
+			"program": "${workspaceFolder}/build/extension/build.js"
 		},
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Build Release",
+			"name": "Build Desktop",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/build-release.mjs"
+			"program": "${workspaceFolder}/build/desktop/build.js"
 		},
 		{
 			"type": "node",

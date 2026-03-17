@@ -1,16 +1,20 @@
 // @ts-check
 import fs from 'fs';
+import url from 'url';
 import path from 'path';
 import crypto from 'crypto';
 import archiver from 'archiver';
 import { createWriteStream } from 'fs';
 
-// Ensure we're at the contrast root
-const currentPath = process.cwd();
-if (!currentPath.endsWith('contrast')) process.chdir(path.join(currentPath, 'contrast'));
+// ---- BUILD RELEASE --------------------------------------------------
+// FOCUS THE ROOT FOLDER
+const filePath = url.fileURLToPath(import.meta.url);
+let rootFolder = filePath; // loop until we find "contrast" folder
+while (!rootFolder.endsWith('contrast'))
+	if (rootFolder === path.dirname(rootFolder)) throw new Error('Could not find contrast root folder');
+	else rootFolder = path.dirname(rootFolder);
 
-const SRC = './';
-const RELEASE_DIR = 'release';
+const RELEASE_DIR = path.join(rootFolder, 'build/desktop/release');
 const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 
 // ---- WHAT GOES IN resources.zip (updates) ----------------------------------------
@@ -19,10 +23,10 @@ const RESOURCES_FILES = [
 	{ in: 'board-service.mjs' },		
 	{ in: 'package.json' }, 			// for version display and update checks
 	{ in: 'bootstraps.json' },			// bootstraps URLs list
-	{ in: 'client/launcher.mjs' },		// launcher patching
-	{ in: 'client/node-manager.mjs' },  // launcher patching
-	{ in: 'client/updater.mjs' },		// launcher patching
-	{ in: 'client/main.mjs' },			// launcher patching
+	{ in: 'app/launcher.mjs' },			// launcher patching
+	{ in: 'app/node-manager.mjs' },  	// launcher patching
+	{ in: 'app/updater.mjs' },			// launcher patching
+	{ in: 'app/main.mjs' },				// launcher patching
 ];
 const RESOURCES_FOLDERS = [
 	{ in: 'board' },
@@ -30,26 +34,27 @@ const RESOURCES_FOLDERS = [
     { in: 'miniLogger' },
     { in: 'node' },
     { in: 'storage' },
-	{ in: 'tests' },
+	// { in: 'tests' }, // not used
     { in: 'types' },
     { in: 'utils' },
 ];
-// node_modules prod only (exclude devDependencies)
+
+// node_modules PROD ONLY (EXCLUDE devDependencies)
 const DEV_DEPS = ['archiver', 'esbuild', '@yao-pkg/pkg', 'postject'];
-const NM_SRC = path.join(SRC, 'node_modules');
+const NM_SRC = path.join(rootFolder, 'node_modules');
 const NM_DIST = path.join(RESOURCES_DIST, 'node_modules');
 
 // ---- WHAT GOES IN contrast.zip (initial install) ---------------------------------
 const CONTRAST_CLIENT_FILES = [
-    { in: 'client/contrast.exe' },
-    { in: 'client/neutralino-win_x64.exe' },
-    { in: 'client/neutralino.config.json' },
-    { in: 'client/contrast_32.png' },
-    { in: 'client/launcher.mjs' },
-    { in: 'client/node-manager.mjs' },
-	{ in: 'client/updater.mjs' },
-    { in: 'client/main.mjs' },
-    { in: 'client/sea-entry.cjs' },
+    { in: 'app/contrast.exe' },
+    { in: 'app/neutralino-win_x64.exe' },
+    { in: 'app/neutralino.config.json' },
+    { in: 'app/contrast_32.png' },
+    { in: 'app/launcher.mjs' },
+    { in: 'app/node-manager.mjs' },
+	{ in: 'app/updater.mjs' },
+    { in: 'app/main.mjs' },
+    { in: 'app/sea-entry.cjs' },
 ];
 
 // ---- HELPERS -----------------------------------------------------------------------
@@ -72,9 +77,9 @@ function copyFile(src, dest) {
 /** @param {string} distDir @param {{in: string, out?: string}[]} files @param {{in: string, out?: string}[]} folders */
 function copyAssets(distDir, files, folders) {
     for (const file of files)
-        copyFile(path.join(SRC, file.in), path.join(distDir, file.out || file.in));
+        copyFile(path.join(rootFolder, file.in), path.join(distDir, file.out || file.in));
     for (const folder of folders) {
-        const src = path.join(SRC, folder.in);
+        const src = path.join(rootFolder, folder.in);
         const dest = path.join(distDir, folder.out || folder.in);
         if (fs.existsSync(src)) fs.cpSync(src, dest, { recursive: true });
         else console.warn(`[skip] ${src} not found`);
@@ -121,7 +126,7 @@ async function main() {
     console.log(`✓ manifest.json (version ${manifest.version})`);
 
     // --- contrast.zip ---
-    console.log('\n[contrast] adding client files to dist...');
+    console.log('\n[contrast] adding app files to dist...');
     copyAssets(RESOURCES_DIST, CONTRAST_CLIENT_FILES, []);
 
     await createZip(RESOURCES_DIST, path.join(RELEASE_DIR, 'contrast.zip'), true);
