@@ -13,7 +13,7 @@
 			"request": "launch",
 			"name": "Board Service",
 			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/board-service.mjs",
+			"program": "${workspaceFolder}/node/board-service.mjs",
 			"args": ["--start"]
 		},
 		{

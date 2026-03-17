@@ -1,16 +1,18 @@
-// IMPORTS
+// CORE COMPONENTS
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('../hive-p2p.min.js');
 import { NetworkVisualizer } from './visualizer/visualizer.js';
 import { Connector } from './utils/connector.js';
 import { Translator } from './utils/translator.js';
+import { FrontStorage } from '../utils/front-storage.mjs';
+import { HIVE_P2P_CONFIG } from '../config/hive-p2p-config.mjs';
+
+// APPS
 import { AppsManager } from './utils/apps-manager.js';
 import { Explorer } from './explorer/explorer.js';
 import { Assistant } from './assistant/assistant.js';
 import { Dashboard } from './dashboard/dashboard.js';
 import { BoardInternalWallet } from './wallet/biw.js';
-import { FrontStorage } from '../utils/front-storage.mjs';
-import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
 //import { InfoManager } from './info-manager.js';
 
 // INIT P2P NODE AND CORE COMPONENTS
@@ -18,7 +20,7 @@ const host = window.location.hostname;
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/time';
 
-const version = '0.6.12'; // Overwrite by board-service.mjs on the fly, based on "contrast-storage/package.json" version field. Used for display in the UI and for update checks.
+const version = '0.6.12'; // Overwrite by board-service.mjs on the fly, based on "contrast/package.json" version field. Used for display in the UI and for update checks.
 const bootstraps = ['ws://localhost:27260'];
 const hostPubkeyStr = null; // Pass from launcher args to board-service.
 const hiveNode = await HiveP2P.createNode({ bootstraps });

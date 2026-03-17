@@ -2,16 +2,22 @@
 // DATA IS ENCRYPTED VIA CHACHA — BROWSER ACCESS IS FORBIDDEN
 
 import fs from 'fs';
+import url from 'url';
 import path from 'path';
 import http from 'node:http';
 import HiveP2P from "hive-p2p";
-import { fileURLToPath } from 'url';
-import { ContrastStorage } from './storage/storage.mjs';
+import { ContrastStorage } from '../storage/storage.mjs';
 await HiveP2P.CLOCK.sync();
+
+const filePath = url.fileURLToPath(import.meta.url);
+let rootFolder = filePath; // loop until we find "contrast" folder
+while (!rootFolder.endsWith('contrast'))
+	if (rootFolder === path.dirname(rootFolder)) throw new Error('Could not find contrast root folder');
+	else rootFolder = path.dirname(rootFolder);
 
 // LOAD BOOTSTRAP URLS FROM "contrast/bootstraps.json" IF EXISTS, OTHERWISE USE DEFAULT
 const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
-const bootstraps = startupStorage.loadJSON('bootstraps', true) || ['ws://localhost:27260'];
+const bootstraps = startupStorage.loadJSON('config/bootstraps', true) || ['ws://localhost:27260'];
 const pkg = startupStorage.loadJSON('package', true);
 const version = pkg.version // '0.6.12'
 console.info(`[BOARD SERVICE] Version: ${version} - ${bootstraps.length} bootstraps`);
@@ -23,7 +29,6 @@ const hostname = args.includes('-nh') ? nextArg('-nh') : 'localhost';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const wsProtocol = args.includes('-wss') ? 'wss' : 'ws';
 const hostPubkey = args.includes('-hpk') ? nextArg('-hpk') : undefined;
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 27262;
 
 const CSP_BASE = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';`;
@@ -46,12 +51,13 @@ const MIME = {
 
 // Static roots mapped to URL prefixes
 const STATIC = [
-    { prefix: '/ext-libs/',       dir: path.join(__dirname, 'ext-libs') },
-    { prefix: '/node/',       dir: path.join(__dirname, 'node') },
-    { prefix: '/types/',      dir: path.join(__dirname, 'types') },
-    { prefix: '/utils/',      dir: path.join(__dirname, 'utils') },
-    { prefix: '/miniLogger/', dir: path.join(__dirname, 'miniLogger') },
-    { prefix: '/',            dir: path.join(__dirname, 'board') }, // catch-all last
+    { prefix: '/external-libs/',	dir: path.join(rootFolder, 'external-libs') },
+    { prefix: '/node/',       		dir: path.join(rootFolder, 'node') },
+	{ prefix: '/config/',     		dir: path.join(rootFolder, 'config') },
+    { prefix: '/types/',      		dir: path.join(rootFolder, 'types') },
+    { prefix: '/utils/',      		dir: path.join(rootFolder, 'utils') },
+    { prefix: '/miniLogger/', 		dir: path.join(rootFolder, 'miniLogger') },
+    { prefix: '/',            		dir: path.join(rootFolder, 'board') }, // catch-all last
 ];
 
 //const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ${wsProtocol}://${hostname}:${nodePort} ws://127.0.0.1:27261 https://time.cloudflare.com https://time.google.com https://pool.ntp.org;`;
@@ -79,7 +85,7 @@ function serveStatic(req, res) {
     send404(res);
 }
 
-const boardMjs = fs.readFileSync(path.join(__dirname, 'board/board.js'), 'utf8');
+const boardMjs = fs.readFileSync(path.join(rootFolder, 'board/board.js'), 'utf8');
 
 /** @param {string} [safeConnexionToken] @param {string} [hostPubkeyStr] */
 export function startBoardService(safeConnexionToken = null, hostPubkeyStr = null) {
@@ -94,7 +100,7 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 			if (isSafeSource) console.log('[BOARD SERVICE] SERVING INDEX.HTML TO SAFE SOURCE');
 			else console.warn('[BOARD SERVICE] SERVING INDEX.HTML TO UNSAFE SOURCE');
 
-			let html = fs.readFileSync(path.join(__dirname, 'board/board.html'), 'utf8');
+			let html = fs.readFileSync(path.join(rootFolder, 'board/board.html'), 'utf8');
     		if (isSafeSource) html = html.replace('src="board.js"', `src="/board.js?token=${token}"`);
 			res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': CSP });
 			return res.end(html);
@@ -116,7 +122,7 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 		}
 
 		if (url === '/hive-p2p.min.js') {
-			const filePath = path.join(__dirname, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js');
+			const filePath = path.join(rootFolder, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js');
 			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
 			return fs.createReadStream(filePath).pipe(res);
 		}

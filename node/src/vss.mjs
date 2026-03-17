@@ -1,8 +1,8 @@
 // @ts-check
 import { HashFunctions } from "./conCrypto.mjs";
-import { VssStorage } from "../../storage/vss-store.mjs";
-import { BLOCKCHAIN_SETTINGS } from "../../utils/blockchain-settings.mjs";
 import { serializer } from "../../utils/serializer.mjs";
+import { VssStorage } from "../../storage/vss-store.mjs";
+import { BLOCKCHAIN_SETTINGS } from "../../config/blockchain-settings.mjs";
 
 /**
  * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized

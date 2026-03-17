@@ -26,7 +26,7 @@ const { Converter } = HiveP2P;
 const converter = new Converter();
 const isNode = typeof self === 'undefined';
 // @ts-expect-error - msgpack global added by browser script
-const msgpack = isNode ? (await import('../ext-libs/msgpack.min.js')).default : window.msgpack;
+const msgpack = isNode ? (await import('../external-libs/msgpack.min.js')).default : window.msgpack;
 
 // Binary Reader/Writer => Simple and fast Uint8Array reader/writer
 export class BinaryWriter {

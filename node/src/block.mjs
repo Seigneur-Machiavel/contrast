@@ -1,5 +1,5 @@
 // @ts-check
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../config/blockchain-settings.mjs';
 import { BlockFinalizedHeader, BlockFinalized,
 	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
 import { solving } from '../../utils/conditionals.mjs';

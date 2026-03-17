@@ -1,6 +1,6 @@
 import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { solving, conditionnals } from '../utils/conditionals.mjs';
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../config/blockchain-settings.mjs';
 
 const testStart = Date.now();
 const speedHash = 32; // Used to faster test, but lower precision

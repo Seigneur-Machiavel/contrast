@@ -1,4 +1,5 @@
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+// ts-check
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { Transaction, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
 // TEMPORARY CHECKER FOR OUTPUT CREATION RULES

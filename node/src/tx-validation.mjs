@@ -9,7 +9,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { OutputCreationValidator } from './tx-rule-checkers.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode

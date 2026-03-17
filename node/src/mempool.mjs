@@ -3,7 +3,7 @@ import { HashFunctions } from './conCrypto.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
  * @typedef {string} TxUniqueId - Unique identifier of tx, hash of serialized transaction.

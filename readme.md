@@ -41,14 +41,14 @@ The frontend (`board/`) imports `.mjs` files directly — no build step, no dupl
 
 ```
 contrast/
-├── node/               # Node runner (run-client.mjs, run-public.mjs)
-├── board/              # Frontend — WM-style interface (wallet, explorer, staking, P2P viz)
-├── board-service.mjs   # HTTP service layer (vanilla node:http, no Express)
-├── ext-libs/           # External dependencies (kept minimal)
-├── utils/              # Utilities (.mjs — part of the future core)
-├── storage/            # Storage layer (atomic writes, O(1) address lookups)
-├── types/              # JSDoc type definitions
-└── miniLogger/         # Lightweight logger with ANSI coloring, TTY-aware
+├── node/               	# Node runner (run-client.mjs, run-public.mjs)
+├── node/board-service.mjs  # HTTP service layer (vanilla node:http, no Express)
+├── board/              	# Frontend — WM-style interface (wallet, explorer, staking, P2P viz)
+├── external-libs/           	# External dependencies (kept minimal)
+├── utils/              	# Utilities (.mjs — part of the future core)
+├── storage/            	# Storage layer (atomic writes, O(1) address lookups)
+├── types/              	# JSDoc type definitions
+└── miniLogger/         	# Lightweight logger with ANSI coloring, TTY-aware
 ```
 
 ### Key components

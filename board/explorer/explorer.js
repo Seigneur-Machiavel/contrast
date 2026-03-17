@@ -8,7 +8,7 @@ import { serializer } from '../../utils/serializer.mjs';
 import { eHTML_STORE } from '../utils/board-helpers.js';
 import { BlockchainComponent } from './blockchain-component.js';
 import { BlocksTimesChartComponent, RoundLegitimaciesChartComponent } from './charts-component.js';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 const eHTML = new eHTML_STORE('cbe-', 'maxSupply');
 export class Navigator {

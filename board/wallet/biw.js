@@ -8,7 +8,7 @@ import { CURRENCY } from '../../utils/currency.mjs';
 import { MiniformComponent } from './miniform-component.js';
 import { AccountsComponent } from './accounts-component.js';
 import { Wallet, Account } from '../../node/src/wallet.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { ButtonHoldAnimation, horizontalBtnLoading } from '../utils/htmlAnimations.js';
 import { Transaction_Builder } from '../../node/src/transaction.mjs';
 

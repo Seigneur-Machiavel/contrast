@@ -17,7 +17,7 @@ import { Transaction_Builder } from "../node/src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";
-import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
+import { HIVE_P2P_CONFIG } from '../config/hive-p2p-config.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 // TEST CONFIG

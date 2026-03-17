@@ -4,7 +4,7 @@ import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { conditionnals } from '../../utils/conditionals.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { Transaction, TxOutput, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
 /**

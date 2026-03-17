@@ -19,20 +19,15 @@ const FILES = [
 	{ in: 'build/extension/background.js', out: 'background.js' },
 	{ in: 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js', out: 'hive-p2p.min.js' },
 
-	{ in: 'ext-libs/d3.v7.min.js' },
-	{ in: 'ext-libs/anime.min.js' },
-	{ in: 'ext-libs/three-4.5.min.js' },
-	{ in: 'ext-libs/bip39-3.1.0.min.js' },
-
-	{ in: 'utils/currency.mjs' },
-	{ in: 'utils/serializer.mjs' },
-	{ in: 'utils/networking.mjs' },
-	{ in: 'utils/conditionals.mjs' },
-	{ in: 'utils/front-storage.mjs' },
-	{ in: 'utils/hive-p2p-config.mjs' },
-	{ in: 'utils/progress-logger.mjs' },
-	{ in: 'utils/blockchain-settings.mjs' },
-
+	{ in: 'external-libs/d3.v7.min.js' },
+	{ in: 'external-libs/anime.min.js' },
+	{ in: 'external-libs/three-4.5.min.js' },
+	{ in: 'external-libs/bip39-3.1.0.min.js' },
+	
+	{ in: 'config/hive-p2p-config.mjs' },
+	{ in: 'config/blockchain-settings.mjs' },
+	{ in: 'miniLogger/mini-logger.mjs' },
+	
 	{ in: 'node/src/sync.mjs' },
 	{ in: 'node/src/block.mjs' },
 	{ in: 'node/src/wallet.mjs' },
@@ -46,7 +41,13 @@ const FILES = [
 	{ in: 'types/address.mjs' },
 	{ in: 'types/validation.mjs' },
 	{ in: 'types/transaction.mjs' },
-	{ in: 'miniLogger/mini-logger.mjs' },
+
+	{ in: 'utils/currency.mjs' },
+	{ in: 'utils/serializer.mjs' },
+	{ in: 'utils/networking.mjs' },
+	{ in: 'utils/conditionals.mjs' },
+	{ in: 'utils/front-storage.mjs' },
+	{ in: 'utils/progress-logger.mjs' }
 ];
 const FOLDERS = [
 	{ in: 'board' },

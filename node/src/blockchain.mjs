@@ -8,7 +8,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockchainStorage } from '../../storage/bc-store.mjs';
 import { IdentityStore } from "../../storage/identity-store.mjs";
 import { LedgersStorage } from '../../storage/ledgers-store.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
 * @typedef {import("./mempool.mjs").MemPool} MemPool

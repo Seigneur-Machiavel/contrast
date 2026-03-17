@@ -13,14 +13,14 @@ import { Transaction_Builder } from "./src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";
-import { HIVE_P2P_CONFIG } from '../utils/hive-p2p-config.mjs';
+import { HIVE_P2P_CONFIG } from '../config/hive-p2p-config.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
 const seed = startupStorage.loadBinary('seed') || await HiveP2P.CryptoCodex.generateNewSybilIdentity(false);
 
 // LOAD BOOTSTRAP URLS FROM "contrast/bootstraps.json" IF EXISTS, OTHERWISE USE DEFAULT
-const bootstraps = startupStorage.loadJSON('bootstraps', true) || ['ws://localhost:27260'];
+const bootstraps = startupStorage.loadJSON('config/bootstraps', true) || ['ws://localhost:27260'];
 const seedHex = serializer.converter.bytesToHex(seed);
 const storage = new ContrastStorage(seedHex);	// ACCESS TO 'contrast-storage/{localIdentifier}'.
 const wallet = new Wallet(seedHex);

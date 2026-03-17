@@ -2,7 +2,7 @@
 import { Sync } from '../../node/src/sync.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { PendingRequest } from '../../utils/networking.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../../utils/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage

@@ -1,7 +1,7 @@
 // @ts-check
 import { IS_VALID } from '../types/validation.mjs';
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from './blockchain-settings.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash

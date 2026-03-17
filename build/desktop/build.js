@@ -20,7 +20,6 @@ const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 // ---- WHAT GOES IN resources.zip (updates) ----------------------------------------
 /** @type {{in: string, out?: string}[]} */
 const RESOURCES_FILES = [
-	{ in: 'board-service.mjs' },		
 	{ in: 'package.json' }, 			// for version display and update checks
 	{ in: 'bootstraps.json' },			// bootstraps URLs list
 	{ in: 'app/launcher.mjs' },			// launcher patching
@@ -30,7 +29,7 @@ const RESOURCES_FILES = [
 ];
 const RESOURCES_FOLDERS = [
 	{ in: 'board' },
-	{ in: 'ext-libs' },
+	{ in: 'external-libs' },
     { in: 'miniLogger' },
     { in: 'node' },
     { in: 'storage' },
