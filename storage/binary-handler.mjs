@@ -20,7 +20,7 @@ export class BinaryHandler {
 	write(data, position = this.cursor) {
 		fs.writeSync(this.fd, data, 0, data.length, position);
 		if (position === this.cursor) this.cursor += data.length;
-	} 
+	}
 	/** @param {number} position @param {number} length */
 	read(position, length) {
 		const buffer = Buffer.allocUnsafe(length);

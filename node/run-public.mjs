@@ -1,14 +1,15 @@
 // @ts-check
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
-const domain = args.includes('-local') ? 'localhost' : '0.0.0.0';
+const enableBoardService = args.includes('--board-service');
+const domain = args.includes('--local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : undefined;
 
 import { Wallet } from './src/wallet.mjs';
+import { createContrastNode } from './src/node.mjs';
 import { serializer } from '../utils/serializer.mjs';
 import { ContrastStorage } from '../storage/storage.mjs';
-import { createContrastNode } from './src/node.mjs';
 import { Transaction_Builder } from "./src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
@@ -32,3 +33,8 @@ await clientNode.start(wallet);
 
 // PERSIST THE SEED FOR NEXT STARTUPS IF NODE IS ABLE TO START SUCCESSFULLY
 startupStorage.saveBinary('seed', seed);
+
+if (enableBoardService) {
+	const { startBoardService } = await import('./board-service.mjs');
+	startBoardService();
+}

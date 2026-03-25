@@ -1,3 +1,4 @@
+// @ts-check
 import crypto from 'crypto';
 
 const l = 4; // pattern length

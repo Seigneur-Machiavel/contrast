@@ -74,19 +74,10 @@ export class LedgersStorage {
 	// API METHODS
 	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {boolean} [safeMode] If enabled: check the history before writing, default: false */
 	digestBlock(block, involvedUTXOs, safeMode = false) {
-		/** @type {Set<string>} */
-		const dirsToCreate = new Set();
 		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
 		let applyCount = 0;
-		for (const address in changesByAddress) dirsToCreate.add(this.#pathOfAddressLedgerDir(address));
-		for (const dirPath of dirsToCreate) fs.mkdirSync(dirPath, { recursive: true });
 		for (const address in changesByAddress)
 			applyCount += this.#applyAddressChanges(address, changesByAddress[address], safeMode);
-		/*for (const address in changesByAddress) {
-			const changes = changesByAddress[address];
-			console.log('(digest) historyTxIds:', [...changes.historyTxIds], 'size:', changes.historyTxIds.size);
-			applyCount += this.#applyAddressChanges(address, changes, safeMode);
-		}*/
 
 		return applyCount;
 	}
@@ -96,11 +87,6 @@ export class LedgersStorage {
 		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
 		for (const address in changesByAddress)
 			undoCount += this.#reverseAddressChanges(address, changesByAddress[address], true, true);
-		/*for (const address in changesByAddress) {
-			const changes = changesByAddress[address];
-			console.log('(undo) historyTxIds:', [...changes.historyTxIds], 'size:', changes.historyTxIds.size);
-			undoCount += this.#reverseAddressChanges(address, changes, true, true);
-		}*/
 
 		return undoCount;
 	}
@@ -187,7 +173,7 @@ export class LedgersStorage {
 
 		// IF EVERYTHING OK => SAVE
 		const dirPath = this.#pathOfAddressLedgerDir(address);
-		if (w.isWritingComplete) this.storage.saveBinary(address, w.getBytes(), dirPath, true);
+		if (w.isWritingComplete) this.storage.saveBinaryAtomic(address, w.getBytes(), dirPath);
 		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 	
 		return 1;
@@ -238,7 +224,7 @@ export class LedgersStorage {
 		w.writeBytes(l.historyBytes.subarray(0, l.historyBytes.length - newHistoryBytes.length));
 
 		// IF EVERYTHING OK => SAVE
-		if (w.isWritingComplete) this.storage.saveBinary(address, w.getBytes(), dirPath, true);
+		if (w.isWritingComplete) this.storage.saveBinaryAtomic(address, w.getBytes(), dirPath);
 		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		
 		return 1;

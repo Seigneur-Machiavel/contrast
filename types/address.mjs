@@ -53,10 +53,20 @@ export class ADDRESS {
 		return new ADDRESS(prefix, B58, uint32);
 	}
 	/** @param {string} addressBase58 */
+	static toUint32(addressBase58) {
+		return Converter.b58ToUint32(addressBase58.substring(1));
+	}
+	/** @param {string} addressBase58 */
 	static fromString(addressBase58) {
+		if (typeof addressBase58 !== 'string') throw new Error('Address must be a string');
+		if (addressBase58.length !== CRITERIA.TOTAL_LENGTH) throw new Error(`Address must be ${CRITERIA.TOTAL_LENGTH} characters long`);
+		
+		const firstChar = addressBase58.substring(0, 1);
+		if (!ADDRESS.AUTHORIZED_PREFIXES.has(firstChar)) throw new Error(`Address must start with one of the following prefixes: ${[...ADDRESS.AUTHORIZED_PREFIXES].join(', ')}`);
+		
 		const lastPartBase58 = addressBase58.substring(1);
-		const uint32 = Converter.b58ToUint32(addressBase58.substring(1));
-		return new ADDRESS(addressBase58.substring(0, 1), lastPartBase58, uint32);
+		const uint32 = Converter.b58ToUint32(lastPartBase58);
+		return new ADDRESS(firstChar, lastPartBase58, uint32);
 	}
 	/** @param {Uint8Array} uint8Array length: 5, first byte is prefix */
 	static fromUint8Array(uint8Array) {

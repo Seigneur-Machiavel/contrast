@@ -1,4 +1,5 @@
 // @ts-check
+import { serializer } from './serializer.mjs';
 import { IS_VALID } from '../types/validation.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../config/blockchain-settings.mjs';
@@ -30,7 +31,7 @@ export const conditionnals = {
     /** Check if the array contains duplicates @param {any[]} array */
     arrayIncludeDuplicates(array) {
         return (new Set(array)).size !== array.length;
-    }
+    },
 };
  
  const logger = new MiniLogger('solving-functions');

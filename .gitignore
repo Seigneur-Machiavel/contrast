@@ -4,6 +4,9 @@ package-lock.json
 miniLogger/history
 miniLogger/mini-logger-config-custom.json
 
+tests/unit-tests/.bench-tmp
+tests/unit-tests/test-results
+
 build/extension/dist
 build/extension/extension.zip
 build/desktop/release

@@ -1,17 +1,18 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
-import { TxValidation } from './tx-validation.mjs';
 import { solving } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from './transaction.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { IdentitiesCache, TxValidation } from './tx-validation.mjs';
+import { WorkerTask, ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
- * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
 const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {
@@ -35,21 +36,21 @@ class WorkerDispatcher {
 	/** @param {ValidationWorker[]} workers */
 	constructor(workers) { this.workers = workers; }
 
-	/** @param {Transaction[]} batch */
+	/** @param {WorkerTask[]} batch */
 	#assignJobToWorker(batch) {
 		const w = this.workers[this.workerIndex];
 		if (!w) throw new Error('Worker index overflow');
 
-		this.promises.push(w.derivationValidation(batch));
+		this.promises.push(w.signatureValidation(batch));
 		this.workerIndex++;
 	}
 
-	/** @param {BlockFinalized} block */
-	async dispatchJobAndWaitResult(block) {
+	/** @param {WorkerTask[]} tasks */
+	async dispatchJobAndWaitResult(tasks) {
 		let batch = [];
-        const batchSize = Math.ceil(block.Txs.length / this.workers.length);
-		for (const tx of block.Txs) {
-			batch.push(tx);
+        const batchSize = Math.ceil(tasks.length / this.workers.length);
+		for (const task of tasks) {
+			batch.push(task);
 			if (batch.length < batchSize) continue;
 			// BATCH READY => ASSIGN TO WORKER & CLEAR BATCH
 			this.#assignJobToWorker(batch);
@@ -174,20 +175,29 @@ export class BlockValidation {
 		if ((node.workers.validations || []).length === 0) throw new Error('No validation workers available');
 		
 		// PROCESS ALL TXs -EXCEPT SIGNATURE VERIFICATION
-		/** Key: Address, Value: PubKeys @type {Map<string, Set<string>>} */
-		const involvedIdentities = new Map(); // used to avoid re-fetching identities
+		const identitiesCache = new IdentitiesCache(); // local cache: used to avoid re-fetching identities
         const validationStart = Date.now();
+		const signatureVerificationTasks = [];
 		for (let i = 0; i < block.Txs.length; i++) {
             const tx = block.Txs[i];
 			const specialTx = i < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
         	TxValidation.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
+			
 			const fee = specialTx ? 0 : TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
 			TxValidation.controlTransactionOutputsRulesConditions(tx);
-			TxValidation.controlAddressesOwnership(node, involvedUTXOs, tx, specialTx, involvedIdentities);
-        }
+			TxValidation.controlOutputsIdentities(node, tx, identitiesCache);
+
+			const ext = specialTx ? null : TxValidation.extractInputsIdentities(node, involvedUTXOs, tx, identitiesCache);
+			TxValidation.controlAddressesHasAssociatedWitnesses(tx, ext?.pubKeysByHashes, ext?.addressesToConfirmByPubKey);
+			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
+			
+			TxValidation.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
+			const serialized = serializer.serialize.transaction(tx, specialTx);
+			signatureVerificationTasks.push(new WorkerTask(serialized, ext?.pubKeysByHashes, specialTx));
+		}
 
 		// SIGNATURE VERIFICATION (MULTI-THREADING)
-		const dispatchedSuccessfully = await workerDispatcher.dispatchJobAndWaitResult(block);
+		const dispatchedSuccessfully = await workerDispatcher.dispatchJobAndWaitResult(signatureVerificationTasks);
 		if (!dispatchedSuccessfully) throw new Error(failureErrorMessages.discoveredDerivationFailure);
 
 		// ALL VALIDATIONS PASSED

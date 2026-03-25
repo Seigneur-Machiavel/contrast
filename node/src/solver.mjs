@@ -12,7 +12,6 @@ import { SolverWorker } from '../workers/solver-worker-wrapper.mjs';
 
 export class Solver {
 	node;
-	address;
 	version = 1;
 	nbOfWorkers = 1;
 	terminated = false;
@@ -32,10 +31,7 @@ export class Solver {
 	hashRate = 0; // hash rate in H/s
 
     /** @param {ContrastNode} node */
-    constructor(node) {
-        this.node = node;
-        this.address = node.rewardAddresses.solver;
-    }
+    constructor(node) { this.node = node; }
 
     get bestCandidateIndex() { return this.bestCandidate ? this.bestCandidate.index : -1; }
     get bestCandidateLegitimacy() { return this.bestCandidate ? this.bestCandidate.legitimacy : 0; }
@@ -79,7 +75,7 @@ export class Solver {
         // preserve the current best candidate, but update considered as true to encourage re-bradcasting
         if (reasonChange === 'none') return true;
 
-        if (this.node.verb > 2) this.logger.log(`[MINER] Best block candidate changed${reasonChange}:
+        if (this.node.verb > 2) this.logger.log(`[SOLVER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
 to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`, (m, c) => console.info(m, c));
         
@@ -93,17 +89,17 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 	async tick() {
 		if (this.terminated) return;
 
-		const rewardAddress = this.node.rewardAddresses.solver;
+		const { sAddress, data } = this.#getAddressAndDataForRewardTx();
 		const blockCandidate = this.bestCandidate;
-		if (!rewardAddress || !blockCandidate) return;
+		if (!sAddress || !blockCandidate) return;
 		if (blockCandidate.index !== this.bestCandidateIndex) {
-			if (this.node.verb > 2) this.logger.log(`[MINER] Block candidate is not the highest block candidate: #${blockCandidate.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
+			if (this.node.verb > 2) this.logger.log(`[SOLVER] Block candidate is not the highest block candidate: #${blockCandidate.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
 			return;
 		}
 
 		this.#togglePausedWorkers();
 		await this.#terminateUnusedWorkers();
-		const readyWorkers = await this.#createMissingWorkers(rewardAddress);
+		const readyWorkers = await this.#createMissingWorkers(sAddress, data);
 		this.hashRate = this.#getAverageHashrate();
 		
 		const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
@@ -114,7 +110,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 			if (!this.node.time) return;
 			const blockBet = this.bets?.[i] || 0;
 			const timeOffset = Date.now() - this.node.time;
-			this.workers[i].updateInfo(rewardAddress, blockBet, timeOffset);
+			this.workers[i].updateInfo(sAddress, blockBet, timeOffset, data);
 		}
 		timings.updateInfo = Date.now();
 
@@ -123,7 +119,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 			if (worker.isWorking) continue;
 			if (worker.result !== null) {
 				const finalizedBlock = worker.getResultAndClear();
-				if (this.node.verb > 2) this.logger.log(`[MINER] Worker ${i} pow! #${finalizedBlock.index})`, (m, c) => console.info(m, c));
+				if (this.node.verb > 2) this.logger.log(`[SOLVER] Worker ${i} pow! #${finalizedBlock.index})`, (m, c) => console.info(m, c));
 				await this.#broadcastFinalizedBlock(finalizedBlock);
 			}
 
@@ -135,7 +131,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		const timeSpent = endTimestamp - timings.start;
 		if (timeSpent < 1000) return;
 
-		if (this.node.verb > 1) this.logger.log(`[MINER] Abnormal time spent: ${timeSpent}ms
+		if (this.node.verb > 1) this.logger.log(`[SOLVER] Abnormal time spent: ${timeSpent}ms
 		- workersUpdate: ${timings.workersUpdate - timings.start}ms
 		- updateInfo: ${timings.updateInfo - timings.workersUpdate}ms`, (m, c) => console.info(m, c));
     }
@@ -147,6 +143,18 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
     }
 
 	// INTERNAL METHODS
+	#getAddressAndDataForRewardTx() {
+		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
+		const { sAddress, sPubkeys } = this.node.rewardsInfo;
+		if (!sAddress || !sPubkeys) throw new Error('Solver address or pubkey is missing in rewards info');
+		
+		const r = this.node.blockchain.identityStore.resolveIdentity(sAddress, sPubkeys);
+		if (r === 'MISMATCH') throw new Error('Solver reward address known but pubkey(s) mismatch in identity store');
+		if (r === 'MATCH') return { sAddress, data: undefined };
+		
+		if (sPubkeys.length === 0 || sPubkeys.length > 1) throw new Error(`Invalid number of pubkeys for solver reward address: ${sPubkeys.length} (should be 1)`);
+		return { sAddress, data: this.node.blockchain.identityStore.buildIdentityEntry(sAddress, sPubkeys) };
+	}
     #prepareBets(nbOfBets = 32) {
         if (!this.useBetTimestamp) { this.bets = []; return }
 
@@ -165,14 +173,14 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
     async #broadcastFinalizedBlock(block) {
         // Avoid sending the block pow if a higher block candidate is available to be mined
         if (this.bestCandidateIndex > block.index) {
-            if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized is not the highest block candidate: #${block.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
+            if (this.node.verb > 2) this.logger.log(`[SOLVER] Block finalized is not the highest block candidate: #${block.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
             return;
         }
         
         const validatorAddress = block.Txs[1].inputs[0].split(':')[0];
 		const solverAddress = block.Txs[0].outputs[0].address;
         if (this.addressOfCandidatesBroadcasted.includes(validatorAddress)) {
-        	if (this.node.verb > 2) this.logger.log(`[MINER] Block finalized already sent (Height: ${block.index})`, (m, c) => console.info(m, c));
+        	if (this.node.verb > 2) this.logger.log(`[SOLVER] Block finalized already sent (Height: ${block.index})`, (m, c) => console.info(m, c));
             return;
         }
 
@@ -180,7 +188,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         const isNewHeight = block.index > this.powBroadcastState.foundHeight;
         const maxTryReached = this.powBroadcastState.sentTryCount >= this.powBroadcastState.maxTryCount;
         if (maxTryReached && !isNewHeight) {
-			if (this.node.verb > 1) this.logger.log(`[MINER] Max try reached for block (Height: ${block.index})`, (m, c) => console.warn(m, c));
+			if (this.node.verb > 1) this.logger.log(`[SOLVER] Max try reached for block (Height: ${block.index})`, (m, c) => console.warn(m, c));
 			return;
 		}
         
@@ -191,20 +199,20 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		// Ensure the block timestamp is not in the future
 		const t = this.node.time || Date.now();
 		if (block.timestamp > t + 990) await new Promise((resolve) => setTimeout(resolve, block.timestamp - (t + 990)));
-        if (this.node.verb > 2) this.logger.log(`[MINER] SENDING: Block finalized, validator: ${validatorAddress} | solver: ${solverAddress}
+        if (this.node.verb > 2) this.logger.log(`[SOLVER] SENDING: Block finalized, validator: ${validatorAddress} | solver: ${solverAddress}
 			(Height: ${block.index}) | Diff = ${block.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));
-			if (this.node.verb > 2) this.logger.log(`[MINER] -POW- #${block.index} | V:${validatorAddress} | M:${solverAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
+			if (this.node.verb > 2) this.logger.log(`[SOLVER] -POW- #${block.index} | V:${validatorAddress} | M:${solverAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
 		
 		// THEN SHARE THE FINALIZED BLOCK
 		const serialized = serializer.serialize.block(block, 'finalized');
         this.node.p2p.broadcast(serialized, { topic: 'block_finalized' });
-		//console.log(`[MINER:${solverAddress}] Broadcasted #${block.index}`); // DEBUG
+		//console.log(`[SOLVER:${solverAddress}] Broadcasted #${block.index}`); // DEBUG
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
 		//const deserializedBlock = serializer.deserialize.blockFinalized(serialized); // DEBUG
 		this.node.taskQueue.pushFirst('DigestBlock', serialized);
     }
-	/** @param {string} rewardAddress */
-    async #createMissingWorkers(rewardAddress) {
+	/** @param {string} sAddress @param {Uint8Array} [data] */
+    async #createMissingWorkers(sAddress, data) {
 		if (!this.node.time) return 0;
 
         const missingWorkers = this.nbOfWorkers - this.workers.length;
@@ -215,7 +223,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
             const workerIndex = readyWorkers + i;
             const blockBet = this.bets?.[workerIndex] || 0;
 			const timeOffset = Date.now() - this.node.time;
-            this.workers.push(new SolverWorker(rewardAddress, blockBet, timeOffset));
+            this.workers.push(new SolverWorker(sAddress, blockBet, timeOffset, data));
             readyWorkers++;
         }
 

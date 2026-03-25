@@ -27,7 +27,7 @@ export class BlockchainStorage {
 	storage;
 	get logger() { return this.storage.miniLogger; }
 	converter = new HiveP2P.Converter();
-	batchSize = BLOCKCHAIN_SETTINGS.halvingInterval; // number of blocks per binary file
+	batchSize = 131_072; // BLOCKCHAIN_SETTINGS.halvingInterval; // number of blocks per binary file
 	lastBlockIndex = -1;
 	/** Blockchain parts handler (blockchain-X.bin) Key: block file index @type {Object<number, BinaryHandler>} */
 	bcHandlers = {};
@@ -68,7 +68,7 @@ export class BlockchainStorage {
 		this.lastBlockIndex++;
     }
     getBlockBytes(height = 0, includeUtxosStates = false) {
-        if (height > this.lastBlockIndex) return null;
+        if (height < 0 || height > this.lastBlockIndex) return null;
 
 		const offset = this.#getOffsetOfBlockData(height);
 		if (!offset) return null;
@@ -188,17 +188,21 @@ export class BlockchainStorage {
 
 		// RESTORE UTXOs TO UNSPENT
 		if (involvedAnchors && !this.#digestUtxos(involvedAnchors, 'restore')) throw new Error('Unable to restore UTXOs for the undone block');
+		if (offset.start < 0) throw new Error('Blockchain.undoBlock: invalid block offset.');
 
-		// TRUNCATE INDEXES, AND BLOCKCHAIN FILE
+		// TRUNCATE BLOCKCHAIN AND INDEXES FILE
 		const blockchainHandler = this.#getBlockchainHandler(this.lastBlockIndex);
 		blockchainHandler.truncate(offset.start);
-		this.idxsHandler.truncate(this.lastBlockIndex * ENTRY_BYTES);
+
+		const idxOffsetStart = this.lastBlockIndex * ENTRY_BYTES;
+		this.idxsHandler.truncate(idxOffsetStart);
 		this.lastBlockIndex--;
     }
 	/** Ensure the blockchain file length matches the last indexed block offset, used at startup only */
 	checkBlockchainBytesLengthConsistency() {
 		const lastOffset = this.#getOffsetOfBlockData(this.lastBlockIndex);
 		if (!lastOffset) throw new Error('Blockchain storage is corrupted: unable to retrieve last block offset.');
+		if (lastOffset.start < 0) throw new Error('Blockchain storage is corrupted: invalid last block offset.');
 
 		const blockchainHandler = this.#getBlockchainHandler(this.lastBlockIndex);
 		const stats = fs.fstatSync(blockchainHandler.fd);
@@ -206,8 +210,13 @@ export class BlockchainStorage {
 		return stats.size === expectedSize;
     }
     reset() {
+		for (const index in this.bcHandlers) this.bcHandlers[index].close();
+		this.idxsHandler.close();
+		this.bcHandlers = {};
+		
         if (fs.existsSync(this.storage.PATH.BLOCKCHAIN)) fs.rmSync(this.storage.PATH.BLOCKCHAIN, { recursive: true });
         fs.mkdirSync(this.storage.PATH.BLOCKCHAIN);
+
         this.lastBlockIndex = -1;
 		this.idxsHandler = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, 'blockchain.idx'));
     }

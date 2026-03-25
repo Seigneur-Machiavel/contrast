@@ -96,12 +96,15 @@ export class VoutIdEncoder {
 const lengths = {
 	// CRYPTO/IDENTITY
 	pubKey: { bytes: 32, str: 64 },
+	pubKeyHash: { bytes: 4, str: 8 },
 	address: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES, str: ADDRESS.CRITERIA.TOTAL_LENGTH },
 	signature: { bytes: 64, str: 128 },
-	witness: { bytes: 96, str: 192 }, // WILL CHANGE => PUBKEY + SIGNATURE => SIGNATURE ONLY
+	validatorWitness: { bytes: 96, str: 192 }, // SIGNATURE(64b) + PUBKEY(32b) = 96b
+	witness: { bytes: 68, str: 136 }, // SIGNATURE(64b) + PUBKEY(32b) => SIGNATURE(64b) + PUBKEY_HASH(4b) = 68b
 
 	// TRANSACTION
-	anchor: { bytes: 8, str: null },
+	txHeader: { bytes: 2 + 2 + 2 + 2 + 2, str: null }, // version(2) + witnessesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2)
+	anchor: { bytes: 8, str: null }, // height(4) + txIndex(2) + vout(2)
 	txId: { bytes: 6, str: null },
 	utxoState: { bytes: 5, str: null },
 	miniUTXO: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 6 + 1, str: null }, // 5 + 6 + 1 = 12
@@ -279,20 +282,35 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Pubkey-addresses object serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-        /** @param {string[]} witnesses ex: [ "signature:pubKey", ... ] */
-        witnessesArray(witnesses) {
-			const w = new BinaryWriter(lengths.witness.bytes * witnesses.length);
+        /** @param {string[]} witnesses ex: [ "signature:pubKeyHash", ... ] @param {'tx' | 'validator'} [mode] default: tx */
+        witnessesArray(witnesses, mode = 'tx') {
+			if (mode !== 'tx' && mode !== 'validator') throw new Error('Invalid mode for witnesses array serialization');
+			const witnessBytes = mode === 'validator' ? lengths.validatorWitness.bytes : lengths.witness.bytes;
+			const w = new BinaryWriter(witnessBytes * witnesses.length);
 			for (const witness of witnesses) w.writeBytes(converter.hexToBytes(witness.replace(':', '')));
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Witnesses array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
+		/** returns: [address: 5b][nb_pubkeys: 1b][threshold: 1b][pubkey x nb_pubkeys: 32b each] 
+		 * @param {ADDRESS} address @param {string[]} pubKeysHex @param {number} threshold */
+		identityEntry(address, pubKeysHex, threshold) {
+			const w = new BinaryWriter(address.bytes.length + 1 + 1 + (pubKeysHex.length * lengths.pubKey.bytes));
+			w.writeBytes(address.bytes);
+			w.writeByte(pubKeysHex.length);
+			w.writeByte(threshold);
+			for (const pubKeyHex of pubKeysHex) w.writeBytes(converter.hexToBytes(pubKeyHex));
+			if (w.isWritingComplete) return w.getBytes();
+			else throw new Error(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
         /** @param {Transaction} tx @param {'tx' | 'validator' | 'solver'} [mode] default: tx */
         transaction(tx, mode = 'tx') {
 			if (mode === 'solver' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.nonce.str)) throw new Error('Invalid coinbase transaction');
             if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== lengths.hash.str)) throw new Error('Invalid transaction: validator input must be address + posHash');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
 			
-			const witnessesBytes = tx.witnesses.length * lengths.witness.bytes;
+			// validator witness is bigger because it includes the full pubKey
+			const witnessBytes = mode === 'validator' ? lengths.validatorWitness.bytes : lengths.witness.bytes;
+			const witnessesBytes = tx.witnesses.length * witnessBytes;
 			let inputBytes = lengths.anchor.bytes;
 			if (mode === 'solver') inputBytes = 4; 			// input = nonce
 			if (mode === 'validator') inputBytes = lengths.hash.bytes; // posHash
@@ -307,7 +325,8 @@ export const serializer = {
 			w.writeBytes(converter.numberTo2Bytes(tx.inputs.length)); 			// nb of inputs
 			w.writeBytes(converter.numberTo2Bytes(tx.outputs.length));			// nb of outputs
 			w.writeBytes(converter.numberTo2Bytes(tx.data?.length || 0)); 		// data: bytes
-			if (mode !== 'solver') w.writeBytes(this.witnessesArray(tx.witnesses));	// witnesses
+			
+			if (mode !== 'solver') w.writeBytes(this.witnessesArray(tx.witnesses, mode));	// witnesses
 			if (mode === 'tx') w.writeBytes(this.anchorsArray(tx.inputs));			// inputs
 			if (mode === 'solver' || mode === 'validator')						// input solver/validator
 				w.writeBytes(converter.hexToBytes(tx.inputs[0])); 				// nonce | posHash (hex)
@@ -428,7 +447,7 @@ export const serializer = {
 			const serializedTxs = [];
 			const ids = Object.keys(txs);
 			const txsValues = Object.values(txs);
-			for (const tx of txsValues) { // SERIALIZE TXs WITH SPECIAL MODE IF VALIDATOR/MINER TX
+			for (const tx of txsValues) { // SERIALIZE TXs WITH SPECIAL MODE IF VALIDATOR/SOLVER TX
 				const mode = Transaction_Builder.isSolverOrValidatorTx(tx);
 				modes.push(!mode ? 0 : mode === 'solver' ? 1 : 2); // 0 = tx, 1 = solver, 2 = validator
 				serializedTxs.push(this.transaction(tx, mode));
@@ -562,18 +581,38 @@ export const serializer = {
 			}
 			return pubkeyAddresses;
 		},
-		/** @param {Uint8Array} serializedWitnesses */
-		witnessesArray(serializedWitnesses) {
-			if (serializedWitnesses.length % lengths.witness.bytes !== 0)throw new Error('Serialized witnesses length is invalid');
+		/** @param {Uint8Array} serializedWitnesses @param {'tx' | 'validator'} [mode] default: tx */
+		witnessesArray(serializedWitnesses, mode = 'tx') {
+			if (mode !== 'tx' && mode !== 'validator') throw new Error('Invalid mode for witnesses array serialization');
+			
+			const witnessBytes = mode === 'validator' ? lengths.validatorWitness.bytes : lengths.witness.bytes;
+			if (serializedWitnesses.length % witnessBytes !== 0) throw new Error('Serialized witnesses length is invalid');
+			
 			const witnesses = [];
-			const expectedNbOfWitnesses = serializedWitnesses.length / lengths.witness.bytes;
+			const expectedNbOfWitnesses = serializedWitnesses.length / witnessBytes;
 			const r = new BinaryReader(serializedWitnesses);
 			for (let i = 0; i < expectedNbOfWitnesses; i++) {
-				const signature = converter.bytesToHex(r.read(64));
-				const pubKey = converter.bytesToHex(r.read(32));
-				witnesses.push(`${signature}:${pubKey}`);
+				const s = converter.bytesToHex(r.read(lengths.signature.bytes));
+				const p = converter.bytesToHex(r.read(mode === 'validator' ? lengths.pubKey.bytes : lengths.pubKeyHash.bytes));
+				witnesses.push(`${s}:${p}`);
 			}
 			return witnesses;
+		},
+		/** @param {Uint8Array} serializedIdentityEntry */
+		identityEntry(serializedIdentityEntry) {
+			if (serializedIdentityEntry.length < lengths.address.bytes + 2 + lengths.pubKey.bytes) throw new Error('Serialized identity entry length is too short to be valid');
+			
+			const r = new BinaryReader(serializedIdentityEntry);
+			const address = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
+			const nbOfPubKeys = r.read(1)[0];
+			const threshold = r.read(1)[0];
+			const totalExpectedBytes = lengths.address.bytes + 1 + 1 + (nbOfPubKeys * lengths.pubKey.bytes);
+			if (serializedIdentityEntry.length !== totalExpectedBytes) throw new Error('Serialized identity entry length is invalid');
+
+			const pubKeysHex = [];
+			for (let i = 0; i < nbOfPubKeys; i++) pubKeysHex.push(converter.bytesToHex(r.read(lengths.pubKey.bytes)));
+			if (r.isReadingComplete) return { address, pubKeysHex, threshold };
+			else throw new Error('Identity entry is not fully deserialized');
 		},
 		/** @param {Uint8Array} serializedTx @param {'tx' | 'validator' | 'solver'} [mode] default: normal */
 		transaction(serializedTx, mode = 'tx') {
@@ -583,7 +622,8 @@ export const serializer = {
 			const nbOfInputs = converter.bytes2ToNumber(r.read(2));
 			const nbOfOutputs = converter.bytes2ToNumber(r.read(2));
 			const dataLength = converter.bytes2ToNumber(r.read(2));
-			const witnesses = mode !== 'solver' ? this.witnessesArray(r.read(nbOfWitnesses * lengths.witness.bytes)) : [];
+			const witnessBytes = mode === 'validator' ? lengths.validatorWitness.bytes : lengths.witness.bytes;
+			const witnesses = mode !== 'solver' ? this.witnessesArray(r.read(nbOfWitnesses * witnessBytes), mode) : [];
 			const inputs = mode === 'tx' ? this.anchorsArray(r.read(nbOfInputs * lengths.anchor.bytes)) : [];
 			if (mode === 'solver') inputs.push(converter.bytesToHex(r.read(4), 4)); // nonce
 			if (mode === 'validator') inputs.push(converter.bytesToHex(r.read(lengths.hash.bytes))); // posHash

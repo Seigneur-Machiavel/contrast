@@ -3,6 +3,7 @@ import { parentPort } from 'worker_threads';
 import { BlockUtils } from '../src/block.mjs';
 import { HashFunctions } from '../src/conCrypto.mjs';
 import { solving } from '../../utils/conditionals.mjs';
+import { serializer } from '../../utils/serializer.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 if (parentPort === null) throw new Error('No parent port in solver worker');
 
@@ -93,6 +94,7 @@ async function prepareBlockCandidateBeforeSolving() {
 	/** @ts-ignore Candidate transmute to Finalized @type {BlockFinalized | null} */
 	const block = solverVars.blockCandidate;
 	if (block === null) throw new Error('No block candidate available');
+	if (!solverVars.sAddress) throw new Error('No reward address provided');
 
 	/** @ts-ignore Candidate transmute to Finalized @type {number} */
 	const powReward = block.powReward;
@@ -102,8 +104,9 @@ async function prepareBlockCandidateBeforeSolving() {
 
 	const now = Date.now() + solverVars.timeOffset;
 	block.timestamp = Math.max(block.posTimestamp + 1 + solverVars.bet, now);
-	const coinbaseTx = await Transaction_Builder.createCoinbase(coinbaseNonce, solverVars.rewardAddress, powReward);
-	BlockUtils.setCoinbaseTransaction(block, coinbaseTx); // Will replace existing coinbase if any
+
+	const rewardTx = await Transaction_Builder.createSolverReward(coinbaseNonce, solverVars.sAddress, powReward, solverVars.data);
+	BlockUtils.setCoinbaseTransaction(block, rewardTx); // Will replace existing coinbase if any
 
 	const signatureHex = await BlockUtils.getBlockSignature(block);
 	const nonce = `${headerNonce}${coinbaseNonce}`;
@@ -117,7 +120,10 @@ const solverVars = {
 	exiting: false,
 	working: false,
 
-	rewardAddress: '',
+	/** @type {Uint8Array | undefined} */
+	data: undefined,
+	/** @type {string | undefined} */
+	sAddress: undefined,
 	highestBlockHeight: 0,
 	bet: 0,
 	timeOffset: 0,
@@ -134,9 +140,10 @@ parentPort.on('message', async (task) => {
 	const response = {};
     switch (task.type) {
 		case 'updateInfo':
-			solverVars.rewardAddress = task.rewardAddress;
+			solverVars.sAddress = task.sAddress;
 			solverVars.bet = task.bet;
 			solverVars.timeOffset = task.timeOffset;
+			solverVars.data = task.data;
 			return;
         case 'newCandidate':
 			solverVars.highestBlockHeight = task.blockCandidate.index;
@@ -147,9 +154,10 @@ parentPort.on('message', async (task) => {
 			if (solverVars.working) return;
 			
 			solverVars.working = true;
-			solverVars.rewardAddress = task.rewardAddress;
+			solverVars.sAddress = task.sAddress;
 			solverVars.bet = task.bet;
 			solverVars.timeOffset = task.timeOffset;
+			solverVars.data = task.data;
 
 			const finalizedBlock = await mineBlockUntilValid();
 			response.result = finalizedBlock;

@@ -39,6 +39,12 @@ export class Sync {
 	}
 
 	// API METHODS
+	get isSynced() {
+		const c = this.getConsensus();
+		if (c.equality || c.count === 0) return false;
+		if (!this.node.blockchain?.lastBlock) return false;
+		return c.blockHash === this.node.blockchain.lastBlock.hash;
+	}
 	/** Strategy: rollback to consensus block, then fetch missing blocks from random peers
 	* - If a peer fails or sends invalid data, remove it and retry with another 
 	* - On digestion failure, undo last block and retry from previous block
@@ -142,7 +148,7 @@ export class Sync {
 		return peersToAsk;
 	}
 	/** @param {string} peerId @param {number} height @returns {Promise<Uint8Array | undefined>} */
-	async fetchBlockFromPeer(peerId, height, timeout = 2000) {
+	async fetchBlockFromPeer(peerId, height, timeout = 3000) {
 		try {
 			this.pendingBlockRequest = new PendingRequest(peerId, 'block', timeout);
 			const heightInt32 = serializer.converter.numberTo4Bytes(height);

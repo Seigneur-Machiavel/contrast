@@ -1,7 +1,17 @@
 import { newWorker } from './unified-worker-initializer.mjs';
 
-/**
- * @typedef {import("../../types/transaction.mjs").Transaction} Transaction */
+export class WorkerTask {
+	serialized;
+	pubKeysByHashes;
+	specialTx;
+
+	/** @param {Uint8Array} serialized @param {Record<string, string>} [pubKeysByHashes] @param {'validator' | 'tx' | undefined} [mode] */
+	constructor(serialized, pubKeysByHashes, mode = 'tx') {
+		this.serialized = serialized;
+		this.pubKeysByHashes = pubKeysByHashes;
+		this.specialTx = mode;
+	}
+}
 
 // CLASSES SIMPLIFYING USAGE OF THE WORKERS
 export class ValidationWorker {
@@ -10,8 +20,9 @@ export class ValidationWorker {
 	state = 'idle';
 
     constructor (id = 0) { this.id = id; }
-	/** @param {Transaction[]} batch */
-	derivationValidation(batch) {
+	
+	/** @param {WorkerTask[]} batch */
+	signatureValidation(batch) {
 		this.state = 'working';
 
         const promise = new Promise((resolve, reject) => {
@@ -27,7 +38,7 @@ export class ValidationWorker {
             };
 
 			this.worker.addEventListener('message', onMessage);
-			this.worker.postMessage({ id: this.id, type: 'derivationValidation', batch });
+			this.worker.postMessage({ id: this.id, type: 'signatureValidation', batch });
         });
         return promise;
     }

@@ -53,8 +53,8 @@ export class ContrastNode {
 
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
-	/** @type {{ validator: string | null, solver: string | null }} */
-	rewardAddresses = { validator: null, solver: null };
+	/** @type {{ vAddress: string | null, vPubkeys: string[] | null, sAddress: string | null, sPubkeys: string[] | null }} */
+	rewardsInfo = { vAddress: null, vPubkeys: null, sAddress: null, sPubkeys: null };
 
 	mainStorage; blockchain;
 	taskQueue; memPool; p2p;
@@ -139,10 +139,12 @@ export class ContrastNode {
 	}
 
 	/** Associate a wallet with this node (for solver and validator functions) @param {Wallet} wallet */
-	associateWallet(wallet) { 
+	associateWallet(wallet) {
 		this.account = wallet.accounts[0];
-		this.rewardAddresses.validator = wallet.accounts[0].address;
-		this.rewardAddresses.solver = wallet.accounts[1].address;
+		this.rewardsInfo.vAddress = wallet.accounts[0].address;
+		this.rewardsInfo.vPubkeys = [wallet.accounts[0].pubKey];
+		this.rewardsInfo.sAddress = wallet.accounts[1].address;
+		this.rewardsInfo.sPubkeys = [wallet.accounts[1].pubKey];
 	}
 	async createAndShareMyBlockCandidate() {
 		try {
@@ -150,15 +152,13 @@ export class ContrastNode {
 			const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
 			if (!myCandidate) throw new Error('Failed to create block candidate');
 
-			//const updated = this.solver.updateBestCandidate(myCandidate);
-			//if (!updated) throw new Error('The solver rejected the created block candidate');
 			this.solver.updateBestCandidate(myCandidate); // throw if not updated
 			
 			const serialized = serializer.serialize.block(myCandidate, 'candidate');
 			this.p2p.broadcast(serialized, { topic: 'block_candidate' });
 			this.callbacks.onBroadcastNewCandidate?.(myCandidate);
 			this.controller?.sendEncryptedMessage('newBlockCandidate', myCandidate);
-		} catch (/** @type {any} */ error) { this.logger.log(error.stack, (m, c) => console.error(m, c)); }
+		} catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(error.stack, (m, c) => console.error(m, c)); }
 		
 		this.updateState("idle", "creating block candidate");
 	}
@@ -167,7 +167,7 @@ export class ContrastNode {
 	async #stackExecution() {
 		while (this.running) {
 			await this.#executeNextTask();
-			await this.solver.tick();
+			try { await this.solver.tick(); } catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[SOLVER] Error in tick: ${error.message}`, (m, c) => console.error(m, c)); }
 			await new Promise(r => setTimeout(r, 10));
 		}
 	}
@@ -181,7 +181,7 @@ export class ContrastNode {
 				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'NewCandidate') 	//@ts-ignore: task.data = BlockCandidate
 			try { this.solver.updateBestCandidate(task.data); }
-			catch (/** @type {any} */ error) { this.logger.log(`[P2P->MINER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
+			catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[P2P->SOLVER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'DigestBlock') 	//@ts-ignore: task.data = BlockFinalizedSerialized
 			await this.blockchain.digestFinalizedBlock(this, task.data);
 	}

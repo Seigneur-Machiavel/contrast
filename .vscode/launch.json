@@ -6,15 +6,71 @@
 			"name": "Run-client",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/run-client.mjs",
-			"args": ["-cp", "27259"]
+			"args": ["--max-old-space-size=16384", "-cp", "27259"],
+			"runtimeArgs": ["--inspect"]
 		},
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Board Service",
+			"name": "Run-client-with-board-service",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/run-client.mjs",
+			"args": ["--max-old-space-size=16384", "-cp", "27259", "--board-service"],
+			"runtimeArgs": ["--inspect"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Simul-Network",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/tests/simulations/simul-network.js",
+			"args": ["--max-old-space-size=16384", "--local", "-bootstraps", "1", "-clients", "0", "-stakers", "2", "-spammers", "1", "-nor", "10", "-nos", "8"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Board-Service-standalone",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/board-service.mjs",
 			"args": ["--start"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Test: Run 2 Nodes",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/tests/simulations-single-thread/run_2_nodes.js"
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Test: Worst TXs Validations",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/tests/simulations-single-thread/test-worst-txs-validations.js",
+			"args": ["--max-old-space-size=16384"],
+			"runtimeArgs": ["--inspect"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Test: Staking",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/tests/simulations-single-thread/test-staking.js",
+			"args": ["--max-old-space-size=16384"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Test: Sync",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/tests/simulations-single-thread/test_sync.js"
+		},
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Test: Storage",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/tests/unit-tests/test-storage.js"
 		},
 		{
 			"type": "node",
@@ -29,55 +85,6 @@
 			"name": "Build Desktop",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/build/desktop/build.js"
-		},
-		{
-			"type": "node",
-			"request": "launch",
-			"name": "Test: Run 2 Nodes",
-			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/run_2_nodes.js",
-			"args": ["--max-old-space-size=16384"]
-		},
-		{
-			"type": "node",
-			"request": "launch",
-			"name": "Test: Worst TXs Validations",
-			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test-worst-txs-validations.js",
-			"args": ["--max-old-space-size=16384"],
-			"runtimeArgs": ["--inspect"]
-		},
-		{
-			"type": "node",
-			"request": "launch",
-			"name": "Test: Staking",
-			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test-staking.js",
-			"args": ["--max-old-space-size=16384"]
-		},
-		{
-			"type": "node",
-			"request": "launch",
-			"name": "Test: Solving",
-			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test-solving.js",
-			"args": ["--max-old-space-size=16384"]
-		},
-		{
-			"type": "node",
-			"request": "launch",
-			"name": "Test: Sync",
-			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/test_sync.js",
-			"args": ["--max-old-space-size=16384"]
-		},
-		{
-			"type": "node",
-			"request": "launch",
-			"name": "Test: Storage",
-			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/storage/storage.mjs",
-			"args": ["--max-old-space-size=16384"]
 		}
     ]
 }

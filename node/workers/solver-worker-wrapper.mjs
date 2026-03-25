@@ -12,9 +12,13 @@ export class SolverWorker {
 	isWorking = false;
 	paused = false;
 	hashRate = 0;
+	sAddress;
+	data;
 
-	constructor(rewardAddress = '', bet = 0, timeOffset = 0) {
-		this.rewardAddress = rewardAddress;
+	/** @param {string} sAddress @param {number} bet @param {number} timeOffset @param {Uint8Array} [data] */
+	constructor(sAddress, bet, timeOffset, data) {
+		this.sAddress = sAddress;
+		this.data = data;
 		this.bet = bet;
 		this.timeOffset = timeOffset;
 		this.worker = newWorker('./solver-worker-nodejs.mjs');
@@ -45,17 +49,21 @@ export class SolverWorker {
 		return sameIndex && samePrevHash && sameValidatorAddress;
 	}
 	
-	/** @param {string} rewardAddress @param {number} bet @param {number} timeOffset */
-	updateInfo(rewardAddress, bet, timeOffset) {
+	/** @param {string} sAddress @param {number} bet @param {number} timeOffset @param {Uint8Array} [data] */
+	updateInfo(sAddress, bet, timeOffset, data) {
 		if (this.terminate) return;
 		
-		const isSame = this.rewardAddress === rewardAddress && this.bet === bet && this.timeOffset === timeOffset;
-		if (isSame) return;
+		const isSameAddress = this.sAddress === sAddress;
+		const isSameBet = this.bet === bet;
+		const isSameTimeOffset = this.timeOffset === timeOffset;
+		const isSameData = (!this.data && !data) || (this.data?.length === data?.length && this.data?.every((byte, i) => byte === data[i]));
+		if (isSameAddress && isSameBet && isSameTimeOffset && isSameData) return;
 
-		this.rewardAddress = rewardAddress;
+		this.sAddress = sAddress;
 		this.bet = bet;
 		this.timeOffset = timeOffset;
-		this.worker.postMessage({ type: 'updateInfo', rewardAddress, bet, timeOffset });
+		this.data = data;
+		this.worker.postMessage({ type: 'updateInfo', sAddress, bet, timeOffset, data });
 	}
 	/** @param {BlockCandidate} blockCandidate */
 	async updateCandidate(blockCandidate) {
@@ -74,12 +82,8 @@ export class SolverWorker {
 		this.isWorking = true;
 		this.result = null;
 
-		this.worker.postMessage({
-			type: 'mineUntilValid',
-			rewardAddress: this.rewardAddress,
-			bet: this.bet,
-			timeOffset: this.timeOffset
-		});
+		const { sAddress, bet, timeOffset, data } = this;
+		this.worker.postMessage({ type: 'mineUntilValid', sAddress, bet, timeOffset, data });
 	}
 	getResultAndClear() {
 		const finalizedBlock = this.result;

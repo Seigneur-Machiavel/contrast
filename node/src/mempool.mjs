@@ -1,8 +1,8 @@
 // @ts-check
 import { HashFunctions } from './conCrypto.mjs';
-import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { serializer } from '../../utils/serializer.mjs';
+import { IdentitiesCache, TxValidation } from './tx-validation.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
@@ -89,6 +89,7 @@ export class MemPool {
 		// CHECK CONFORMITY & SPENDABILITY
 		const tx = serializer.deserialize.transaction(serializedTx);
 		TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
+
 		const { involvedAnchors, repeatedAnchorsCount } = Transaction_Builder.extractInvolvedAnchors(tx, true);
 		if (repeatedAnchorsCount > 0) throw new Error('Transaction has repeated anchors');
 		
@@ -120,7 +121,8 @@ export class MemPool {
             if (colliding) this.organizer.remove(colliding.oTx);
         }
     }
-    getMostLucrativeTransactionsBatch() {
+	/** @param {ContrastNode} node */
+    getMostLucrativeTransactionsBatch(node) {
 		/** @type {OrganizedTx[]} */
 		const invalidTransactions = [];
 		const batchSize = 1000; // Number of anchors to process in one go
@@ -138,13 +140,23 @@ export class MemPool {
 			totalFee: 0 
 		};
 
+		/** @type {Set<string>} */
+		const spentAnchors = new Set();
+		const identitiesCache = new IdentitiesCache();
+
 		const controlCurrentBatch = () => {
 			const involvedUTXOs = this.blockchain.getUtxos(batch.anchors, false) || {};
 			for (const oTx of batch.oTxs) {
-				try { TxValidation.isConformTransaction(involvedUTXOs, oTx.tx) }
-				catch (error) { invalidTransactions.push(oTx); continue; }
+				// skip transaction if one of its inputs is already spent by another tx in the batch
+				if (oTx.tx.inputs.some(input => spentAnchors.has(input))) continue;
+
+				try {
+					TxValidation.isConformTransaction(involvedUTXOs, oTx.tx);
+					TxValidation.controlOutputsIdentities(node, oTx.tx, identitiesCache);
+				} catch (error) { invalidTransactions.push(oTx); continue; }
 				
 				// ADD THE TRANSACTION TO RESULT
+				for (const input of oTx.tx.inputs) spentAnchors.add(input);
 				result.txs.push(oTx.tx);
 				result.totalFee += oTx.fee;
 				result.bytes += oTx.serializedTx.byteLength;

@@ -41,17 +41,25 @@ export class BlockUtils {
 	/** Adds POS reward transaction to the block candidate and signs it
 	 * @param {ContrastNode} node @param {BlockCandidate} block */
 	static async #signBlockCandidate(node, block) {
-		const { blockchain, rewardAddresses, account } = node;
-		if (!rewardAddresses.validator || !account || !account.pubKey) throw new Error('Node reward addresses or account not set');
+		const { blockchain, rewardsInfo, account } = node;
+		const { identityStore } = blockchain;
+		const { vAddress, vPubkeys } = rewardsInfo;
+		if (!vAddress || !vPubkeys || !account || !account.pubKey) throw new Error('Node reward addresses/pubkey or account not set');
 
 		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
 		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
 		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
 
+		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
+		const r = identityStore.resolveIdentity(vAddress, vPubkeys);
+		if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
+		const data = r === 'MATCH' ? undefined : identityStore.buildIdentityEntry(vAddress, vPubkeys);
+
+		// CALCULATE REWARD => CREATE & SIGN VALIDATOR REWARD TX => ADD IT TO BLOCK CANDIDATE
 		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
-		const posFeeTx = await Transaction_Builder.createPosReward(posReward, block, rewardAddresses.validator);
-		const signedPosFeeTx = account.signTransaction(posFeeTx);
-		block.Txs.unshift(signedPosFeeTx);
+		const validatorFeeTx = await Transaction_Builder.createValidatorReward(posReward, block, vAddress, data);
+		const signedValidatorFeeTx = account.signTransaction(validatorFeeTx, 'pubKey');
+		block.Txs.unshift(signedValidatorFeeTx);
 		block.powReward = powReward; // Reward for the solver
 	}
 
@@ -150,7 +158,7 @@ export class BlockUtils {
 		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
 		node.info.averageBlockTime = averageBlockTime;
 		const coinBaseReward = solving.calculateNextCoinbaseReward(blockchain.lastBlock);
-		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch();
+		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch(node);
 		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, txs, posTimestamp);
 	}
 	/** @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */

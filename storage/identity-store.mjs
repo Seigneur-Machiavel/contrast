@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
+import { conditionnals } from '../utils/conditionals.mjs';
 import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs';
 
 /** 
@@ -11,96 +12,166 @@ import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs'
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("./bc-store.mjs").BlockchainStorage} BlockchainStorage */
 
+
 const ENTRY_BYTES = serializer.lengths.txId.bytes;
-const MAX_ENTRIES_PER_FILE = 0xFFFFFFFF + 1; // 2^32
+//const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 8; // 2^32 / 8 = 536,870,912 entries per file (8 files per prefix)
+const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 32; // 2^32 / 32 = 134,217,728 entries per file (32 files per prefix) => 8GB per file, we can afford to have bigger files to reduce the number of files and handlers to manage
+const MAX_BYTES_PER_FILE = MAX_ENTRIES_PER_FILE * ENTRY_BYTES; // 24GB / 8 = 3GB per file
+
+/** Build identity entry, ex: [address: 5b][nb_pubkeys: 1b][threshold: 1b][pubkey x nb_pubkeys: 32b each]
+ * @param {string} address @param {string[]} pubKeysHex @param {number} [threshold] number of required signatures for multi-sig */
+export function buildIdentityEntry(address, pubKeysHex, threshold = 1) {
+	const a = ADDRESS.fromString(address);
+	if (!a.isMultiSig && pubKeysHex.length > 1) throw new Error(`IdentityRecordInterpreter.buildEntry: non multi-sig address ${address} cannot have multiple pubkeys`);
+	if (!a.isMultiSig && threshold !== 1) throw new Error(`IdentityRecordInterpreter.buildEntry: non multi-sig address ${address} cannot have threshold different from 1`);
+	if (threshold < 1) throw new Error(`IdentityRecordInterpreter.buildEntry: threshold must be at least 1 for address ${address}`);
+	if (pubKeysHex.length === 0) throw new Error(`IdentityRecordInterpreter.buildEntry: at least one pubkey is required for address ${address}`);
+	if (pubKeysHex.length > 255) throw new Error(`IdentityRecordInterpreter.buildEntry: maximum number of pubkeys is 255 for address ${address}`);
+	if (threshold > 255) throw new Error(`IdentityRecordInterpreter.buildEntry: threshold cannot be higher than 255`);
+	for (const pk of pubKeysHex) if (pk.length !== serializer.lengths.pubKey.str) throw new Error(`IdentityRecordInterpreter.buildEntry: invalid pubkey length for pubkey ${pk} in address ${address}`);
+
+	return serializer.serialize.identityEntry(a, pubKeysHex, threshold); // throws if non conform
+}
+/** Find and parse the identity entry in the data field of a transaction for a given address, throws if non conform or not found
+ * @param {Uint8Array | undefined} data @param {string} address */
+export function findAndParseEntry(data, address, throwIfNot = true) {
+	try {
+		if (!data) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: no data to parse for address ${address}`);
+
+		const a = ADDRESS.fromString(address);
+		const index = Buffer.from(data).indexOf(a.bytes); // use C++ indexOf() to find the address bytes
+		if (index === -1) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: no identity entry found in data for address ${address}`);
+
+		const nbOfPubKeys = data[index + 5];
+		const entryBytesLength = 5 + 1 + 1 + nbOfPubKeys * serializer.lengths.pubKey.bytes;
+		if (index + entryBytesLength > data.length) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: non conform identity entry for address ${address} - not enough data for the declared number of pubkeys`);
+		
+		const entryBytes = data.subarray(index, index + entryBytesLength);
+		const identity = serializer.deserialize.identityEntry(entryBytes);
+		return identity;
+	} catch (error) {
+		if (throwIfNot) throw error;
+		return null; // NOT FOUND (non conform entry)
+	}
+}
 
 export class IdentityStore {
-	/** The identities file handles by prefix @type {Object<string, BinaryHandler>} */
+	static buildEntry = buildIdentityEntry;
+	buildIdentityEntry = buildIdentityEntry;
+	static findAndParseEntry = findAndParseEntry;
+	findAndParseEntry = findAndParseEntry;
+
+	/** The identities file handles by identifier @type {Object<string, BinaryHandler>} */
 	handlers = {};
 	bcStorage;
 	basePath;
-
+	
 	/** @param {BlockchainStorage} blockchainStorage */
 	constructor(blockchainStorage) {
 		this.bcStorage = blockchainStorage;
 		this.basePath = blockchainStorage.storage.PATH.IDENTITIES;
-
-		for (const prefix of ADDRESS.AUTHORIZED_PREFIXES)
-			if (this.handlers[prefix]) continue;
-			else this.#createHandlerForPrefix(prefix);
 	}
 
-	/** Create the new identities entries for the addresses involved in the block (pointers)
-	 * @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
-	digestBlock(block, involvedUTXOs) {
-		const discovery = this.#extractDiscovery(block, involvedUTXOs).discovery;
-		for (const [address, txId] of discovery) this.#register(address, txId);
+	/** Return the pubkeys associated with an address @param {string} address */
+	getIdentity(address) {
+		if (!ADDRESS.checkConformity(address)) return null;
+
+		// RETRIEVE POINTER
+		const pointer = this.#getPointer(address);
+		if (!pointer) return null; // UNKNOWN ADDRESS
+
+		// RETRIEVE TX AND PARSE IDENTITY ENTRY ASSOCIATED WITH THE ADDRESS
+		const { blockIndex, txIndex } = pointer;
+		const tx = this.bcStorage.getTransaction(`${blockIndex}:${txIndex}`);
+		if (!tx) throw new Error(`IdentityStore.get: unable to retrieve transaction at ${blockIndex}:${txIndex} for address ${address}`);
+		if (!tx.data) throw new Error(`IdentityStore.get: no data field in transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
+
+		return findAndParseEntry(tx.data, address);
+	}
+	/** Lookup at the store to resolve identity, helper to know if we needs to include reservation data in transaction.
+	 * - 'UNKNOWN' if the address is not known in the store (no pointer, no entry)
+	 * - 'MISMATCH' if the address is known but the pubkey(s) do not match the entry
+	 * - 'MATCH' if the address is known and the pubkey(s) match the entry
+	 * @param {string} address @param {string[]} pubKeysHex */
+	resolveIdentity(address, pubKeysHex) {
+		const parsedEntry = this.getIdentity(address);
+		if (!parsedEntry) return 'UNKNOWN';
+
+		if (parsedEntry.pubKeysHex.length !== pubKeysHex.length) return 'MISMATCH';
+		for (const pk of parsedEntry.pubKeysHex) if (!pubKeysHex.includes(pk)) return 'MISMATCH';
+		return 'MATCH';
+	}
+	/** Create the new identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
+	digestBlock(block) {
+		const discovery = this.#extractDiscovery(block).discovery;
+		//for (const [address, txId] of discovery) this.#register(address, txId);
+		const orderedDiscovery = this.#sortDiscovery(discovery);
+		for (const [address, txId] of orderedDiscovery) this.#register(address, txId);
 		return discovery;
 	}
-	/** Undo the identities entries for the addresses involved in the block (pointers)
-	 * @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
-	undoBlock(block, involvedUTXOs) {
-		const { discovery, known } = this.#extractDiscovery(block, involvedUTXOs);
+	/** Undo the identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
+	undoBlock(block) {
+		const { discovery, known } = this.#extractDiscovery(block);
 		if (discovery.size > 0) throw new Error(`IdentityStore.undoBlock: corrupted state - found ${discovery.size} unregistered identities in block ${block.index} (should be empty)`);
 
 		for (const [address, blockIndex] of known)
 			if (blockIndex === block.index) this.#unregister(address);
 	}
-	/** Return the pubkeys associated with an address @param {string} address */
-	get(address) {
-		if (!ADDRESS.checkConformity(address)) return null;
-
-		// RETRIEVE POINTER
-		const { blockIndex, txIndex } = this.#getPointer(address) || {};
-		if (blockIndex === undefined || txIndex === undefined) return null; // UNKNOWN ADDRESS
-
-		// RETRIEVE TX
-		const tx = this.bcStorage.getTransaction(`${blockIndex}:${txIndex}`);
-		if (!tx) throw new Error(`IdentityStore.get: unable to retrieve transaction at ${blockIndex}:${txIndex} for address ${address}`);
-
-		// EXTRACT PUBKEYS
-		/** @type {Set<string>} */
-		const pubKeys = new Set();
-		for (const w of tx.witnesses) pubKeys.add(w.split(':')[1]);
-		return pubKeys;
-	}
 	reset() {
+		for (const identifier in this.handlers) this.handlers[identifier].close();
+		this.handlers = {};
+
 		if (fs.existsSync(this.basePath)) fs.rmSync(this.basePath, { recursive: true });
 		fs.mkdirSync(this.basePath);
-
-		for (const prefix of ADDRESS.AUTHORIZED_PREFIXES)
-			if (!this.handlers[prefix]) this.#createHandlerForPrefix(prefix);
 	}
 
 	// INTERNAL METHODS
-	/** Extract discovery information from block
-	 * @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
-	#extractDiscovery(block, involvedUTXOs) {
+	/** Extract discovery information from block @param {BlockFinalized} block */
+	#extractDiscovery(block) {
 		/** Key: address, value: TxId(pointer) @type {Map<string, TxId>} */
 		const discovery = new Map();
 		/** Key: address, value: blockIndex @type {Map<string, number>} */
 		const known = new Map();
 
-		// Starting from txIndex = 2 to skip coinbase & validator Txs
-		for (let txIndex = 2; txIndex < block.Txs.length; txIndex++)
-			for (const input of block.Txs[txIndex].inputs) {
-				const address = involvedUTXOs[input]?.address; // address is in the UTXO
-				if (!address) throw new Error(`Unable to find address to verify for input: ${input}`);
+		// OUTPUTS SCAN (IDENTITIES DISCOVERY)
+		for (let txIndex = 0; txIndex < block.Txs.length; txIndex++) {
+			for (const output of block.Txs[txIndex].outputs) {
+				const address = output.address;
 				if (discovery.has(address) || known.has(address)) continue;
-
+	
 				const pointer = this.#getPointer(address);
-				if (pointer) known.set(address, pointer.blockIndex);
-				else discovery.set(address, `${block.index}:${txIndex}`);
+				if (pointer) { known.set(address, pointer.blockIndex); continue; }
+	
+				discovery.set(address, `${block.index}:${txIndex}`);
 			}
+		}
 		
 		return { discovery, known };
 	}
+	/** @param {Map<string, TxId>} discovery */
+	#sortDiscovery(discovery) {
+		/** Key: identifier, value: array of [address, txId] @type {Object<string, [string, TxId][]>} */
+		const discoveryByIdentifier = {};
+		for (const [address, txId] of discovery) {
+			const identifier = this.#getIdentifier(address);
+			if (!discoveryByIdentifier[identifier]) discoveryByIdentifier[identifier] = [];
+			discoveryByIdentifier[identifier].push([address, txId]);
+		}
+
+		/** @type {Map<string, TxId>} */
+		const orderedDiscovery = new Map();
+		for (const identifier in discoveryByIdentifier)
+			for (const [address, txId] of discoveryByIdentifier[identifier])
+				orderedDiscovery.set(address, txId);
+
+		return orderedDiscovery;
+	}
 	/** Return the pointer for an address @param {string} address */
-	#getPointer(address) {
-		// READ ENTRY
+	#getPointer(address) { // READ ENTRY
 		const a = ADDRESS.fromString(address);
-		const handler = this.handlers[a.prefix];
-		const entryBytes = handler.read(a.uint32 * ENTRY_BYTES, ENTRY_BYTES);
+		const handler = this.#getHandler(address);
+		const offset = (a.uint32 % MAX_ENTRIES_PER_FILE) * ENTRY_BYTES;
+		const entryBytes = handler.read(offset, ENTRY_BYTES);
 		if (entryBytes.every(b => b === 0)) return null; // EMPTY ENTRY
 
 		const blockIndex = serializer.converter.bytes4ToNumber(entryBytes.subarray(0, 4));
@@ -108,32 +179,45 @@ export class IdentityStore {
 		return { blockIndex, txIndex };
 	}
 	/** Write the pointer for an address @param {string} address @param {TxId} txId */
-	#register(address, txId) {
+	#register(address, txId) { // WRITE ENTRY
 		if (!ADDRESS.checkConformity(address)) throw new Error(`IdentityStore.register: invalid address format: ${address}`);
 		const a = ADDRESS.fromString(address);
-		const handler = this.handlers[a.prefix];
+		const handler = this.#getHandler(address);
 		const entryBytes = serializer.serialize.txsIdsArray([txId]);
-		handler.write(entryBytes, a.uint32 * ENTRY_BYTES);
+		const offset = (a.uint32 % MAX_ENTRIES_PER_FILE) * ENTRY_BYTES;
+		handler.write(entryBytes, offset);
+		//console.log(`[REGISTER] Address ${address} - ${a.uint32} - #${offset} - pointer set to ${txId}.`);
 	}
 	/** Write an empty pointer for an address @param {string} address */
-	#unregister(address) {
+	#unregister(address) { // WRITE EMPTY ENTRY
 		if (!ADDRESS.checkConformity(address)) throw new Error(`IdentityStore.unregister: invalid address format: ${address}`);
 		const a = ADDRESS.fromString(address);
-		const handler = this.handlers[a.prefix];
-		handler.write(new Uint8Array(ENTRY_BYTES), a.uint32 * ENTRY_BYTES);
+		const handler = this.#getHandler(address);
+		const offset = (a.uint32 % MAX_ENTRIES_PER_FILE) * ENTRY_BYTES;
+		handler.write(new Uint8Array(ENTRY_BYTES), offset);
+		//console.warn(`[UNREGISTER] Address ${address} - ${a.uint32} - #${offset} - entry cleared.`);
 	}
-	#createHandlerForPrefix(prefix = 'C') {
-		if (this.handlers[prefix]) this.handlers[prefix].close();
+	/** divide in 8 files per prefix (uint32 max value is 4,294,967,295 => 8 files of 536,870,912 entries */
+	#getIdentifier(address = "C123456") {
+		const uint32 = ADDRESS.toUint32(address);
+		return `${address[0]}-${Math.floor(uint32 / MAX_ENTRIES_PER_FILE)}`;
+	}
+	#getHandler(address = "C123456") {
+		const identifier = this.#getIdentifier(address);
+		if (this.handlers[identifier]) return this.handlers[identifier];
 		
-		// OPEN OR CREATE FILE
-		const filePath = path.join(this.basePath, `${prefix}.dat`);
-		this.handlers[prefix] = new BinaryHandler(filePath);
-		if (this.handlers[prefix].size === MAX_ENTRIES_PER_FILE * ENTRY_BYTES) return; // READY
+		// OPEN AND CONTROL FILE
+		const filePath = path.join(this.basePath, `${identifier}.bin`);
+		this.handlers[identifier] = new BinaryHandler(filePath);
 
-		// CREATE EMPTY FILE OF MAX SIZE (VERY FAST)
-		this.handlers[prefix].truncate(MAX_ENTRIES_PER_FILE * ENTRY_BYTES); // 24GB FILE
-		this.handlers[prefix].close();
-		this.handlers[prefix] = new BinaryHandler(filePath);
-		if (this.handlers[prefix].size !== MAX_ENTRIES_PER_FILE * ENTRY_BYTES) throw new Error('IdentityStore.init: unable to create identity store file of correct size.');
+		if (this.handlers[identifier].size !== MAX_BYTES_PER_FILE) {
+			// CREATE EMPTY FILE OF MAX SIZE (VERY FAST)
+			this.handlers[identifier].truncate(MAX_BYTES_PER_FILE); // ~3GB
+			//this.handlers[identifier].close();
+			//this.handlers[identifier] = new BinaryHandler(filePath);
+		}
+		
+		if (this.handlers[identifier].size !== MAX_BYTES_PER_FILE) throw new Error('IdentityStore.init: unable to create identity store file of correct size.');
+		return this.handlers[identifier]; // READY
 	}
 }

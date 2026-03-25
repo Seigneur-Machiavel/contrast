@@ -1,6 +1,8 @@
 import { parentPort } from 'worker_threads';
+import { serializer } from '../../utils/serializer.mjs';
 import { TxValidation } from '../src/tx-validation.mjs';
-//import { ADDRESS } from '../../types/address.mjs';
+
+/** @typedef {import('./validation-worker-wrapper.mjs').WorkerTask} WorkerTask */
 
 // WORKER SIDE
 let abortOperationRequested = false;
@@ -8,20 +10,22 @@ let workerId = undefined;
 parentPort.on('message', async (task) => {
     const id = task.id;
     workerId = workerId || id;
+
 	const response = { id, error: false };
     switch (task.type) {
-		case 'derivationValidation':
+		case 'signatureValidation':
 			abortOperationRequested = false; // Reset for new task
 			try {
-				/** @type {Transaction[]} */
+				/** @type {WorkerTask[]} */
 				const batch = task.batch;
-				for (const tx of batch) {
+				for (const task of batch) { // Validate all witnesses signatures
 					if (abortOperationRequested) return;
-					// Validate all witnesses signatures
-					TxValidation.controlAllWitnessesSignatures(tx);
+					const tx = serializer.deserialize.transaction(task.serialized, task.specialTx);
+					TxValidation.controlAllWitnessesSignatures(tx, task.pubKeysByHashes);
 				}
+				
 			} catch (/**@type {any}*/ error) {
-				console.error(`[VALIDATION_WORKER ${task.id}] derivationValidation error: ${error.message}`);
+				console.error(`[VALIDATION_WORKER ${task.id}] signatureValidation error: ${error.message}`);
 				abortOperationRequested = false;
 				response.error = error.message;
 			}

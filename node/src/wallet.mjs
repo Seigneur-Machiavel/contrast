@@ -53,15 +53,17 @@ export class Account {
 	get address() { return `${this.prefix}${this.b58}`; }
 	get nbHistory() { return this.historyIds.length; }
 
-    /** @param {Transaction} transaction */
-    signTransaction(transaction) {
+    /** @param {Transaction} transaction @param {'hash' | 'pubKey'} [pubKeyMode] default: 'hash' - how to include the public key in the witness (as a hash or full pubKey) */
+    signTransaction(transaction, pubKeyMode = 'hash') {
         if (typeof this.#privKey !== 'string') throw new Error('Invalid private key');
 		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
 
+		const pubKeyHash = HashFunctions.xxHash32(this.pubKey, 8);
 		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
         const { signatureHex } = AsymetricFunctions.signMessage(toSign, this.#privKey);
-        if (transaction.witnesses.includes(`${signatureHex}:${this.pubKey}`)) throw new Error('Signature already included');
-        transaction.witnesses.push(`${signatureHex}:${this.pubKey}`);
+        if (transaction.witnesses.includes(`${signatureHex}:${pubKeyHash}`)) throw new Error('Signature already included');
+        if (transaction.witnesses.includes(`${signatureHex}:${this.pubKey}`)) throw new Error('Signature already included with full pubKey');
+		transaction.witnesses.push(`${signatureHex}:${pubKeyMode === 'hash' ? pubKeyHash : this.pubKey}`);
         return transaction;
     }
     /** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */

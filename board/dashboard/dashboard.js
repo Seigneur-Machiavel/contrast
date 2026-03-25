@@ -24,7 +24,7 @@ const ACTIONS = {
     REVALIDATE: 'revalidate',
     RESET_WALLET: 'reset_wallet',
     FORCE_RESTART: 'force_restart',
-    SET_MINER_ADDRESS: 'set_solver_address',
+    SET_SOLVER_ADDRESS: 'set_solver_address',
     SET_VALIDATOR_ADDRESS: 'set_validator_address'
 };
 
