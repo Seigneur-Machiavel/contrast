@@ -42,7 +42,10 @@ export async function createContrastNode(options = { bootstraps: [] }) {
 	if (options.autoStart === undefined) options.autoStart = true; // set default autoStart to true
 	
 	const p2pNode = asPublic ? await HiveP2P.createPublicNode(options) : await HiveP2P.createNode(options);
-	return new ContrastNode(p2pNode, options.storage, verb, options.controllerPort, options.chachaSeedHex);
+	const blockchain = new Blockchain(options.storage);
+	await blockchain.initialize();
+	
+	return new ContrastNode(p2pNode, blockchain, verb, options.controllerPort, options.chachaSeedHex);
 }
 
 export class ContrastNode {
@@ -72,14 +75,14 @@ export class ContrastNode {
 
 	/** Node instance should be created with "createContrastNode" method, not using "new" constructor.
 	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance.
-	 * @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence.
+	 * @param {Blockchain} blockchain - Blockchain instance for the node.
 	 * @param {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable)
 	 * @param {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation */
-	constructor(p2pNode, storage, verb = 2, controllerPort, chachaSeedHex) {
-		this.blockchain = new Blockchain(storage);
+	constructor(p2pNode, blockchain, verb = 2, controllerPort, chachaSeedHex) {
+		this.blockchain = blockchain;
+		this.mainStorage = blockchain.storage;
 		this.memPool = new MemPool(this.blockchain);
 		this.taskQueue = new TaskQueue();
-		this.mainStorage = storage;
 		this.verb = verb;
 		this.p2p = p2pNode;
 		this.solver = new Solver(this);
@@ -213,7 +216,7 @@ export class ContrastNode {
 			if (typeof address !== 'string') throw new Error('Invalid address data type');
 			if (!ADDRESS.checkConformity(address)) throw new Error('Invalid address format');
 			
-			const ledger = this.blockchain.ledgersStorage.getAddressLedger(address);
+			const ledger = await this.blockchain.ledgersStorage.getAddressLedger(address);
 			if (!ledger) throw new Error('Ledger not found for address: ' + address);
 			// CLEAR REDUNDANT DATA & SEND RESPONSE
 			delete ledger.historyBytes;

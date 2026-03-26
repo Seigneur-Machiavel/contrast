@@ -1,15 +1,17 @@
 import { newWorker } from './unified-worker-initializer.mjs';
 
+/** @typedef {import('../../types/transaction.mjs').Transaction} Transaction */
+
 export class WorkerTask {
-	serialized;
 	pubKeysByHashes;
 	specialTx;
+	tx;
 
-	/** @param {Uint8Array} serialized @param {Record<string, string>} [pubKeysByHashes] @param {'validator' | 'tx' | undefined} [mode] */
-	constructor(serialized, pubKeysByHashes, mode = 'tx') {
-		this.serialized = serialized;
+	/** @param {Transaction} tx @param {Record<string, string>} [pubKeysByHashes] @param {'validator' | 'tx' | undefined} [mode] */
+	constructor(tx, pubKeysByHashes, mode = 'tx') {
 		this.pubKeysByHashes = pubKeysByHashes;
 		this.specialTx = mode;
+		this.tx = tx;
 	}
 }
 

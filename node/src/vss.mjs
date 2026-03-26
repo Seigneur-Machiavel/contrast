@@ -51,7 +51,7 @@ export class Vss {
 		for (const anchor of newStakeAnchors) this.vssStorage.addStake(anchor);
     }
 	/** @param {BlockFinalized} block */
-	undoBlockStakes(block) {
+	revertBlockStakes(block) {
 		const newStakeAnchors = this.#extractBlockStakes(block);
 		if (newStakeAnchors.length) this.vssStorage.removeStakes(newStakeAnchors);
 	}
@@ -106,12 +106,12 @@ export class Vss {
 		if (!utxo?.address || utxo.spent) throw new Error(`Stake UTXO is missing or spent for anchor: ${anchor}`);
 
 		const { height, txIndex, vout } = serializer.parseAnchor(anchor);
-		const tx = this.blockchain.blockStorage.getTransaction(`${height}:${txIndex}`);
-		if (!tx) throw new Error(`Stake transaction not found for anchor: ${anchor}`);
-		if (!tx.data || tx.data.length % 32 !== 0) throw new Error(`Invalid stake transaction data for anchor: ${anchor}`);
+		const data = this.blockchain.blockStorage.getTransactionData(height, txIndex);
+		if (!data || data.length % 32 !== 0) throw new Error(`Invalid stake transaction data for anchor: ${anchor}`);
 
-		/** @type {Set<string>} */	const authorizedPubkeys = new Set();
-		const hex = serializer.converter.bytesToHex(tx.data);
+		/** @type {Set<string>} */
+		const authorizedPubkeys = new Set();
+		const hex = serializer.converter.bytesToHex(data);
 		for (let i = 0; i < hex.length; i += 64) authorizedPubkeys.add(hex.slice(i, i + 64));
 		return { authorizedPubkeys, owner: utxo.address };
 	}

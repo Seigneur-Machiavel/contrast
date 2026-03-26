@@ -14,8 +14,7 @@ import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs'
 
 
 const ENTRY_BYTES = serializer.lengths.txId.bytes;
-//const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 8; // 2^32 / 8 = 536,870,912 entries per file (8 files per prefix)
-const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 32; // 2^32 / 32 = 134,217,728 entries per file (32 files per prefix) => 8GB per file, we can afford to have bigger files to reduce the number of files and handlers to manage
+const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 8; // 2^32 / 8 = 536,870,912 entries per file (8 files per prefix)
 const MAX_BYTES_PER_FILE = MAX_ENTRIES_PER_FILE * ENTRY_BYTES; // 24GB / 8 = 3GB per file
 
 /** Build identity entry, ex: [address: 5b][nb_pubkeys: 1b][threshold: 1b][pubkey x nb_pubkeys: 32b each]
@@ -82,11 +81,10 @@ export class IdentityStore {
 
 		// RETRIEVE TX AND PARSE IDENTITY ENTRY ASSOCIATED WITH THE ADDRESS
 		const { blockIndex, txIndex } = pointer;
-		const tx = this.bcStorage.getTransaction(`${blockIndex}:${txIndex}`);
-		if (!tx) throw new Error(`IdentityStore.get: unable to retrieve transaction at ${blockIndex}:${txIndex} for address ${address}`);
-		if (!tx.data) throw new Error(`IdentityStore.get: no data field in transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
+		const data = this.bcStorage.getTransactionData(blockIndex, txIndex);
+		if (!data) throw new Error(`IdentityStore.get: no data found for transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
 
-		return findAndParseEntry(tx.data, address);
+		return findAndParseEntry(data, address);
 	}
 	/** Lookup at the store to resolve identity, helper to know if we needs to include reservation data in transaction.
 	 * - 'UNKNOWN' if the address is not known in the store (no pointer, no entry)
@@ -104,15 +102,13 @@ export class IdentityStore {
 	/** Create the new identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
 	digestBlock(block) {
 		const discovery = this.#extractDiscovery(block).discovery;
-		//for (const [address, txId] of discovery) this.#register(address, txId);
-		const orderedDiscovery = this.#sortDiscovery(discovery);
-		for (const [address, txId] of orderedDiscovery) this.#register(address, txId);
+		for (const [address, txId] of discovery) this.#register(address, txId);
 		return discovery;
 	}
 	/** Undo the identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
-	undoBlock(block) {
+	revertBlock(block) {
 		const { discovery, known } = this.#extractDiscovery(block);
-		if (discovery.size > 0) throw new Error(`IdentityStore.undoBlock: corrupted state - found ${discovery.size} unregistered identities in block ${block.index} (should be empty)`);
+		if (discovery.size > 0) throw new Error(`IdentityStore.revertBlock: corrupted state - found ${discovery.size} unregistered identities in block ${block.index} (should be empty)`);
 
 		for (const [address, blockIndex] of known)
 			if (blockIndex === block.index) this.#unregister(address);
@@ -148,28 +144,10 @@ export class IdentityStore {
 		
 		return { discovery, known };
 	}
-	/** @param {Map<string, TxId>} discovery */
-	#sortDiscovery(discovery) {
-		/** Key: identifier, value: array of [address, txId] @type {Object<string, [string, TxId][]>} */
-		const discoveryByIdentifier = {};
-		for (const [address, txId] of discovery) {
-			const identifier = this.#getIdentifier(address);
-			if (!discoveryByIdentifier[identifier]) discoveryByIdentifier[identifier] = [];
-			discoveryByIdentifier[identifier].push([address, txId]);
-		}
-
-		/** @type {Map<string, TxId>} */
-		const orderedDiscovery = new Map();
-		for (const identifier in discoveryByIdentifier)
-			for (const [address, txId] of discoveryByIdentifier[identifier])
-				orderedDiscovery.set(address, txId);
-
-		return orderedDiscovery;
-	}
 	/** Return the pointer for an address @param {string} address */
 	#getPointer(address) { // READ ENTRY
 		const a = ADDRESS.fromString(address);
-		const handler = this.#getHandler(address);
+		const handler = this.#getHandler(a);
 		const offset = (a.uint32 % MAX_ENTRIES_PER_FILE) * ENTRY_BYTES;
 		const entryBytes = handler.read(offset, ENTRY_BYTES);
 		if (entryBytes.every(b => b === 0)) return null; // EMPTY ENTRY
@@ -182,7 +160,7 @@ export class IdentityStore {
 	#register(address, txId) { // WRITE ENTRY
 		if (!ADDRESS.checkConformity(address)) throw new Error(`IdentityStore.register: invalid address format: ${address}`);
 		const a = ADDRESS.fromString(address);
-		const handler = this.#getHandler(address);
+		const handler = this.#getHandler(a);
 		const entryBytes = serializer.serialize.txsIdsArray([txId]);
 		const offset = (a.uint32 % MAX_ENTRIES_PER_FILE) * ENTRY_BYTES;
 		handler.write(entryBytes, offset);
@@ -192,18 +170,15 @@ export class IdentityStore {
 	#unregister(address) { // WRITE EMPTY ENTRY
 		if (!ADDRESS.checkConformity(address)) throw new Error(`IdentityStore.unregister: invalid address format: ${address}`);
 		const a = ADDRESS.fromString(address);
-		const handler = this.#getHandler(address);
+		const handler = this.#getHandler(a);
 		const offset = (a.uint32 % MAX_ENTRIES_PER_FILE) * ENTRY_BYTES;
 		handler.write(new Uint8Array(ENTRY_BYTES), offset);
 		//console.warn(`[UNREGISTER] Address ${address} - ${a.uint32} - #${offset} - entry cleared.`);
 	}
-	/** divide in 8 files per prefix (uint32 max value is 4,294,967,295 => 8 files of 536,870,912 entries */
-	#getIdentifier(address = "C123456") {
-		const uint32 = ADDRESS.toUint32(address);
-		return `${address[0]}-${Math.floor(uint32 / MAX_ENTRIES_PER_FILE)}`;
-	}
-	#getHandler(address = "C123456") {
-		const identifier = this.#getIdentifier(address);
+	/** @param {ADDRESS} a */
+	#getHandler(a) {
+		// Divide in 8 files per prefix (uint32 max value is 4,294,967,295 => 8 files of 536,870,912 entries each)
+		const identifier = `${a.prefix}-${Math.floor(a.uint32 / MAX_ENTRIES_PER_FILE)}`;
 		if (this.handlers[identifier]) return this.handlers[identifier];
 		
 		// OPEN AND CONTROL FILE
@@ -213,8 +188,7 @@ export class IdentityStore {
 		if (this.handlers[identifier].size !== MAX_BYTES_PER_FILE) {
 			// CREATE EMPTY FILE OF MAX SIZE (VERY FAST)
 			this.handlers[identifier].truncate(MAX_BYTES_PER_FILE); // ~3GB
-			//this.handlers[identifier].close();
-			//this.handlers[identifier] = new BinaryHandler(filePath);
+			this.handlers[identifier].preallocate(MAX_BYTES_PER_FILE); // pre-touch pages to force physical allocation and avoid slow writes later on when the OS needs to allocate pages on the fly (which can cause huge latency spikes for the write that triggers it)
 		}
 		
 		if (this.handlers[identifier].size !== MAX_BYTES_PER_FILE) throw new Error('IdentityStore.init: unable to create identity store file of correct size.');

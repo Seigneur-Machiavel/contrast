@@ -63,7 +63,7 @@ for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 // TESTS
 // -------------------------------------------------------------------------------------
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
-const onBlockConfirmed = (block) => {
+const onBlockConfirmed = async (block) => {
 	//const c = clientNodes[0]; // Simple request test => Success
 	//c.p2p.messager.sendUnicast(bootstrapNode.p2p.id, 'C1YyJoc', 'address_ledger_request');
 	if (!transactionTest) return;
@@ -71,7 +71,7 @@ const onBlockConfirmed = (block) => {
 	// TEST: create transaction
 	const a = bootstrapWallet.accounts[0];
 	const receipient = bootstrapWallet.accounts[1].address;
-	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
+	const ledger = await bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
 	if (!ledger.ledgerUtxos) return;
 
 	a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);

@@ -62,13 +62,13 @@ for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 // TESTS
 // -------------------------------------------------------------------------------------
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
-const onBlockConfirmed = (block) => {
+const onBlockConfirmed = async (block) => {
 	if (!transactionTest) return;
 
 	// TEST: create transaction
 	const a = bootstrapWallet.accounts[0];
 	const receipient = bootstrapWallet.accounts[1].address;
-	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
+	const ledger = await bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
 	if (!ledger.ledgerUtxos) return;
 
 	a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);

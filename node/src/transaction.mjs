@@ -25,12 +25,6 @@ export class Transaction_Builder {
         const anchors = utxos.map(utxo => utxo.anchor);
         if (conditionnals.arrayIncludeDuplicates(anchors)) throw new Error('Duplicate UTXO anchors in UTXOs');
     }
-    static createLighthouse() { // DEPRECATED
-        const lighthouseOutput = new TxOutput(0, 'lighthouse', ADDRESS.SAMPLE);
-        const inputs = ['00000000'];
-        const outputs = [lighthouseOutput];
-		return new Transaction(inputs, outputs);
-    }
     /** @param {string} nonceHex @param {string} address @param {number} amount @param {Uint8Array | undefined} [data] */
     static async createSolverReward(nonceHex, address, amount, data) {
         if (typeof nonceHex !== 'string') throw new Error('Invalid nonceHex');
@@ -162,28 +156,6 @@ export class Transaction_Builder {
 		const witnessesWeight = nbOfSigners * serializer.lengths.witness.bytes;
 		return headerWeight + inputsWeight + outputsWeight + witnessesWeight + dataWeight;
 	}
-	/** @param {number} estWeight @param {UTXO[]} UTXOs @param {number} totalSpent @param {number} feePerByte @param {string} senderAddress */
-    static #estimateFeeToOptimizeUtxos(estWeight, UTXOs, totalSpent, feePerByte, senderAddress) { // DEPRECATED
-        const { fee } 		= Transaction_Builder.calculateFeeAndChange(UTXOs, totalSpent, estWeight, feePerByte);
-        const utxos 		= Transaction_Builder.#extractNecessaryUtxosForAmount(UTXOs, totalSpent + fee);
-        const { fee: finalFee, change } = Transaction_Builder.calculateFeeAndChange(utxos, totalSpent, estWeight, feePerByte);
-        const changeOutput 	= change > BLOCKCHAIN_SETTINGS.unspendableUtxoAmount ? new TxOutput(change, 'sig', senderAddress) : undefined;
-        return { utxos, changeOutput, finalFee };
-    }
-    /** @param {UTXO[]} utxos @param {TxOutput[]} outputs @param {number} [nbOfSigners] default: 1 */
-    static simulateTxToEstimateWeight(utxos, outputs, nbOfSigners = 1) { // DEPRECATED
-        const change = 26_152_659_654_321;
-        const changeOutput = new TxOutput(change, 'sig', ADDRESS.SAMPLE);
-        const outputsClone = JSON.parse(JSON.stringify(outputs));
-        outputsClone.push(changeOutput);
-
-        const inputs = utxos.map(utxo => utxo.anchor);
-        const witnesses = []; // add fake witness (signature:pubKeyHash) for each signer to simulate the weight of a real transaction with signatures
-        for (let i = 0; i < nbOfSigners; i++) witnesses.push("6a6e432aaba4c7f241f9dcc9ea1c7df94e2533b53974182b86d3acd83029667cc940ce6eea166c97953789d169af562a54d6c96028a5ca7dba95047a15bfd20c:846a6a7c");
-		
-		const tx = new Transaction(inputs, outputsClone, witnesses);
-		return serializer.serialize.transaction(tx).length;
-    }
     /** @param {{recipientAddress: string, amount: number}[]} transfers @param {string} rule */
     static buildOutputsFrom(transfers = [{ recipientAddress: 'recipientAddress', amount: 1 }], rule = 'sig') {
         const outputs = [];
@@ -198,22 +170,6 @@ export class Transaction_Builder {
 
         return { outputs, totalSpent };
     }
-    /** @param {UTXO[]} utxos @param {number} totalSpent @param {number} estimatedWeight @param {number} feePerByte */
-    static calculateFeeAndChange(utxos, totalSpent, estimatedWeight, feePerByte) {
-        if (feePerByte < BLOCKCHAIN_SETTINGS.minTransactionFeePerByte) throw new Error(`Invalid feePerByte: ${feePerByte}`);
-        const inAmount = utxos.reduce((a, b) => a + b.amount, 0);
-        const remainingAmount = inAmount - totalSpent;
-        if (remainingAmount < 0) throw new Error(`Not enough funds: ${inAmount} - ${totalSpent} = ${remainingAmount}`);
-
-        const fee = Math.ceil(feePerByte * estimatedWeight);
-        if (fee % 1 !== 0) throw new Error(`Invalid fee: not integer (${fee})`);
-        if (fee < 0) throw new Error(`Negative transaction fee (${fee})`);
-
-        const change = remainingAmount - fee;
-		if (change < 0) throw new Error(`Not enough funds to cover the fee: ${remainingAmount} - ${fee} = ${change}`);
-        if (change === 0) return { fee: remainingAmount, change: 0 };
-        else return { fee, change };
-    }
     /** @param {Transaction} tx */
     static isSolverOrValidatorTx(tx) {
         if (tx.inputs.length !== 1 || tx.outputs.length !== 1) return;
@@ -226,11 +182,6 @@ export class Transaction_Builder {
 		const expectedWitnessLen = serializer.lengths.signature.str + 1 + serializer.lengths.pubKey.str;
 		if (tx.witnesses[0].length !== expectedWitnessLen) return; // VALIDATOR witness should be signature:pubKey
 		return 'validator';
-    }
-    /** @param {Transaction} transaction */
-    static isIncriptionTx(transaction) {
-        if (transaction.outputs.length !== 1) return false;
-        return typeof transaction.outputs[0] === 'string';
     }
 	/** @param {Transaction} tx */
 	static extractInvolvedAnchors(tx, abortOnDoubles = true) {

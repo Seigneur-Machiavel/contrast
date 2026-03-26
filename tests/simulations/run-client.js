@@ -37,7 +37,7 @@ await clientNode.start(clientWallet);
 // STAKER / SPAMMER BEHAVIOR
 let stakeHeight = -1;
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
-const tryStaking = (block) => {
+const tryStaking = async (block) => {
 	if (block.index === stakeHeight) return; // already processed
 	stakeHeight = block.index;
 	if (!clientNode.account) return; // account not ready
@@ -45,7 +45,7 @@ const tryStaking = (block) => {
 
 	// UPDATE ACCOUNT BALANCE & UTXOS
 	const r = clientNode.account.address;
-	const ledger = clientNode.blockchain.ledgersStorage.getAddressLedger(r);
+	const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(r);
 	if (!ledger.ledgerUtxos) return; // no UTXO
 	
 	clientNode.account.setBalanceAndUTXOs(clientNode.account.balance, ledger.ledgerUtxos);
@@ -68,7 +68,7 @@ const tryStaking = (block) => {
 
 let spamHeight = -1;
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
-const trySpamming = (block) => {
+const trySpamming = async (block) => {
     if (block.index === spamHeight) return;
     spamHeight = block.index;
     if (!clientNode.account) return; // account not ready
@@ -76,7 +76,7 @@ const trySpamming = (block) => {
 
 	const { address } = clientNode.account;
     if (block.index % 2 === 0) { // EVEN BLOCKS: one multi-output tx
-        const ledger = clientNode.blockchain.ledgersStorage.getAddressLedger(address);
+        const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(address);
         if (!ledger?.ledgerUtxos) return;
         clientNode.account.setBalanceAndUTXOs(clientNode.account.balance, ledger.ledgerUtxos);
 
@@ -113,7 +113,7 @@ const trySpamming = (block) => {
 	let txs = [];
 	for (let i = 2; i < nbOfSenders; i++) {
 		const sender = clientWallet.accounts[i];
-		const ledger = clientNode.blockchain.ledgersStorage.getAddressLedger(sender.address);
+		const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(sender.address);
 		if (!ledger?.ledgerUtxos) continue;
 		sender.setBalanceAndUTXOs(sender.balance, ledger.ledgerUtxos);
 

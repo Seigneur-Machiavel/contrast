@@ -27,8 +27,8 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 // TEST CONFIG
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
-const nbReceipients = nor || 600 || 4600;	// Number of receipient addresses in multi output transaction
-const nbOfSenders = nos || 600 || 800; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nbReceipients = nor || 4600;	// Number of receipient addresses in multi output transaction
+const nbOfSenders = nos || 800; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 
@@ -49,13 +49,13 @@ await bootstrapNode.start(bootstrapWallet);
 // TESTS
 // -------------------------------------------------------------------------------------
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
-const onBlockConfirmed = (block) => {
+const onBlockConfirmed = async (block) => {
 	const { identityStore } = bootstrapNode.blockchain;
 	
 	// TEST: SEND TRANSACTION WITH MULTI OUTPUTS
 	if (block.index % 2 === 1) { // ONLY ON ODD BLOCKS
 		const account = bootstrapWallet.accounts[0];
-		const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(account.address);
+		const ledger = await bootstrapNode.blockchain.ledgersStorage.getAddressLedger(account.address);
 		if (!ledger || !ledger.ledgerUtxos) throw new Error('Ledger or ledgerUtxos not found for the account');
 		if (ledger.totalReceived - ledger.totalSent !== ledger.balance) throw new Error('Inconsistent balance calculation!');
 
@@ -101,8 +101,8 @@ const onBlockConfirmed = (block) => {
 	let txs = [];
 	for (let i = 2; i < nbOfSenders; i++) {
 		const sender = bootstrapWallet.accounts[i];
-		const senderLedgerUtxos = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(sender.address).ledgerUtxos;
-		if (senderLedgerUtxos) sender.ledgerUtxos = senderLedgerUtxos;
+		const ledger = await bootstrapNode.blockchain.ledgersStorage.getAddressLedger(sender.address);
+		if (ledger && ledger.ledgerUtxos) sender.ledgerUtxos = ledger.ledgerUtxos;
 		const receipient = bootstrapWallet.accounts[0].address; // send back to main account
 		const signedTx2 = Transaction_Builder.createAndSignTransaction(sender, 100, receipient, 1)?.signedTx;
 		if (signedTx2) txs.push(signedTx2);

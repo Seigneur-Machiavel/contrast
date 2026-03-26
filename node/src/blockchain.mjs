@@ -25,6 +25,7 @@ export class Blockchain {
 	get currentHeight() { return this.blockStorage.lastBlockIndex; }
     logger = new MiniLogger('blockchain');
 	vss;
+	storage;
 	blockStorage;
 	identityStore;
 	ledgersStorage;
@@ -33,13 +34,16 @@ export class Blockchain {
 	/** @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
 	constructor(storage) {
 		if (!storage) throw new Error('Blockchain constructor: storage is required.');
+		this.storage = storage;
 		this.blockStorage = new BlockchainStorage(storage);
 		this.identityStore = new IdentityStore(this.blockStorage);
 		this.ledgersStorage = new LedgersStorage(storage);
 		this.vss = new Vss(this, storage);
+	}
+	
+	async initialize() {
 		if (this.currentHeight === -1) return; // FRESH CHAIN
-
-		this.#ensureConsistency();
+		await this.#ensureConsistency();
 		this.lastBlock = this.getBlock() || null;
 	}
 
@@ -69,9 +73,14 @@ export class Blockchain {
 			if (!hashConfInfo?.conform) throw new Error('Failed to validate block');
 			this.vss.digestBlockStakes(block, 'control'); // throw if invalid stakes
 	
-			// APPLY BLOCK
+			// APPLY BLOCK (SYNC)
 			node.updateState(`${statePrefix}applying finalized block #${block.index}`);
-			this.addBlock(block, involvedAnchors, involvedUTXOs);
+			this.#addBlock(block, involvedAnchors, involvedUTXOs);
+			
+			// APPLY LEDGERS CHANGES (ASYNC)
+			//await this.ledgersStorage.digestBlock(block, involvedUTXOs);
+			this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY');
+			this.ledgersStorage.cache.clear();
 			node.memPool.removeFinalizedBlocksTransactions(block);
 			
 			const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
@@ -90,7 +99,7 @@ export class Blockchain {
 		}
 
 		// EXEC CALLBACK
-		try { node.callbacks.onBlockConfirmed?.(block);
+		try { await node.callbacks.onBlockConfirmed?.(block);
 		} catch (/** @type {any} */ error) { this.logger.log(`onBlockConfirmed callback error: ${error.message}`, (m, c) => console.error(m, c)); }
 
 		// CREATE AND SHARE NEW CANDIDATE AFTER A SHORT DELAY
@@ -106,16 +115,15 @@ export class Blockchain {
 	 * @param {BlockFinalized} block - The block to add.
 	 * @param {TxAnchor[]} involvedAnchors - The list of UTXO anchors involved in the block.
 	 * @param {Object<string, UTXO>} involvedUTXOs - The list of UTXO anchors involved in the block */
-    addBlock(block, involvedAnchors, involvedUTXOs) {
-		// SAVE IN ORDER: BLOCK_IDX, BLOCK_DATA, UTXO CHANGES, IDENTITIES, LEDGERS
-		this.blockStorage.addBlock(block, involvedAnchors);
+    #addBlock(block, involvedAnchors, involvedUTXOs) {
+		// SAVE IN ORDER: BLOCKCHAIN > IDENTITIES > LEDGERS > VSS (STAKE CHANGES SHOULD BE LAST TO BE SURE THEY ARE TAKEN INTO ACCOUNT IN CASE OF FAILURE DURING THE PROCESS)
+		this.blockStorage.store(block, involvedAnchors);
 		// CRASH DURING SAVING OPERATION (TEST PURPOSES)
 		//if (block.index === 5) throw new Error('Test error on block 5 saving');
 		this.identityStore.digestBlock(block);
-		this.ledgersStorage.digestBlock(block, involvedUTXOs);
 		this.vss.digestBlockStakes(block, 'persist');
+
 		this.lastBlock = block;
-		this.ledgersStorage.cache.clear();
 		//this.logger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
     }
 	getBlock(height = this.currentHeight) {
@@ -130,7 +138,7 @@ export class Blockchain {
 	getUtxos(anchors, breakOnSpent = false) {
 		return this.blockStorage.getUtxos(anchors, breakOnSpent);
 	}
-	undoBlock(resetOnFailure = false) {
+	async undoBlock(resetOnFailure = false) {
 		const block = this.lastBlock;
 		if (!block)
 			if (resetOnFailure) return this.reset('Blockchain.undoBlock: no block to undo.');
@@ -146,12 +154,13 @@ export class Blockchain {
 			if (resetOnFailure) return this.reset('Blockchain.undoBlock: unable to retrieve involved UTXOs.');
 			else throw new Error('Blockchain.undoBlock: unable to retrieve all involved UTXOs for the last block.');
 
-		this.ledgersStorage.undoBlock(block, involvedUTXOs);
-		this.identityStore.undoBlock(block);
-		this.blockStorage.undoBlock(involvedAnchors);
-		this.vss.undoBlockStakes(block);
+		// await this.ledgersStorage.revertBlock(block, involvedUTXOs, 'REVERT');
+		this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'REVERT');
+		this.vss.revertBlockStakes(block);
+		this.identityStore.revertBlock(block);
+		this.blockStorage.unstore(involvedAnchors);
+		
 		this.ledgersStorage.cache.clear();
-
 		this.logger.log(`Block undone: #${block.index}, hash=${block.hash.slice(0, 8)}..., currentHeight=#${this.currentHeight}`, (m, c) => console.info(m, c));
 		if (this.currentHeight === -1) this.reset('Blockchain.undoBlock: no more blocks after undo.');
 		else this.lastBlock = this.getBlock() || null;
@@ -168,7 +177,7 @@ export class Blockchain {
 
 	// INTERNAL METHODS
 	/** Ensure the blockchain storage consistency by checking the last block */
-	#ensureConsistency() {
+	async #ensureConsistency() {
 		// ZERO: if no blocks, just reset everything to be sure
 		if (this.currentHeight === -1) { this.reset('#ensureConsistency: currentHeight === -1'); return; }
 
@@ -189,7 +198,7 @@ export class Blockchain {
 		} catch (/** @type {any} */ error) { this.logger.log(`Error while retrieving last block or its involved anchors during consistency check: ${error.message}`, (m, c) => console.error(m, c)); }
 
 		if (!block || !isLastBlockConsistent) {
-			this.blockStorage.undoBlock(involvedAnchors);
+			this.blockStorage.unstore(involvedAnchors);
 			this.logger.log('Blockchain file repaired', (m, c) => console.warn(m, c));
 			return;
 		}
@@ -202,21 +211,22 @@ export class Blockchain {
 		if (discovery.size === 0) this.logger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
 		else this.logger.log(`Blockchain identities check: ${discovery.size} new identities patch`, (m, c) => console.info(m, c));
 		
-		// THIRD: ENSURE LEDGERS CONSISTENCY
-		const involvedUTXOs = this.getUtxos(involvedAnchors, false);
-		if (!involvedUTXOs) throw new Error('Blockchain consistency check failed: unable to retrieve all involved UTXOs for the last block.');
-		
-		const applyCount = this.ledgersStorage.digestBlock(block, involvedUTXOs, true);
-		if (applyCount === 0) this.logger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
-		else this.logger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
-		this.ledgersStorage.cache.clear();
-
-		// FOURTH: ENSURE VSS CONSISTENCY
+		// THIRD: ENSURE VSS CONSISTENCY
 		if (this.vss.hasBlockStakes(block)) this.logger.log('VSS consistency check: no change', (m, c) => console.info(m, c));
 		else {
-			this.vss.undoBlockStakes(block); // ensure no stakes from block
+			this.vss.revertBlockStakes(block); // ensure no stakes from block
 			this.vss.digestBlockStakes(block, 'persist'); // re-add stakes from block
 			this.logger.log('VSS consistency check: stakes repaired', (m, c) => console.warn(m, c));
 		}
+
+		// FOURTH: ENSURE LEDGERS CONSISTENCY
+		const involvedUTXOs = this.getUtxos(involvedAnchors, false);
+		if (!involvedUTXOs) throw new Error('Blockchain consistency check failed: unable to retrieve all involved UTXOs for the last block.');
+		
+		//const applyCount = await this.ledgersStorage.digestBlock(block, involvedUTXOs, 'APPLY, true);
+		const applyCount = this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY', true);
+		if (applyCount === 0) this.logger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
+		else this.logger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
+		this.ledgersStorage.cache.clear();
 	}
 }

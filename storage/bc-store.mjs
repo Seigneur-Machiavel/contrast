@@ -17,6 +17,8 @@ import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
  * @typedef {import("../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
+/** @type {Object<number, 'solver' | 'validator'>} */
+const specialMode = { 0: 'solver', 1: 'validator' }; // Finalized block only: correspond to index of tx in the block.
 const ENTRY_BYTES = serializer.lengths.indexEntry.bytes;
 
 /** New version of BlockchainStorage.
@@ -45,7 +47,7 @@ export class BlockchainStorage {
 	
 	// API METHODS
 	/** @param {BlockFinalized} block @param {TxAnchor[]} involvedAnchors */
-    addBlock(block, involvedAnchors) {
+    store(block, involvedAnchors) {
 		if (block.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${block.index}`);
 
 		// PREPARE DATA TO WRITE
@@ -120,6 +122,13 @@ export class BlockchainStorage {
 		const extracted = this.#extractTransactionsFromBlockBytes(blockBytes, [txIndex]);
 		return extracted?.txs[txIndex] || null;
 	}
+	/** @param {number} height @param {number} txIndex */
+	getTransactionData(height, txIndex) {
+		const { blockBytes } = this.getBlockBytes(height, false) || {};
+		if (!blockBytes) return null;
+
+		return this.#extractTransactionDataFromBlockBytes(blockBytes, txIndex);
+	}
 	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) */
 	getUtxos(anchors, breakOnSpent = false) {
 		/** Key: Anchor, value: UTXO @type {Object<string, UTXO>} */
@@ -145,6 +154,7 @@ export class BlockchainStorage {
 					
 					let utxoSpent = true;
 					searchPattern.set(serializer.voutIdEncoder.encode(voutIndex), 2);
+
 					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
 					if (stateOffset !== -1) utxoSpent = utxosStatesBytes[stateOffset + 4] === 1;
 					if (utxoSpent && breakOnSpent) return null; // UTXO is spent
@@ -182,7 +192,7 @@ export class BlockchainStorage {
 		return { heights, timestamps };
 	}
 	/** Undo the last block added to the blockchain @param {TxAnchor[]} [involvedAnchors] If missing: will erase block without restoring UTXOs */
-    undoBlock(involvedAnchors) {
+    unstore(involvedAnchors) {
         const offset = this.#getOffsetOfBlockData(this.lastBlockIndex);
 		if (!offset) throw new Error('Blockchain.undoBlock: unable to retrieve last block offset.');
 
@@ -300,15 +310,43 @@ export class BlockchainStorage {
 	}
 	/** @param {Uint8Array} blockBytes @param {number[]} txIndexes */
 	#extractTransactionsFromBlockBytes(blockBytes, txIndexes) {
-		/** key: txIndex, value: transaction @type {Object<number, Transaction>} */
-		const txs = {};
-		/** @type {Object<number, 'solver' | 'validator'>} */
-		const specialMode = { 0: 'solver', 1: 'validator' }; // finalized block only
-		const nbOfTxs = this.converter.bytes2ToNumber(blockBytes.subarray(0, 2));
 		const timestampOffset = serializer.dataPositions.timestampInFinalizedBlock;
 		const timestamp = this.converter.bytes6ToNumber(blockBytes.subarray(timestampOffset, timestampOffset + 6));
+		const txsBytes = this.#extractTransactionsBytesFromBlockBytes(blockBytes, txIndexes);
+		if (!txsBytes) return null;
+
+		/** key: txIndex, value: transaction @type {Object<number, Transaction>} */
+		const txs = {};
+		for (const i of txIndexes) txs[i] = serializer.deserialize.transaction(txsBytes[i], specialMode[i] || 'tx');
+		return { txs, timestamp };
+	}
+	/** Extract the data section of a transaction from block bytes without deserializing @param {Uint8Array} blockBytes @param {number} txIndex */
+	#extractTransactionDataFromBlockBytes(blockBytes, txIndex) {
+		const serializedTx = this.#extractTransactionsBytesFromBlockBytes(blockBytes, [txIndex])?.[txIndex];
+		if (!serializedTx) return null;
+
+		const mode = specialMode[txIndex] ? specialMode[txIndex] : 'tx';
+		const nbOfWitnesses = this.converter.bytes2ToNumber(serializedTx.subarray(2, 4));
+		const nbOfInputs = this.converter.bytes2ToNumber(serializedTx.subarray(4, 6));
+		const nbOfOutputs = this.converter.bytes2ToNumber(serializedTx.subarray(6, 8));
+		const dataLength = this.converter.bytes2ToNumber(serializedTx.subarray(8, 10));
+
+		const headersBytesLength = serializer.lengths.txHeader.bytes;
+		const witnessBytes = mode === 'validator' ? serializer.lengths.validatorWitness.bytes : serializer.lengths.witness.bytes;
+		const witnessesBytesLength = nbOfWitnesses * witnessBytes;
+		const inputsBytesLength = mode === 'tx' ? nbOfInputs * serializer.lengths.anchor.bytes
+			: mode === 'solver' ? serializer.lengths.nonce.bytes : serializer.lengths.hash.bytes;
+		const outputsBytesLength = nbOfOutputs * serializer.lengths.miniUTXO.bytes;
+		const start = headersBytesLength + witnessesBytesLength + inputsBytesLength + outputsBytesLength;
+		return serializedTx.subarray(start, start + dataLength);
+	}
+	/** @param {Uint8Array} blockBytes @param {number[]} txIndexes */
+	#extractTransactionsBytesFromBlockBytes(blockBytes, txIndexes) {
+		/** key: txIndex, value: transaction @type {Object<number, Uint8Array>} */
+		const txsBytes = {};
+		const nbOfTxs = this.converter.bytes2ToNumber(blockBytes.subarray(0, 2));
 		for (const i of txIndexes) {
-			if (txs[i] !== undefined) continue; // already extracted
+			if (txsBytes[i] !== undefined) continue; // already extracted
 			if (i + 1 > nbOfTxs) return null;
 
 			const pointerStart = serializer.lengths.blockFinalizedHeader.bytes + (i * 4);
@@ -316,10 +354,10 @@ export class BlockchainStorage {
 			const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);
 			const offsetEnd = i + 1 === nbOfTxs ? blockBytes.length
 				: this.converter.bytes4ToNumber(blockBytes.subarray(pointerStart + 4, pointerStart + 8));
-			const txBuffer = blockBytes.subarray(offsetStart, offsetEnd);
-			const tx = serializer.deserialize.transaction(txBuffer, specialMode[i] || 'tx');
-			txs[i] = tx;
+			const txBytes = blockBytes.subarray(offsetStart, offsetEnd);
+			txsBytes[i] = txBytes;
 		}
-		return { txs, timestamp };
-    }
+
+		return txsBytes;
+	}
 }

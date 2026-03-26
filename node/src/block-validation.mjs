@@ -192,8 +192,7 @@ export class BlockValidation {
 			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
 			
 			TxValidation.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
-			const serialized = serializer.serialize.transaction(tx, specialTx);
-			signatureVerificationTasks.push(new WorkerTask(serialized, ext?.pubKeysByHashes, specialTx));
+			signatureVerificationTasks.push(new WorkerTask(tx, ext?.pubKeysByHashes, specialTx));
 		}
 
 		// SIGNATURE VERIFICATION (MULTI-THREADING)

@@ -64,8 +64,8 @@ export class Sync {
 
 			// ROLLBACK UNTIL CONSENSUS BLOCK AND CATCH UP
 			const peersToAsk = this.getPeersToAskList(c.blockHeight, c.blockHash);
-			bc.undoBlock(true); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
-			while (bc.currentHeight > c.blockHeight) bc.undoBlock(true);
+			await bc.undoBlock(true); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
+			while (bc.currentHeight > c.blockHeight) await bc.undoBlock(true);
 
 			if (!attempts) this.logger.log(`Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
 			attempts++;
@@ -103,7 +103,7 @@ export class Sync {
 
 				// Unable to digest >  undo last block, retry from previous
 				this.logger.log(`Failed #${nextHeight} digest => undo one block`, (m, c) => console.error(m, c));
-				bc.undoBlock(true); // if undo fails, just reset everything to be sure
+				await bc.undoBlock(true); // if undo fails, just reset everything to be sure
 			}
 		} while (attempts < maxAttempts);
 	}

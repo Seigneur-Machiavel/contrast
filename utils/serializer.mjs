@@ -99,16 +99,16 @@ const lengths = {
 	pubKeyHash: { bytes: 4, str: 8 },
 	address: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES, str: ADDRESS.CRITERIA.TOTAL_LENGTH },
 	signature: { bytes: 64, str: 128 },
-	validatorWitness: { bytes: 96, str: 192 }, // SIGNATURE(64b) + PUBKEY(32b) = 96b
-	witness: { bytes: 68, str: 136 }, // SIGNATURE(64b) + PUBKEY(32b) => SIGNATURE(64b) + PUBKEY_HASH(4b) = 68b
-
+	
 	// TRANSACTION
-	txHeader: { bytes: 2 + 2 + 2 + 2 + 2, str: null }, // version(2) + witnessesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2)
-	anchor: { bytes: 8, str: null }, // height(4) + txIndex(2) + vout(2)
-	txId: { bytes: 6, str: null },
+	txHeader: { bytes: 2 + 2 + 2 + 2 + 2, str: null }, // version(2) + witnessesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2) = 10b
+	anchor: { bytes: 8, str: null }, // height(4) + txIndex(2) + vout(2) = 8b
+	txId: { bytes: 6, str: null }, // height(4) + txIndex(2) = 6b
 	utxoState: { bytes: 5, str: null },
-	miniUTXO: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 6 + 1, str: null }, // 5 + 6 + 1 = 12
-	ledgerUtxo: { bytes: 4 + 2 + 2 + 6 + 1, str: null }, // 4 + 2 + 2 + 6 + 1 = 15
+	miniUTXO: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 6 + 1, str: null }, // address(5) + amount(6) + rule(1) = 5 + 6 + 1 = 12b
+	ledgerUtxo: { bytes: 4 + 2 + 2 + 6 + 1, str: null }, // 4 + 2 + 2 + 6 + 1 = 15b
+	validatorWitness: { bytes: 96, str: 192 }, 	// SIGNATURE(64b) + PUBKEY(32b) = 96b
+	witness: { bytes: 68, str: 136 }, 			// SIGNATURE(64b) + PUBKEY_HASH(4b) = 68b
 
 	// BLOCK VALUES
 	hash: { bytes: 32, str: 64 },
@@ -188,9 +188,19 @@ export const serializer = {
 			if (w.isWritingComplete) return w.getBytes();
 			else throw new Error(`Anchors array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-		/** @param {Object<TxAnchor, boolean>} anchors */
+		/** @param {Record<TxAnchor, boolean>} anchors */
         anchorsObjToArray(anchors) {
-            return this.anchorsArray(Object.keys(anchors));
+			let count = 0;
+			for (const anchor in anchors) count++;
+			const w = new BinaryWriter(lengths.anchor.bytes * count);
+			for (const anchor in anchors) {
+				const { height, txIndex, vout } = serializer.parseAnchor(anchor);
+				w.writeBytes(converter.numberTo4Bytes(height));
+				w.writeBytes(converter.numberTo2Bytes(txIndex));
+				w.writeBytes(converter.numberTo2Bytes(vout))
+			}
+			if (w.isWritingComplete) return w.getBytes();
+			else throw new Error(`Anchors object serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
 		/** @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
 		ledgerUtxo(height, txIndex, vout, amount, rule) {
@@ -496,16 +506,29 @@ export const serializer = {
         anchorsArray(serializedAnchorsArray) {
 			/** @type {TxAnchor[]} */
             const anchors = [];
-            for (let i = 0; i < serializedAnchorsArray.length; i += lengths.anchor.bytes)
-                anchors.push(this.anchor(serializedAnchorsArray.slice(i, i + lengths.anchor.bytes)));
-            return anchors;
+			const r = new BinaryReader(serializedAnchorsArray);
+			for (let i = 0; i < serializedAnchorsArray.length; i += lengths.anchor.bytes) {
+				const blockHeight = converter.bytes4ToNumber(r.read(4));
+				const txIndex = converter.bytes2ToNumber(r.read(2));
+				const inputIndex = converter.bytes2ToNumber(r.read(2));
+				anchors.push(`${blockHeight}:${txIndex}:${inputIndex}`);
+			}
+			if (r.isReadingComplete) return anchors;
+			else throw new Error(`Anchors array is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
         },
         /** @param {Uint8Array} serializedAnchorsObj */
         anchorsObjFromArray(serializedAnchorsObj) {
 			/** @type {Object<string, boolean>} */
 			const anchorsObj = {};
-			for (const anchor of this.anchorsArray(serializedAnchorsObj || [])) anchorsObj[anchor] = true;
-			return anchorsObj;
+			const r = new BinaryReader(serializedAnchorsObj);
+			for (let i = 0; i < serializedAnchorsObj.length; i += lengths.anchor.bytes) {
+				const blockHeight = converter.bytes4ToNumber(r.read(4));
+				const txIndex = converter.bytes2ToNumber(r.read(2));
+				const inputIndex = converter.bytes2ToNumber(r.read(2));
+				anchorsObj[`${blockHeight}:${txIndex}:${inputIndex}`] = true;
+			}
+			if (r.isReadingComplete) return anchorsObj;
+			else throw new Error(`Anchors object is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
         },
 		/** @param {Uint8Array} serializedLedgerUtxos */
 		ledgerUtxosArray(serializedLedgerUtxos) {
@@ -520,7 +543,8 @@ export const serializer = {
 				const ruleCode = r.read(1)[0];
 				ledgerUtxos.push(new LedgerUtxo(`${height}:${txIndex}:${vout}`, amount, ruleCode));
 			}
-			return ledgerUtxos;
+			if (r.isReadingComplete) return ledgerUtxos;
+			else throw new Error(`LedgerUtxos array is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** Deserialize a miniUTXO: { address, amount, rule } @param {Uint8Array} serializedMiniUTXO */
         miniUTXO(serializedMiniUTXO) {
@@ -533,10 +557,16 @@ export const serializer = {
         },
         /** @param {Uint8Array} serializedMiniUTXOs */
         miniUTXOsArray(serializedMiniUTXOs) {
-            const miniUTXOs = [];
-            for (let i = 0; i < serializedMiniUTXOs.length; i += lengths.miniUTXO.bytes)
-                miniUTXOs.push(this.miniUTXO(serializedMiniUTXOs.slice(i, i + lengths.miniUTXO.bytes)));
-            return miniUTXOs;
+			const miniUTXOs = [];
+			const r = new BinaryReader(serializedMiniUTXOs);
+			for (let i = 0; i < serializedMiniUTXOs.length; i += lengths.miniUTXO.bytes) {
+				const address = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
+				const amount = converter.bytes6ToNumber(r.read(6));
+				const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
+				miniUTXOs.push({ address, amount, rule });
+			}
+			if (r.isReadingComplete) return miniUTXOs;
+			else throw new Error(`miniUTXOs array is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
         },
 		/** @param {Uint8Array} serializedMiniUTXOsObj */
 		miniUTXOsObj(serializedMiniUTXOsObj) {
@@ -550,8 +580,8 @@ export const serializer = {
 				const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
 				miniUTXOsObj[anchor] = { address, amount, rule };
 			}
-
-			return miniUTXOsObj;
+			if (r.isReadingComplete) return miniUTXOsObj;
+			else throw new Error(`miniUTXOs object is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {Uint8Array} serializedTxsIds */
         txsIdsArray(serializedTxsIds) {
@@ -565,7 +595,8 @@ export const serializer = {
 				const txIndex = converter.bytes2ToNumber(r.read(2));
 				txsIds.push(`${blockHeight}:${txIndex}`);
 			}
-			return txsIds;
+			if (r.isReadingComplete) return txsIds;
+			else throw new Error(`TxsIds array is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
         },
 		/** @param {Uint8Array} serializedPubkeyAddresses */
 		pubkeyAddressesObj(serializedPubkeyAddresses) {
@@ -579,7 +610,8 @@ export const serializer = {
 				const addressBase58 = ADDRESS.BYTES_TO_B58(r.read(lengths.address.bytes));
 				pubkeyAddresses[pubKeyHex] = addressBase58;
 			}
-			return pubkeyAddresses;
+			if (r.isReadingComplete) return pubkeyAddresses;
+			else throw new Error(`PubkeyAddresses object is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {Uint8Array} serializedWitnesses @param {'tx' | 'validator'} [mode] default: tx */
 		witnessesArray(serializedWitnesses, mode = 'tx') {
@@ -596,7 +628,8 @@ export const serializer = {
 				const p = converter.bytesToHex(r.read(mode === 'validator' ? lengths.pubKey.bytes : lengths.pubKeyHash.bytes));
 				witnesses.push(`${s}:${p}`);
 			}
-			return witnesses;
+			if (r.isReadingComplete) return witnesses;
+			else throw new Error(`Witnesses array is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {Uint8Array} serializedIdentityEntry */
 		identityEntry(serializedIdentityEntry) {

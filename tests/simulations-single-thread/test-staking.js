@@ -75,7 +75,7 @@ for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
 // -------------------------------------------------------------------------------------
 let height = -1;
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
-const onBlockConfirmed = (block) => {
+const onBlockConfirmed = async (block) => {
 	if (block.index === height) return; // already processed
 	height = block.index;
 	console.log(`\n=== Block finalized #${block.index} (hash: ${block.hash.slice(0, 8)}...) ===`);
@@ -85,7 +85,7 @@ const onBlockConfirmed = (block) => {
 		if (!account) continue;
 		
 		const r = account.address;
-		const ledger = node.blockchain.ledgersStorage.getAddressLedger(r);
+		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(r);
 		if (!ledger.ledgerUtxos) continue; // no UTXO
 
 		//const sigUtxos = ledger.ledgerUtxos.filter(u => u.ruleCode === UTXO_RULES_GLOSSARY['sig'].code)

@@ -23,6 +23,28 @@ const CRITERIA = { // WORK IN PROGRESS
 	MAX_NUM_VALUE: 4_294_967_295 // 2^32-1
 };
 
+/*
+	static #maxCacheSize = 100_000;
+	static #b58ToUint32Cache = new Map();
+	static b58ToUint32(str = '123456') {
+		if (ADDRESS.#b58ToUint32Cache.has(str)) return ADDRESS.#b58ToUint32Cache.get(str);
+		if (ADDRESS.#b58ToUint32Cache.size >= ADDRESS.#maxCacheSize) ADDRESS.#b58ToUint32Cache.clear();
+		const result = Converter.b58ToUint32(str);
+		ADDRESS.#b58ToUint32Cache.set(str, result);
+		return result;
+	}*/
+
+class ConverterCache {
+	maxCacheSize = 100_000;
+	cache = new Map();
+
+	get(key) { return this.cache.get(key); }
+	set(key, value) {
+		if (this.cache.size >= this.maxCacheSize) this.cache.clear();
+		this.cache.set(key, value);
+	}
+}
+
 export class ADDRESS {
 	static AUTHORIZED_PREFIXES = new Set(Object.keys(LEXICON));
 	static LEXICON = LEXICON;
@@ -46,16 +68,40 @@ export class ADDRESS {
 		this.bytes.set(converter.numberTo4Bytes(uint32), 1);
 	}
 
+	// CACHES
+	static #b58ToUint32Cache = new ConverterCache();
+	static b58ToUint32(str = '123456') {
+		/** @type {number | undefined} */
+		const cached = ADDRESS.#b58ToUint32Cache.get(str);
+		if (cached !== undefined) return cached;
+		
+		const result = Converter.b58ToUint32(str);
+		ADDRESS.#b58ToUint32Cache.set(str, result);
+		return result;
+	}
+	static #uint32ToB58Cache = new ConverterCache();
+	static uint32ToB58(num = 0) {
+		/** @type {string | undefined} */
+		const cached = ADDRESS.#uint32ToB58Cache.get(num);
+		if (cached !== undefined) return cached;
+
+		const result = Converter.uint32ToB58(num, CRITERIA.B58_LENGTH);
+		ADDRESS.#uint32ToB58Cache.set(num, result);
+		return result;
+	}
+	static #bytesToB58Cache = new ConverterCache();
+	static bytesToB58(bytes) {
+		const key = converter.bytesToHex(bytes);
+		/** @type {string | undefined} */
+		const cached = ADDRESS.#bytesToB58Cache.get(key);
+		if (cached !== undefined) return cached;
+
+		const result = ADDRESS.BYTES_TO_B58(bytes);
+		ADDRESS.#bytesToB58Cache.set(key, result);
+		return result;
+	}
+
 	// BUILDERS
-	/** @param {string} prefix @param {number} uint32 */
-	static fromUint32(prefix, uint32) {
-		const B58 = Converter.uint32ToB58(uint32, CRITERIA.B58_LENGTH);
-		return new ADDRESS(prefix, B58, uint32);
-	}
-	/** @param {string} addressBase58 */
-	static toUint32(addressBase58) {
-		return Converter.b58ToUint32(addressBase58.substring(1));
-	}
 	/** @param {string} addressBase58 */
 	static fromString(addressBase58) {
 		if (typeof addressBase58 !== 'string') throw new Error('Address must be a string');
@@ -65,20 +111,13 @@ export class ADDRESS {
 		if (!ADDRESS.AUTHORIZED_PREFIXES.has(firstChar)) throw new Error(`Address must start with one of the following prefixes: ${[...ADDRESS.AUTHORIZED_PREFIXES].join(', ')}`);
 		
 		const lastPartBase58 = addressBase58.substring(1);
-		const uint32 = Converter.b58ToUint32(lastPartBase58);
+		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
 		return new ADDRESS(firstChar, lastPartBase58, uint32);
-	}
-	/** @param {Uint8Array} uint8Array length: 5, first byte is prefix */
-	static fromUint8Array(uint8Array) {
-		const prefix = converter.bytesToString(uint8Array.slice(0, 1));
-		const uint32 = converter.bytes4ToNumber(uint8Array.slice(1, 5));
-		const B58 = Converter.uint32ToB58(uint32, CRITERIA.B58_LENGTH);
-		return new ADDRESS(prefix, B58, uint32);
 	}
 	/** @param {string} pubKeyHex */
 	static deriveB58(pubKeyHex) {
-		const n = xxHash32(converter.hexToBytes(pubKeyHex));
-		return Converter.uint32ToB58(n, CRITERIA.B58_LENGTH);
+		const uint32 = xxHash32(converter.hexToBytes(pubKeyHex));
+		return ADDRESS.uint32ToB58(uint32);
 	}
 
 	// VALIDATORS
@@ -92,31 +131,44 @@ export class ADDRESS {
 		if (!ADDRESS.AUTHORIZED_PREFIXES.has(firstChar)) return false;
 		
 		/// CONTROL NUMERICAL VALUE OF THE ADDRESS IS UNDER MAX VALUE
-		const val = Converter.b58ToUint32(addressBase58.substring(1));
+		const val = ADDRESS.b58ToUint32(addressBase58.substring(1));
 		return (val <= CRITERIA.MAX_NUM_VALUE);
 	}
 	/** Perform security check of the address by deriving it from the public key
 	 * @param {string} addressBase58 - Address to validate @param {string} pubKeyHex - Public key to derive the address from */
 	static isDerivedFrom(addressBase58, pubKeyHex) {
-		const val = Converter.b58ToUint32(addressBase58.substring(1));
-		const n = xxHash32(converter.hexToBytes(pubKeyHex));
-		return val === n;
+		const val = ADDRESS.b58ToUint32(addressBase58.substring(1));
+		const uint32 = xxHash32(converter.hexToBytes(pubKeyHex));
+		return val === uint32;
 	}
 
 	// HELPERS
 	/** @param {string} addressBase58 */
 	static B58_TO_BYTES(addressBase58) {
 		const bytes = new Uint8Array(5);
-		const uint32 = Converter.b58ToUint32(addressBase58.substring(1));
+		const uint32 = ADDRESS.b58ToUint32(addressBase58.substring(1));
 		bytes.set(converter.stringToBytes(addressBase58.substring(0, 1)), 0);
 		bytes.set(converter.numberTo4Bytes(uint32), 1);
 		return bytes;
 	}
 	/** @param {Uint8Array} bytes length: 5, first byte is prefix */
 	static BYTES_TO_B58(bytes) {
+		//const prefix = converter.bytesToString(bytes.slice(0, 1));
+		//const uint32 = converter.bytes4ToNumber(bytes.slice(1, 5));
+		//return prefix + ADDRESS.uint32ToB58(uint32);
+
+		const uint32 = (bytes[4] << 24 | bytes[3] << 16 | bytes[2] << 8 | bytes[1]) >>> 0; // LE
+		const key = bytes[0] * 0x100000000 + uint32; // unique per prefix+uint32
+
+		/** @type {string | undefined} */
+		const cached = ADDRESS.#bytesToB58Cache.get(key);
+		if (cached !== undefined) return cached;
+
 		const prefix = converter.bytesToString(bytes.slice(0, 1));
-		const uint32 = converter.bytes4ToNumber(bytes.slice(1, 5));
-		return prefix + Converter.uint32ToB58(uint32, CRITERIA.B58_LENGTH);
+		const B58 = ADDRESS.uint32ToB58(uint32);
+		const result = prefix + B58;
+		ADDRESS.#bytesToB58Cache.set(key, result);
+		return result;
 	}
 	/** Format an address with a separator for better readability, ex: C123456 -> C1-23456
 	* @param {string} addressBase58 - Address to format @param {string} separator - Separator to use (default: '-') */
