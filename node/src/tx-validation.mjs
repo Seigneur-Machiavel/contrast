@@ -4,9 +4,9 @@
 import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 import { conditionnals } from '../../utils/conditionals.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { OutputCreationValidator } from './tx-rule-checkers.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
@@ -69,8 +69,8 @@ export class TxValidation {
         for (const input of transaction.inputs) {
             if (specialTx && typeof input !== 'string') throw new Error('Invalid coinbase/validator input type');
 			if (specialTx && !IS_VALID.HEX(input)) throw new Error(`Invalid coinbase/validator input(not HEX): ${input}`);
-			if (specialTx === 'validator' && input.length !== serializer.lengths.hash.str) throw new Error('Invalid validator input length');
-			if (specialTx === 'solver' && input.length !== serializer.lengths.nonce.str) throw new Error('Invalid coinbase input length');
+			if (specialTx === 'validator' && input.length !== SIZES.hash.str) throw new Error('Invalid validator input length');
+			if (specialTx === 'solver' && input.length !== SIZES.nonce.str) throw new Error('Invalid coinbase input length');
 			if (specialTx) continue; // skip further checks for special txs
 
             const anchor = input;
@@ -141,13 +141,13 @@ export class TxValidation {
 
         const p1 = witnessParts[0];
         if (!IS_VALID.HEX(p1)) throw new Error(`Invalid signature: ${p1} !== hex`);
-        if (p1.length !== serializer.lengths.signature.str) throw new Error('Invalid p1 size: not signature');
+        if (p1.length !== SIZES.signature.str) throw new Error('Invalid p1 size: not signature');
 		//if (witnessParts.length === 1) return { signature, pubKeyHex: null };
 
         const p2 = witnessParts[1];
         if (!IS_VALID.HEX(p2)) throw new Error(`Invalid pubKeyHash: ${p2} !== hex`);
-        const isPubKeyHash = p2.length === serializer.lengths.pubKeyHash.str;
-		const isPubKey = p2.length === serializer.lengths.pubKey.str;
+        const isPubKeyHash = p2.length === SIZES.pubKeyHash.str;
+		const isPubKey = p2.length === SIZES.pubKey.str;
 		if (!isPubKeyHash && !isPubKey) throw new Error('Invalid p2 size: neither pubKeyHash nor pubKey');
 
         return { signature: p1, pubKeyHash: isPubKeyHash ? p2 : null, pubKey: isPubKey ? p2 : null };

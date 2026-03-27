@@ -40,7 +40,7 @@ export class BlockUtils {
     }
 	/** Adds POS reward transaction to the block candidate and signs it
 	 * @param {ContrastNode} node @param {BlockCandidate} block */
-	static async #signBlockCandidate(node, block) {
+	static async signBlockCandidate(node, block) {
 		const { blockchain, rewardsInfo, account } = node;
 		const { identityStore } = blockchain;
 		const { vAddress, vPubkeys } = rewardsInfo;
@@ -151,22 +151,17 @@ export class BlockUtils {
 		const solverBestIndex = solver.bestCandidateIndex !== -1 ? solver.bestCandidateIndex : null;
 		const myLegitimacy = await blockchain.vss.getPubkeyLegitimacy(account.pubKey, prevHash);
 		node.info.lastLegitimacy = myLegitimacy;
-		if (solverBestIndex !== null && solverBestIndex < blockchain.lastBlock.index) return null;
-		if (solverBestIndex !== null && solverBestIndex > blockchain.lastBlock.index + 1) return null;
-		if (myLegitimacy > BLOCKCHAIN_SETTINGS.validatorsPerRound) return null;
+
+		if (solverBestIndex !== null)
+			if (solverBestIndex > blockchain.lastBlock.index + 1) return false; // TOO FAR AHEAD, WAIT FOR OTHER BLOCKS TO CATCH UP
+			else if (solverBestIndex < blockchain.lastBlock.index) return false;// ALREADY BEHIND, WAIT FOR OTHER BLOCKS TO CATCH UP
+		if (myLegitimacy > BLOCKCHAIN_SETTINGS.validatorsPerRound) return false;// TOO LOW LEGITIMACY, DON'T WASTE RESOURCES
 
 		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
 		node.info.averageBlockTime = averageBlockTime;
 		const coinBaseReward = solving.calculateNextCoinbaseReward(blockchain.lastBlock);
 		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch(node);
 		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, txs, posTimestamp);
-	}
-	/** @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
-	static async createAndSignBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
-		const blockCandidate = await this.createBlockCandidate(node, blockReward, initDiff);
-		if (!blockCandidate) return null;
-		await this.#signBlockCandidate(node, blockCandidate);
-		return blockCandidate;
 	}
 	/** @param {BlockFinalized | BlockCandidate} block @param {'blockFinalized' | 'blockCandidate'} [mode] Default: 'blockFinalized' */
 	static extractInvolvedAnchors(block, mode = 'blockFinalized') {

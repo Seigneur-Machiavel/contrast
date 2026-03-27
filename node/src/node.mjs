@@ -13,6 +13,7 @@ import { serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
+import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from "../../config/blockchain-settings.mjs";
 
 /**
 * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
@@ -152,8 +153,13 @@ export class ContrastNode {
 	async createAndShareMyBlockCandidate() {
 		try {
 			this.updateState("creating block candidate");
-			const myCandidate = await BlockUtils.createAndSignBlockCandidate(this);
-			if (!myCandidate) throw new Error('Failed to create block candidate');
+			const { blockReward } = BLOCKCHAIN_SETTINGS;
+			const { initialDifficulty } = MINING_PARAMS;
+			const myCandidate = await BlockUtils.createBlockCandidate(this, blockReward, initialDifficulty);
+			if (myCandidate === null) throw new Error('Failed to create block candidate');
+			if (myCandidate === false) throw new Error('Not eligible to create a block candidate at this time (low legitimacy or already ahead, or too far behind)');
+
+			await BlockUtils.signBlockCandidate(this, myCandidate);
 
 			this.solver.updateBestCandidate(myCandidate); // throw if not updated
 			

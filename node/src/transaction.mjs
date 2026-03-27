@@ -2,8 +2,8 @@
 import { BlockUtils } from './block.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 import { conditionnals } from '../../utils/conditionals.mjs';
+import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { Transaction, TxOutput, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
@@ -150,10 +150,10 @@ export class Transaction_Builder {
 	}
 	/** @param {number} utxoCount @param {number} outputCount */
 	static #calculateTransactionWeight(utxoCount, outputCount, dataWeight = 0, nbOfSigners = 1) {
-		const headerWeight = serializer.lengths.txHeader.bytes;
-		const inputsWeight = utxoCount * serializer.lengths.anchor.bytes;
-		const outputsWeight = outputCount * serializer.lengths.miniUTXO.bytes;
-		const witnessesWeight = nbOfSigners * serializer.lengths.witness.bytes;
+		const headerWeight = SIZES.txHeader.bytes;
+		const inputsWeight = utxoCount * SIZES.anchor.bytes;
+		const outputsWeight = outputCount * SIZES.miniUTXO.bytes;
+		const witnessesWeight = nbOfSigners * SIZES.witness.bytes;
 		return headerWeight + inputsWeight + outputsWeight + witnessesWeight + dataWeight;
 	}
     /** @param {{recipientAddress: string, amount: number}[]} transfers @param {string} rule */
@@ -174,12 +174,12 @@ export class Transaction_Builder {
     static isSolverOrValidatorTx(tx) {
         if (tx.inputs.length !== 1 || tx.outputs.length !== 1) return;
 
-        if (tx.inputs[0].length === serializer.lengths.nonce.str) 		// SOLVER nonce lenght is 8
+        if (tx.inputs[0].length === SIZES.nonce.str) 		// SOLVER nonce lenght is 8
 			if (tx.witnesses.length === 0) return 'solver'; 			// and no witness
 
 		if (tx.witnesses.length !== 1) return; 							// VALIDATOR should have exactly 1 witness
-        if (tx.inputs[0].length !== serializer.lengths.hash.str) return; // VALIDATOR hash length is 64
-		const expectedWitnessLen = serializer.lengths.signature.str + 1 + serializer.lengths.pubKey.str;
+        if (tx.inputs[0].length !== SIZES.hash.str) return; // VALIDATOR hash length is 64
+		const expectedWitnessLen = SIZES.signature.str + 1 + SIZES.pubKey.str;
 		if (tx.witnesses[0].length !== expectedWitnessLen) return; // VALIDATOR witness should be signature:pubKey
 		return 'validator';
     }

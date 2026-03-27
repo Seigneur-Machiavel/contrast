@@ -3,8 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
-import { conditionnals } from '../utils/conditionals.mjs';
-import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs';
+import { serializer, SIZES } from '../utils/serializer.mjs';
 
 /** 
  * @typedef {import("../types/transaction.mjs").TxId} TxId
@@ -13,7 +12,7 @@ import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs'
  * @typedef {import("./bc-store.mjs").BlockchainStorage} BlockchainStorage */
 
 
-const ENTRY_BYTES = serializer.lengths.txId.bytes;
+const ENTRY_BYTES = SIZES.txId.bytes;
 const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 8; // 2^32 / 8 = 536,870,912 entries per file (8 files per prefix)
 const MAX_BYTES_PER_FILE = MAX_ENTRIES_PER_FILE * ENTRY_BYTES; // 24GB / 8 = 3GB per file
 
@@ -27,7 +26,7 @@ export function buildIdentityEntry(address, pubKeysHex, threshold = 1) {
 	if (pubKeysHex.length === 0) throw new Error(`IdentityRecordInterpreter.buildEntry: at least one pubkey is required for address ${address}`);
 	if (pubKeysHex.length > 255) throw new Error(`IdentityRecordInterpreter.buildEntry: maximum number of pubkeys is 255 for address ${address}`);
 	if (threshold > 255) throw new Error(`IdentityRecordInterpreter.buildEntry: threshold cannot be higher than 255`);
-	for (const pk of pubKeysHex) if (pk.length !== serializer.lengths.pubKey.str) throw new Error(`IdentityRecordInterpreter.buildEntry: invalid pubkey length for pubkey ${pk} in address ${address}`);
+	for (const pk of pubKeysHex) if (pk.length !== SIZES.pubKey.str) throw new Error(`IdentityRecordInterpreter.buildEntry: invalid pubkey length for pubkey ${pk} in address ${address}`);
 
 	return serializer.serialize.identityEntry(a, pubKeysHex, threshold); // throws if non conform
 }
@@ -42,7 +41,7 @@ export function findAndParseEntry(data, address, throwIfNot = true) {
 		if (index === -1) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: no identity entry found in data for address ${address}`);
 
 		const nbOfPubKeys = data[index + 5];
-		const entryBytesLength = 5 + 1 + 1 + nbOfPubKeys * serializer.lengths.pubKey.bytes;
+		const entryBytesLength = 5 + 1 + 1 + nbOfPubKeys * SIZES.pubKey.bytes;
 		if (index + entryBytesLength > data.length) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: non conform identity entry for address ${address} - not enough data for the declared number of pubkeys`);
 		
 		const entryBytes = data.subarray(index, index + entryBytesLength);
@@ -102,7 +101,7 @@ export class IdentityStore {
 	/** Create the new identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
 	digestBlock(block) {
 		const discovery = this.#extractDiscovery(block).discovery;
-		for (const [address, txId] of discovery) this.#register(address, txId);
+		for (const [address, txIndex] of discovery) this.#register(address, block.index, txIndex);
 		return discovery;
 	}
 	/** Undo the identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
@@ -124,7 +123,7 @@ export class IdentityStore {
 	// INTERNAL METHODS
 	/** Extract discovery information from block @param {BlockFinalized} block */
 	#extractDiscovery(block) {
-		/** Key: address, value: TxId(pointer) @type {Map<string, TxId>} */
+		/** Key: address, value: TxIndex @type {Map<string, number>} */
 		const discovery = new Map();
 		/** Key: address, value: blockIndex @type {Map<string, number>} */
 		const known = new Map();
@@ -136,9 +135,8 @@ export class IdentityStore {
 				if (discovery.has(address) || known.has(address)) continue;
 	
 				const pointer = this.#getPointer(address);
-				if (pointer) { known.set(address, pointer.blockIndex); continue; }
-	
-				discovery.set(address, `${block.index}:${txIndex}`);
+				if (pointer) known.set(address, pointer.blockIndex);
+				else discovery.set(address, txIndex);
 			}
 		}
 		
@@ -153,15 +151,18 @@ export class IdentityStore {
 		if (entryBytes.every(b => b === 0)) return null; // EMPTY ENTRY
 
 		const blockIndex = serializer.converter.bytes4ToNumber(entryBytes.subarray(0, 4));
-		const txIndex = serializer.converter.bytes2ToNumber(entryBytes.subarray(4, 6));
+		const txIndex = serializer.nonZeroUint16.decode(entryBytes.subarray(4, 6));
 		return { blockIndex, txIndex };
 	}
-	/** Write the pointer for an address @param {string} address @param {TxId} txId */
-	#register(address, txId) { // WRITE ENTRY
+	/** Write the pointer for an address @param {string} address @param {number} blockIndex @param {number} txIndex */
+	#register(address, blockIndex, txIndex) { // WRITE ENTRY
 		if (!ADDRESS.checkConformity(address)) throw new Error(`IdentityStore.register: invalid address format: ${address}`);
 		const a = ADDRESS.fromString(address);
 		const handler = this.#getHandler(a);
-		const entryBytes = serializer.serialize.txsIdsArray([txId]);
+		const entryBytes = new Uint8Array(ENTRY_BYTES);
+		entryBytes.set(serializer.converter.numberTo4Bytes(blockIndex), 0);
+		entryBytes.set(serializer.nonZeroUint16.encode(txIndex), 4);
+
 		const offset = (a.uint32 % MAX_ENTRIES_PER_FILE) * ENTRY_BYTES;
 		handler.write(entryBytes, offset);
 		//console.log(`[REGISTER] Address ${address} - ${a.uint32} - #${offset} - pointer set to ${txId}.`);

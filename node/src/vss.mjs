@@ -1,7 +1,7 @@
 // @ts-check
 import { HashFunctions } from "./conCrypto.mjs";
-import { serializer } from "../../utils/serializer.mjs";
 import { VssStorage } from "../../storage/vss-store.mjs";
+import { serializer, SIZES } from "../../utils/serializer.mjs";
 import { BLOCKCHAIN_SETTINGS } from "../../config/blockchain-settings.mjs";
 
 /**
@@ -62,7 +62,7 @@ export class Vss {
 	}
 	/** Returns best legitimacy of pubkey for the round, if not found: return last index + 1 (= array length) @param {string} pubkey @param {string} prevHash */
 	async getPubkeyLegitimacy(pubkey, prevHash) {
-		if (pubkey.length !== serializer.lengths.pubKey.str) throw new Error('Invalid pubkey length');
+		if (pubkey.length !== SIZES.pubKey.str) throw new Error('Invalid pubkey length');
 		const round = await this.#calculateRound(prevHash);
 		const bestLeg = round.legitimacies.getPubkeyBestLegitimacy(pubkey);
 		return bestLeg !== undefined ? bestLeg : round.legitimacies.legitimacies.length;

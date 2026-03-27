@@ -24,7 +24,7 @@
 			"name": "Simul-Network",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/tests/simulations/simul-network.js",
-			"args": ["--max-old-space-size=16384", "--local", "-bootstraps", "1", "-clients", "0", "-stakers", "2", "-spammers", "1", "-nor", "10", "-nos", "8"]
+			"args": ["--max-old-space-size=16384", "--local", "-bootstraps", "1", "-clients", "1", "-stakers", "1", "-spammers", "1", "-nor", "10", "-nos", "8"]
 		},
 		{
 			"type": "node",

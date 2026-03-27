@@ -185,8 +185,7 @@ export class LedgersStorage {
 		w.writeBytes(newHistoryBytes);
 
 		// IF EVERYTHING OK => RETURN BYTES TO SAVE
-		if (w.isWritingComplete) return w.getBytes();
-		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		return w.getBytesOrThrow(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 	}
 	/** @param {string} address @param {RawLedger} rawLedger @param {AddressChanges} changes @param {boolean} [safeMode] If enabled: check the history before writing, default: false @param {boolean} [cleanupEmpty] delete the ledger file if empty, default: true */
 	#reverseAddressChanges(address, rawLedger, changes, safeMode = false, cleanupEmpty = true) {
@@ -212,7 +211,7 @@ export class LedgersStorage {
 			fs.rmSync(path.join(dirPath, `${address}.bin`), { force: true });
 			return null;
 		}
-
+		
 		const w = new BinaryWriter(6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
 		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.balance));
 		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.totalSent));
@@ -232,8 +231,7 @@ export class LedgersStorage {
 		w.writeBytes(rawLedger.historyBytes.subarray(0, rawLedger.historyBytes.length - newHistoryBytes.length));
 
 		// IF EVERYTHING OK => RETURN BYTES TO SAVE
-		if (w.isWritingComplete) return w.getBytes();
-		else throw new Error(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		return w.getBytesOrThrow(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 	}
 	/** @param {string} address Base58 string address */
 	#pathOfAddressLedgerDir(address) {

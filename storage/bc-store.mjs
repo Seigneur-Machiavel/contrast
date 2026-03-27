@@ -5,8 +5,8 @@ import path from 'path';
 import HiveP2P from "hive-p2p";
 import { UTXO } from '../types/transaction.mjs';
 import { BlockUtils } from '../node/src/block.mjs';
-import { serializer } from '../utils/serializer.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
+import { serializer, SIZES } from '../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 
 /**
@@ -19,7 +19,7 @@ import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 
 /** @type {Object<number, 'solver' | 'validator'>} */
 const specialMode = { 0: 'solver', 1: 'validator' }; // Finalized block only: correspond to index of tx in the block.
-const ENTRY_BYTES = serializer.lengths.indexEntry.bytes;
+const ENTRY_BYTES = SIZES.indexEntry.bytes;
 
 /** New version of BlockchainStorage.
  * - No needs for "retreiveBlockByHash" anymore, we only use block indexes now
@@ -146,14 +146,14 @@ export class BlockchainStorage {
 
 			const searchPattern = new Uint8Array(4); // Search pattern: [txIndex(2), voutId(2)]
 			for (const txIndex of txIndexes) {
-				searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
+				searchPattern.set(serializer.nonZeroUint16.encode(txIndex), 0);
 				
 				// @ts-ignore: search.get(height).get(txIndex) can only contain valid voutIds at this point
 				for (const voutIndex of search.get(height).get(txIndex)) {
 					if (!txs[txIndex]?.outputs[voutIndex]) return null; // unable to find the referenced tx/output
 					
 					let utxoSpent = true;
-					searchPattern.set(serializer.voutIdEncoder.encode(voutIndex), 2);
+					searchPattern.set(serializer.nonZeroUint16.encode(voutIndex), 2);
 
 					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
 					if (stateOffset !== -1) utxoSpent = utxosStatesBytes[stateOffset + 4] === 1;
@@ -184,7 +184,7 @@ export class BlockchainStorage {
 			const offset = offsets[h];
 			const timestampOffset = offset.start + serializer.dataPositions.timestampInFinalizedBlock;
 			const blockchainHandler = this.#getBlockchainHandler(h);
-			const timestampBuffer = blockchainHandler.read(timestampOffset, serializer.lengths.timestamp.bytes);
+			const timestampBuffer = blockchainHandler.read(timestampOffset, SIZES.timestamp.bytes);
 			const timestamp = this.converter.bytes6ToNumber(timestampBuffer);
 			heights.push(h);
 			timestamps.push(timestamp);
@@ -248,11 +248,11 @@ export class BlockchainStorage {
 			const searchPattern = new Uint8Array(4); // Search pattern: [txIndex(2), voutId(2)]
 			// @ts-ignore: search.get(height) can only contain valid txIndexes at this point
 			for (const txIndex of search.get(height).keys()) {
-				searchPattern.set(serializer.voutIdEncoder.encode(txIndex), 0);
+				searchPattern.set(serializer.nonZeroUint16.encode(txIndex), 0);
 				
 				// @ts-ignore: search.get(height).get(txIndex) can only contain valid voutIds at this point
 				for (const voutIndex of search.get(height).get(txIndex)) {
-					searchPattern.set(serializer.voutIdEncoder.encode(voutIndex), 2);
+					searchPattern.set(serializer.nonZeroUint16.encode(voutIndex), 2);
 					const stateOffset = utxosStatesBytes.indexOf(searchPattern);
 					if (stateOffset === -1) throw new Error(`UTXO not found (anchor: ${height}:${txIndex}:${voutIndex})`);
 
@@ -331,12 +331,12 @@ export class BlockchainStorage {
 		const nbOfOutputs = this.converter.bytes2ToNumber(serializedTx.subarray(6, 8));
 		const dataLength = this.converter.bytes2ToNumber(serializedTx.subarray(8, 10));
 
-		const headersBytesLength = serializer.lengths.txHeader.bytes;
-		const witnessBytes = mode === 'validator' ? serializer.lengths.validatorWitness.bytes : serializer.lengths.witness.bytes;
+		const headersBytesLength = SIZES.txHeader.bytes;
+		const witnessBytes = mode === 'validator' ? SIZES.validatorWitness.bytes : SIZES.witness.bytes;
 		const witnessesBytesLength = nbOfWitnesses * witnessBytes;
-		const inputsBytesLength = mode === 'tx' ? nbOfInputs * serializer.lengths.anchor.bytes
-			: mode === 'solver' ? serializer.lengths.nonce.bytes : serializer.lengths.hash.bytes;
-		const outputsBytesLength = nbOfOutputs * serializer.lengths.miniUTXO.bytes;
+		const inputsBytesLength = mode === 'tx' ? nbOfInputs * SIZES.anchor.bytes
+			: mode === 'solver' ? SIZES.nonce.bytes : SIZES.hash.bytes;
+		const outputsBytesLength = nbOfOutputs * SIZES.miniUTXO.bytes;
 		const start = headersBytesLength + witnessesBytesLength + inputsBytesLength + outputsBytesLength;
 		return serializedTx.subarray(start, start + dataLength);
 	}
@@ -349,7 +349,7 @@ export class BlockchainStorage {
 			if (txsBytes[i] !== undefined) continue; // already extracted
 			if (i + 1 > nbOfTxs) return null;
 
-			const pointerStart = serializer.lengths.blockFinalizedHeader.bytes + (i * 4);
+			const pointerStart = SIZES.blockFinalizedHeader.bytes + (i * 4);
 			const pointerBuffer = blockBytes.subarray(pointerStart, pointerStart + 4);
 			const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);
 			const offsetEnd = i + 1 === nbOfTxs ? blockBytes.length
