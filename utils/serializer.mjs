@@ -62,17 +62,18 @@ const dataPositions = { // specific helpers for partial block reading
  * - functions do not check the input data.
  * - Make sure to validate the data before using these functions. */
 export const serializer = {
-	nonZeroUint16: new NonZeroUint16(),
-	dataPositions,
-	converter,
 	/** Routing of mode for transaction serialization
 	 * - In candidate blocks, the first tx is always the validator tx
 	 * - In finalized blocks, the first tx is always the solver (coinbase) tx, the second is the validator tx
 	 * @type {Object<string, Object<string, 'solver' | 'validator' | undefined>>} */
-	specialMode: { // Routing of mode for transaction serialization
+	specialMode: {
 		finalized: { 0: 'solver', 1: 'validator' },
 		candidate: { 0: 'validator' }
 	},
+	nonZeroUint16: new NonZeroUint16(),
+	dataPositions,
+	converter,
+	
 	/** @param {TxId} txId ex: blockHeight:txIndex */
 	parseTxId(txId) {
 		const [height, txIndex] = txId.split(':').map(n => parseInt(n, 10));
