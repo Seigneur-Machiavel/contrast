@@ -22,10 +22,10 @@ const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 const RESOURCES_FILES = [
 	{ in: 'package.json' }, 			// for version display and update checks
 	//{ in: 'bootstraps.json' },			// bootstraps URLs list
-	{ in: 'app/launcher.mjs' },			// launcher patching
-	{ in: 'app/node-manager.mjs' },  	// launcher patching
-	{ in: 'app/updater.mjs' },			// launcher patching
-	{ in: 'app/main.mjs' },				// launcher patching
+	{ in: 'client/launcher.mjs' },			// launcher patching
+	{ in: 'client/node-manager.mjs' },  	// launcher patching
+	{ in: 'client/updater.mjs' },			// launcher patching
+	{ in: 'client/main.mjs' },				// launcher patching
 ];
 const RESOURCES_FOLDERS = [
 	{ in: 'board' },
