@@ -21,7 +21,7 @@ const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 /** @type {{in: string, out?: string}[]} */
 const RESOURCES_FILES = [
 	{ in: 'package.json' }, 			// for version display and update checks
-	{ in: 'bootstraps.json' },			// bootstraps URLs list
+	//{ in: 'bootstraps.json' },			// bootstraps URLs list
 	{ in: 'app/launcher.mjs' },			// launcher patching
 	{ in: 'app/node-manager.mjs' },  	// launcher patching
 	{ in: 'app/updater.mjs' },			// launcher patching
@@ -29,6 +29,8 @@ const RESOURCES_FILES = [
 ];
 const RESOURCES_FOLDERS = [
 	{ in: 'board' },
+	{ in: 'config' },
+
 	{ in: 'external-libs' },
     { in: 'miniLogger' },
     { in: 'node' },
@@ -45,15 +47,15 @@ const NM_DIST = path.join(RESOURCES_DIST, 'node_modules');
 
 // ---- WHAT GOES IN contrast.zip (initial install) ---------------------------------
 const CONTRAST_CLIENT_FILES = [
-    { in: 'app/contrast.exe' },
-    { in: 'app/neutralino-win_x64.exe' },
-    { in: 'app/neutralino.config.json' },
-    { in: 'app/contrast_32.png' },
-    { in: 'app/launcher.mjs' },
-    { in: 'app/node-manager.mjs' },
-	{ in: 'app/updater.mjs' },
-    { in: 'app/main.mjs' },
-    { in: 'app/sea-entry.cjs' },
+    { in: 'client/contrast.exe' },
+    { in: 'client/neutralino-win_x64.exe' },
+    { in: 'client/neutralino.config.json' },
+    { in: 'client/contrast_32.png' },
+    { in: 'client/launcher.mjs' },
+    { in: 'client/node-manager.mjs' },
+	{ in: 'client/updater.mjs' },
+    { in: 'client/main.mjs' },
+    { in: 'client/sea-entry.cjs' },
 ];
 
 // ---- HELPERS -----------------------------------------------------------------------

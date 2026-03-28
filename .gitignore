@@ -12,7 +12,7 @@ build/extension/extension.zip
 build/desktop/release
 
 neutralino
-app/.tmp
-app/sea-prep.blob
-app/neutralinojs.log
-app/launcher-config.json
+client/.tmp
+client/sea-prep.blob
+client/neutralinojs.log
+client/launcher-config.json

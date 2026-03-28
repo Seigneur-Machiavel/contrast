@@ -15,6 +15,8 @@ while (!rootFolder.endsWith('contrast'))
 	if (rootFolder === path.dirname(rootFolder)) throw new Error('Could not find contrast root folder');
 	else rootFolder = path.dirname(rootFolder);
 
+console.log(`[BOARD SERVICE] Starting... - Root folder: ${rootFolder}`);
+
 // LOAD BOOTSTRAP URLS FROM "contrast/bootstraps.json" IF EXISTS, OTHERWISE USE DEFAULT
 const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
 const bootstraps = startupStorage.loadJSON('config/bootstraps', true) || ['ws://localhost:27260'];
