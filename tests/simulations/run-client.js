@@ -117,7 +117,7 @@ const trySpamming = async (block) => {
 		if (!ledger?.ledgerUtxos) continue;
 		sender.setBalanceAndUTXOs(sender.balance, ledger.ledgerUtxos);
 
-		const signedTx2 = Transaction_Builder.createAndSignTransaction(sender, 100, receipient, 1)?.signedTx;
+		const signedTx2 = Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1)?.signedTx;
 		if (signedTx2) txs.push(signedTx2);
 	}
 

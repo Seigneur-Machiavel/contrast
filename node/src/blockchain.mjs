@@ -65,6 +65,7 @@ export class Blockchain {
 		let blockIndex = null;
 		try {
 			// VALIDATE BLOCK
+			if (serializedBlock.length > BLOCKCHAIN_SETTINGS.maxBlockSize) throw new Error('Block size exceeds the maximum limit');
 			block = serializer.deserialize.blockFinalized(serializedBlock);
 			blockIndex = block.index;
 			node.updateState(`${statePrefix}block-validation #${block.index}`);

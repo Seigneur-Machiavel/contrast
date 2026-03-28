@@ -13,15 +13,17 @@ import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction */
 
 class OrganizedTx {
-	tx; fee; serializedTx; feePerByte;
+	tx; fee; serialized; feePerByte;
 
 	/** @param {Transaction} tx - The transaction object @param {number} fee - The total fee of the transaction @param {Uint8Array} serializedTx - The serialized transaction */
 	constructor(tx, fee, serializedTx) {
 		this.tx = tx;
 		this.fee = fee;
-		this.serializedTx = serializedTx;
+		this.serialized = serializedTx;
 		this.feePerByte = fee / serializedTx.byteLength;
 	}
+
+	get finalWeight() { return this.serialized.byteLength + 4 }; // Adding 4 bytes for the pointer to the transaction in the finalized block.
 }
 
 class Organizer {
@@ -126,8 +128,7 @@ export class MemPool {
 		/** @type {OrganizedTx[]} */
 		const invalidTransactions = [];
 		const batchSize = 1000; // Number of anchors to process in one go
-		const maxSize = BLOCKCHAIN_SETTINGS.maxBlockSize;
-    	const targetSize = maxSize * 0.98;
+    	const targetSize = BLOCKCHAIN_SETTINGS.maxBlockSize * 0.98; // a 2% margin to avoid edge cases of slightly exceeding the max block size due to unexpected serialization size differences or future changes in block structure.
 		const batch = {
 			/** @type {OrganizedTx[]} */   oTxs: [],
 			/** @type {string[]} */ 	anchors: [],
@@ -144,7 +145,7 @@ export class MemPool {
 		const spentAnchors = new Set();
 		const identitiesCache = new IdentitiesCache();
 
-		const controlCurrentBatch = () => {
+		const includeCurrentBatchIfValid = () => {
 			const involvedUTXOs = this.blockchain.getUtxos(batch.anchors, false) || {};
 			for (const oTx of batch.oTxs) {
 				// skip transaction if one of its inputs is already spent by another tx in the batch
@@ -159,7 +160,7 @@ export class MemPool {
 				for (const input of oTx.tx.inputs) spentAnchors.add(input);
 				result.txs.push(oTx.tx);
 				result.totalFee += oTx.fee;
-				result.bytes += oTx.serializedTx.byteLength;
+				result.bytes += oTx.finalWeight;
 				if (result.bytes >= targetSize) break;
 			}
 
@@ -172,20 +173,19 @@ export class MemPool {
         for (const rangeKey of this.organizer.rangesList) {
             const rangeMap = this.organizer.txsByRanges[rangeKey];
         	for (const [h, oTx] of rangeMap) {
-				const oTxByteWeight = oTx.serializedTx.byteLength;
-				if (!oTxByteWeight) throw new Error('Transaction in mempool missing byteWeight');
-				if (result.bytes + batch.bytes + oTxByteWeight > maxSize) continue;
+				if (!oTx.finalWeight) throw new Error('Transaction in mempool missing(or zero) finalWeight');
+				if (result.bytes + batch.bytes + oTx.finalWeight > targetSize) continue;
 
 				batch.oTxs.push(oTx);
 				batch.anchors.push(...oTx.tx.inputs);
-				batch.bytes += oTxByteWeight;
-				if (batch.anchors.length >= batchSize) controlCurrentBatch();
-				if (result.bytes + batch.bytes >= targetSize) controlCurrentBatch();
+				batch.bytes += oTx.finalWeight;
+				if (batch.anchors.length >= batchSize) includeCurrentBatchIfValid();
+				if (result.bytes + batch.bytes >= targetSize) includeCurrentBatchIfValid();
 				if (result.bytes >= targetSize) break;
 			}
 
-			controlCurrentBatch();
-			if (result.bytes >= targetSize) break;
+			includeCurrentBatchIfValid();
+			if (result.bytes > targetSize) break;
         }
 
 		// REMOVE INVALID TRANSACTIONS FROM MEMPOOL & RETURN RESULT

@@ -118,7 +118,7 @@ export class Transaction {
 		const inputs = utxos.map(utxo => utxo.anchor);
 		const inAmountByAddress = {};
 		for (const utxo of utxos)
-			if (!inAmountByAddress[utxo.address]) inAmountByAddress[utxo.address] = 0;
+			if (!inAmountByAddress[utxo.address]) inAmountByAddress[utxo.address] = utxo.amount;
 			else inAmountByAddress[utxo.address] += utxo.amount;
 
 		return new TRANSACTION.Transaction(inputs, outputs, [], data, TRANSACTION.VERSION, undefined, undefined, inAmountByAddress);

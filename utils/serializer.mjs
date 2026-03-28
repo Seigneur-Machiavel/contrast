@@ -27,8 +27,7 @@ const { Converter } = HiveP2P;
 * @property {number} solverThreads */
 
 const converter = new Converter();
-const isNode = typeof self === 'undefined';
-// @ts-expect-error - msgpack global added by browser script
+const isNode = typeof self === 'undefined'; // @ts-expect-error - msgpack global added by browser script
 const msgpack = isNode ? (await import('../external-libs/msgpack.min.js')).default : window.msgpack;
 
 
@@ -87,7 +86,7 @@ export const serializer = {
 
     serialize: {
 		/** @param {any} rawData */
-        rawData(rawData) {
+        rawData(rawData) { // DEPRECATED: not used.
             /** @type {Uint8Array} */
             const encoded = msgpack.encode(rawData);
             return encoded;
@@ -388,7 +387,7 @@ export const serializer = {
 	},
     deserialize: {
 		/** @param {Uint8Array} encodedData */
-        rawData(encodedData) {
+        rawData(encodedData) { // DEPRECATED: not used.
             return msgpack.decode(encodedData);
         },
         /** @param {Uint8Array} serializedAnchor */

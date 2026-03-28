@@ -27,8 +27,8 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 // TEST CONFIG
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
-const nbReceipients = nor || 4600;	// Number of receipient addresses in multi output transaction
-const nbOfSenders = nos || 8; // 800// Number of single output transactions to send (should be higher than nbReceipients)
+const nbReceipients = nor || 6000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
+const nbOfSenders = nos || 1000; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 
@@ -102,12 +102,12 @@ const onBlockConfirmed = async (block) => {
 
 	// TEST: SEND LOT OF SINGLE OUTPUT TRANSACTIONS (ONLY ON EVEN BLOCKS)
 	let txs = [];
-	for (let i = 2; i < nbOfSenders; i++) {
+	for (let i = 2; i < nbOfSenders + 2; i++) {
 		const sender = wallet.accounts[i];
 		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(sender.address);
 		if (ledger && ledger.ledgerUtxos) sender.ledgerUtxos = ledger.ledgerUtxos;
 		const receipient = wallet.accounts[1].address; // send back to main account
-		const signedTx2 = Transaction_Builder.createAndSignTransaction(sender, 100, receipient, 1)?.signedTx;
+		const signedTx2 = Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1)?.signedTx;
 		if (signedTx2) txs.push(signedTx2);
 	}
 
