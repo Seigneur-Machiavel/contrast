@@ -108,18 +108,31 @@ export class MiniLogger {
         //! Possible EventEmitter memory leak detected. 11 exit listeners ...
         /*process.on('exit', () => {
             this.exiting = true;
-            fs.writeFileSync(this.filePath, JSON.stringify(this.history));
+            fs.writeFileSync(this.filePath, JSON.stringify(this.history), 'utf-8');
         });*/
     }
     #loadAndConcatHistory() {
-        if (!fs.existsSync(path.join(basePath, 'history'))) { fs.mkdirSync(path.join(basePath, 'history')); };
+        if (!fs.existsSync(path.join(basePath, 'history'))) fs.mkdirSync(path.join(basePath, 'history'));
         if (!fs.existsSync(this.filePath)) return [];
         
+		let fileContent;
         try {
-            const loadedHistory = JSON.parse(fs.readFileSync(this.filePath));
+            //const loadedHistory = JSON.parse(fs.readFileSync(this.filePath));
+			fileContent = fs.readFileSync(this.filePath, 'utf-8');
+            const loadedHistory = JSON.parse(fileContent);
             if (!Array.isArray(loadedHistory)) throw new Error('Invalid history format');
             return loadedHistory.concat(this.history);
-        } catch (error) { console.error('Error while loading history:', error) }
+        } catch (error) {
+			console.error('Error while loading history:', error.stack);
+			if (error.message.includes('at position ')) { // log the incorrect char
+				const positionMatch = error.message.match(/at position (\d+)/);
+				if (positionMatch) {
+					const position = parseInt(positionMatch[1]);
+					const context = fileContent.slice(Math.max(0, position - 20), Math.min(fileContent.length, position + 20));
+					console.error('Context around error position:', context);
+				}
+			}
+		}
         return [];
     }
     async #saveHistoryLoop() {
@@ -130,7 +143,7 @@ export class MiniLogger {
 
             const maxHistory = this.miniLoggerConfig.maxHistory || 100;
             while (this.history.length > maxHistory) this.history.shift();
-            fs.writeFileSync(this.filePath, JSON.stringify(this.history));
+            fs.writeFileSync(this.filePath, JSON.stringify(this.history), 'utf-8');
             this.saveRequested = false;
         }
     }

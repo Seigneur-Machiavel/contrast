@@ -17,6 +17,8 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../../types/sync.mjs").BlockHeightHashStr} BlockHeightHashStr */
 
+
+
 export class Sync {
 	logger = new MiniLogger('sync');
 	/** @type {PendingRequest | null} */
@@ -57,7 +59,7 @@ export class Sync {
 		let attempts = 0;
 		do {	// UPDATE CONSENSUS STATUS
 			const c = this.getConsensus();
-			if (attempts && c.blockHash === bc.lastBlock?.hash) this.logger.log(`IN CONSENSUS at block #${c.blockHeight}`, (m, c) => console.log(m, c));
+			if (attempts && c.blockHash === bc.lastBlock?.hash) this.logger.log(`[SYNC-DONE] IN CONSENSUS at block #${c.blockHeight}`, (m, c) => console.log(m, c));
 			if (c.equality || c.count === 0) return; // No clear consensus
 			if (c.blockHash === bc.lastBlock?.hash) return; // We are in consensus
 			if (bc.currentHeight === c.blockHeight + 1) return; // We are just ahead
@@ -67,7 +69,7 @@ export class Sync {
 			await bc.undoBlock(true); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
 			while (bc.currentHeight > c.blockHeight) await bc.undoBlock(true);
 
-			if (!attempts) this.logger.log(`Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
+			if (!attempts) this.logger.log(`[SYNC-OUT] Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
 			attempts++;
 
 			// DOWNLOAD AND APPLY BLOCKS UNTIL REASONABLE GAP
@@ -91,10 +93,10 @@ export class Sync {
 				peersToAsk.splice(index, 1); // Don't use same peer for next block
 				if (peerIdToRestore) peersToAsk.push(peerIdToRestore); // restore previously removed peer (if any) to try again later
 
-				this.logger.log(`Fetching block #${nextHeight} from peer ${peerId}`, (m, c) => console.log(m, c));
+				this.logger.log(`[SYNC-OUT] Fetching block #${nextHeight} from peer ${peerId}`, (m, c) => console.log(m, c));
 				const blockBytes = await this.fetchBlockFromPeer(peerId, nextHeight);
 				if (!blockBytes) { // failed to fetch block from this peer, try another
-					this.logger.log(`Fetch failure for block #${nextHeight} from peer ${peerId}`, (m, c) => console.error(m, c));
+					this.logger.log(`[SYNC-OUT] Fetch failure for block #${nextHeight} from peer ${peerId}`, (m, c) => console.error(m, c));
 					continue;
 				}
 
@@ -102,7 +104,7 @@ export class Sync {
 				if (success) { peerIdToRestore = peerId; continue; } // Able to digest > continue routine.
 
 				// Unable to digest >  undo last block, retry from previous
-				this.logger.log(`Failed #${nextHeight} digest => undo one block`, (m, c) => console.error(m, c));
+				this.logger.log(`[SYNC-OUT] Failed #${nextHeight} digest => undo one block`, (m, c) => console.error(m, c));
 				await bc.undoBlock(true); // if undo fails, just reset everything to be sure
 			}
 		} while (attempts < maxAttempts);
@@ -196,18 +198,18 @@ export class Sync {
 		if (!this.node.blockchain) return;
 
 		const { senderId, data, route } = msg;
-		this.logger.log(`[SYNC] Received block request from ${senderId} (${route})`, (m, c) => console.log(m, c));
+		this.logger.log(`[SYNC-IN] Received block request from ${senderId} (${route})`, (m, c) => console.log(m, c));
 		
 		if (!(data instanceof Uint8Array) || data.length !== 4) return; // invalid request
 		const height = serializer.converter.bytes4ToNumber(data);
 		const b = this.node.blockchain.blockStorage.getBlockBytes(height, false)?.blockBytes;
 		if (b) this.node.p2p.messager.sendUnicast(senderId, b, 'block', 1);
-		if (b) this.logger.log(`[SYNC] Sent block #${height} to ${senderId}`, (m, c) => console.log(m, c));
+		if (b) this.logger.log(`[SYNC-IN] Sent block #${height} to ${senderId}`, (m, c) => console.log(m, c));
 	}
 	/** @param {DirectMessage} msg */
 	#onBlock = async (msg) => {
 		const { senderId, data, route } = msg;
-		this.logger.log(`[SYNC] Received block data from ${senderId} (${route})`, (m, c) => console.log(m, c));
+		this.logger.log(`[SYNC-IN] Received block data from ${senderId} (${route})`, (m, c) => console.log(m, c));
 
 		if (this.pendingBlockRequest?.peerId !== senderId) return; // not the expected sender
 		if (!(data instanceof Uint8Array)) return; // invalid data type

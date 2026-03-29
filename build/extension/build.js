@@ -23,11 +23,11 @@ const FILES = [
 	{ in: 'external-libs/anime.min.js' },
 	{ in: 'external-libs/three-4.5.min.js' },
 	{ in: 'external-libs/bip39-3.1.0.min.js' },
-	
+
 	{ in: 'config/hive-p2p-config.mjs' },
 	{ in: 'config/blockchain-settings.mjs' },
 	{ in: 'miniLogger/mini-logger.mjs' },
-	
+
 	{ in: 'node/src/sync.mjs' },
 	{ in: 'node/src/block.mjs' },
 	{ in: 'node/src/wallet.mjs' },
@@ -59,19 +59,19 @@ fs.mkdirSync(DIST_DIR, { recursive: true });
 
 // COPY FILES
 for (const file of FILES) {
-  const src = path.join(rootFolder, file.in);
-  const dest = path.join(DIST_DIR, file.out || file.in);
-  if (fs.existsSync(src)) {
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(src, dest);
-  }
+	const src = path.join(rootFolder, file.in);
+	const dest = path.join(DIST_DIR, file.out || file.in);
+	if (!fs.existsSync(src)) throw new Error(`Source file does not exist: ${src}`);
+	fs.mkdirSync(path.dirname(dest), { recursive: true });
+	fs.copyFileSync(src, dest);
 }
 
 // COPY FOLDERS
 for (const folder of FOLDERS) {
 	const srcFolder = path.join(rootFolder, folder.in);
 	const destFolder = path.join(DIST_DIR, folder.out || folder.in);
-	if (fs.existsSync(srcFolder)) fs.cpSync(srcFolder, destFolder, { recursive: true });
+	if (!fs.existsSync(srcFolder)) throw new Error(`Source folder does not exist: ${srcFolder}`);
+	fs.cpSync(srcFolder, destFolder, { recursive: true });
 }
 
 // CREATE ZIP
@@ -87,6 +87,9 @@ console.log('DIST exists:', fs.existsSync(DIST_DIR));
 console.log('DIST contents:', fs.readdirSync(DIST_DIR).slice(0, 5));
 archive.pipe(output);
 archive.directory(path.resolve(DIST_DIR), false);
-archive.finalize();
+await archive.finalize();
+
+// REMOVE DIST FOLDER
+fs.rmSync(DIST_DIR, { recursive: true });
 
 console.log('✓ Extension build completed');

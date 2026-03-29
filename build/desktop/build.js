@@ -132,6 +132,8 @@ async function main() {
 
     await createZip(RESOURCES_DIST, path.join(RELEASE_DIR, 'contrast.zip'), true);
 
+	fs.rmSync(RESOURCES_DIST, { recursive: true });
+
     console.log('\n✓ Release build completed');
     console.log(`  Upload to GitHub release: release/contrast.zip, release/resources.zip, release/manifest.json`);
 }

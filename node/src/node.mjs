@@ -31,6 +31,7 @@ import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from "../../config/blockchain-sett
 * @property {string} [domain] - The domain name for the node (Public only).
 * @property {number} [port] - The port number for the node to listen on (Public only).
 * @property {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable)
+* @property {boolean} [unsafeMode] - If true, the controller will allow certain operations that may expose sensitive data (use with caution, default: false).
 * @property {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation
 * @property {string[]} bootstraps - An array of bootstrap node addresses. */
 
@@ -46,7 +47,7 @@ export async function createContrastNode(options = { bootstraps: [] }) {
 	const blockchain = new Blockchain(options.storage);
 	await blockchain.initialize();
 	
-	return new ContrastNode(p2pNode, blockchain, verb, options.controllerPort, options.chachaSeedHex);
+	return new ContrastNode(p2pNode, blockchain, verb, options.controllerPort, options.unsafeMode,options.chachaSeedHex);
 }
 
 export class ContrastNode {
@@ -78,8 +79,9 @@ export class ContrastNode {
 	 * @param {import('hive-p2p').Node} p2pNode - Hive P2P node instance.
 	 * @param {Blockchain} blockchain - Blockchain instance for the node.
 	 * @param {number | false} [controllerPort] - The port number for the controller to create. (default: 27261 | false to disable)
+	 * @param {boolean} [unsafeMode] - If true, the controller will allow certain operations that may expose sensitive data (use with caution, default: false).
 	 * @param {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation */
-	constructor(p2pNode, blockchain, verb = 2, controllerPort, chachaSeedHex) {
+	constructor(p2pNode, blockchain, verb = 2, controllerPort, unsafeMode = false, chachaSeedHex) {
 		this.blockchain = blockchain;
 		this.mainStorage = blockchain.storage;
 		this.memPool = new MemPool(this.blockchain);
@@ -88,7 +90,7 @@ export class ContrastNode {
 		this.p2p = p2pNode;
 		this.solver = new Solver(this);
 		this.sync = new Sync(this);
-		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort, chachaSeedHex);
+		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort, chachaSeedHex, unsafeMode);
 
 		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
@@ -188,10 +190,10 @@ export class ContrastNode {
 			for (const tx of task.data)
 				try { this.memPool.pushTransaction(this, tx); }
 				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
-		else if (task.type === 'NewCandidate') 	//@ts-ignore: task.data = BlockCandidate
+		else if (task.type === 'NewCandidate') 	// @ts-ignore: task.data = BlockCandidate
 			try { this.solver.updateBestCandidate(task.data); }
 			catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[P2P->SOLVER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
-		else if (task.type === 'DigestBlock') 	//@ts-ignore: task.data = BlockFinalizedSerialized
+		else if (task.type === 'DigestBlock') 	// @ts-ignore: task.data = BlockFinalizedSerialized
 			await this.blockchain.digestFinalizedBlock(this, task.data);
 	}
 	/** @param {GossipMessage} msg */

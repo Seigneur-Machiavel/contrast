@@ -244,7 +244,7 @@ h3 {
 }
 div:hover > .tooltip, h1:hover > .tooltip, h3:hover > .tooltip, button:hover > .tooltip {
     display: block;
-	animation: fadeInTooltip .4s cubic-bezier(0.4, 0, 0.2, 1);
+	animation: fadeInTooltip .3s cubic-bezier(0.4, 0, 0.2, 1);
 	transform: translateX(-50%);
 }
 @keyframes fadeInTooltip {

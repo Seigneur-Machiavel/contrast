@@ -10,7 +10,7 @@ export class NodeController {
 	/** @type {NodeJS.Timeout | null} */			authTimeout = null;
 	textEncoder = new TextEncoder();
 	textDecoder = new TextDecoder();
-	unsafeMode = false;
+	unsafeMode;
 	pingInterval;
 	sharedSecret;
 	myKeypair;
@@ -18,8 +18,9 @@ export class NodeController {
 	node;
 
 	/** @param {ContrastNode} node @param {number} [port] @param {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation */
-	constructor(node, port = 27261, chachaSeedHex) {
+	constructor(node, port = 27261, chachaSeedHex, unsafeMode = false) {
 		this.node = node;
+		this.unsafeMode = unsafeMode;
 		this.wsServer = new WebSocketServer({ port });
 		this.wsServer.on('connection', this.#handleConnection);
 		this.myKeypair = this.node.p2p.cryptoCodex.generateEphemeralX25519Keypair(chachaSeedHex);

@@ -158,6 +158,7 @@
 #biw-buttonBar button.disabled {
     opacity: .6;
     cursor: initial;
+	pointer-events: none;
     filter: brightness(0.8);
     box-shadow: 3px 2px 5px var(--neumo-color2), -2px -2px 4px var(--neumo-color1);
 }
@@ -404,6 +405,7 @@
     padding: 12px 10px;
 }
 #biw-buttonRefresh, #biw-buttonSettings {
+	position: relative;
     width: 26px;
     height: 26px;
     padding: 0;

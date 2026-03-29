@@ -90,11 +90,13 @@ export class Blockchain {
 			node.updateState("idle", "applying finalized block");
 			node.sync.setAndshareMyStatus(block);
 		} catch (/** @type {any} */ error) {
-			const shouldLog = !error.message.includes('(outdated)');
-			if (shouldLog) this.logger.log(`Failed to digest finalized block #${blockIndex}: ${error.stack}`, (m, c) => console.error(m, c));
-			
+			const shouldLogMsgOnly = error.message.includes('invalid prevHash:')
+									|| error.message.includes('last+1')
+									|| error.message.includes('(outdated)');
+			if (shouldLogMsgOnly) this.logger.log(`[DFB] ${error.message}`, (m, c) => console.error(m, c));
+
 			const isOffense = error.message.startsWith('!applyOffense!');
-			if (isOffense) this.logger.log(`!!! Offense detected while digesting finalized block: ${error.message}`, (m, c) => console.warn(m, c));
+			if (isOffense) this.logger.log(`[DFB] !!! Offense detected: ${error.message}`, (m, c) => console.warn(m, c));
 			else if (!isSync) await node.sync.catchUpWithNetwork();
 			return false;
 		}

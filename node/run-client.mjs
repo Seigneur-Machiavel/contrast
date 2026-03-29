@@ -4,6 +4,7 @@ const args = process.argv.slice(2); // digest the start args
 const enableBoardService = args.includes('--board-service');
 const controllerPort = args.includes('-cp') ? parseInt(nextArg('-cp')) : 27261;
 const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : undefined;
+const unsafeMode = true; // args.includes('--controller-unsafe');
 
 import { Wallet } from './src/wallet.mjs';
 import { createContrastNode } from './src/node.mjs';
@@ -27,7 +28,7 @@ const wallet = new Wallet(seedHex);
 await wallet.deriveAccounts(2, 'C', storage);
 
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
-const clientNode = await createContrastNode({ cryptoCodex, storage, bootstraps, chachaSeedHex, controllerPort });
+const clientNode = await createContrastNode({ cryptoCodex, storage, bootstraps, chachaSeedHex, controllerPort, unsafeMode });
 await clientNode.start(wallet);
 
 // PERSIST THE SEED FOR NEXT STARTUPS IF NODE IS ABLE TO START SUCCESSFULLY

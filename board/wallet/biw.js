@@ -369,6 +369,8 @@ export class BoardInternalWallet {
 				//this.setActiveTogglerButton('biw-toggle-interpreter');
 				break;
 			case 'biw-toggle-history-form':
+				if (e.target.classList.contains('disabled')) return;
+				console.log('Toggle history form', e.target.classList);
 				if (this.components.miniform.isHistoryOpen) this.components.miniform.close();
 				else {
 					this.components.miniform.open('HISTORY');
