@@ -3,6 +3,7 @@ import { BlockHeightHash } from '../../types/sync.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { PendingRequest } from '../../utils/networking.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { CONSENSUS } from '../../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
@@ -17,23 +18,109 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../../types/sync.mjs").BlockHeightHashStr} BlockHeightHashStr */
 
+class SelectedConsensus {
+	blockHeight = -1;
+	blockHash = '';
+	count = 0;
+	ratio = 0;
+	get isRobust() {
+		if (this.count < CONSENSUS.minConsensusPeers) return false;
+		if (this.ratio < CONSENSUS.minConsensusRatio) return false;
+		return true;
+	}
+	
+	/** @param {BlockHeightHashStr} bhhStr @param {number} count */
+	setValues(bhhStr, count) {
+		const bhh = BlockHeightHash.fromString(bhhStr);
+		this.blockHeight = bhh.blockHeight;
+		this.blockHash = bhh.blockHash;
+		this.count = count;
+	}
+	/** If secondBestCount is 0, we consider count as ratio to pass the CONSENSUS requirements. @param {number} secondBestCount */
+	calculateRatio(secondBestCount) {
+		if (!this.count || !secondBestCount) this.ratio = this.count;
+		else this.ratio = this.count / secondBestCount;
+	}
+}
 
-
-export class Sync {
-	logger = new MiniLogger('sync');
-	/** @type {PendingRequest | null} */
-	pendingBlockRequest = null;
-	/** @type {Uint8Array | null} */
-	myStatusSerialized = null;
+class ConsensusMerger {
+	/** @type {SelectedConsensus | null} */
+	#bestSelectedConsensus = null;
+	//needsUpdate = false;
+	myPeerId;
 	/** Key: peerId, value: BHH @type {Object<string, BlockHeightHashStr>} */
 	peersStatus = {};
 	/** Key: BHH, value: peerId @type {Object<string, Set<string>>} */
 	peersByBHH = {}; // NOT INCLUDE SELF
+
+	get best() {
+		this.#updateConsensus();
+		return this.#bestSelectedConsensus;
+	}
+
+	/** @param {string} myPeerId */
+	constructor(myPeerId) { this.myPeerId = myPeerId; }
+
+	#updateConsensus() {
+		if (this.#bestSelectedConsensus) return;
+
+		/** @type {Record<BlockHeightHashStr, number>} */
+		const occurences = {};
+		for (const peerId in this.peersStatus) {
+			const bhhStr = this.peersStatus[peerId];
+			occurences[bhhStr] = (occurences[bhhStr] || 0) + 1;
+		}
+
+		const [ best, secondBest ] = [new SelectedConsensus(), new SelectedConsensus()];
+		for (const bhhStr in occurences)
+			if (occurences[bhhStr] > best.count) best.setValues(bhhStr, occurences[bhhStr]);
+			else if (occurences[bhhStr] > secondBest.count) secondBest.setValues(bhhStr, occurences[bhhStr]);
+
+		best.calculateRatio(secondBest.count);
+		this.#bestSelectedConsensus = best;
+	}
+	/** @param {string} peerId @param {number} blockHeight @param {string} blockHash */
+	add(peerId, blockHeight, blockHash) {
+		const oldBHH = this.peersStatus[peerId];
+		if (oldBHH) this.remove(peerId, oldBHH);
+
+		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
+		if (!this.peersByBHH[bhh]) this.peersByBHH[bhh] = new Set();
+		this.peersByBHH[bhh].add(peerId);
+		this.peersStatus[peerId] = bhh;
+
+		//this.needsUpdate = true;
+		this.#bestSelectedConsensus = null; // reset best consensus to force recalculation on next access
+	}
+	/** @param {string} peerId @param {BlockHeightHashStr} bhh */
+	remove(peerId, bhh) {
+		this.peersByBHH[bhh]?.delete(peerId);
+		if (this.peersByBHH[bhh]?.size === 0) delete this.peersByBHH[bhh];
+	}
+	/** @param {number} blockHeight @param {string} blockHash */
+	getPeersToAskList(blockHeight, blockHash) {
+		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
+		const peersToAsk = []; // All consensus peers except self
+		for (const peerId of this.peersByBHH[bhh] || new Set())
+			if (peerId !== this.myPeerId) peersToAsk.push(peerId); // Don't ask self
+		return peersToAsk;
+	}
+}
+
+export class Sync {
+	logger = new MiniLogger('sync');
+	consensusMerger;
 	node;
+
+	/** @type {PendingRequest | null} */
+	pendingBlockRequest = null;
+	/** @type {Uint8Array | null} */
+	myStatusSerialized = null;
 
 	/** @param {ContrastNode | MinimalContrastNode} node */
 	constructor(node) {
-		this.node = node;	// @ts-ignore
+		this.node = node;
+		this.consensusMerger = new ConsensusMerger(node.p2p.id);
 		node.p2p.onPeerConnect(() => setTimeout(() => this.shareMyStatus(1), 1_000));
 		node.p2p.gossip.on('sync_status', this.#onSyncStatus);
 		node.p2p.messager.on('block_request', this.#onBlockRequest);
@@ -42,10 +129,20 @@ export class Sync {
 
 	// API METHODS
 	get isSynced() {
-		const c = this.getConsensus();
-		if (c.equality || c.count === 0) return false;
 		if (!this.node.blockchain?.lastBlock) return false;
-		return c.blockHash === this.node.blockchain.lastBlock.hash;
+
+		const best = this.consensusMerger.best;
+		if (!best?.isRobust) return false; // NOT CLEAR CONSENSUS, CONSIDER NOT SYNCED
+		return best.blockHash === this.node.blockchain.lastBlock.hash;
+	}
+	/** Retreive a list of peers to ask for a specific block height and hash.
+	 * - Both params need to be filled or left empty together resulting in using the best consensus block height and hash.
+	 * @param {number} [height] @param {string} [hash] */
+	getUpdatedPeersToAskList(height, hash) {
+		const best = this.consensusMerger.best;
+		const he = typeof height === 'number' ? height : best?.blockHeight || -1;
+		const ha = typeof hash === 'string' ? hash : best?.blockHash || '';
+		return this.consensusMerger.getPeersToAskList(he, ha);
 	}
 	/** Strategy: rollback to consensus block, then fetch missing blocks from random peers
 	* - If a peer fails or sends invalid data, remove it and retry with another 
@@ -57,27 +154,28 @@ export class Sync {
 
 		const bc = this.node.blockchain;
 		let attempts = 0;
-		do {	// UPDATE CONSENSUS STATUS
-			const c = this.getConsensus();
-			if (attempts && c.blockHash === bc.lastBlock?.hash) this.logger.log(`[SYNC-DONE] IN CONSENSUS at block #${c.blockHeight}`, (m, c) => console.log(m, c));
-			if (c.equality || c.count === 0) return; // No clear consensus
-			if (c.blockHash === bc.lastBlock?.hash) return; // We are in consensus
-			if (bc.currentHeight === c.blockHeight + 1) return; // We are just ahead
+		do {
+			const best = this.consensusMerger.best;
+			if (!best?.isRobust) return; // NOT CLEAR CONSENSUS, ABORT SYNC
 
-			// ROLLBACK UNTIL CONSENSUS BLOCK AND CATCH UP
-			const peersToAsk = this.getPeersToAskList(c.blockHeight, c.blockHash);
+			const { blockHeight, blockHash, count } = best;
+			if (attempts && blockHash === bc.lastBlock?.hash) this.logger.log(`[SYNC-DONE] IN CONSENSUS at block #${blockHeight}`, (m, c) => console.log(m, c));
+			if (blockHash === bc.lastBlock?.hash) return; // WE ARE IN CONSENSUS
+			if (bc.currentHeight === blockHeight + 1) return; // WE ARE JUST AHEAD, MAYBE BLOCK WILL COME SOON, LET'S NOT RISK ROLLING BACK
+
+			const peersToAsk = this.consensusMerger.getPeersToAskList(blockHeight, blockHash);
 			await bc.undoBlock(true); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
-			while (bc.currentHeight > c.blockHeight) await bc.undoBlock(true);
+			while (bc.currentHeight > blockHeight) await bc.undoBlock(true);
 
-			if (!attempts) this.logger.log(`[SYNC-OUT] Catching up with network to h:${c.blockHeight} (hash: ${c.blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
+			if (!attempts) this.logger.log(`[SYNC-OUT] Catching up with network to h:${blockHeight} (hash: ${blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
 			attempts++;
 
 			// DOWNLOAD AND APPLY BLOCKS UNTIL REASONABLE GAP
 			/** @type {string | null} */
 			let peerIdToRestore = null;
-			this.node.updateState(`Syncing from #${bc.currentHeight} to #${c.blockHeight}`);
-			while (bc.currentHeight < c.blockHeight) {
-				if (c.count < 6) { // Small network: tolerance to fetching from the same peer multiple times.
+			this.node.updateState(`Syncing from #${bc.currentHeight} to #${blockHeight}`);
+			while (bc.currentHeight < blockHeight) {
+				if (count < 6) { // Small network: tolerance to fetching from the same peer multiple times.
 					if (peerIdToRestore) peersToAsk.push(peerIdToRestore);
 					peerIdToRestore = null;
 				}
@@ -109,46 +207,6 @@ export class Sync {
 			}
 		} while (attempts < maxAttempts);
 	}
-	getConsensus() {
-		/** @type {Object<BlockHeightHashStr, number>} */
-		const occurences = {};
-		for (const peerId in this.peersStatus) {
-			const bhh = this.peersStatus[peerId];
-			occurences[bhh] = (occurences[bhh] || 0) + 1;
-		}
-
-		const myBHH = this.peersStatus[this.node?.p2p.id];
-		const myBhhObj = myBHH ? BlockHeightHash.fromString(myBHH) : null;
-		const result = { blockHeight: -1, blockHash: '', count: 0, equality: false };
-		for (const bhh in occurences) {
-			if (occurences[bhh] < result.count) continue;
-
-			// PREFER HIGHER BLOCK HEIGHT IN CASE OF TIE
-			const bhhObj = BlockHeightHash.fromString(bhh);
-			const equality = occurences[bhh] === result.count;
-			if (equality && bhhObj.blockHeight < result.blockHeight) continue;
-
-			// PREFER OWN CHAIN IN CASE OF SAME HEIGHT TIE
-			const sameHeight = bhhObj.blockHeight === result.blockHeight;
-			if (sameHeight && myBhhObj?.blockHeight === bhhObj.blockHeight)
-				if (myBhhObj?.blockHash !== bhhObj.blockHash) continue; // prefer own status in case of tie
-			
-			result.blockHeight = bhhObj.blockHeight;
-			result.blockHash = bhhObj.blockHash;
-			result.count = occurences[bhh];
-			result.equality = equality;
-		}
-
-		return result;
-	}
-	/** @param {number} blockHeight @param {string} blockHash */
-	getPeersToAskList(blockHeight, blockHash) {
-		const bhh = BlockHeightHash.toString(blockHeight, blockHash);
-		const peersToAsk = []; // All consensus peers except self
-		for (const peerId of this.peersByBHH[bhh] || new Set())
-			if (peerId !== this.node.p2p.id) peersToAsk.push(peerId); // Don't ask self
-		return peersToAsk;
-	}
 	/** @param {string} peerId @param {number} height @returns {Promise<Uint8Array | undefined>} */
 	async fetchBlockFromPeer(peerId, height, timeout = 3000) {
 		try {
@@ -163,7 +221,7 @@ export class Sync {
 	/** @param {BlockFinalized} block */
 	setAndshareMyStatus(block) {
 		this.myStatusSerialized = serializer.serialize.blockHeightHash(block.index, block.hash);
-		this.peersStatus[this.node.p2p.id] = BlockHeightHash.toString(block.index, block.hash);
+		this.consensusMerger.add(this.node.p2p.id, block.index, block.hash);
 		this.shareMyStatus();
 	}
 	/** @param {number} [HOPS] */
@@ -173,6 +231,10 @@ export class Sync {
 		if (HOPS) options.HOPS = HOPS;
 		this.node.p2p.broadcast(this.myStatusSerialized, options);
 	}
+	reset() {
+		this.consensusMerger = new ConsensusMerger(this.node.p2p.id);
+		this.myStatusSerialized = null;
+	}
 
 	// INTERNAL HANDLERS
 	/** @param {GossipMessage} msg */
@@ -181,16 +243,7 @@ export class Sync {
 		if (!(data instanceof Uint8Array)) return; // not the expected data type
 		try {
 			const { blockHeight, blockHash } = serializer.deserialize.blockHeightHash(data);
-			const oldBHH = this.peersStatus[senderId];
-			if (oldBHH) { // remove old status
-				this.peersByBHH[oldBHH]?.delete(senderId);
-				if (this.peersByBHH[oldBHH]?.size === 0) delete this.peersByBHH[oldBHH];
-			}
-
-			const bhh = BlockHeightHash.toString(blockHeight, blockHash);
-			if (!this.peersByBHH[bhh]) this.peersByBHH[bhh] = new Set();
-			this.peersByBHH[bhh].add(senderId);
-			this.peersStatus[senderId] = bhh;
+			this.consensusMerger.add(senderId, blockHeight, blockHash);
 		} catch (/** @type {any} */ error) { this.logger.log(`[SYNC] -onSyncStatus- Error deserializing sync status from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */

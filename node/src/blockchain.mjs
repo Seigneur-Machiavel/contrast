@@ -79,8 +79,8 @@ export class Blockchain {
 			this.#addBlock(block, involvedAnchors, involvedUTXOs);
 			
 			// APPLY LEDGERS CHANGES (ASYNC)
-			//await this.ledgersStorage.digestBlock(block, involvedUTXOs);
-			this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY');
+			//await this.ledgersStorage.digestBlock(block, involvedUTXOs, 'APPLY');
+			this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY'); // prefer sync
 			this.ledgersStorage.cache.clear();
 			node.memPool.removeFinalizedBlocksTransactions(block);
 			
@@ -158,7 +158,7 @@ export class Blockchain {
 			else throw new Error('Blockchain.undoBlock: unable to retrieve all involved UTXOs for the last block.');
 
 		// await this.ledgersStorage.revertBlock(block, involvedUTXOs, 'REVERT');
-		this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'REVERT');
+		this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'REVERT'); // prefer sync
 		this.vss.revertBlockStakes(block);
 		this.identityStore.revertBlock(block);
 		this.blockStorage.unstore(involvedAnchors);
@@ -227,7 +227,7 @@ export class Blockchain {
 		if (!involvedUTXOs) throw new Error('Blockchain consistency check failed: unable to retrieve all involved UTXOs for the last block.');
 		
 		//const applyCount = await this.ledgersStorage.digestBlock(block, involvedUTXOs, 'APPLY, true);
-		const applyCount = this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY', true);
+		const applyCount = this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY', true); // prefer sync
 		if (applyCount === 0) this.logger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
 		else this.logger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
 		this.ledgersStorage.cache.clear();

@@ -126,11 +126,7 @@ export class MiniLogger {
 			console.error('Error while loading history:', error.stack);
 			if (error.message.includes('at position ')) { // log the incorrect char
 				const positionMatch = error.message.match(/at position (\d+)/);
-				if (positionMatch) {
-					const position = parseInt(positionMatch[1]);
-					const context = fileContent.slice(Math.max(0, position - 20), Math.min(fileContent.length, position + 20));
-					console.error('Context around error position:', context);
-				}
+				if (positionMatch) console.error(`The involved char is: ${fileContent[parseInt(positionMatch[1])]}`);
 			}
 		}
         return [];

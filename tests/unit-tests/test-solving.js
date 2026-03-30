@@ -1,7 +1,7 @@
 // @ts-check
 import { HashFunctions } from '../../node/src/conCrypto.mjs';
 import { solving, conditionnals } from '../../utils/conditionals.mjs';
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../config/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS, SOLVING } from '../../config/blockchain-settings.mjs';
 
 const testStart = Date.now();
 const speedHash = 32; // Used to faster test, but lower precision
@@ -143,7 +143,7 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
             //const powTimestamp = Date.now(); //? test: not betting
 
             const betBlockCandidate = { difficulty: baseDifficulty, legitimacy: 0, posTimestamp, timestamp: powTimestamp };
-            let diffWL = baseDifficulty + (betBlockCandidate.legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy);
+            let diffWL = baseDifficulty + (betBlockCandidate.legitimacy * SOLVING.diffAdjustPerLegitimacy);
             let finalDiff = solving.getBlockFinalDifficulty(betBlockCandidate, targetBlockTime).finalDifficulty;
             const conform = verify(await computeHash(), finalDiff);
             if (!conform) continue;
@@ -157,7 +157,7 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
                 
                 powTimestamp = noBetBlockCandidate.timestamp; // update powTimestamp with the new one
                 finalDiff = noBetFinalDiff; // update finalDiff with the new one
-                diffWL = baseDifficulty + (noBetBlockCandidate.legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy);
+                diffWL = baseDifficulty + (noBetBlockCandidate.legitimacy * SOLVING.diffAdjustPerLegitimacy);
                 break;
             }
 
@@ -180,7 +180,7 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
             console.log(`avgFD: ${averageFinalDiff.toFixed(2)} | EGH: ${estGlobalHasrate.toFixed(2)} H/s | betTime: ${betTime.toFixed(2)}`);
             
             //if (baseDifficulty === newDiff) continue; // no adjustment needed
-            if (success + adjustDiffEveryCrop < MINING_PARAMS.blocksBeforeAdjustment) continue; // no adjustment needed
+            if (success + adjustDiffEveryCrop < SOLVING.blocksBeforeAdjustment) continue; // no adjustment needed
 
             const successRate = success / powCounter * 100;
             console.log(`New difficulty: ${newDiff} | Avg success time: ${(avgSuccessTime*.001).toFixed(3)}s | Hash rate: ${hashRate} H/s | tS/tPow: ${totalSuccess}/${totalPowCounter} | ${successRate.toFixed(2)}%`);

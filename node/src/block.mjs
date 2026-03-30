@@ -1,5 +1,5 @@
 // @ts-check
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../../config/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS, SOLVING } from '../../config/blockchain-settings.mjs';
 import { BlockFinalizedHeader, BlockFinalized,
 	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
 import { solving } from '../../utils/conditionals.mjs';
@@ -113,14 +113,14 @@ export class BlockUtils {
 	/** @param {ContrastNode} node */
 	static calculateAverageBlockTimeAndDifficulty(node, logs = false) {
         const lastBlock = node.blockchain.lastBlock;
-        if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
+        if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: SOLVING.initialDifficulty };
         
-		// const olderBlockHeight = lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment;
-		// if (olderBlockHeight < 0) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
+		// const olderBlockHeight = lastBlock.index - SOLVING.blocksBeforeAdjustment;
+		// if (olderBlockHeight < 0) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: SOLVING.initialDifficulty };
 		
-		const olderBlockHeight = Math.max(0, lastBlock.index - MINING_PARAMS.blocksBeforeAdjustment);
+		const olderBlockHeight = Math.max(0, lastBlock.index - SOLVING.blocksBeforeAdjustment);
         const olderBlock = node.blockchain.getBlock(olderBlockHeight);
-        if (!olderBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: MINING_PARAMS.initialDifficulty };
+        if (!olderBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: SOLVING.initialDifficulty };
 
 		const averageBlockTime = solving.calculateAverageBlockTime(lastBlock, olderBlock);
         const newDifficulty = solving.difficultyAdjustment(lastBlock, averageBlockTime, undefined, logs);
@@ -138,7 +138,7 @@ export class BlockUtils {
 	}
 	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
-	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = MINING_PARAMS.initialDifficulty) {
+	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = SOLVING.initialDifficulty) {
 		const { blockchain, memPool, account, solver, time } = node;
 		if (typeof time !== 'number') throw new Error('Invalid node time');
 		if (!account || !account.pubKey) throw new Error('Node account not set');

@@ -19,11 +19,12 @@ export class Connector {
 	/** @type {PendingRequest | null} */		pendingTransactionsRequest = null;
 	/** @type {PendingRequest | null} */		pendingRoundsLegitimaciesRequest = null;
 	/** @type {Record<string, Function[]>} */	listeners = {};
+
+	get height() { return this.sync.consensusMerger.best?.blockHeight || -1; }
+	get hash() { return this.sync.consensusMerger.best?.blockHash || ''; }
+	get isConsensusRobust() { return this.sync.consensusMerger.best?.isRobust || false; }
 	get prevHash() { return this.blocks.finalized[this.hash]?.prevHash; }
 	get lastBlock() { return this.blocks.finalized[this.hash]; }
-	isConsensusRobust = false;
-	height = -1;
-	hash = '';
 	p2pNode;
 	sync;
 
@@ -67,11 +68,13 @@ export class Connector {
 		if (!this.listeners[type]) this.listeners[type] = [];
 		this.listeners[type].push(callback);
 	}
-	/** @param {number} [height] @param {Object} [consensus] @param {number} consensus.height @param {string} consensus.hash */
-	async getMissingBlock(height = this.height, consensus = { height: this.height, hash: this.hash }) {
-		const peersToAsk = this.sync.getPeersToAskList(consensus.height, consensus.hash);
+	/** @param {number} [height] */
+	async getMissingBlock(height = this.height) {
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
 			const blockBytes = await this.sync.fetchBlockFromPeer(peerId, height);
+			if (!blockBytes) continue;
+
 			const block = this.#storeBlock(blockBytes);
 			if (block) return block;
 		}
@@ -99,7 +102,7 @@ export class Connector {
 	}
 	/** @param {string} address */
 	async getAddressLedger(address, timeout = 3000) {
-		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
 			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
 			this.p2pNode.messager.sendUnicast(peerId, address, 'address_ledger_request');
@@ -114,7 +117,7 @@ export class Connector {
 	async getTransactions(txIds, timeout = 5000, force = false) {
 		// only fetch transactions for which we don't have the implied UTXOs (which means we don't have the transaction details)
 		const txIdsToFetch = force ? txIds : txIds.filter(txId => !this.utxosByAnchors.has(txId));
-		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
 			console.log(`Requesting transactions ${txIdsToFetch} from peer ${peerId}`);
 			const serializedTxIds = serializer.serialize.txsIdsArray(txIdsToFetch);
@@ -142,7 +145,9 @@ export class Connector {
 		const t = Math.min(toHeight, this.height);
 		const min = Math.max(0, t - 119);
 		const f = Math.max(min, Math.min(fromHeight, t));
-		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		if (f > t) return null; // invalid range
+
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
 			this.pendingTimestampsRequest = new PendingRequest(peerId, 'blocks_timestamps', timeout);
 			const s = serializer.serialize.blocksTimestampsRequest(f, t);
@@ -156,7 +161,7 @@ export class Connector {
 	async getRoundsLegitimacies(timeout = 5000) {
 		if (!this.prevHash) return null;
 
-		const peersToAsk = this.sync.getPeersToAskList(this.height, this.hash);
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
 			this.pendingRoundsLegitimaciesRequest = new PendingRequest(peerId, 'rounds_legitimacies', timeout);
 			const s = serializer.converter.hexToBytes(this.prevHash);
@@ -169,15 +174,15 @@ export class Connector {
 	}
 	
 	// INTERNAL METHODS
+	#lastConsensus = { blockHeight: -1, blockHash: '' };
 	async #consensusChangeDetectionLoop() {
 		setInterval(() => {
-			const c = this.sync.getConsensus();
-			if (this.height === c.blockHeight && this.hash === c.blockHash) return; // No change
+			const best = this.sync.consensusMerger.best;
+			if (!best) return; // no consensus at all
 
-			this.isConsensusRobust = !c.equality && c.count >= 1;
-			this.height = c.blockHeight;
-			this.hash = c.blockHash;
-			console.log(`Consensus height changed #${this.height} | Robust: ${this.isConsensusRobust}(c: ${c.count})`);
+			if (best.blockHeight === this.#lastConsensus.blockHeight && best.blockHash === this.#lastConsensus.blockHash) return; // no change in consensus
+			this.#lastConsensus = { blockHeight: best.blockHeight, blockHash: best.blockHash };
+			console.log(`Consensus height changed #${this.height} | Robust: ${best.isRobust}(c: ${best.count}, r: ${best.ratio})`);
 
 			if (!this.blocks.finalized[this.hash]) this.getMissingBlock();
 			for (const handler of this.listeners['consensus_height_change'] || []) handler(this.height);
@@ -187,11 +192,11 @@ export class Connector {
 		console.log(`New peer connected! Total neighbors: ${this.p2pNode.peerStore.neighborsList.length}`);
 		for (const handler of this.listeners['peer_connect'] || []) handler();
 		if (this.p2pNode.peerStore.neighborsList.length !== 1) return;
-		this.isConsensusRobust = false; this.height = -1; this.hash = ''; // reset consensus data
 		for (const handler of this.listeners['connection_established'] || []) handler();
 	};
 	#onPeerDisconnect = () => {
 		console.log(`Peer disconnected! Total neighbors: ${this.p2pNode.peerStore.neighborsList.length}`);
+		this.sync.reset(); // if we just had 0 peer => reset consensus.
 		for (const handler of this.listeners['peer_disconnect'] || []) handler();
 	}
 	/** @param {Uint8Array} serializedBlock */

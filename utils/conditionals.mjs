@@ -2,7 +2,7 @@
 import { serializer } from './serializer.mjs';
 import { IS_VALID } from '../types/validation.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
-import { BLOCKCHAIN_SETTINGS, MINING_PARAMS } from '../config/blockchain-settings.mjs';
+import { BLOCKCHAIN_SETTINGS, SOLVING } from '../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash
@@ -46,7 +46,7 @@ export const solving = {
 
         if (typeof blockIndex !== 'number') { logger.log('Invalid blockIndex', (m, c) => console.error(m, c)); return difficulty; }
 		if (blockIndex === 0) return difficulty;
-        if (blockIndex % MINING_PARAMS.blocksBeforeAdjustment !== 0) return difficulty;
+        if (blockIndex % SOLVING.blocksBeforeAdjustment !== 0) return difficulty;
 
         const deviation = 1 - (averageBlockTimeMS / targetBlockTime);
         const deviationPercentage = deviation * 100; // over zero = too fast / under zero = too slow
@@ -56,8 +56,8 @@ export const solving = {
             logger.log(`Deviation: ${deviation.toFixed(4)} | Deviation percentage: ${deviationPercentage.toFixed(2)}%`, (m, c) => console.info(m, c));
         }
 
-        const diffAdjustment = Math.floor(Math.abs(deviationPercentage) / MINING_PARAMS.thresholdPerDiffIncrement);
-        const capedDiffIncrement = Math.min(diffAdjustment, MINING_PARAMS.maxDiffIncrementPerAdjustment);
+        const diffAdjustment = Math.floor(Math.abs(deviationPercentage) / SOLVING.thresholdPerDiffIncrement);
+        const capedDiffIncrement = Math.min(diffAdjustment, SOLVING.maxDiffIncrementPerAdjustment);
         const diffIncrement = deviation > 0 ? capedDiffIncrement : -capedDiffIncrement;
         const newDifficulty = Math.max(difficulty + diffIncrement, 1); // cap at 1 minimum
 
@@ -92,7 +92,7 @@ export const solving = {
         return periodInterval / blockCount;
     },
     /** @param {number} length - Nonce length in bytes */
-    generateRandomNonce: (length = MINING_PARAMS.nonceLength) => {
+    generateRandomNonce: (length = SOLVING.nonceLength) => {
         const Uint8 = new Uint8Array(length);
         crypto.getRandomValues(Uint8);
 
@@ -110,7 +110,7 @@ export const solving = {
      * @param {string} blockSignature - Block signature to hash
      * @param {string} nonce - Nonce to hash */
     hashBlockSignature: async (argon2HashFunction, blockSignature = '', nonce = '') => {
-        const { time, mem, parallelism, type, hashLen } = MINING_PARAMS.argon2;
+        const { time, mem, parallelism, type, hashLen } = SOLVING.argon2;
         const newBlockHash = await argon2HashFunction(blockSignature, nonce, mem, time, parallelism, type, hashLen);
         return newBlockHash;
     },
@@ -124,8 +124,8 @@ export const solving = {
         if (!IS_VALID.POSITIVE_INTEGER(powTimestamp)) throw new Error('Invalid timestamp');
 
         const differenceRatio = (powTimestamp - posTimestamp) / targetBlockTime;
-        const timeDiffAdjustment = MINING_PARAMS.maxTimeDifferenceAdjustment - Math.round(differenceRatio * MINING_PARAMS.maxTimeDifferenceAdjustment);
-        const legitimacyAdjustment = legitimacy * MINING_PARAMS.diffAdjustPerLegitimacy;
+        const timeDiffAdjustment = SOLVING.maxTimeDifferenceAdjustment - Math.round(differenceRatio * SOLVING.maxTimeDifferenceAdjustment);
+        const legitimacyAdjustment = legitimacy * SOLVING.diffAdjustPerLegitimacy;
         const finalDifficulty = Math.max(difficulty + timeDiffAdjustment + legitimacyAdjustment, 1); // cap at 1 minimum
         return { difficulty, timeDiffAdjustment, legitimacy, finalDifficulty };
     },
@@ -164,13 +164,13 @@ export const solving = {
         if (avgTimeGap < 1) return 1;
         
         const timeDiffRatio = targetBlockTime / avgTimeGap;
-        const base1HsDiff = MINING_PARAMS.oneHsDiffBasis; // Difficulty for 1H/s: 77
+        const base1HsDiff = SOLVING.oneHsDiffBasis; // Difficulty for 1H/s: 77
         const exceedingDiff = avgDiffWithLegitimacy - base1HsDiff; // 130 - 77 = 53
         if (exceedingDiff <= 0) return 1 * timeDiffRatio; // 1H/s
 
-        const exp = Math.floor(exceedingDiff / MINING_PARAMS.doubleDiffPoints); // 18 / 53 = 3
-        const rem = exceedingDiff % MINING_PARAMS.doubleDiffPoints; // 53 % 16 = 5
-        const percentPerPoint = 1 / MINING_PARAMS.doubleDiffPoints; // 1 / 16 = 0.0625
+        const exp = Math.floor(exceedingDiff / SOLVING.doubleDiffPoints); // 18 / 53 = 3
+        const rem = exceedingDiff % SOLVING.doubleDiffPoints; // 53 % 16 = 5
+        const percentPerPoint = 1 / SOLVING.doubleDiffPoints; // 1 / 16 = 0.0625
         
         let totalHashrate = Math.pow(2, exp); // 2^3 = 8H/s
         totalHashrate *= 1 + (rem * percentPerPoint); // 8 * (1 + (5 * 0.0625)) = 8 * 1.3125 = 10.5H/s

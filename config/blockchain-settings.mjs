@@ -49,7 +49,13 @@ export const BLOCKCHAIN_SETTINGS_120SEC = { // DEPRECATED
     stakeAmount: 10_000_000, 	// 10_000_000 mC = 10 C
 };
 
-export const MINING_PARAMS = {
+// a minConsensusRatio of 1 means that the best consensus must have at least the same number of peers as the second best consensus to be considered valid, otherwise we consider that there is no consensus
+export const CONSENSUS = { // AS MUCH BIGGER THE NETWORK GROWS, AS MUCH STRICTER THE CONSENSUS SHOULD BE
+	minConsensusPeers: 2, // minimum number of peers required to have a valid consensus
+	minConsensusRatio: 1, // bestConsensusPeers / secondBestConsensusPeers must be >= this value to have a valid consensus, otherwise we consider that there is no consensus
+};
+
+export const SOLVING = {
     // a difficulty incremented by 16 means 1 more zero in the hash - then 50% more difficult to find a valid hash
     // a difference of 1 difficulty means 3.125% harder to find a valid hash
     argon2: {
