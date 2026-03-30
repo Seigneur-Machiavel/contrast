@@ -3,8 +3,8 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
 const enableBoardService = args.includes('--board-service');
 const controllerPort = args.includes('-cp') ? parseInt(nextArg('-cp')) : 27261;
-const chachaSeedHex = args.includes('-cs') ? nextArg('-cs') : undefined;
-const unsafeMode = true; // args.includes('--controller-unsafe');
+const serverChachaSeedHex = args.includes('-scs') ? nextArg('-scs') : undefined; // chachaSeed to use instead of gnerating a new on in NodeController. Useful while starting client on different process or worker.
+const unsafeServePubKey = args.includes('--unsafe-serve-pubkey'); // WARNING: ENABLING THIS CAN EXPOSE THE NODE TO MITM ATTACKS - ONLY USE IN SAFE ENVIRONMENTS!
 
 import { Wallet } from './src/wallet.mjs';
 import { createContrastNode } from './src/node.mjs';
@@ -28,13 +28,25 @@ const wallet = new Wallet(seedHex);
 await wallet.deriveAccounts(2, 'C', storage);
 
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
-const clientNode = await createContrastNode({ cryptoCodex, storage, bootstraps, chachaSeedHex, controllerPort, unsafeMode });
+const clientNode = await createContrastNode({
+	cryptoCodex,
+	storage,
+	bootstraps,
+	controllerPort,
+	serverChachaSeedHex,
+	unsafeServePubKey
+});
 await clientNode.start(wallet);
 
 // PERSIST THE SEED FOR NEXT STARTUPS IF NODE IS ABLE TO START SUCCESSFULLY
 startupStorage.saveBinary('seed', seed);
 
+// LOG THE CONTROLLER PUBKEY IF NECESSARY
+if (!unsafeServePubKey && !serverChachaSeedHex && clientNode.controller)
+	console.log(`[CONTROLLER PUBKEY: ${serializer.converter.bytesToHex(clientNode.controller?.myKeypair.myPub)}`);
+
+// START THE BOARD SERVICE IF THE FLAG IS ENABLED
 if (enableBoardService) {
 	const { startBoardService } = await import('./board-service.mjs');
-	startBoardService();
+	startBoardService(undefined, undefined, controllerPort);
 }

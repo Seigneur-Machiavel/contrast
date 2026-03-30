@@ -19,7 +19,6 @@
 }
 .cnd-dashboard-wrapper.connecting .cnd-establishing-connection {
 	display: flex;
-	pointer-events: none;
 }
 #cnd-establishing-connection-text.hidden {
 	display: none;

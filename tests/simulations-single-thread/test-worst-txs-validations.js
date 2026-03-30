@@ -6,12 +6,6 @@
 // 1) LOT OF SINGLE OUTPUT TRANSACTIONS (HIGH VALIDATION COST FOR THE NUMBER OF TXS IN BLOCK)
 // 2) ONE MULTI OUTPUT TRANSACTION WITH LOT OF OUTPUTS (HIGH VALIDATION COST FOR ONE SINGLE TX IN BLOCK)
 
-function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
-const args = process.argv.slice(2); // digest the start args
-const domain = undefined; // args.includes('--local') ? 'localhost' : '0.0.0.0';
-const nodePort = undefined; //args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const clearOnStart = true; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
-
 import { Wallet } from '../../node/src/wallet.mjs';
 import { createContrastNode } from '../../node/src/node.mjs';
 import { Transfer } from "../../types/transaction.mjs";
@@ -24,7 +18,12 @@ import HiveP2P from "hive-p2p";
 import { HIVE_P2P_CONFIG } from '../../config/hive-p2p-config.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
-// TEST CONFIG
+// CONFIG
+function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
+const args = process.argv.slice(2); // digest the start args
+const domain = undefined; // args.includes('--local') ? 'localhost' : '0.0.0.0';
+const nodePort = undefined; //args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
+const clearOnStart = true; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
 const nbReceipients = nor || 6000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
@@ -44,7 +43,7 @@ const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed);
 // @ts-ignore
 const node = await createContrastNode({ cryptoCodex, bootstraps, storage, domain, port: nodePort });
-if (node.controller) node.controller.enableUnsafeMode(); // ENABLE UNSAFE MODE FOR TESTING
+if (node.controller) node.controller.enableUnsafeServePubKey(); // ENABLE UNSAFE MODE FOR TESTING
 await node.start(wallet);
 
 // -------------------------------------------------------------------------------------

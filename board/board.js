@@ -122,12 +122,12 @@ document.addEventListener('mousemove', (e) => {
 	appsManager.mousemoveHandler(e);
 	visualizer.networkRenderer.handleMouseMove(e);
 }, { passive: true });
-document.addEventListener('input', (e) => biw.inputHandler(e));
+document.addEventListener('input', (e) => { biw.inputHandler(e), dashboard.inputHandler(e) });
 document.addEventListener('keydown', (e) => {
 	biw.keyDownHandler(e);
 	visualizer.onKeyDown(e);
 });
-document.addEventListener('paste', (e) => biw.pasteHandler(e));
+document.addEventListener('paste', (e) => { biw.pasteHandler(e), dashboard.pasteHandler(e) });
 document.addEventListener('focusin', (e) => biw.focusInHandler(e));
 document.addEventListener('focusout', (e) => biw.focusOutHandler(e));
 document.addEventListener('change', (event) => {

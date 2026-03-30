@@ -64,7 +64,7 @@ async function main() {
 	const node = new NodeManager(CONTRAST_EXE);
 
 	const { startBoardService } = await import('../node/board-service.mjs');
-	startBoardService(safeConnexionToken, node.pubKeyHex);
+	startBoardService(safeConnexionToken, node.serverPubKeyHex);
 
 	// Spawn Neutralino window with token in query for secure board.js access, if available
 	const neutralinoArgs = safeConnexionToken ? [`--url=http://localhost:27262?token=${safeConnexionToken}`] : [];

@@ -50,6 +50,10 @@ export class Dashboard {
 		this.#initWhileDomReady();
 	}
 
+	// HANDLERS
+	inputHandler(e) { if (e.target.dataset.action === 'setPubkeyFromInput') this.#setControllerPubkeyFromInput(); }
+	pasteHandler(e) { if (e.target.dataset.action === 'setPubkeyFromInput') this.#setControllerPubkeyFromInput(); }
+
 	// INTERNAL METHODS
 	async #initWhileDomReady() {
 		if (!eHTML.isReady) console.log('Dashboard awaiting DOM elements...');
@@ -75,11 +79,8 @@ export class Dashboard {
 		this.isWsAccessible = true;
 		eHTML.get('establishing-connection-text').classList.add('hidden');
 		
-		if (this.hostPubkeyStr) this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr));
-		else eHTML.get('node-pubkey-input').classList.remove('hidden');
-		this.ws.send(this.myKeypair.myPub);
-		//this.#setPubkeyFromInput();
-		//if (!this.sharedSecret) this.buildSharedSecretFromPubkey();
+		if (!this.hostPubkeyStr) eHTML.get('node-pubkey-input').classList.remove('hidden');
+		else this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr), true);
 	}
 	/** @param {string} [reason] */
 	#handleClose = (reason) => {
@@ -95,15 +96,18 @@ export class Dashboard {
 		if (reason) console.log(`[NodeController] WebSocket connection closed: ${reason}`);
 		else console.log('[NodeController] WebSocket connection closed.');
 	}
-	#setPubkeyFromInput() {
+	#setControllerPubkeyFromInput() {
 		try {
 			const input = eHTML.get('node-pubkey-input');
 			const pubkeyStr = input.value.trim();
 			if (pubkeyStr.length !== 64) return null; // expecting 32-byte public key in hex
 			else input.value = '';
 
-			if (chrome.storage) chrome.storage.local.set({ nodePubkey: pubkeyStr });
 			this.hostPubkeyStr = pubkeyStr;
+			if (chrome.storage) chrome.storage.local.set({ nodePubkey: pubkeyStr });
+			
+			this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr), true);
+			console.log('Controller pubkey set from input and saved to storage.');
 		} catch (error) { console.error('Error getting public key from input:', error); }
 	}
 	async #pubkeyFromStorage() {
@@ -122,7 +126,7 @@ export class Dashboard {
 			const d = new Uint8Array(message.data);
 			if (d.length === 0) throw new Error('WRONG PUBKEY'); // error response from server
 			// UNSAFE MODE PUBKEY HANDLER
-			if (!this.sharedSecret && d.length === 32) return this.buildSharedSecretFromPubkey(d);
+			if (!this.sharedSecret && d.length === 32) return this.buildSharedSecretFromPubkey(d, true);
 			
 			const { type, data } = this.#parseEncryptedMessage(d) || {};
 			if (!type) return this.#handleClose('Unable to parse encrypted message.');
@@ -153,12 +157,13 @@ export class Dashboard {
 
 	// PUBLIC METHODS
 	/** @param {Uint8Array} pubkey */
-	buildSharedSecretFromPubkey(pubkey) {
+	buildSharedSecretFromPubkey(pubkey, thenSendPubkey = false) {
 		const p = pubkey || (this.hostPubkeyStr === null ? null : serializer.converter.hexToBytes(this.hostPubkeyStr));
 		if (!p) return null;
 		try {
 			const sharedSecret = this.connector.p2pNode.cryptoCodex.computeX25519SharedSecret(this.myKeypair.myPriv, p);
 			this.sharedSecret = sharedSecret;
+			if (thenSendPubkey) this.ws.send(this.myKeypair.myPub); // Then send client pubkey to server to complete key exchange
 		} catch (error) { console.error('Error computing shared secret:', error); }
 	}
 	/** @param {string} type @param {any} data */
@@ -175,80 +180,4 @@ export class Dashboard {
 		if (type === 'stateUpdate') return this.#handleStateUpdate(data);
 		console.log(`[Dashboard] Received unknown message of type "${type}":`, data);
 	}
-}
-
-function connectWS() {
-    ws = new WebSocket(`${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
-    //console.log(`Connecting to ${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
-  
-    ws.onopen = function() {
-        console.log('Connection opened');
-        ws.send(JSON.stringify({ type: 'get_node_info', data: Date.now() })); // do it once at the beginning
-    };
-    ws.onclose = function() {
-        console.info('Connection closed');
-        setTimeout(connectWS, WS_SETTINGS.RECONNECT_INTERVAL); // retry connection
-    };
-    ws.onerror = function(error) { console.info('WebSocket error: ' + error); };
-  
-    ws.onmessage = function(event) {
-        const message = JSON.parse(event.data);
-        const trigger = message.trigger;
-        const data = message.data;
-        if (data && data.error) { console.info(data.error); }
-        switch (message.type) {
-            case 'error':
-                if (data === 'No active node' && !modalOpen) {
-                    openModal(ACTIONS.SETUP, {
-                        message: 'No active node detected. Please set up your private key.',
-                        inputLabel: 'Private Key:',
-                        inputType: 'password',
-                        showInput: true
-                    });
-                    console.log('No active node, opening setup modal');
-                }
-                break;
-            case 'node_info':
-                if (data.error === 'No active node') { return; }
-
-                displayNodeInfo(data);
-                nodeId = data.nodeId;
-                validatorUTXOs = data.validatorUTXOs;
-                solverUTXOs = data.solverUTXOs;
-                
-                break;
-            case 'state_updated':
-                if (typeof data !== 'string') { console.error('state_update: data is not a string'); return; }
-                eHTML.nodeState.textContent = data;
-                break;
-            case 'node_restarting':
-                console.log('node_restarting', data);
-                break;
-            case 'node_restarted':
-                console.log('node_restarted', data);
-                break;
-            case 'broadcast_new_candidate':
-                console.log('broadcast_new_candidate', data);
-                break;
-            case 'broadcast_finalized_block':
-                //console.log('broadcast_finalized_block', data);
-                break;
-            case 'transaction_broadcasted':
-                console.log('transaction_broadcasted', data);
-                break;
-            case 'hash_rate_updated':
-                if (isNaN(data)) { console.error(`hash_rate_updated: ${data} is not a number`); return; }
-                eHTML.hashRate.textContent = data.toFixed(2);
-                break;
-            case 'balance_updated':
-                //console.log('balance_updated', data);
-                return; // not used anymore, we fetch node_info frequently
-                if(trigger === eHTML.validatorAddress.textContent) { eHTML.validatorBalance.textContent = convert.formatNumberAsCurrency(data); }
-                if(trigger === eHTML.solverAddress.textContent) { eHTML.solverBalance.textContent = convert.formatNumberAsCurrency(data); }
-                break;
-            default:
-                console.error(`Unknown message type: ${message.type}`);
-                break;
-        }
-    };
 }

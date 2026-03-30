@@ -8,9 +8,8 @@ import { CryptoCodex } from 'hive-p2p';
 
 // ---- NODE MANAGER ------------------------------------------------------------------
 export class NodeManager {
-	// Ephemeral seed generated once at launcher start — never written to disk
-	seed = crypto.randomBytes(32).toString('hex');
-	pubKeyHex; // to access from launcher.mjs
+	seed; // Ephemeral seed generated once at launcher start — never written to disk
+	serverPubKeyHex; // to access from launcher.mjs
 	/** @type {import('child_process').ChildProcess | null} */
 	#process = null;
 	#exePath;
@@ -23,13 +22,14 @@ export class NodeManager {
 		this.#exePath = exePath;
 		this.#autoRestart = autoRestart;
 		
-		const codex = new CryptoCodex(); // empty codex just to generate the keypair for auto-logging
+		this.seed = crypto.randomBytes(32).toString('hex');
+		const codex = new CryptoCodex(); // empty codex to generate the keypair for auto-logging
 		const keypair = codex.generateEphemeralX25519Keypair(this.seed);
 		if (!keypair?.myPub) return;
 
-		this.pubKeyHex = codex.converter.bytesToHex(keypair.myPub);
-		console.log('[NodeManager] generated ephemeral keyPair and assigned pubKeyHex');
-		// console.log(`[NodeManager] pubkey ${this.pubKeyHex}`);
+		this.serverPubKeyHex = codex.converter.bytesToHex(keypair.myPub);
+		console.log('[NodeManager] generated ephemeral keyPair and assigned serverPubKeyHex');
+		// console.log(`[NodeManager] pubkey ${this.serverPubKeyHex}`);
 		// console.log(`[NodeManager] privKey ${codex.converter.bytesToHex(keypair.myPriv)}`);
 	}
 
@@ -37,7 +37,7 @@ export class NodeManager {
 		if (this.isRunning) { console.log('[node] already running'); return; }
 		if (!fs.existsSync(this.#exePath)) { console.log('[node] contrast.exe not found — run update first'); return; }
 
-		this.#process = spawn(this.#exePath, ['--mode=run-client', '-cs', this.seed], { stdio: ['ignore', 'inherit', 'inherit'] });
+		this.#process = spawn(this.#exePath, ['--mode=run-client', '-scs', this.seed], { stdio: ['ignore', 'inherit', 'inherit'] });
 		this.#process.on('exit', (code) => {
 			this.#process = null;
 			console.log(`[node] exited (code ${code})`);

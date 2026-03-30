@@ -10,22 +10,22 @@ export class NodeController {
 	/** @type {NodeJS.Timeout | null} */			authTimeout = null;
 	textEncoder = new TextEncoder();
 	textDecoder = new TextDecoder();
-	unsafeMode;
+	unsafeServePubKey;
 	pingInterval;
 	sharedSecret;
 	myKeypair;
 	wsServer;
 	node;
 
-	/** @param {ContrastNode} node @param {number} [port] @param {string} [chachaSeedHex] - A 32bytes hex-encoded seed for key generation */
-	constructor(node, port = 27261, chachaSeedHex, unsafeMode = false) {
+	/** @param {ContrastNode} node @param {number} [port] @param {string} [serverChachaSeedHex] - A 32bytes hex-encoded seed for key generation (if not set, client-server pubkeys will be exchanged) */
+	constructor(node, port = 27261, serverChachaSeedHex, unsafeServePubKey = false) {
 		this.node = node;
-		this.unsafeMode = unsafeMode;
+		this.unsafeServePubKey = unsafeServePubKey;
 		this.wsServer = new WebSocketServer({ port });
 		this.wsServer.on('connection', this.#handleConnection);
-		this.myKeypair = this.node.p2p.cryptoCodex.generateEphemeralX25519Keypair(chachaSeedHex);
+		this.myKeypair = this.node.p2p.cryptoCodex.generateEphemeralX25519Keypair(serverChachaSeedHex);
 		console.log(`[NodeController] started on port ${port}`);
-		console.log(`[NodeController] unsafeMode is ${this.unsafeMode ? 'ENABLED' : 'DISABLED'}`);
+		console.log(`[NodeController] unsafeServePubKey is ${this.unsafeServePubKey ? 'ENABLED' : 'DISABLED'}`);
 		console.log('[NodeController] waiting for client connection...');
 		//console.log(`[NodeController] Public key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPub)}`);
 		//console.log(`[NodeController] Private key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPriv)}`);
@@ -42,7 +42,8 @@ export class NodeController {
 		this.wsConnection = ws;
 		ws.on('message', (message) => this.#handleMessage(message));
 		ws.on('close', () => this.#handleClose());
-		this.authTimeout = setTimeout(() => this.#handleClose('authentication timeout'), 1_000);
+		if (this.unsafeServePubKey) this.wsConnection.send(this.myKeypair.myPub); // share the server pubkey
+		//this.authTimeout = setTimeout(() => this.#handleClose('authentication timeout'), 1_000);
 	}
 	/** @param {string | Buffer | ArrayBuffer | Buffer[] } message */
 	#handleMessage = (message) => {
@@ -69,8 +70,7 @@ export class NodeController {
 		const codex = this.node.p2p.cryptoCodex;
 		const sharedSecret = codex.computeX25519SharedSecret(this.myKeypair.myPriv, data);
 		this.sharedSecret = sharedSecret;
-		if (this.authTimeout) { clearTimeout(this.authTimeout); this.authTimeout = null; }
-		if (this.unsafeMode) this.wsConnection.send(this.myKeypair.myPub); // share the pubkey back in unsafe mode
+		//if (this.authTimeout) { clearTimeout(this.authTimeout); this.authTimeout = null; }
 		console.log('[NodeController] Key exchange completed - secure channel established');
 	}
 	/** @param {Uint8Array} encryptedData */
@@ -82,7 +82,7 @@ export class NodeController {
 	}
 	/** @param {string} [reason] */
 	#handleClose = (reason) => {
-		if (this.authTimeout) { clearTimeout(this.authTimeout); this.authTimeout = null; }
+		//if (this.authTimeout) { clearTimeout(this.authTimeout); this.authTimeout = null; }
 		if (this.wsConnection) this.wsConnection.close();
 		this.wsConnection = null;
 		this.sharedSecret = null;
@@ -90,13 +90,13 @@ export class NodeController {
 	}
 
 	// PUBLIC METHODS
-	enableUnsafeMode() {
-		this.unsafeMode = true;
-		console.log('[NodeController] unsafeMode is ENABLED');
+	enableUnsafeServePubKey() {
+		this.unsafeServePubKey = true;
+		console.log('[NodeController] unsafeServePubKey is ENABLED');
 	}
-	disableUnsafeMode() {
-		this.unsafeMode = false;
-		console.log('[NodeController] unsafeMode is DISABLED');
+	disableUnsafeServePubKey() {
+		this.unsafeServePubKey = false;
+		console.log('[NodeController] unsafeServePubKey is DISABLED');
 	}
 	/** @param {string} type @param {any} data */
 	sendEncryptedMessage = (type, data) => {

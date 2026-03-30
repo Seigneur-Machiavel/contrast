@@ -24,25 +24,22 @@ const pkg = startupStorage.loadJSON('package', true);
 const version = pkg.version // '0.6.12'
 console.info(`[BOARD SERVICE] Version: ${version} - ${bootstraps.length} bootstraps`);
 
+// HANDLE STARTUP ARGS
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2);
 const start = args.includes('--start') || args.includes('-s');
-const hostname = args.includes('-nh') ? nextArg('-nh') : 'localhost';
-const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const wsProtocol = args.includes('-wss') ? 'wss' : 'ws';
 const hostPubkey = args.includes('-hpk') ? nextArg('-hpk') : undefined;
-const PORT = 27262;
 
+const SERVICE_PORT = 27262;
 const CSP_BASE = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';`;
 const CSP_CONNECT = [
     `connect-src 'self'`,
     `https://time.cloudflare.com`,
     `https://time.google.com`,
     `https://pool.ntp.org`,
-    `ws://127.0.0.1:27261`,
+    // `ws://127.0.0.1:27261`, Will be pushed by startBoardService()
 	...bootstraps
-].join(' ');
-const CSP = `${CSP_BASE} ${CSP_CONNECT};`;
+];
 
 const MIME = {
     '.js': 'application/javascript', '.mjs': 'application/javascript',
@@ -62,13 +59,11 @@ const STATIC = [
     { prefix: '/',            		dir: path.join(rootFolder, 'board') }, // catch-all last
 ];
 
-//const CSP = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ${wsProtocol}://${hostname}:${nodePort} ws://127.0.0.1:27261 https://time.cloudflare.com https://time.google.com https://pool.ntp.org;`;
-
 /** @param {http.ServerResponse} res @param {number} code */
 function send404(res, code = 404) { res.writeHead(code).end(); }
 
-/** @param {http.IncomingMessage} req @param {http.ServerResponse} res */
-function serveStatic(req, res) {
+/** @param {http.IncomingMessage} req @param {http.ServerResponse} res @param {string} CSP */
+function serveStatic(req, res, CSP) {
     for (const { prefix, dir } of STATIC) {
 		if (req.method !== 'GET') return send404(res);
 		
@@ -89,8 +84,13 @@ function serveStatic(req, res) {
 
 const boardMjs = fs.readFileSync(path.join(rootFolder, 'board/board.js'), 'utf8');
 
-/** @param {string} [safeConnexionToken] @param {string} [hostPubkeyStr] */
-export function startBoardService(safeConnexionToken = null, hostPubkeyStr = null) {
+/** @param {string} [safeConnexionToken] @param {string} [hostPubkeyStr] The NodeController server pubKey @param {number} [controllerPort] */
+export function startBoardService(safeConnexionToken = null, hostPubkeyStr = null, controllerPort = 27261) {
+	// APPEND CONTROLLER_PORT TO CSP ----------------------------
+	CSP_CONNECT.push(`ws://127.0.0.1:${controllerPort}`);
+	const CSP = `${CSP_BASE} ${CSP_CONNECT.join(' ')};`;
+	
+	// START HTTP SERVER ----------------------------------------
 	const hpkStr = hostPubkeyStr || hostPubkey || null;
 	http.createServer((req, res) => {
 		const url = (req.url ?? '/').split('?')[0]; // http://localhost:27262?token=abc123
@@ -118,6 +118,16 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 			return res.end(patched);
 		}
 
+		if (url === '/dashboard/dashboard.js') {
+			console.log('REQUESTING DASHBOARD.JS');
+			// replacee "PORT: 27261," by actual controllerPort in dashboard.js on the fly
+			let dashboardPath = path.join(rootFolder, 'board/dashboard/dashboard.js');
+			let dashboardMjs = fs.readFileSync(dashboardPath, 'utf8');
+			dashboardMjs = dashboardMjs.replace(/PORT:\s*\d{4,5}/, `PORT: ${controllerPort}`);
+			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
+			return res.end(dashboardMjs);
+		}
+
 		if (url === '/api/time') {
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			return res.end(JSON.stringify({ time: HiveP2P.CLOCK.time }));
@@ -129,8 +139,8 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 			return fs.createReadStream(filePath).pipe(res);
 		}
 
-		serveStatic(req, res);
-	}).listen(PORT, () => console.log(`Board service running at http://localhost:${PORT}`));
+		serveStatic(req, res, CSP);
+	}).listen(SERVICE_PORT, () => console.log(`Board service running at http://localhost:${SERVICE_PORT}`));
 }
 
 if (start) startBoardService();
