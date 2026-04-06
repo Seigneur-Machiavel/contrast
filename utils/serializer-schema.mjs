@@ -25,6 +25,10 @@ export const SIZES = {
 	// TRANSACTION
 	/** Transaction header, represented as 10 bytes, containing: version(2) + witnessesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2) */
 	txHeader: { bytes: 2 + 2 + 2 + 2 + 2, str: null },
+	/** Validator witness, represented as 96 bytes, containing: signature(64) + pubKey(32) */
+	validatorWitness: { bytes: 96, str: 192 },
+	/** Regular witness, represented as 68 bytes, containing: signature(64) + pubKeyHash(4) */
+	witness: { bytes: 68, str: 136 },
 	/** Anchor, represented as 8 bytes, containing: height(4) + txIndex(2) + vout(2) */
 	anchor: { bytes: 8, str: null },
 	/** Transaction ID, represented as 6 bytes, containing: height(4) + txIndex(2) */
@@ -33,12 +37,10 @@ export const SIZES = {
 	utxoState: { bytes: 5, str: null },
 	/** Mini UTXO, represented as 12 bytes, containing: address(5) + amount(6) + rule(1) */
 	miniUTXO: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 6 + 1, str: null },
+
+	// LEDGERS
 	/** Ledger UTXO, represented as 15 bytes, containing: height(4) + txIndex(2) + vout(2) + amount(6) + rule(1) */
 	ledgerUtxo: { bytes: 4 + 2 + 2 + 6 + 1, str: null },
-	/** Validator witness, represented as 96 bytes, containing: signature(64) + pubKey(32) */
-	validatorWitness: { bytes: 96, str: 192 },
-	/** Regular witness, represented as 68 bytes, containing: signature(64) + pubKeyHash(4) */
-	witness: { bytes: 68, str: 136 },
 
 	// BLOCK VALUES
 	/** Block candidate header, represented as 60 bytes, containing: nbOfTxs(2) + index(4) + supply(6) + coinBase(4) + difficulty(4) + legitimacy(2) + prevHash(32) + posTimestamp(6) + powReward(6) */

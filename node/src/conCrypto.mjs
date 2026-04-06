@@ -11,7 +11,6 @@ const converter = new Converter();
 export const argon2Hash = argon2.hash;
 
 export class HashFunctions {
-    //static Argon2 = argon2Hash;
 	static Argon2 = argon2.hash;
 	/** Return a hash of the input as Hexadecimal string @param {string | Uint8Array} input @param {number} minLength */
     static xxHash32 = (input, minLength = 8) => {

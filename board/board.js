@@ -32,12 +32,10 @@ const language = await boardStorage.load('language');
 // ON LANGAGE SET CALLBACK => TRIGGER BY "OPENING" SECTION AT THE END OF THIS FILE
 const translator = new Translator(async (lang) => {
 	boardStorage.save('language', lang);
+	assistant.commandInterpreter.updateCommandsCorrespondences();
 	if (!language) assistant.requestNewPassword(); // FIRST TIME SETUP
 	else if (hasPassword) assistant.requestPasswordToExtract();
-	else {
-		await assistant.welcome();
-		setTimeout(() => assistant.idleMenu('toto'), 4500);
-	}
+	else await assistant.welcome();
 });
 
 // INIT OTHER MANAGERS AND COMPONENTS
@@ -101,9 +99,7 @@ document.addEventListener('click', (e) => {
 	//infoManager.clickInfoButtonHandler(e);
 	//settingsManager.clickSettingsButtonHandler(e);
 });
-document.addEventListener('keyup', (e) => {
-	explorer.keyUpHandler(e);
-});
+document.addEventListener('keyup', (e) => { explorer.keyUpHandler(e); });
 document.addEventListener('mouseover', (e) => {
 	appsManager.overAppButtonsHandler(e);
 	explorer.overHandler(e);
@@ -203,5 +199,5 @@ connector.on('peer_disconnect', onPeerCountChange);
 // OPENING => HANDLE PASSWORD AND LANGUAGE SELECTION
 if (!language || hasPassword) appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP
 while (!assistant.isReady) await new Promise(resolve => setTimeout(resolve, 20));
-if (!language) assistant.requestLanguageSelection();
+if (!language) assistant.interactor.requestLanguageSelection();
 else translator.setLanguage(language);

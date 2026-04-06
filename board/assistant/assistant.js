@@ -3,10 +3,12 @@ if (false) { // For better completion
 	const anime = require('animejs');
 }
 
+import { Interactor } from './interactions.js';
+import { CommandInterpreter } from './commands.js';
+
 /**
  * @typedef {import('../wallet/biw.js').BoardInternalWallet} BoardInternalWallet
- * @typedef {import('../utils/translator.js').Translator} Translator
- */
+ * @typedef {import('../utils/translator.js').Translator} Translator */
 
 /**
  * @typedef {Object<string, Function>} ChoicesActions
@@ -20,32 +22,21 @@ if (false) { // For better completion
  * @property {HTMLInputElement} input
  * @property {HTMLElement} possibilities
  * @property {HTMLButtonElement} sendBtn
- * @property {HTMLElement} choicesContainer
- * 
- * @typedef {Object} UserCommandsDescription
- * @property {string} command - The full command name
- * @property {string} [short] - The short command name
- * @property {string} description - The command description
- */
-
-/** @type {UserCommandsDescription[]} */
-const userCommandsDescriptions = [
-    { command: '-help', short: '-h', description: 'Show available commands' },
-    { command: '-cancel', short: '-c', description: 'Cancel current interaction' },
-	{ command: '-language', short: '-lang', description: 'Change the language' },
-    { command: '-copy_logs_history', short: '-clh', description: 'Copy logs history to clipboard' },
-    { command: '-change_password', short: '-cpass', description: 'Change your password' },
-    { command: '-extract_my_private_key', short: '-epk', description: 'Extract your private key' },
-    { command: '-reset', short: '-r', description: 'Delete your private key and/or all data' }
-]
+ * @property {HTMLElement} choicesContainer */
 
 export class Assistant {
-	idPrefix = 'board'
-	biw;
-	translator;
+	/** The user knowledge level, used to unlock more complex commands in the assistant.
+	 * - 0 = Newbie, 1 = Intermediate, 2 = Expert */
+	userGrade = 0;
     isFirstMessage = true;
 	isReady = false;
     activeInput = 'idle';
+	idPrefix = 'board'
+	commandInterpreter;
+	translator;
+	interactor;
+	biw;
+
     /** @type {HtmlElements} */
     eHTML = {						// @ts-ignore
         assistantContainer: null,	// @ts-ignore
@@ -61,12 +52,13 @@ export class Assistant {
 
 	/** @type {NodeJS.Timeout | null} */	nextActiveInputTimeout = null;
     /** @type {Function | null} */			onResponse = null;
-	/** @type {string | null} */			#userResponse = null;
 
 	/** @param {BoardInternalWallet} biw @param {Translator} translator */
     constructor(biw, translator) {
 		this.biw = biw;
 		this.translator = translator;
+		this.interactor = new Interactor(this);
+		this.commandInterpreter = new CommandInterpreter(this);
 		this.init();
     }
 
@@ -74,13 +66,11 @@ export class Assistant {
 		console.log('Assistant: Waiting for HTML elements to be available...');
         while (document.getElementById(`${this.idPrefix}-assistant-container`) === null) await new Promise(resolve => setTimeout(resolve, 20));
 		
-		this.isReady = true;
-		console.log('Assistant: HTML elements found, initializing...');
+		this.isReady = true; console.log('Assistant: HTML elements found, initializing...');
 
 		// @ts-ignore
         this.eHTML.assistantContainer = document.getElementById(`${this.idPrefix}-assistant-container`);	// @ts-ignore
         this.eHTML.messagesContainer = document.getElementById(`${this.idPrefix}-messages-container`);		// @ts-ignore
-
         this.eHTML.inputForm = document.getElementById(`${this.idPrefix}-assistant-text-input-form`);		// @ts-ignore
         this.eHTML.input = document.getElementById(`${this.idPrefix}-messages-input`);						// @ts-ignore
         this.eHTML.possibilities = document.getElementById(`${this.idPrefix}-messages-input-possibilitiesList`); // @ts-ignore
@@ -91,10 +81,15 @@ export class Assistant {
 
         this.#setupEventListeners();
         this.#idleInfiniteAnimation();
-
-		// this.requestNewPassword(); // for testing, should be removed
-
     }
+	async welcome(displaySetupMessage = false) {
+		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 200)); // Wait until the assistant is ready
+		console.log('-- Assistant displaying welcome message --');
+		setTimeout(() => this.sendMessage(this.translator.Welcome), 600);
+		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 1600);
+		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 2200);
+		setTimeout(() => this.idleMenu(), displaySetupMessage ? 2800 : 2200);
+	}
     #setupEventListeners() {
         this.eHTML.sendBtn.addEventListener('click', () => {
             console.log('click');
@@ -102,49 +97,38 @@ export class Assistant {
             this.eHTML.input.value = '';
         });
         this.eHTML.inputForm.addEventListener('submit', (e) => {
+			console.log('submit');
             e.preventDefault();
             this.eHTML.input.blur(); // blur the input to hide the possibilities list
         });
-		//this.eHTML.inputForm.addEventListener('change', () => console.log('change'));
 
-        this.eHTML.input.addEventListener('focus', () => this.#updatePossibilitiesList());
-        this.eHTML.input.addEventListener('input', () => this.#updatePossibilitiesList());
-        this.eHTML.input.addEventListener('blur', () => this.#updatePossibilitiesList());
+        this.eHTML.input.addEventListener('focus', () => this.commandInterpreter.updateOptionsList());
+        this.eHTML.input.addEventListener('input', () => this.commandInterpreter.updateOptionsList());
+        this.eHTML.input.addEventListener('blur', () => this.commandInterpreter.updateOptionsList());
         // if press "tab" in input, select the first possibility
-        this.eHTML.input.addEventListener('keydown', (event) => {
-            if (event.key === 'Tab') {
-                event.preventDefault();
-                const firstOption = this.eHTML.possibilities.querySelector('option');
-                if (firstOption) {
-                    this.eHTML.input.value = firstOption.value;
-                    this.#updatePossibilitiesList();
-                }
-            }
+        this.eHTML.input.addEventListener('keyup', (event) => {
+            if (event.key !== 'Tab') return;
+			event.preventDefault();
+			const firstOption = this.eHTML.possibilities.querySelector('option');
+			if (!firstOption) return;
+			this.eHTML.input.value = firstOption.value;
+			this.commandInterpreter.updateOptionsList();
         });
     }
-    #obfuscateString(string = '') {
-        return string.replace(/./g, '•');
-    }
-	/** @param {HTMLElement} messageDiv */
-    #addMesasgeDeleteBtn(messageDiv) {
-        const deleteBtn = document.createElement('button');
-        deleteBtn.classList.add('board-delete-btn');
-        deleteBtn.textContent = 'X';
-        deleteBtn.addEventListener('click', () => messageDiv.remove());
-        messageDiv.appendChild(deleteBtn);
-    }
-    #cancelInteraction() {
-        this.sendMessage('*Interaction cancelled*', 'system');
-        this.idleMenu();
+
+    async idleMenu() { // Come back to simple text input awaiting user command.
+		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 100)); // Wait until the assistant is ready
+		this.setActiveInput('text', this.translator.TypeYourCommand, true);
+        this.onResponse = this.commandInterpreter.processCommand;
     }
 	/** @param {string} message @param {string} sender */
     async sendMessage(message, sender = 'system') {
-        if (sender === 'system' && !this.isFirstMessage) { await new Promise(resolve => setTimeout(resolve, 200)); }
+        if (sender === 'system' && !this.isFirstMessage) await new Promise(resolve => setTimeout(resolve, 200));
         this.isFirstMessage = false;
 
         const msgLower = message.toLowerCase();
-        if (msgLower === '-cancel' || msgLower ==='-c') return this.#cancelInteraction();
-        if (msgLower === 'cancel' || msgLower ==='c') return this.#cancelInteraction();
+        if (msgLower === '-cancel' || msgLower ==='-c') return this.interactor.cancelInteraction();
+        if (msgLower === 'cancel' || msgLower ==='c') return this.interactor.cancelInteraction();
 
         const messageDiv = document.createElement('div');
         messageDiv.classList.add('board-message');
@@ -160,145 +144,28 @@ export class Assistant {
         else messageDiv.innerHTML = secureText.replace(/\n/g, "<br>");
         
         this.eHTML.messagesContainer.appendChild(messageDiv);
-        this.#addMesasgeDeleteBtn(messageDiv);
+        this.#addMessageDeleteBtn(messageDiv);
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
 
         if (sender === 'system') return;
+		//console.log(this.onResponse); // DEBUG => Log the callback fnc
         this.onResponse?.(message);
     }
-
-    #updatePossibilitiesList() {
-        const inputValue = this.eHTML.input.value.toLowerCase();
-        this.eHTML.possibilities.innerHTML = ''; // clear previous options
-        for (const ucd of userCommandsDescriptions) {
-			 // exact match => auto submit
-			if (ucd.command === inputValue || ucd.short === inputValue)
-				return this.eHTML.sendBtn.click();
-
-			 // partial match => show in possibilities
-            if (!ucd.command.includes(inputValue) && !ucd.short?.includes(inputValue)) continue;
-            const option = document.createElement('option');
-            option.value = ucd.command;
-            option.textContent = `${ucd.command} | ${ucd.short} => ${ucd.description}`;
-            this.eHTML.possibilities.appendChild(option);
-        }
+	#obfuscateString(string = '') {
+        return string.replace(/./g, '•');
     }
-    #displayHelpMessage() {
-        const lines = ['Available commands:'];
-        for (const ucd of userCommandsDescriptions)
-            lines.push(`${ucd.command} or ${ucd.short} => ${ucd.description}`);
-
-        this.sendMessage(lines.join('\n'));
-        this.idleMenu();
-    }
-    #reset() {
-        this.sendMessage('Your private key will be lost, are you sure?');
-        this.requestChoice({
-            'Delete private key': () => ipcRenderer.send('reset-private-key'), // should restart the app
-            'Delete all data': () => ipcRenderer.send('reset-all-data'), // should restart the app
-            'No': () => this.idleMenu()
-        });
-    }
-    #processCommand(userMessage = '-help') {
-        const lowerCaseMessage = userMessage.toLowerCase();
-        if (lowerCaseMessage === '') return this.idleMenu();
-
-        switch (lowerCaseMessage) {
-            case '-help':
-            case '-h':
-            case 'help':
-            case 'h':
-                this.#displayHelpMessage();
-                break;
-
-            case '-cancel':
-            case '-c':
-            case 'cancel':
-            case 'c':
-                this.#cancelInteraction();
-                break;
-
-			case '-language':
-			case '-lang':
-			case 'language':
-				this.requestLanguageSelection();
-				break;
-
-            case '-copy_logs_history':
-            case '-clh':
-            case 'copy logs history':
-                this.sendMessage('Preparing logs history...');
-                ipcRenderer.send('get-logs-historical');
-                break;
-
-            case '-change_password':
-            case '-cpass':
-            case 'change password':
-                this.requestPasswordToChange();
-                break;
-
-            case '-extract_my_private_key':
-            case '-epk':
-            case 'extract my private key':
-                this.requestPasswordToExtract();
-                break;
-            
-            case '-reset':
-            case '-r':
-            case 'reset':
-                this.#reset();
-                break;
-
-            default:
-                this.sendMessage('Unknown command, type "-help" for help');
-                break;
-        }
-    }
-
-	async welcome(displaySetupMessage = false) {
-		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 200)); // Wait until the assistant is ready
-		
-		setTimeout(() => this.sendMessage(this.translator.Welcome), 600);
-		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 1600);
-		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 2200);
-	}
-	/** @param {string | false} failureMsg */
-    async requestNewPassword(failureMsg = false) {
-        if (failureMsg === false) await this.welcome(true);
-
-        setTimeout(() => {
-            this.onResponse = this.#verifyNewPassword;
-            //this.sendMessage(`(1) ${failureMsg || 'Please enter a new password or press enter to skip (less secure):'}`);
-			this.sendMessage(`(1) ${failureMsg || this.translator.PleaseEnterNewPassword}`);
-			this.#setActiveInput('password', 'Your new password...', true);
-        }, failureMsg ? 0 : 5000);
-    }
-    #verifyNewPassword(password = 'toto') {
-        if (password === '') {
-            ipcRenderer.send('set-password', 'fingerPrint'); // less secure: use the finger print as password
-            this.#setActiveInput('idle');
-            return;
-        }
-
-        const isValid = typeof password === 'string' && password.length > 5 && password.length < 31;
-        if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; } // re ask confirmation (2)
-
-        this.#userResponse = password;
-        this.onResponse = this.#confirmNewPassword;
-        this.sendMessage('(2) Confirm your password');
-        this.#setActiveInput('password', 'Confirm your password...', true);
-    }
-    #confirmNewPassword(password = 'toto') {
-        if (typeof password !== 'string') { this.sendMessage('What the hell are you typing?'); return; }
-        if (password !== this.#userResponse) { this.requestNewPassword('Passwords do not match.'); return; } // Retry at step (1)
-
-        ipcRenderer.send('set-password', password);
-        this.#setActiveInput('idle');
+	/** @param {HTMLElement} messageDiv */
+    #addMessageDeleteBtn(messageDiv) {
+        const deleteBtn = document.createElement('button');
+        deleteBtn.classList.add('board-delete-btn');
+        deleteBtn.textContent = 'X';
+        deleteBtn.addEventListener('click', () => messageDiv.remove());
+        messageDiv.appendChild(deleteBtn);
     }
 
     requestPrivateKey() {
         this.sendMessage('Please enter your private key (64 characters hexadecimal or 24 words list)');
-        this.#setActiveInput('password', 'Your private key...', true);
+        this.setActiveInput('password', 'Your private key...', true);
         this.onResponse = this.#verifyPrivateKey;
     }
     #digestWordsListStr(wordsList = 'toto toto ...') {
@@ -313,10 +180,8 @@ export class Assistant {
 
         if (words.length % 2 !== 0) return null; // must be even
 
-        const wl = words.join(' ');
-        const hex = bip39.mnemonicToEntropy(wl).toString('hex');
-        
-        return hex;
+        const wl = words.join(' '); // @ts-ignore
+        return bip39.mnemonicToEntropy(wl).toString('hex');
     }
 	/** @param {string} str */
     #isHexadecimal(str) {
@@ -326,28 +191,25 @@ export class Assistant {
     }
 	/** @param {string} privateKey */
     #verifyPrivateKey(privateKey) {
-        if (typeof privateKey !== 'string') { this.sendMessage('Invalid private key. (must be a string)'); return; }
+        if (typeof privateKey !== 'string') return this.sendMessage('Invalid private key. (must be a string)');
 
         //console.log('privateKey:', privateKey);
-        let privKeyHex = privateKey;
-        const isWordsList = privateKey.split(' ').length > 1;
-        if (isWordsList) { // convert words list to hex
-            privKeyHex = this.#digestWordsListStr(privateKey);
-            if (!privKeyHex) { this.sendMessage('Invalid private key (words list).'); return; }
-        }
+		const isWordsList = privateKey.split(' ').length > 1;
+        const privKeyHex = isWordsList ? this.#digestWordsListStr(privateKey) : privateKey;
+		if (isWordsList && !privKeyHex) return this.sendMessage('Invalid private key (words list).');
 
         // hex only, 64 characters
         const isValidPrivHex = privKeyHex.length === 64 && this.#isHexadecimal(privKeyHex);
-        if (!isValidPrivHex) { this.sendMessage('Invalid private key. (retry)'); return; }
+        if (!isValidPrivHex) return this.sendMessage('Invalid private key. (retry)');
         
         this.sendMessage('Initializing node... (can take a up to a minute)');
         ipcRenderer.send('set-private-key-and-start-node', privKeyHex);
-        this.#setActiveInput('idle');
+        this.setActiveInput('idle');
     }
 
     requestPasswordToUnlock(failed = false) {
         this.sendMessage(failed ? 'Wrong password, try again' : 'Please enter your password to unlock');
-        this.#setActiveInput('password', 'Your password...', true);
+        this.setActiveInput('password', 'Your password...', true);
         this.onResponse = this.#verifyPasswordAndUnlock;
     }
     #verifyPasswordAndUnlock(password = 'toto') {
@@ -355,44 +217,15 @@ export class Assistant {
         if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
 
         ipcRenderer.send('set-password', password);
-        this.#setActiveInput('idle');
+        this.setActiveInput('idle');
     }
 
-    requestPasswordToChange() {
-        this.sendMessage('Please enter your current password to change it');
-        this.#setActiveInput('password', 'Your current password...', true);
-        this.onResponse = this.#removePasswordToChange;
-    }
-    #removePasswordToChange(password = 'toto') {
-        let existingPassword = password === '' ? 'fingerPrint' : password; // less secure: use the finger print as password
-        const isValid = typeof existingPassword === 'string' && existingPassword.length > 5 && existingPassword.length < 31;
-        if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
-
-        ipcRenderer.send('remove-password', existingPassword);
-    }
-    askNewPassowrdIfRemovedSuccessfully(success = false) {
-        if (success) this.requestNewPassword('Password removed successfully, please enter a new password or press enter to skip (less secure)');
-        else { this.sendMessage('Password removal failed, wrong password!'); this.idleMenu() }
-    }
-
-    requestPasswordToExtract() {
-        this.sendMessage('Please enter your password to extract your private key');
-        this.#setActiveInput('password', 'Your password...', true);
-        this.onResponse = this.#verifyPasswordAndExtract;
-    }
-    #verifyPasswordAndExtract(password = 'toto') {
-        const isValid = typeof password === 'string';
-        if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
-
-        ipcRenderer.send('extract-private-key', password);
-        setTimeout(() => { this.idleMenu(); }, 1000);
-    }
 	/** @param {string} privateKeyHex @param {boolean} [asWords] default false */
     showPrivateKey(privateKeyHex, asWords = false) {
         if (!asWords) return this.sendMessage(privateKeyHex, 'system');
 
-        /** @type {string} */
-        const wordsList = bip39.entropyToMnemonic(privateKeyHex);
+        /** @type {string} */										// @ts-ignore
+        const wordsList = bip39.entropyToMnemonic(privateKeyHex); 	// @ts-ignore
         const hexFromList = bip39.mnemonicToEntropy(wordsList).toString('hex');
         if (hexFromList !== privateKeyHex) return this.sendMessage('Error while extracting the private key!', 'system');
         
@@ -422,44 +255,11 @@ export class Assistant {
         }
 
         this.eHTML.messagesContainer.appendChild(messageDiv);
-        this.#addMesasgeDeleteBtn(messageDiv);
+        this.#addMessageDeleteBtn(messageDiv);
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
     }
-
-	requestLanguageSelection() {
-		this.sendMessage('Please select your language');
-		this.requestChoice({
-			'English': () => { this.translator.setLanguage('en'); this.idleMenu(); },
-			'Français': () => { this.translator.setLanguage('fr'); this.idleMenu(); }
-		});
-	}
-
-    /** @param {ChoicesActions} choices */
-    async requestChoice(choices = { "Yes": () => console.log('Yes'), "No": () => console.log('No') }) {
-        this.eHTML.input.type = 'text';
-        this.eHTML.choicesContainer.innerHTML = '';
-        this.#setActiveInput('choices');
-        
-        for (const choice of Object.keys(choices)) {
-            const choiceBtn = document.createElement('button');
-            choiceBtn.textContent = choice;
-            choiceBtn.addEventListener('click', () => {
-                this.onResponse = choices[choice];
-                this.#setActiveInput('idle');
-                this.sendMessage(choice, 'user');
-            });
-            this.eHTML.choicesContainer.appendChild(choiceBtn);
-            await new Promise(resolve => setTimeout(resolve, 200));
-        }
-    }
-    async idleMenu() { // come back to simple text input
-		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 100)); // Wait until the assistant is ready
-        this.#setActiveInput('text', this.translator.TypeYourCommand, true);
-        this.onResponse = this.#processCommand;
-    }
-
     /** @param {string} input - 'text', 'password' or 'choices' - default 'idle' */
-    #setActiveInput(input = 'idle', placeholder = '', resetValue = false) {
+    setActiveInput(input = 'idle', placeholder = '', resetValue = false) {
         this.eHTML.input.value = '';
         this.eHTML.inputForm.classList.add('disabled');
         this.eHTML.choicesContainer.classList.add('disabled');

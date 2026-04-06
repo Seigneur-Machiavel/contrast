@@ -21,6 +21,15 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Run-public-with-board-service",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/run-public.mjs",
+			"args": ["--max-old-space-size=16384", "-cp", "27259", "--board-service"],
+			"runtimeArgs": ["--inspect"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Simul-Network",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/tests/simulations/simul-network.js",

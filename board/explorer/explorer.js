@@ -193,7 +193,9 @@ export class Explorer {
 	}
 	// @ts-ignore
 	keyUpHandler(e) {
-		if (e.key !== 'Enter') return;
+		if (!eHTML.isReady || e.key !== 'Enter') return;
+		const input = eHTML.get('searchInput');
+		if (e.target !== input) return;
 
 		const inputText = e.target.value.replace(/\s/g, '');
 		const isNumber = !isNaN(inputText);

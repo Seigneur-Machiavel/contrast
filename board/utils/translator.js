@@ -3,10 +3,42 @@
 // FIRST WE DEFINE THE TRANSLATION STRINGS FOR EACH LANGUAGE IN A STRUCTURED WAY,
 // EACH OBJECT CORRESPOND TO ONE BOARD APP.
 // NAMING CORRESPOND TO THE "data-translatorkey" ATTRIBUTE OF THE HTML ELEMENTS TO TRANSLATE.
+/** @type {Record<string, Record<Language, { key: string, description: string }>>} */
+const assistantCommands = {
+	cancel: {
+		en: { key: 'cancel', description: 'Cancel current interaction' },
+		fr: { key: 'annuler', description: 'Annuler l\'interaction en cours' },
+	},
+	language: {
+		en: { key: 'language', description: 'Change the language' },
+		fr: { key: 'langue', description: 'Changer la langue' },
+	},
+	copy_logs: {
+		en: { key: 'copy_logs', description: 'Copy logs history to clipboard' },
+		fr: { key: 'copier_journaux', description: 'Copier l\'historique des journaux dans le presse-papiers' },
+	},
+	change_password: {
+		en: { key: 'change_password', description: 'Change your password' },
+		fr: { key: 'changer_mot_de_passe', description: 'Changer votre mot de passe' },
+	},
+	reveal_seed: {
+		en: { key: 'reveal_seed', description: 'Reveal your private seed' },
+		fr: { key: 'revealer_grain', description: 'Révéler votre graine privée' },
+	},
+	reset: {
+		en: { key: 'reset', description: 'Delete your private key(seed) and/or all data' },
+		fr: { key: 'reinitialiser', description: 'Supprimer votre clé privée (graine) et/ou toutes les données' },
+	},
+
+}
 const assistant = {
+	InteractionCancelled: {
+		en: '*Interaction cancelled*',
+		fr: '*Interaction annulée*',
+	},
 	TypeYourCommand: {
-		en: 'Type your command ("-help" for help):',
-		fr: 'Tapez votre commande ("-help" pour l\'aide) :',
+		en: 'Type your command:',
+		fr: 'Tapez votre commande :',
 	},
 	Welcome: {
 		en: 'Welcome to Contrast app, this open-source software is still in the experimental stage, and no one can be held responsible in case of difficulty or bugs.',
@@ -173,7 +205,7 @@ const wallet = {
 export class Translator {
 	onLanguageChange = null; // Callback function when language changes, receives new language as argument
 	availableLanguages = ['en', 'fr'];
-	lang;
+	/** @type {Language} */	lang;
 
 	/** @param {function(Language):void} onLanguageChange */
 	constructor(onLanguageChange) { this.onLanguageChange = onLanguageChange; }
@@ -192,11 +224,19 @@ export class Translator {
 			if (!text) throw new Error(`No translation found for key "${key}" and language "${this.lang}"`);
 			el.textContent = text;
 		}
+
+		console.log(`-- Language set to ${lang} --`);
 	}
 
 	// BOARD
 
 	// ASSISTANT
+	assistantCommand(cmdKey = 'language') {
+		const cmd = assistantCommands[cmdKey];
+		if (!cmd) throw new Error(`No command found for key "${cmdKey}"`);
+		return cmd[this.lang] || cmd.en; // fallback to English if translation is missing
+	}
+	get InteractionCancelled() { return assistant.InteractionCancelled[this.lang] || assistant.InteractionCancelled.en; }
 	get TypeYourCommand() { return assistant.TypeYourCommand[this.lang] || assistant.TypeYourCommand.en; }
 	get Welcome() { return assistant.Welcome[this.lang] || assistant.Welcome.en; }
 	get JoinDiscord() { return assistant.JoinDiscord[this.lang] || assistant.JoinDiscord.en; }

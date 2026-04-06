@@ -8,7 +8,6 @@ import { serializer } from '../../utils/serializer.mjs';
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  */
 
-let ws;
 const WS_SETTINGS = {
     PROTOCOL: "ws:",
     DOMAIN: "127.0.0.1",
@@ -47,6 +46,7 @@ export class Dashboard {
 		this.connector = connector;
 		this.hostPubkeyStr = hostPubkeyStr;
 		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair();
+		this.#testIfWebSocketIsAccessible();
 		this.#initWhileDomReady();
 	}
 
@@ -55,6 +55,15 @@ export class Dashboard {
 	pasteHandler(e) { if (e.target.dataset.action === 'setPubkeyFromInput') this.#setControllerPubkeyFromInput(); }
 
 	// INTERNAL METHODS
+	#testIfWebSocketIsAccessible() {
+		this.ws = new WebSocket(`${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
+		this.ws.onopen = () => {
+			this.isWsAccessible = true;
+			this.ws.close();
+			this.ws = null;
+			console.log('NodeController WebSocket is accessible.');
+		}
+	}
 	async #initWhileDomReady() {
 		if (!eHTML.isReady) console.log('Dashboard awaiting DOM elements...');
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
@@ -62,9 +71,9 @@ export class Dashboard {
 		
 		// if not already set, try to load pubkey from storage if exists.
 		if (!this.hostPubkeyStr) this.hostPubkeyStr = await this.#pubkeyFromStorage();
-		this.wsInitInterval = setInterval(() => this.initWebSocketIfNot(), 1000);
+		this.wsInitInterval = setInterval(() => this.#initWebSocketIfNot(), 1000);
 	}
-	async initWebSocketIfNot() {
+	#initWebSocketIfNot() {
 		if (this.ws) return;
 		// WebSocket will throw an error if the server is not up yet.
 		this.ws = new WebSocket(`${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
@@ -105,7 +114,7 @@ export class Dashboard {
 
 			this.hostPubkeyStr = pubkeyStr;
 			if (chrome.storage) chrome.storage.local.set({ nodePubkey: pubkeyStr });
-			
+
 			this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr), true);
 			console.log('Controller pubkey set from input and saved to storage.');
 		} catch (error) { console.error('Error getting public key from input:', error); }

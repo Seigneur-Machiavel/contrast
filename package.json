@@ -8,7 +8,7 @@
   "license": "ISC",
   "dependencies": {
     "adm-zip": "^0.5.16",
-    "hive-p2p": "^1.0.98"
+    "hive-p2p": "^1.0.103"
   },
   "devDependencies": {
     "archiver": "^7.0.1",
