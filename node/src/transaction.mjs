@@ -186,12 +186,11 @@ export class Transaction_Builder {
         if (tx.inputs.length !== 1 || tx.outputs.length !== 1) return;
 
         if (tx.inputs[0].length === SIZES.nonce.str) 		// SOLVER nonce lenght is 8
-			if (tx.witnesses.length === 0) return 'solver'; 			// and no witness
+			if (tx.witnesses.length === 0) return 'solver'; // and no witness
 
-		if (tx.witnesses.length !== 1) return; 							// VALIDATOR should have exactly 1 witness
+		if (tx.witnesses.length !== 1) return; 				// VALIDATOR should have exactly 1 witness
         if (tx.inputs[0].length !== SIZES.hash.str) return; // VALIDATOR hash length is 64
-		const expectedWitnessLen = SIZES.signature.str + 1 + SIZES.pubKey.str;
-		if (tx.witnesses[0].length !== expectedWitnessLen) return; // VALIDATOR witness should be signature:pubKey
+		
 		return 'validator';
     }
 	/** @param {Transaction} tx */

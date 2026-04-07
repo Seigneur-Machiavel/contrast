@@ -1,13 +1,26 @@
 // @ts-check
 
+/**
+ * @typedef {import('@pinkparrot/qsafe-sig').QsafeSigner} QsafeSigner
+ * @typedef {import('@pinkparrot/qsafe-sig').QsafeHelper} QsafeHelper
+ */
+
+/** @type {import('@pinkparrot/qsafe-sig')} */
+const Qsafe = typeof window !== 'undefined' // @ts-ignore
+	? await import('@pinkparrot/qsafe-sig.min.js')
+	: await import('@pinkparrot/qsafe-sig');
+
+export const { QsafeSigner, QsafeHelper } = Qsafe;
+
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = typeof window !== 'undefined' // @ts-ignore
 	? await import('../../hive-p2p.min.js')
 	: await import('hive-p2p');
 const { xxHash32, Converter, Argon2Unified, ed25519 } = HiveP2P;
+export { xxHash32, Converter, Argon2Unified, ed25519 };
+
 const argon2 = new Argon2Unified();
 const converter = new Converter();
-
 export const argon2Hash = argon2.hash;
 
 export class HashFunctions {
@@ -29,39 +42,16 @@ export class HashFunctions {
     };
 };
 export class AsymetricFunctions {
-    /** @param {string} privKeyHex - Hexadecimal representation of the private key */
-    static generateKeyPairFromHash(privKeyHex) {
-        if (privKeyHex.length !== 64) { console.error('Hash must be 32 bytes long (hex: 64 chars)'); return false; }
-        
-        // Calculate the public key from the private key
-		const privKeyBytes = converter.hexToBytes(privKeyHex);
-        const publicKey = ed25519.getPublicKey(privKeyBytes);
-		const pubKeyHex = converter.bytesToHex(publicKey);
-        return { privKeyHex, pubKeyHex };
-    }
-    /** Sign a message using Ed25519
-     * @param {string} messageHex - Message to sign
-     * @param {string} privKeyHex - necessary to sign the message */
-    static signMessage(messageHex, privKeyHex) {
-        const result = { isValid: false, signatureHex: '', error: '' };
-        if (typeof messageHex !== 'string') { result.error = 'Invalid message type'; return result; }
-        if (typeof privKeyHex !== 'string') { result.error = 'Invalid privKeyHex type'; return result; }
-        if (privKeyHex.length !== 64) { result.error = 'Hash must be 32 bytes long (hex: 64 chars)'; return result; }
+	/** @type {QsafeSigner} */
+	static verifierInstance;
 
-		const messageBytes = converter.stringToBytes(messageHex);
-		const privBytes = converter.hexToBytes(privKeyHex);
-        const signature = ed25519.sign(messageBytes, privBytes);
-        if (!signature) { result.error = 'Failed to sign the message'; return result; }
-        
-		result.signatureHex = converter.bytesToHex(signature);
-		result.isValid = true;
-		return result;
-    }
-    /** @param {string} signature @param {string} messageHex @param {string} pubKeyHex @returns {boolean} */
-    static verifySignature(signature, messageHex, pubKeyHex) {
-		const signatureBytes = converter.hexToBytes(signature);
-        const messageBytes = converter.stringToBytes(messageHex);
-		const pubKeyBytes = converter.hexToBytes(pubKeyHex);
-		return ed25519.verify(signatureBytes, messageBytes, pubKeyBytes);
-    }
+	/** Verify a signature using Qsafe. Will throw an error if the signature is invalid
+	 * @param {string} message @param {string} signature @param {string} pubKeyHex */
+	static async qsafeVerify(message, signature, pubKeyHex) {
+		const verifier 		= this.verifierInstance || await QsafeSigner.createFull();
+		const toSignBytes 	= converter.hexToBytes(message);
+		const signtureBytes = converter.hexToBytes(signature);
+		const pubKeyBytes 	= converter.hexToBytes(pubKeyHex);
+		await verifier.verify(signtureBytes, toSignBytes, pubKeyBytes); // will throw an error if the signature is invalid
+	}
 };

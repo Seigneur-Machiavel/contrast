@@ -191,7 +191,7 @@ export class BlockValidation {
 			TxValidation.controlAddressesHasAssociatedWitnesses(tx, ext?.pubKeysByHashes, ext?.addressesToConfirmByPubKey);
 			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
 			
-			TxValidation.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
+			await TxValidation.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
 			signatureVerificationTasks.push(new WorkerTask(tx, ext?.pubKeysByHashes, specialTx));
 		}
 

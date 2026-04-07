@@ -153,7 +153,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		if (r === 'MATCH') return { sAddress, data: undefined };
 		
 		if (sPubkeys.length === 0 || sPubkeys.length > 1) throw new Error(`Invalid number of pubkeys for solver reward address: ${sPubkeys.length} (should be 1)`);
-		return { sAddress, data: this.node.blockchain.identityStore.buildIdentityEntry(sAddress, sPubkeys) };
+		return { sAddress, data: this.node.blockchain.identityStore.buildEntry(sAddress, sPubkeys) };
 	}
     #prepareBets(nbOfBets = 32) {
         if (!this.useBetTimestamp) { this.bets = []; return }

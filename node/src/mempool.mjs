@@ -86,8 +86,9 @@ export class MemPool {
 	/** @param {import("./blockchain.mjs").Blockchain} blockchain */
 	constructor(blockchain) { this.blockchain = blockchain; }
 
-    /** @param {ContrastNode} node @param {Uint8Array} serializedTx */
-    pushTransaction(node, serializedTx) {
+    /** DON'T PARALLELIZE THIS FUNCTION!!!
+	 * @param {ContrastNode} node @param {Uint8Array} serializedTx */
+    async pushTransaction(node, serializedTx) {
 		// CHECK CONFORMITY & SPENDABILITY
 		const tx = serializer.deserialize.transaction(serializedTx);
 		TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
@@ -104,7 +105,7 @@ export class MemPool {
 			throw new Error(`Transaction size too big: ${serializedTx.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
 		
 		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
-		const result = TxValidation.transactionValidation(node, involvedUTXOs, tx);
+		const result = await TxValidation.transactionValidation(node, involvedUTXOs, tx);
 		if (!result.success) throw new Error('Transaction validation failed: succes === false');
 		
 		// CHECK CONFLICTS & REPLACEMENT POLICY
@@ -113,7 +114,7 @@ export class MemPool {
 		if (colliding && oTx.feePerByte <= colliding.oTx.feePerByte) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${colliding.oTx.feePerByte} >= ${oTx.feePerByte}`);
 		
 		// ADD TRANSACTION TO MEMPOOL
-		if (colliding?.oTx) this.organizer.remove(colliding.oTx);
+		if (colliding?.oTx) await this.organizer.remove(colliding.oTx);
 		this.organizer.add(oTx);
     }
 	/** @param {BlockFinalized} block */

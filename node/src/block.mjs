@@ -53,7 +53,7 @@ export class BlockUtils {
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 		const r = identityStore.resolveIdentity(vAddress, vPubkeys);
 		if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-		const data = r === 'MATCH' ? undefined : identityStore.buildIdentityEntry(vAddress, vPubkeys);
+		const data = r === 'MATCH' ? undefined : identityStore.buildEntry(vAddress, vPubkeys);
 
 		// CALCULATE REWARD => CREATE & SIGN VALIDATOR REWARD TX => ADD IT TO BLOCK CANDIDATE
 		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);

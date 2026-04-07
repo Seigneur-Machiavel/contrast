@@ -2,9 +2,7 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     // BLOCK
     targetBlockTime: 10_000, 		// 60_000, // 1 min
     maxBlockSize: 102_400, 			// =100KB
-	maxTransactionSize: 92_160, 	// =90KB
-    maxTransactionDataSize: 65_535, // =64KB
-    
+
     // DISTRIBUTION
     // 1 000 000mC = 1 Contrast
     // In the code we only speak in mC ( micro contrast = 0.000001 C ), but in the UI we will use the Contrast unit
@@ -16,9 +14,12 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     maxSupply: 21_000_000_000_000, 	// last 6 zeros are considered as decimals ( can be stored as 8 bytes )
 
     // TRANSACTION
-    minTransactionFeePerByte: 0.1, // 0.1 mC per byte = 100 mC per KB
-    unspendableUtxoAmount: 120,	// min utxo amount to be considered as dust ( used for spam protection, and to avoid dust accumulation in the blockchain )
-	finalizationDelay: 12, 		// number of blocks before a transaction is considered final ( used for double spending protection )
+    minTransactionFeePerByte: 0.1, 	// 0.1 mC per byte = 100 mC per KB
+    unspendableUtxoAmount: 120,		// min utxo amount to be considered as dust ( used for spam protection, and to avoid dust accumulation in the blockchain )
+	finalizationDelay: 12, 			// number of blocks before a transaction is considered final ( used for double spending protection )
+	maxTransactionSize: 65_535, 	// =64KB
+    maxTransactionDataSize: 65_535, // =64KB (impossible to reach this limit since maxTransactionSize is equal)
+	maxPubkeysPerMultiSig: 10,		// maximum number of pubkeys allowed in a multi-sig address ( also affects the maximum size of the witness for multi-sig transactions )
 
     // VSS (STAKING)
 	validatorsPerRound: 10, 	// maximum number of validators per round

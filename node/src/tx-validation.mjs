@@ -9,7 +9,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { OutputCreationValidator } from './tx-rule-checkers.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
-import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
+import { HashFunctions, AsymetricFunctions, QsafeHelper } from './conCrypto.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
@@ -139,18 +139,15 @@ export class TxValidation {
         const witnessParts = witness.split(':');
 		if (witnessParts.length !== 2) throw new Error('Invalid witness');
 
-        const p1 = witnessParts[0];
+        const [p1, p2] = [witnessParts[0], witnessParts[1]];
         if (!IS_VALID.HEX(p1)) throw new Error(`Invalid signature: ${p1} !== hex`);
-        if (p1.length !== SIZES.signature.str) throw new Error('Invalid p1 size: not signature');
-		//if (witnessParts.length === 1) return { signature, pubKeyHex: null };
-
-        const p2 = witnessParts[1];
         if (!IS_VALID.HEX(p2)) throw new Error(`Invalid pubKeyHash: ${p2} !== hex`);
-        const isPubKeyHash = p2.length === SIZES.pubKeyHash.str;
-		const isPubKey = p2.length === SIZES.pubKey.str;
-		if (!isPubKeyHash && !isPubKey) throw new Error('Invalid p2 size: neither pubKeyHash nor pubKey');
+		
+		// Control key & sig validity if full pubKey is provided
+		const isPubKeyHash = p2.length === SIZES.pubKeyHash.str;
+		if (!isPubKeyHash && !QsafeHelper.checkFormat(serializer.converter.hexToBytes(p2), serializer.converter.hexToBytes(p1))) throw new Error('QsafeHelper.checkFormat() failed!');
 
-        return { signature: p1, pubKeyHash: isPubKeyHash ? p2 : null, pubKey: isPubKey ? p2 : null };
+        return { signature: p1, pubKeyHash: isPubKeyHash ? p2 : null, pubKey: !isPubKeyHash ? p2 : null };
     }
 
 	/** ==> Fourth validation, low disk access cost. - control the discovery of new identities through outputs with unknown addresses
@@ -261,7 +258,7 @@ export class TxValidation {
 
 	/** ==> Seventh validation, medium computation cost. - control the signature of the inputs
      * @param {Transaction} transaction @param {Record<string, string>} [pubKeysByHashes] Key: Hash, Value: PubKey */
-    static controlAllWitnessesSignatures(transaction, pubKeysByHashes = {}) {
+    static async controlAllWitnessesSignatures(transaction, pubKeysByHashes = {}) {
         if (!Array.isArray(transaction.witnesses)) throw new Error(`Invalid witnesses: ${transaction.witnesses} !== array`);
         
 		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
@@ -269,14 +266,15 @@ export class TxValidation {
             const { signature, pubKeyHash, pubKey } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
 			const pubKeyHex = pubKeyHash ? pubKeysByHashes[pubKeyHash] : pubKey;
 			if (!pubKeyHex) throw new Error(`No pubKey found for witness with pubKeyHash: ${pubKeyHash}`);
-			AsymetricFunctions.verifySignature(signature, toSign, pubKeyHex); // will throw an error if the signature is invalid
-        }
+			//AsymetricFunctions.verifySignature(signature, toSign, pubKeyHex); // will throw an error if the signature is invalid
+			await AsymetricFunctions.qsafeVerify(toSign, signature, pubKeyHex); // will throw an error if the signature is invalid
+		}
     }
 
     /** ==> Sequentially call the set of validations (DON'T give a specialTx to this function)
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
      * @param {Transaction} tx @param {'solver' | 'validator'} [specialTx] */
-    static transactionValidation(node, involvedUTXOs, tx, specialTx, involvedIdentities = new IdentitiesCache()) {
+    static async transactionValidation(node, involvedUTXOs, tx, specialTx, involvedIdentities = new IdentitiesCache()) {
         this.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
         const fee = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, tx);
 		this.controlTransactionOutputsRulesConditions(tx);
@@ -286,7 +284,7 @@ export class TxValidation {
 		this.controlAddressesHasAssociatedWitnesses(tx, ext?.pubKeysByHashes, ext?.addressesToConfirmByPubKey);
 		if (specialTx === 'solver') return { fee, success: true }; // solver's txs don't have to respect ownership rules, so we skip signature verification
 
-		this.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
+		await this.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
 		return { fee, success: true };
     }
 }

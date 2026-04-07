@@ -7,20 +7,21 @@ import { ADDRESS } from '../types/address.mjs';
  * - str: The lengths in characters of the value (if applicable, otherwise null) */
 export const SIZES = {
 	// GENERAL
+	pointer: { bytes: 2, str: null }, // A pointer is an offset in the serialized buffer, represented as 4 bytes, allowing to point up to 4GB of data.
 	/** Amount, represented as 6 bytes, allowing to represent up to 281 trillion tokens */
 	amount: { bytes: 6, str: null },
 	/** Timestamp, represented as 6 bytes, allowing to represent up to the year 2106 */
 	timestamp: { bytes: 6, str: null },
 
 	// CRYPTO/IDENTITY
+	/** 512 bits signature, represented as 64 bytes or 128 hex characters */
+	signature: { bytes: 64, str: 128 },
 	/** 256 bits public key, represented as 32 bytes or 64 hex characters */
 	pubKey: { bytes: 32, str: 64 },
 	/** 32 bits public key hash(xxHash32), represented as 4 bytes or 8 hex characters */
 	pubKeyHash: { bytes: 4, str: 8 },
 	/** Address, represented as a string of 7 characters or 5 bytes | ex: C123456 */
 	address: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES, str: ADDRESS.CRITERIA.TOTAL_LENGTH },
-	/** 512 bits signature, represented as 64 bytes or 128 hex characters */
-	signature: { bytes: 64, str: 128 },
 
 	// TRANSACTION
 	/** Transaction header, represented as 10 bytes, containing: version(2) + witnessesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2) */

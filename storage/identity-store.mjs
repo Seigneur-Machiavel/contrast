@@ -3,7 +3,9 @@ import fs from 'fs';
 import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
+import { QsafeHelper } from '../node/src/conCrypto.mjs';
 import { serializer, SIZES } from '../utils/serializer.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 
 /** 
  * @typedef {import("../types/transaction.mjs").TxId} TxId
@@ -16,17 +18,23 @@ const ENTRY_BYTES = SIZES.txId.bytes;
 const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 8; // 2^32 / 8 = 536,870,912 entries per file (8 files per prefix)
 const MAX_BYTES_PER_FILE = MAX_ENTRIES_PER_FILE * ENTRY_BYTES; // 24GB / 8 = 3GB per file
 
-/** Build identity entry, ex: [address: 5b][nb_pubkeys: 1b][threshold: 1b][pubkey x nb_pubkeys: 32b each]
+/** Build identity entry, used to declare/record the pubkey(s) associated with an address in the data field of a transaction, to be retrieved later for identity resolution.
+ * - ex: [address: 5b][nb_pubkeys: 1b][threshold: 1b][pubkey x nb_pubkeys: 32b each]
  * @param {string} address @param {string[]} pubKeysHex @param {number} [threshold] number of required signatures for multi-sig */
-export function buildIdentityEntry(address, pubKeysHex, threshold = 1) {
+export function buildEntry(address, pubKeysHex, threshold = 1) {
 	const a = ADDRESS.fromString(address);
-	if (!a.isMultiSig && pubKeysHex.length > 1) throw new Error(`IdentityRecordInterpreter.buildEntry: non multi-sig address ${address} cannot have multiple pubkeys`);
-	if (!a.isMultiSig && threshold !== 1) throw new Error(`IdentityRecordInterpreter.buildEntry: non multi-sig address ${address} cannot have threshold different from 1`);
-	if (threshold < 1) throw new Error(`IdentityRecordInterpreter.buildEntry: threshold must be at least 1 for address ${address}`);
-	if (pubKeysHex.length === 0) throw new Error(`IdentityRecordInterpreter.buildEntry: at least one pubkey is required for address ${address}`);
-	if (pubKeysHex.length > 255) throw new Error(`IdentityRecordInterpreter.buildEntry: maximum number of pubkeys is 255 for address ${address}`);
-	if (threshold > 255) throw new Error(`IdentityRecordInterpreter.buildEntry: threshold cannot be higher than 255`);
-	for (const pk of pubKeysHex) if (pk.length !== SIZES.pubKey.str) throw new Error(`IdentityRecordInterpreter.buildEntry: invalid pubkey length for pubkey ${pk} in address ${address}`);
+	if (!a.isMultiSig && pubKeysHex.length > 1) throw new Error(`buildEntry(): non multi-sig address ${address} cannot have multiple pubkeys`);
+	if (!a.isMultiSig && threshold !== 1) throw new Error(`buildEntry(): non multi-sig address ${address} cannot have threshold different from 1`);
+	if (threshold < 1) throw new Error(`buildEntry(): threshold must be at least 1 for address ${address}`);
+	if (pubKeysHex.length === 0) throw new Error(`buildEntry(): at least one pubkey is required for address ${address}`);
+	if (pubKeysHex.length > BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig) throw new Error(`buildEntry(): maximum number of pubkeys is ${BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig} for address ${address}`);
+	if (threshold > 255) throw new Error(`buildEntry(): threshold cannot be higher than 255`);
+	
+	for (const pk of pubKeysHex) {
+		const pkBytes = serializer.converter.hexToBytes(pk);
+		if (QsafeHelper.checkFormat(pkBytes)) continue;
+		else throw new Error(`buildEntry(): invalid pubkey ${pk}`);
+	}
 
 	return serializer.serialize.identityEntry(a, pubKeysHex, threshold); // throws if non conform
 }
@@ -34,15 +42,15 @@ export function buildIdentityEntry(address, pubKeysHex, threshold = 1) {
  * @param {Uint8Array | undefined} data @param {string} address */
 export function findAndParseEntry(data, address, throwIfNot = true) {
 	try {
-		if (!data) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: no data to parse for address ${address}`);
+		if (!data) throw new Error(`findAndParseEntry(): no data to parse for address ${address}`);
 
 		const a = ADDRESS.fromString(address);
 		const index = Buffer.from(data).indexOf(a.bytes); // use C++ indexOf() to find the address bytes
-		if (index === -1) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: no identity entry found in data for address ${address}`);
+		if (index === -1) throw new Error(`findAndParseEntry(): no identity entry found in data for address ${address}`);
 
 		const nbOfPubKeys = data[index + 5];
 		const entryBytesLength = 5 + 1 + 1 + nbOfPubKeys * SIZES.pubKey.bytes;
-		if (index + entryBytesLength > data.length) throw new Error(`IdentityRecordInterpreter.findAndParseEntry: non conform identity entry for address ${address} - not enough data for the declared number of pubkeys`);
+		if (index + entryBytesLength > data.length) throw new Error(`findAndParseEntry(): non conform identity entry for address ${address} - not enough data for the declared number of pubkeys`);
 		
 		const entryBytes = data.subarray(index, index + entryBytesLength);
 		const identity = serializer.deserialize.identityEntry(entryBytes);
@@ -54,9 +62,7 @@ export function findAndParseEntry(data, address, throwIfNot = true) {
 }
 
 export class IdentityStore {
-	static buildEntry = buildIdentityEntry;
-	buildIdentityEntry = buildIdentityEntry;
-	static findAndParseEntry = findAndParseEntry;
+	buildEntry = buildEntry;
 	findAndParseEntry = findAndParseEntry;
 
 	/** The identities file handles by identifier @type {Object<string, BinaryHandler>} */

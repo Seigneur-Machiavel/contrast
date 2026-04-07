@@ -20,7 +20,7 @@ parentPort.on('message', async (task) => {
 				const batch = task.batch;
 				for (const task of batch) { // Validate all witnesses signatures
 					if (abortOperationRequested) return;
-					TxValidation.controlAllWitnessesSignatures(task.tx, task.pubKeysByHashes);
+					await TxValidation.controlAllWitnessesSignatures(task.tx, task.pubKeysByHashes);
 				}
 				
 			} catch (/**@type {any}*/ error) {

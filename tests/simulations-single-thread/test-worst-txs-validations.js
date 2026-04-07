@@ -68,7 +68,7 @@ const onBlockConfirmed = async (block) => {
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = wallet.accounts[i].address;
 			const pk = wallet.accounts[i].pubKey;
-			const d = identityStore.buildIdentityEntry(a, [pk]);
+			const d = identityStore.buildEntry(a, [pk]);
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const r = identityStore.resolveIdentity(a, [pk]);
@@ -92,7 +92,7 @@ const onBlockConfirmed = async (block) => {
 		try {
 			const s = serializer.serialize.transaction(signedTx);
 			if (node.p2p.peerStore.neighborsList.length > 0) node.p2p.broadcast(s, { topic: 'transaction' });
-			else node.memPool.pushTransaction(node, s);
+			else await node.memPool.pushTransaction(node, s);
 			console.log(`Sent 1 multi output transaction with ${tx.outputs.length} outputs.`);
 		} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.stack); }
 		
@@ -115,7 +115,7 @@ const onBlockConfirmed = async (block) => {
 		try {
 			const s = serializer.serialize.transaction(tx);
 			if (node.p2p.peerStore.neighborsList.length > 0) node.p2p.broadcast(s, { topic: 'transaction' });
-			else node.memPool.pushTransaction(node, s);
+			else await node.memPool.pushTransaction(node, s);
 			nbSent++;
 		} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.stack); }
 	}

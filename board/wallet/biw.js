@@ -3,14 +3,14 @@ if (false) { const anime = require('animejs'); } // For completion
 
 import { Interpreter } from './interpreter.js';
 import { ADDRESS } from '../../types/address.mjs';
-import { eHTML_STORE } from '../utils/board-helpers.js';
+import { Wallet } from '../../node/src/wallet.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
+import { eHTML_STORE } from '../utils/board-helpers.js';
 import { MiniformComponent } from './miniform-component.js';
 import { AccountsComponent } from './accounts-component.js';
-import { Wallet, Account } from '../../node/src/wallet.mjs';
+import { Transaction_Builder } from '../../node/src/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { ButtonHoldAnimation, horizontalBtnLoading } from '../utils/htmlAnimations.js';
-import { Transaction_Builder } from '../../node/src/transaction.mjs';
 
 /** 
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction 

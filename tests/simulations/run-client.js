@@ -86,7 +86,7 @@ const trySpamming = async (block) => {
         for (let i = 0; i < nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
 			const pk = clientWallet.accounts[i].pubKey;
-			const d = identityStore.buildIdentityEntry(a, [pk]);
+			const d = identityStore.buildEntry(a, [pk]);
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const r = identityStore.resolveIdentity(a, [pk]);

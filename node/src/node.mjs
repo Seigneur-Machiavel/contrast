@@ -20,7 +20,7 @@ import { BLOCKCHAIN_SETTINGS, SOLVING } from "../../config/blockchain-settings.m
 * @typedef {import("../../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
 * 
 * @typedef {import("./wallet.mjs").Wallet} Wallet
-* @typedef {import("./wallet.mjs").Account} Account
+* @typedef {import("./account.mjs").Account} Account
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * 
 * @typedef {Object} NodeOptions
@@ -146,6 +146,7 @@ export class ContrastNode {
 
 	/** Associate a wallet with this node (for solver and validator functions) @param {Wallet} wallet */
 	associateWallet(wallet) {
+		if (!wallet.accounts[0].pubKey || !wallet.accounts[1].pubKey) throw new Error('Wallet accounts must be initialized with pubKeys before associating with the node');
 		this.account = wallet.accounts[0];
 		this.rewardsInfo.vAddress = wallet.accounts[0].address;
 		this.rewardsInfo.vPubkeys = [wallet.accounts[0].pubKey];
@@ -178,7 +179,7 @@ export class ContrastNode {
 	async #stackExecution() {
 		while (this.running) {
 			await this.#executeNextTask();
-			try { await this.solver.tick(); } catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[SOLVER] Error in tick: ${error.message}`, (m, c) => console.error(m, c)); }
+			try { await this.solver.tick(); } catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[NODE-STACK] Error in tick: ${error.stack}`, (m, c) => console.error(m, c)); }
 			await new Promise(r => setTimeout(r, 10));
 		}
 	}
@@ -188,7 +189,7 @@ export class ContrastNode {
 
 		if (task.type === 'PushTxs') 			// as batch of transactions
 			for (const tx of task.data)
-				try { this.memPool.pushTransaction(this, tx); }
+				try { await this.memPool.pushTransaction(this, tx); }
 				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'NewCandidate') 	// @ts-ignore: task.data = BlockCandidate
 			try { this.solver.updateBestCandidate(task.data); }

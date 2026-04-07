@@ -1,17 +1,12 @@
 // @ts-check
 import { ADDRESS } from '../types/address.mjs';
 import { SIZES } from './serializer-schema.mjs';
-import { BinaryReader, BinaryWriter } from './binary-writer-reader.mjs';
+import { BinaryReader, BinaryWriter } from './binary-helpers.mjs';
 import { Transaction_Builder } from '../node/src/transaction.mjs';
 import { BlockFinalized, BlockCandidate } from '../types/block.mjs';
+import { Converter, QsafeSigner, QsafeHelper } from '../node/src/conCrypto.mjs';
 import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from '../types/transaction.mjs';
 export { SIZES, BinaryReader, BinaryWriter };
-
-/** @type {typeof import('hive-p2p')} */
-const HiveP2P = typeof window !== 'undefined' // @ts-ignore
-	? await import('../hive-p2p.min.js')
-	: await import('hive-p2p');
-const { Converter } = HiveP2P;
 
 /**
 * @typedef {import("../types/transaction.mjs").UTXO} UTXO
@@ -29,7 +24,6 @@ const { Converter } = HiveP2P;
 const converter = new Converter();
 const isNode = typeof self === 'undefined'; // @ts-expect-error - msgpack global added by browser script
 const msgpack = isNode ? (await import('../external-libs/msgpack.min.js')).default : window.msgpack;
-
 
 /** Two bytes (Uint16) encoder/decoder (values 0 and 1 are reserved)
  * - Shift the value by 2 to fit in the range 2-255 for each byte
@@ -182,51 +176,57 @@ export const serializer = {
 			}
 			return w.getBytesOrThrow(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-		/** @param {Object<string, string>} pubkeyAddresses ex: { pubKeyHex: addressBase58, ... } */
-        pubkeyAddressesObj(pubkeyAddresses) { // Here we minimize garbage.
-			let totalBytes = 0;
-			for (const p in pubkeyAddresses) totalBytes += SIZES.pubKey.bytes + SIZES.address.bytes;
-
-			const w = new BinaryWriter(totalBytes);
-			for (const pubKeyHex in pubkeyAddresses) {
-				w.writeBytes(converter.hexToBytes(pubKeyHex));
-				w.writeBytes(ADDRESS.B58_TO_BYTES(pubkeyAddresses[pubKeyHex]));
-			}
-			return w.getBytesOrThrow(`Pubkey-addresses object serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
-        },
-        /** @param {string[]} witnesses ex: [ "signature:pubKeyHash", ... ] @param {'tx' | 'validator'} [mode] default: tx */
-        witnessesArray(witnesses, mode = 'tx') {
-			if (mode !== 'tx' && mode !== 'validator') throw new Error('Invalid mode for witnesses array serialization');
-			const witnessBytes = mode === 'validator' ? SIZES.validatorWitness.bytes : SIZES.witness.bytes;
-			const w = new BinaryWriter(witnessBytes * witnesses.length);
-			for (const witness of witnesses) w.writeBytes(converter.hexToBytes(witness.replace(':', '')));
-			return w.getBytesOrThrow(`Witnesses array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
-		},
-		/** returns: [address: 5b][nb_pubkeys: 1b][threshold: 1b][pubkey x nb_pubkeys: 32b each] 
-		 * @param {ADDRESS} address @param {string[]} pubKeysHex @param {number} threshold */
+		/** @param {ADDRESS} address @param {string[]} pubKeysHex @param {number} threshold */
 		identityEntry(address, pubKeysHex, threshold) {
-			const w = new BinaryWriter(address.bytes.length + 1 + 1 + (pubKeysHex.length * SIZES.pubKey.bytes));
-			w.writeBytes(address.bytes);
-			w.writeByte(pubKeysHex.length);
-			w.writeByte(threshold);
-			for (const pubKeyHex of pubKeysHex) w.writeBytes(converter.hexToBytes(pubKeyHex));
+			const pks = pubKeysHex.map(hybridKeyHex => converter.hexToBytes(hybridKeyHex));
+			const totalPksBytes = pks.reduce((sum, pk) => sum + pk.length, 0);
+			const pointersBytes = BinaryWriter.calculatePointersSize(pks);
+			const w = new BinaryWriter(address.bytes.length + 1 + pointersBytes + totalPksBytes);
+			w.writeBytes(address.bytes);    	// 5b
+			w.writeByte(threshold);		  		// 1b
+			w.writePointersAndDataChunks(pks);  // unspecified.
 			return w.getBytesOrThrow(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
+		/** @param {string} witness 	ex: "signature:pubKey(Hash)" */
+		witness(witness) {
+			const s = witness.split(':');
+			if (s.length !== 2) throw new Error(`Invalid witness format: ${witness}`);
+
+			const witnessAsArray = [converter.hexToBytes(s[0]), converter.hexToBytes(s[1])];
+			const witnessBytes = witnessAsArray.reduce((sum, w) => sum + w.length, 0);
+			const pointersBytes = BinaryWriter.calculatePointersSize(witnessAsArray);
+			const w = new BinaryWriter(pointersBytes + witnessBytes);
+			w.writePointersAndDataChunks(witnessAsArray);
+			return w.getBytesOrThrow(`Witness serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
+        /** @param {string[]} witnesses ex: [ "signature:pubKey(Hash)", ... ] */
+        witnessesArray(witnesses) {
+			const witnessesAsArrays = [];
+			for (const w of witnesses) witnessesAsArrays.push(this.witness(w));
+
+			const totalWitnessesBytes = witnessesAsArrays.reduce((sum, w) => sum + w.length, 0);
+			const pointersBytes = BinaryWriter.calculatePointersSize(witnessesAsArrays);
+			const w = new BinaryWriter(pointersBytes + totalWitnessesBytes);
+			w.writePointersAndDataChunks(witnessesAsArrays);
+			return w.getBytesOrThrow(`Witnesses array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
         /** @param {Transaction} tx @param {'tx' | 'validator' | 'solver'} [mode] default: tx */
         transaction(tx, mode = 'tx') {
+			if (mode === 'solver' && tx.witnesses.length !== 0) throw new Error('Invalid coinbase transaction: should not have witnesses');
 			if (mode === 'solver' && (tx.inputs.length !== 1 || tx.inputs[0].length !== SIZES.nonce.str)) throw new Error('Invalid coinbase transaction');
             if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== SIZES.hash.str)) throw new Error('Invalid transaction: validator input must be address + posHash');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
 			
 			// validator witness is bigger because it includes the full pubKey
-			const witnessBytes = mode === 'validator' ? SIZES.validatorWitness.bytes : SIZES.witness.bytes;
-			const witnessesBytes = tx.witnesses.length * witnessBytes;
 			let inputBytes = SIZES.anchor.bytes;
 			if (mode === 'solver') inputBytes = 4; 			// input = nonce
 			if (mode === 'validator') inputBytes = SIZES.hash.bytes; // posHash
 			const inputsBytes = tx.inputs.length * inputBytes;
 			const outputsBytes = tx.outputs.length * SIZES.miniUTXO.bytes;
 			const dataBytes = tx.data?.length || 0;			// arbitrary data
+			
+			const witnesses = tx.witnesses.length ? this.witnessesArray(tx.witnesses) : null;
+			const witnessesBytes = witnesses ? witnesses.length : 0;
 			
 			// header (10) => version(2) + witnesses(2) + inputs(2) + outputs(2) + dataLength(2)
 			const w = new BinaryWriter(10 + witnessesBytes + inputsBytes + outputsBytes + dataBytes);
@@ -235,9 +235,8 @@ export const serializer = {
 			w.writeBytes(converter.numberTo2Bytes(tx.inputs.length)); 			// nb of inputs
 			w.writeBytes(converter.numberTo2Bytes(tx.outputs.length));			// nb of outputs
 			w.writeBytes(converter.numberTo2Bytes(tx.data?.length || 0)); 		// data: bytes
-			
-			if (mode !== 'solver') w.writeBytes(this.witnessesArray(tx.witnesses, mode));	// witnesses
-			if (mode === 'tx') w.writeBytes(this.anchorsArray(tx.inputs));			// inputs
+			if (witnesses) w.writeBytes(witnesses);								// witnesses
+			if (mode === 'tx') w.writeBytes(this.anchorsArray(tx.inputs));		// inputs
 			if (mode === 'solver' || mode === 'validator')						// input solver/validator
 				w.writeBytes(converter.hexToBytes(tx.inputs[0])); 				// nonce | posHash (hex)
 			w.writeBytes(this.miniUTXOsArray(tx.outputs));						// outputs
@@ -257,7 +256,7 @@ export const serializer = {
             }
             
             let totalBytes = mode === 'finalized' ? SIZES.blockFinalizedHeader.bytes : SIZES.blockCandidateHeader.bytes;
-			totalBytes += (serializedTxs.length * 4) + totalTxsBytes; // pointers + txs
+			totalBytes += BinaryWriter.calculatePointersSize(serializedTxs) + totalTxsBytes; // pointers + txs
             
 			const w = new BinaryWriter(totalBytes);
 			w.writeBytes(converter.numberTo2Bytes(blockData.Txs.length));	// nbOfTxs
@@ -274,21 +273,13 @@ export const serializer = {
 			if (mode === 'candidate' && 'powReward' in blockData)
 				w.writeBytes(converter.numberTo6Bytes(blockData.powReward || 0)); // powReward
 
-			if (mode === 'finalized' && 'hash' in blockData)
-				w.writeBytes(converter.hexToBytes(blockData.hash)); 	// hash
-			if (mode === 'finalized' && 'nonce' in blockData)
-				w.writeBytes(converter.hexToBytes(blockData.nonce));	// nonce
+			if (mode === 'finalized' && 'hash' in blockData)  // write hash if any
+				w.writeBytes(converter.hexToBytes(blockData.hash));	
+			if (mode === 'finalized' && 'nonce' in blockData) // write nonce if any
+				w.writeBytes(converter.hexToBytes(blockData.nonce));
             
-            // POINTERS & TXS -> This specific traitment offer better reading performance:
-            // no need to deserialize the whole block to read the txs
-			let offset = w.cursor + (serializedTxs.length * 4);
-            for (let i = 0; i < serializedTxs.length; i++) { // WRITE POINTERS
-                w.writeBytes(converter.numberTo4Bytes(offset));
-				offset += serializedTxs[i].length;
-			}
-
-			for (const serializedTx of serializedTxs) w.writeBytes(serializedTx); // WRITE TXS
-            return w.getBytesOrThrow(`Block serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+			w.writePointersAndDataChunks(serializedTxs); // write pointers and txs in one call
+			return w.getBytesOrThrow(`Block serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
 		/** @param {number} blockHeight @param {string} blockHash */
 		blockHeightHash(blockHeight, blockHash) {
@@ -481,21 +472,6 @@ export const serializer = {
 			if (r.isReadingComplete) return txsIds;
 			else throw new Error(`TxsIds array is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
         },
-		/** @param {Uint8Array} serializedPubkeyAddresses */
-		pubkeyAddressesObj(serializedPubkeyAddresses) {
-			if (serializedPubkeyAddresses.length % (SIZES.pubKey.bytes + SIZES.address.bytes) !== 0) throw new Error('Serialized pubkeyAddresses length is invalid');
-			/** @type {Object<string, string>} */
-			const pubkeyAddresses = {};
-			const expectedNbOfEntries = serializedPubkeyAddresses.length / (SIZES.pubKey.bytes + SIZES.address.bytes);
-			const r = new BinaryReader(serializedPubkeyAddresses);
-			for (let i = 0; i < expectedNbOfEntries; i++) {
-				const pubKeyHex = converter.bytesToHex(r.read(SIZES.pubKey.bytes));
-				const addressBase58 = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
-				pubkeyAddresses[pubKeyHex] = addressBase58;
-			}
-			if (r.isReadingComplete) return pubkeyAddresses;
-			else throw new Error(`PubkeyAddresses object is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
-		},
 		/** @param {Uint8Array} serializedWitnesses @param {'tx' | 'validator'} [mode] default: tx */
 		witnessesArray(serializedWitnesses, mode = 'tx') {
 			if (mode !== 'tx' && mode !== 'validator') throw new Error('Invalid mode for witnesses array serialization');
@@ -516,19 +492,14 @@ export const serializer = {
 		},
 		/** @param {Uint8Array} serializedIdentityEntry */
 		identityEntry(serializedIdentityEntry) {
-			if (serializedIdentityEntry.length < SIZES.address.bytes + 2 + SIZES.pubKey.bytes) throw new Error('Serialized identity entry length is too short to be valid');
-			
 			const r = new BinaryReader(serializedIdentityEntry);
 			const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
-			const nbOfPubKeys = r.read(1)[0];
 			const threshold = r.read(1)[0];
-			const totalExpectedBytes = SIZES.address.bytes + 1 + 1 + (nbOfPubKeys * SIZES.pubKey.bytes);
-			if (serializedIdentityEntry.length !== totalExpectedBytes) throw new Error('Serialized identity entry length is invalid');
-
 			const pubKeysHex = [];
-			for (let i = 0; i < nbOfPubKeys; i++) pubKeysHex.push(converter.bytesToHex(r.read(SIZES.pubKey.bytes)));
+			const pks = r.readPointersAndExtractDataChunks();
+			for (const pk of pks) pubKeysHex.push(converter.bytesToHex(pk));
 			if (r.isReadingComplete) return { address, pubKeysHex, threshold };
-			else throw new Error('Identity entry is not fully deserialized');
+			else throw new Error(`Identity entry is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {Uint8Array} serializedTx @param {'tx' | 'validator' | 'solver'} [mode] default: normal */
 		transaction(serializedTx, mode = 'tx') {
@@ -551,7 +522,7 @@ export const serializer = {
 			return new Transaction(inputs, outputs, witnesses, data, version);
 		},
 		/** @param {Uint8Array} serializedBlock @param {'finalized' | 'candidate'} [mode] default: finalized */
-		blockData(serializedBlock, mode = 'finalized') {
+		blockData(serializedBlock, mode = 'finalized') { // local use only
 			const r = new BinaryReader(serializedBlock);
 			const nbOfTxs = converter.bytes2ToNumber(r.read(2));
 			const index = converter.bytes4ToNumber(r.read(4));
@@ -572,20 +543,12 @@ export const serializer = {
 				nonce = converter.bytesToHex(r.read(4));
 			}
 
-			// POINTERS & TXS -> This specific traitment offer better reading performance:
-			// no need to deserialize the whole block to read the txs
-			const txPointers = [];
-			for (let i = 0; i < nbOfTxs; i++) txPointers.push(converter.bytes4ToNumber(r.read(4)));
-			
+			const txsSerialized = r.readPointersAndExtractDataChunks();
 			const txs = [];
-			for (let i = 0; i < nbOfTxs; i++) {
-				const start = txPointers[i];
-				const end = i + 1 < nbOfTxs ? txPointers[i + 1] : serializedBlock.length;
-				txs.push(this.transaction(r.read(end - start), serializer.specialMode[mode][i]));
-			}
+			for (let i = 0; i < nbOfTxs; i++) txs.push(this.transaction(txsSerialized[i], serializer.specialMode[mode][i]));
 
 			if (!r.isReadingComplete) throw new Error('Block is not fully deserialized');
-			return { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, posTimestamp, timestamp, hash, nonce, powReward };
+			return { index, supply, coinBase, difficulty, legitimacy, prevHash, txs, txsSerialized, posTimestamp, timestamp, hash, nonce, powReward };
 		},
 		/** @param {Uint8Array} serializedBlock */
 		blockCandidate(serializedBlock) {

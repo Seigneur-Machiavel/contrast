@@ -1,18 +1,14 @@
 // @ts-check
+import { Account } from './account.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { Transaction_Builder } from './transaction.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ProgressLogger } from '../../utils/progress-logger.mjs';
 import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
-import { UTXO_RULES_GLOSSARY, UTXO } from '../../types/transaction.mjs';
 
 /**
 * @typedef {import("../../storage/storage.mjs").ContrastStorage} ContrastStorage
-* @typedef {import("../../utils/front-storage.mjs").FrontStorage} FrontStorage
-* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
-* @typedef {import("../../types/transaction.mjs").TxId} TxId
-* @typedef {import("../../types/transaction.mjs").LedgerUtxo} LedgerUtxo */
+* @typedef {import("../../utils/front-storage.mjs").FrontStorage} FrontStorage */
 
 class GeneratedAccount {
 	/** @param {string} address @param {string} seedModifierHex */
@@ -29,89 +25,6 @@ class EncryptedGeneratedAccount extends GeneratedAccount {
 	}
 }
 
-export class Account {
-    #privKey;
-	pubKey;
-	prefix;		// e.g., 'C'
-	b58;		// e.g., '123456'
-
-	/** @type {TxId[]} */					historyIds = [];
-	/** @type {LedgerUtxo[]} */				ledgerUtxos = [];
-    /** @type {number} */ 					balance = 0;
-	/** @type {number} */					totalSent = 0;
-	/** @type {number} */					totalReceived = 0;
-    /** @type {number} */					spendableBalance = 0;
-
-	/** @param {string} pubKey @param {string} privKey @param {string} b58 @param {string} [prefix] default: 'C' */
-    constructor(pubKey, privKey, b58, prefix = 'C') {
-        this.pubKey = pubKey;
-        this.#privKey = privKey;
-        this.b58 = b58;
-		this.prefix = prefix;
-    }
-
-	get address() { return `${this.prefix}${this.b58}`; }
-	get nbHistory() { return this.historyIds.length; }
-
-    /** @param {Transaction} transaction @param {'hash' | 'pubKey'} [pubKeyMode] default: 'hash' - how to include the public key in the witness (as a hash or full pubKey) */
-    signTransaction(transaction, pubKeyMode = 'hash') {
-        if (typeof this.#privKey !== 'string') throw new Error('Invalid private key');
-		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
-
-		const pubKeyHash = HashFunctions.xxHash32(this.pubKey, 8);
-		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
-        const { signatureHex } = AsymetricFunctions.signMessage(toSign, this.#privKey);
-        if (transaction.witnesses.includes(`${signatureHex}:${pubKeyHash}`)) throw new Error('Signature already included');
-        if (transaction.witnesses.includes(`${signatureHex}:${this.pubKey}`)) throw new Error('Signature already included with full pubKey');
-		transaction.witnesses.push(`${signatureHex}:${pubKeyMode === 'hash' ? pubKeyHash : this.pubKey}`);
-        return transaction;
-    }
-    /** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */
-    setBalanceAndUTXOs(balance, ledgerUtxos) {
-        if (typeof balance !== 'number') throw new Error('Invalid balance');
-        if (!Array.isArray(ledgerUtxos)) throw new Error('Invalid LedgerUtxos');
-
-        this.balance = balance;
-        this.ledgerUtxos = ledgerUtxos;
-    }
-	/** @param {TxId[]} history */
-	setHistoryIds(history) {
-		this.historyIds = history;
-	}
-	/** @param {string} anchor */
-	markUTXOAsSpent(anchor) {
-		const utxo = this.ledgerUtxos.find(utxo => utxo.anchor === anchor);
-		const amount = utxo?.amount;
-		if (typeof amount !== 'number') throw new Error('UTXO not found for anchor: ' + anchor);
-
-		this.balance -= amount;
-		this.totalSent += amount;
-		this.ledgerUtxos = this.ledgerUtxos.filter(utxo => utxo.anchor !== anchor);
-	}
-    /** @param {number} length - len of the hex hash */
-    async getUniqueHash(length = 64) {
-        const hash = await HashFunctions.SHA256(this.pubKey + this.#privKey);
-        return hash.substring(0, length);
-    }
-	/** Return a list of UTXOs that are filtered based on the provided criteria. (excludeRules or includesRules, not both)
-	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sigOrSlash'] @param {string[]} [includesRules] ex: ['sigOrSlash'] */
-	filteredUtxos(maxHeight = Infinity, excludeRules = [], includesRules = []) {
-		if (excludeRules.length > 0 && includesRules.length > 0) throw new Error('Cannot use both excludeRules and includesRules at the same time');
-		
-		const rulesCodesToExclude = excludeRules.map(r => UTXO_RULES_GLOSSARY[r]?.code).filter(c => c !== undefined);
-		const ruleCodesToExclude = rulesCodesToExclude.length ? new Set(rulesCodesToExclude) : undefined;
-		let utxo = UTXO.fromLedgerUtxos(this.address, this.ledgerUtxos, ruleCodesToExclude);
-		if (includesRules.length > 0) utxo = utxo.filter(u => includesRules.some(r => r === u.rule));
-		return utxo.filter(u => parseInt(u.anchor.split(':')[0], 10) <= maxHeight);
-	}
-	/** Calculate the balance based on the filtered UTXOs. (excludeRules or includesRules, not both)
-	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sigOrSlash'] @param {string[]} [includesRules] ex: ['sigOrSlash'] */
-	filteredBalance(maxHeight = Infinity, excludeRules = [], includesRules = []) {
-		const filteredUtxos = this.filteredUtxos(maxHeight, excludeRules, includesRules);
-		return filteredUtxos.reduce((sum, utxo) => sum + utxo.amount, 0);
-	}
-}
-
 export class Wallet {
     #masterHex = '';
 	converter = serializer.converter;
@@ -125,7 +38,7 @@ export class Wallet {
 
 	// API
 	static generateRandomMasterHex() {
-		const randomBytes = new Uint8Array(32);
+		const randomBytes = new Uint8Array(24);
 		crypto.getRandomValues(randomBytes);
 		return serializer.converter.bytesToHex(randomBytes);
 	}
@@ -167,11 +80,10 @@ export class Wallet {
 			
 			// from saved account
 			const { address, seedModifierHex } = this.accountsGenerated[i];
-			const seedHex = await HashFunctions.SHA256(this.#masterHex + seedModifierHex);
-			const keyPair = AsymetricFunctions.generateKeyPairFromHash(seedHex);
-			if (!keyPair) throw new Error('Failed to generate key pair from saved account');
-			
-			this.accounts.push(new Account(keyPair.pubKeyHex, keyPair.privKeyHex, address.substring(1), addressPrefix));
+			const qsafeMasterHex = await HashFunctions.SHA256(this.#masterHex + seedModifierHex);
+			const account = await Account.initializedAccount(qsafeMasterHex, addressPrefix);
+			if (address !== account.address) throw new Error('Loaded account address does not match derived address');
+			this.accounts.push(account);
         }
 		
 		let iterationsPerAccount = 0; // metrics
@@ -228,14 +140,8 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
         for (let i = 0; i < maxIterations; i++) {
             const seedModifier = seedModifierStart + i;
             const seedModifierHex = seedModifier.toString(16).padStart(12, '0'); // padStart(12, '0') => 48 bits (6 bytes), maxValue = 281 474 976 710 655
-			const seedHex = await HashFunctions.SHA256(this.#masterHex + seedModifierHex);
-			const keyPair = AsymetricFunctions.generateKeyPairFromHash(seedHex);
-			if (!keyPair) throw new Error('Failed to generate key pair during account derivation');
-
-			const b58 = ADDRESS.deriveB58(keyPair.pubKeyHex);
-			if (!ADDRESS.checkConformity(`${prefix}${b58}`)) continue;
-
-			const account = new Account(keyPair.pubKeyHex, keyPair.privKeyHex, b58, prefix);
+			const qsafeMasterHex = await HashFunctions.SHA256(this.#masterHex + seedModifierHex);
+			const account = await Account.initializedAccount(qsafeMasterHex, prefix);
 			this.accountsGenerated.push({ address: account.address, seedModifierHex });
 			return { account, iterations: i };
         }

@@ -82,7 +82,7 @@ const onBlockConfirmed = async (block) => {
 	console.log(`Pushing transaction spending: ${tx.inputs.join(', ')}`);
 	try {
 		const s = serializer.serialize.transaction(tx);
-		bootstrapNode.memPool.pushTransaction(bootstrapNode, s);
+		await bootstrapNode.memPool.pushTransaction(bootstrapNode, s);
 	} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
 }
 bootstrapNode.on('onBlockConfirmed', onBlockConfirmed);
