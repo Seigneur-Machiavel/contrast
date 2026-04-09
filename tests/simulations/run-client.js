@@ -82,21 +82,21 @@ const trySpamming = async (block) => {
 
 		const identityStore = clientNode.blockchain.identityStore;
         const transfers = [];
-		let data;
+		const identityEntries = [];
         for (let i = 0; i < nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
 			const pk = clientWallet.accounts[i].pubKey;
-			const d = identityStore.buildEntry(a, [pk]);
+			if (!pk) throw new Error('Pubkey not found for receipient account');
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const r = identityStore.resolveIdentity(a, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (r === 'UNKNOWN') data = Transaction_Builder.mergeIdentityData(d, data);
+			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(a, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
 			transfers.push(new Transfer(clientWallet.accounts[i].address, 1_000)); // self, patch recipients here
 		}
 
-        const { tx } = Transaction_Builder.createTransaction(clientNode.account, transfers, 1, data);
+        const { tx } = Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries);
         const signedTx = clientNode.account.signTransaction(tx);
         if (!signedTx) return;
         try {

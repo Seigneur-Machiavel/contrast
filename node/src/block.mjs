@@ -43,22 +43,31 @@ export class BlockUtils {
 	static async signBlockCandidate(node, block) {
 		const { blockchain, rewardsInfo, account } = node;
 		const { identityStore } = blockchain;
-		const { vAddress, vPubkeys } = rewardsInfo;
-		if (!vAddress || !vPubkeys || !account || !account.pubKey) throw new Error('Node reward addresses/pubkey or account not set');
+		const { vAddress: rewardAddress, vPubkeys: rewardPubkeys } = rewardsInfo;
+		if (!rewardAddress || !rewardPubkeys || !account || !account.pubKey) throw new Error('Node reward addresses/pubkey or account not set');
 
 		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
 		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
 		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
 
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
-		const r = identityStore.resolveIdentity(vAddress, vPubkeys);
-		if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-		const data = r === 'MATCH' ? undefined : identityStore.buildEntry(vAddress, vPubkeys);
+		/** @type {Uint8Array[]} */
+		const identityEntries = [];
+		const vr = identityStore.resolveIdentity(account.address, [account.pubKey]);
+		if (vr === 'MISMATCH') throw new Error('Validator address known but pubkey(s) mismatch in identity store');
+		if (vr === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(account.address, [account.pubKey]));
+
+		// IF NOT USING THE SAME ADDRESS TO RECEIVE REWARD AND VALIDATE...
+		if (account.address !== rewardAddress) { // ...THEN ALSO CREATE IDENTITY IF NEEDED
+			const rr = identityStore.resolveIdentity(rewardAddress, rewardPubkeys);
+			if (rr === 'MISMATCH') throw new Error('Reward address known but pubkey(s) mismatch in identity store');
+			if (rr === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(rewardAddress, rewardPubkeys));
+		}
 
 		// CALCULATE REWARD => CREATE & SIGN VALIDATOR REWARD TX => ADD IT TO BLOCK CANDIDATE
 		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
-		const validatorFeeTx = await Transaction_Builder.createValidatorReward(posReward, block, vAddress, data);
-		const signedValidatorFeeTx = account.signTransaction(validatorFeeTx, 'pubKey');
+		const validatorFeeTx = await Transaction_Builder.createValidatorReward(posReward, block, account.address, rewardAddress, identityEntries);
+		const signedValidatorFeeTx = account.signTransaction(validatorFeeTx);
 		block.Txs.unshift(signedValidatorFeeTx);
 		block.powReward = powReward; // Reward for the solver
 	}

@@ -89,7 +89,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 	async tick() {
 		if (this.terminated) return;
 
-		const { sAddress, data } = this.#getAddressAndDataForRewardTx();
+		const { sAddress, identityEntries } = this.#getAddressAndDataForRewardTx();
 		const blockCandidate = this.bestCandidate;
 		if (!sAddress || !blockCandidate) return;
 		if (blockCandidate.index !== this.bestCandidateIndex) {
@@ -99,7 +99,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 
 		this.#togglePausedWorkers();
 		await this.#terminateUnusedWorkers();
-		const readyWorkers = await this.#createMissingWorkers(sAddress, data);
+		const readyWorkers = await this.#createMissingWorkers(sAddress, identityEntries);
 		this.hashRate = this.#getAverageHashrate();
 		
 		const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
@@ -110,7 +110,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 			if (!this.node.time) return;
 			const blockBet = this.bets?.[i] || 0;
 			const timeOffset = Date.now() - this.node.time;
-			this.workers[i].updateInfo(sAddress, blockBet, timeOffset, data);
+			this.workers[i].updateInfo(sAddress, blockBet, timeOffset, identityEntries);
 		}
 		timings.updateInfo = Date.now();
 
@@ -150,10 +150,10 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		
 		const r = this.node.blockchain.identityStore.resolveIdentity(sAddress, sPubkeys);
 		if (r === 'MISMATCH') throw new Error('Solver reward address known but pubkey(s) mismatch in identity store');
-		if (r === 'MATCH') return { sAddress, data: undefined };
+		if (r === 'MATCH') return { sAddress, identityEntries: undefined };
 		
 		if (sPubkeys.length === 0 || sPubkeys.length > 1) throw new Error(`Invalid number of pubkeys for solver reward address: ${sPubkeys.length} (should be 1)`);
-		return { sAddress, data: this.node.blockchain.identityStore.buildEntry(sAddress, sPubkeys) };
+		return { sAddress, identityEntries: [this.node.blockchain.identityStore.buildEntry(sAddress, sPubkeys)] };
 	}
     #prepareBets(nbOfBets = 32) {
         if (!this.useBetTimestamp) { this.bets = []; return }
@@ -211,8 +211,8 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		//const deserializedBlock = serializer.deserialize.blockFinalized(serialized); // DEBUG
 		this.node.taskQueue.pushFirst('DigestBlock', serialized);
     }
-	/** @param {string} sAddress @param {Uint8Array} [data] */
-    async #createMissingWorkers(sAddress, data) {
+	/** @param {string} sAddress @param {Uint8Array[]} [identityEntries] */
+    async #createMissingWorkers(sAddress, identityEntries) {
 		if (!this.node.time) return 0;
 
         const missingWorkers = this.nbOfWorkers - this.workers.length;
@@ -223,7 +223,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
             const workerIndex = readyWorkers + i;
             const blockBet = this.bets?.[workerIndex] || 0;
 			const timeOffset = Date.now() - this.node.time;
-            this.workers.push(new SolverWorker(sAddress, blockBet, timeOffset, data));
+            this.workers.push(new SolverWorker(sAddress, blockBet, timeOffset, identityEntries));
             readyWorkers++;
         }
 

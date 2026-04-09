@@ -62,12 +62,12 @@ export class Blockchain {
 		if (this.currentHeight > 10 && Math.random() < this.simulateFailureRate)
 			return console.log(`%c[DEBUG] Simulated failure of digestFinalizedBlock #${this.currentHeight}`, 'color: orange;');
 		
-		let blockIndex = null;
+		// let blockIndex = null;
 		try {
 			// VALIDATE BLOCK
 			if (serializedBlock.length > BLOCKCHAIN_SETTINGS.maxBlockSize) throw new Error('Block size exceeds the maximum limit');
 			block = serializer.deserialize.blockFinalized(serializedBlock);
-			blockIndex = block.index;
+			// blockIndex = block.index;
 			node.updateState(`${statePrefix}block-validation #${block.index}`);
 			const validationResult = await BlockValidation.validateBlockProposal(node, block, serializedBlock);
 			const { hashConfInfo, involvedAnchors, involvedUTXOs } = validationResult;

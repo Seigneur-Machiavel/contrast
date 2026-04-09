@@ -48,10 +48,11 @@ export class AsymetricFunctions {
 	/** Verify a signature using Qsafe. Will throw an error if the signature is invalid
 	 * @param {string} message @param {string} signature @param {string} pubKeyHex */
 	static async qsafeVerify(message, signature, pubKeyHex) {
-		const verifier 		= this.verifierInstance || await QsafeSigner.createFull();
-		const toSignBytes 	= converter.hexToBytes(message);
-		const signtureBytes = converter.hexToBytes(signature);
-		const pubKeyBytes 	= converter.hexToBytes(pubKeyHex);
-		await verifier.verify(signtureBytes, toSignBytes, pubKeyBytes); // will throw an error if the signature is invalid
+		const verifier 		 = this.verifierInstance || await QsafeSigner.createFull();
+		const toSignBytes 	 = converter.hexToBytes(message);
+		const signatureBytes = converter.hexToBytes(signature);
+		const pubKeyBytes 	 = converter.hexToBytes(pubKeyHex);
+		const iValid = await verifier.verify(toSignBytes, signatureBytes, pubKeyBytes);
+		if (!iValid) throw new Error('Invalid signature');
 	}
 };

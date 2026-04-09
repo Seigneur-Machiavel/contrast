@@ -8,7 +8,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { Transaction, TxOutput, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
 /**
- * @typedef {import('./wallet.mjs').Account} Account
+ * @typedef {import('./account.mjs').Account} Account
  * @typedef {import('../../types/block.mjs').BlockCandidate} BlockCandidate */
 
 export class Transaction_Builder {
@@ -25,28 +25,28 @@ export class Transaction_Builder {
         const anchors = utxos.map(utxo => utxo.anchor);
         if (conditionnals.arrayIncludeDuplicates(anchors)) throw new Error('Duplicate UTXO anchors in UTXOs');
     }
-    /** @param {string} nonceHex @param {string} address @param {number} amount @param {Uint8Array | undefined} [data] */
-    static async createSolverReward(nonceHex, address, amount, data) {
+    /** @param {string} nonceHex @param {string} address @param {number} amount @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
+    static async createSolverReward(nonceHex, address, amount, identities, data) {
         if (typeof nonceHex !== 'string') throw new Error('Invalid nonceHex');
         if (typeof address !== 'string') throw new Error('Invalid address');
         if (typeof amount !== 'number') throw new Error('Invalid amount');
 		if (data && !(data instanceof Uint8Array)) throw new Error('Invalid data');
 
         const coinbaseOutput = new TxOutput(amount, 'sig', address);
-		return new Transaction([nonceHex], [coinbaseOutput], undefined, data);
+		return new Transaction([nonceHex], [coinbaseOutput], undefined, identities, data);
     }
-    /** @param {number} posReward @param {BlockCandidate} blockCandidate @param {string} address - who will receive the reward @param {Uint8Array | undefined} [data] */
-    static async createValidatorReward(posReward, blockCandidate, address, data) {
-        if (typeof address !== 'string') throw new Error('Invalid address');
+    /** @param {number} posReward @param {BlockCandidate} blockCandidate @param {string} validatorAddress @param {string} rewardAddress - who will receive the reward @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
+    static async createValidatorReward(posReward, blockCandidate, validatorAddress, rewardAddress, identities, data) {
+        if (typeof rewardAddress !== 'string') throw new Error('Invalid rewardAddress');
         if (data && !(data instanceof Uint8Array)) throw new Error('Invalid data');
 
         const posHashHex = await BlockUtils.getBlockSignature(blockCandidate, true);
-        const posInput = posHashHex;
-        const posOutput = new TxOutput(posReward, 'sig', address);
-		return new Transaction([posInput], [posOutput], undefined, data);
+        const posInput = `${validatorAddress}:${posHashHex}`;
+        const posOutput = new TxOutput(posReward, 'sig', rewardAddress);
+		return new Transaction([posInput], [posOutput], undefined, identities, data);
     }
-    /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte @param {Uint8Array | undefined} [data] */
-    static createTransaction(senderAccount, transfers, feePerByte = 1, data, inMaxAmount = false) {
+    /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
+    static createTransaction(senderAccount, transfers, feePerByte = 1, identities, data, inMaxAmount = false) {
         const senderAddress = senderAccount.address;
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
         const UTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
@@ -68,7 +68,8 @@ export class Transaction_Builder {
 		if (changeOutput) outputs.push(changeOutput);
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
-		return { tx: Transaction.fromUTXOs(selectedUtxos, outputs, data), finalFee, totalConsumed: totalSpent + finalFee, weight };
+		const tx = Transaction.fromUTXOs(selectedUtxos, outputs, identities, data);
+		return { tx, finalFee, totalConsumed: totalSpent + finalFee, weight };
     }
 	/** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount - the account who is staking the VSS
@@ -189,7 +190,7 @@ export class Transaction_Builder {
 			if (tx.witnesses.length === 0) return 'solver'; // and no witness
 
 		if (tx.witnesses.length !== 1) return; 				// VALIDATOR should have exactly 1 witness
-        if (tx.inputs[0].length !== SIZES.hash.str) return; // VALIDATOR hash length is 64
+        if (tx.inputs[0].length !== SIZES.validatorInput.str) return; // VALIDATOR hash length is 64
 		
 		return 'validator';
     }
@@ -210,16 +211,6 @@ export class Transaction_Builder {
 
 		return { involvedAnchors, repeatedAnchorsCount };
 	}
-	/** @param {Uint8Array} d1 @param {Uint8Array} [d2] */
-	static mergeIdentityData(d1, d2) {
-		if (!d2) return d1;
-		if (d1.length + d2.length > BLOCKCHAIN_SETTINGS.maxTransactionDataSize) throw new Error('Merged data exceeds maximum allowed size in transaction (65,535 bytes)');
-		
-		const mergedData = new Uint8Array(d1.length + d2.length);
-		mergedData.set(d1, 0);
-		mergedData.set(d2, d1.length);
-		return mergedData;
-	}
 
     // Multi-functions methods
     /** Fast method to create & sign a transaction in on call. (Only works with 1 signature, for more complex transactions use createTransaction + account.signTransaction separately)
@@ -231,7 +222,7 @@ export class Transaction_Builder {
 			const inMaxAmount = amount === 'max';
 			const amountToSend = !inMaxAmount ? amount : Transaction_Builder.calculateMaxSendableAmount(senderAccount, feePerByte, data);
 			const transfer = { recipientAddress, amount: amountToSend };
-			const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte, data, inMaxAmount);
+			const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte, undefined, data, inMaxAmount);
 			senderAccount.signTransaction(tx);
 			return { signedTx: tx, finalFee, error: false };
         } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }

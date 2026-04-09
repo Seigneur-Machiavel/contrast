@@ -1,9 +1,13 @@
+// @ts-check
+
 /**
  * @typedef {Object} UTXORule
- * @property {number} code - The code of the rule
- * @property {string} description - The description of the rule
+ * @property {number} code 			- The code of the rule
+ * @property {string} description 	- The description of the rule
  * @property {number} [withdrawLockBlocks] - Number of blocks to lock for 'sigOrSlash' rule
  * @property {number} [lockUntilBlock] - Block height until which the UTXO is locked for 'lockUntilBlock' rule
+ * 
+ * @typedef {Uint8Array} IdentityEntry binary entry, e.g: [address: 5b][threshold: 1b][pointers & pubkeys]
  *
  * @typedef {string} TxAnchor 	- The path to the UTXO, ex: blockHeight:txIndex:vout
  * @typedef {string} TxId 		- The path to the transaction, ex: blockHeight:txIndex
@@ -101,11 +105,17 @@ export class Transfer {
 }
 
 export class Transaction {
-	/** @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {string[]} [witnesses] @param {Uint8Array | undefined} [data] @param {number} [version] Arbitrary data attached to the transaction @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {Object<string, number>} [inAmountByAddress] */
-	constructor(inputs, outputs, witnesses = [], data, version = TRANSACTION.VERSION, feePerByte, byteWeight, inAmountByAddress) {
+	/**
+	 * @param {TxAnchor[]} inputs @param {TxOutput[]} outputs
+	 * @param {string[]} [witnesses] @param {IdentityEntry[]} [identities] The newly delaclared identities.
+	 * @param {Uint8Array | undefined} [data] Arbitrary data attached to the transaction
+	 * @param {number} [version]  @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight]
+	 * @param {Record<string, number>} [inAmountByAddress] */
+	constructor(inputs, outputs, witnesses = [], identities = [], data, version = TRANSACTION.VERSION, feePerByte, byteWeight, inAmountByAddress) {
 		this.inputs = inputs;
 		this.outputs = outputs;
 		this.witnesses = witnesses;
+		this.identities = identities;
 		this.data = data;
 		this.version = version;
 		this.feePerByte = feePerByte;
@@ -113,15 +123,16 @@ export class Transaction {
 		this.inAmountByAddress = inAmountByAddress;
 	}
 
-	/** @param {UTXO[]} utxos @param {TxOutput[]} outputs @param {Uint8Array | undefined} [data] */
-	static fromUTXOs(utxos, outputs, data) {
-		const inputs = utxos.map(utxo => utxo.anchor);
+	/** @param {UTXO[]} utxos @param {TxOutput[]} outputs @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
+	static fromUTXOs(utxos, outputs, identities, data) {
+		/** @type {Record<string, number>} */
 		const inAmountByAddress = {};
+		const inputs = utxos.map(utxo => utxo.anchor);
 		for (const utxo of utxos)
 			if (!inAmountByAddress[utxo.address]) inAmountByAddress[utxo.address] = utxo.amount;
 			else inAmountByAddress[utxo.address] += utxo.amount;
 
-		return new TRANSACTION.Transaction(inputs, outputs, [], data, TRANSACTION.VERSION, undefined, undefined, inAmountByAddress);
+		return new TRANSACTION.Transaction(inputs, outputs, [], identities, data, TRANSACTION.VERSION, undefined, undefined, inAmountByAddress);
 	}
 }
 

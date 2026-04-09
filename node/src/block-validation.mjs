@@ -185,9 +185,10 @@ export class BlockValidation {
 			
 			const fee = specialTx ? 0 : TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
 			TxValidation.controlTransactionOutputsRulesConditions(tx);
-			TxValidation.controlOutputsIdentities(node, tx, identitiesCache);
+			TxValidation.controlIdentitiesReservation(node, tx, identitiesCache);
+			TxValidation.extractOutputsIdentities(node, tx, identitiesCache);
 
-			const ext = specialTx ? null : TxValidation.extractInputsIdentities(node, involvedUTXOs, tx, identitiesCache);
+			const ext = specialTx === 'solver' ? null : TxValidation.extractInputsIdentities(node, involvedUTXOs, tx, identitiesCache);
 			TxValidation.controlAddressesHasAssociatedWitnesses(tx, ext?.pubKeysByHashes, ext?.addressesToConfirmByPubKey);
 			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
 			

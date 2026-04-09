@@ -105,7 +105,7 @@ async function prepareBlockCandidateBeforeSolving() {
 	const now = Date.now() + solverVars.timeOffset;
 	block.timestamp = Math.max(block.posTimestamp + 1 + solverVars.bet, now);
 
-	const rewardTx = await Transaction_Builder.createSolverReward(coinbaseNonce, solverVars.sAddress, powReward, solverVars.data);
+	const rewardTx = await Transaction_Builder.createSolverReward(coinbaseNonce, solverVars.sAddress, powReward, solverVars.identities);
 	BlockUtils.setCoinbaseTransaction(block, rewardTx); // Will replace existing coinbase if any
 
 	const signatureHex = await BlockUtils.getBlockSignature(block);
@@ -120,8 +120,6 @@ const solverVars = {
 	exiting: false,
 	working: false,
 
-	/** @type {Uint8Array | undefined} */
-	data: undefined,
 	/** @type {string | undefined} */
 	sAddress: undefined,
 	highestBlockHeight: 0,
@@ -130,6 +128,7 @@ const solverVars = {
 	paused: false,
 	/** @type {BlockCandidate | null} */	blockCandidate: null,
 	/** @type {number | null} */			pausedAtTime: 0,
+	/** @type {Uint8Array[]} */				identities: [],
 
 	testSolvingSpeedPenality: 0 // TODO: set to 0 after testing
 };
@@ -143,7 +142,7 @@ parentPort.on('message', async (task) => {
 			solverVars.sAddress = task.sAddress;
 			solverVars.bet = task.bet;
 			solverVars.timeOffset = task.timeOffset;
-			solverVars.data = task.data;
+			solverVars.identities = task.identityEntries || [];
 			return;
         case 'newCandidate':
 			solverVars.highestBlockHeight = task.blockCandidate.index;
@@ -157,7 +156,7 @@ parentPort.on('message', async (task) => {
 			solverVars.sAddress = task.sAddress;
 			solverVars.bet = task.bet;
 			solverVars.timeOffset = task.timeOffset;
-			solverVars.data = task.data;
+			solverVars.identities = task.identityEntries || [];
 
 			const finalizedBlock = await mineBlockUntilValid();
 			response.result = finalizedBlock;

@@ -13,12 +13,12 @@ export class SolverWorker {
 	paused = false;
 	hashRate = 0;
 	sAddress;
-	data;
+	identityEntries;
 
-	/** @param {string} sAddress @param {number} bet @param {number} timeOffset @param {Uint8Array} [data] */
-	constructor(sAddress, bet, timeOffset, data) {
+	/** @param {string} sAddress @param {number} bet @param {number} timeOffset @param {Uint8Array[]} [identityEntries] */
+	constructor(sAddress, bet, timeOffset, identityEntries) {
 		this.sAddress = sAddress;
-		this.data = data;
+		this.identityEntries = identityEntries;
 		this.bet = bet;
 		this.timeOffset = timeOffset;
 		this.worker = newWorker('./solver-worker-nodejs.mjs');
@@ -48,22 +48,34 @@ export class SolverWorker {
 		const sameValidatorAddress = currentCandidateValidatorAddress === newCandidateValidatorAddress;
 		return sameIndex && samePrevHash && sameValidatorAddress;
 	}
-	
-	/** @param {string} sAddress @param {number} bet @param {number} timeOffset @param {Uint8Array} [data] */
-	updateInfo(sAddress, bet, timeOffset, data) {
+	/** @param {Uint8Array[] | undefined} entries1 @param {Uint8Array[] | undefined} entries2 */
+	#areIdentityEntriesEqual(entries1, entries2) {
+		if (!entries1 && !entries2) return true;
+		if (!entries1 || !entries2) return false;
+		if (entries1.length !== entries2.length) return false;
+		for (let i = 0; i < entries1.length; i++) {
+			const e1 = entries1[i];
+			const e2 = entries2[i];
+			if (e1.length !== e2.length) return false;
+			for (let j = 0; j < e1.length; j++) if (e1[j] !== e2[j]) return false;
+		}
+		return true;
+	}
+	/** @param {string} sAddress @param {number} bet @param {number} timeOffset @param {Uint8Array[]} [identityEntries] */
+	updateInfo(sAddress, bet, timeOffset, identityEntries) {
 		if (this.terminate) return;
 		
 		const isSameAddress = this.sAddress === sAddress;
 		const isSameBet = this.bet === bet;
 		const isSameTimeOffset = this.timeOffset === timeOffset;
-		const isSameData = (!this.data && !data) || (this.data?.length === data?.length && this.data?.every((byte, i) => byte === data[i]));
-		if (isSameAddress && isSameBet && isSameTimeOffset && isSameData) return;
+		const isSameIdentityEntries = this.#areIdentityEntriesEqual(identityEntries, this.identityEntries);
+		if (isSameAddress && isSameBet && isSameTimeOffset && isSameIdentityEntries) return;
 
 		this.sAddress = sAddress;
 		this.bet = bet;
 		this.timeOffset = timeOffset;
-		this.data = data;
-		this.worker.postMessage({ type: 'updateInfo', sAddress, bet, timeOffset, data });
+		this.identityEntries = identityEntries;
+		this.worker.postMessage({ type: 'updateInfo', sAddress, bet, timeOffset, identityEntries });
 	}
 	/** @param {BlockCandidate} blockCandidate */
 	async updateCandidate(blockCandidate) {
@@ -82,8 +94,8 @@ export class SolverWorker {
 		this.isWorking = true;
 		this.result = null;
 
-		const { sAddress, bet, timeOffset, data } = this;
-		this.worker.postMessage({ type: 'mineUntilValid', sAddress, bet, timeOffset, data });
+		const { sAddress, bet, timeOffset, identityEntries } = this;
+		this.worker.postMessage({ type: 'mineUntilValid', sAddress, bet, timeOffset, identityEntries });
 	}
 	getResultAndClear() {
 		const finalizedBlock = this.result;

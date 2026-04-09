@@ -6,7 +6,7 @@ import HiveP2P from "hive-p2p";
 import { UTXO } from '../types/transaction.mjs';
 import { BlockUtils } from '../node/src/block.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
-import { serializer, SIZES } from '../utils/serializer.mjs';
+import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 
 /**
@@ -123,11 +123,33 @@ export class BlockchainStorage {
 		return extracted?.txs[txIndex] || null;
 	}
 	/** @param {number} height @param {number} txIndex */
+	getTransactionIdentities(height, txIndex) {
+		const { blockBytes } = this.getBlockBytes(height, false) || {};
+		if (!blockBytes) return null;
+
+		const serializedTx = this.#extractTransactionsBytesFromBlockBytes(blockBytes, [txIndex])?.[txIndex];
+		if (!serializedTx) return null;
+
+		const r = new BinaryReader(serializedTx);
+		const mode = specialMode[txIndex] ? specialMode[txIndex] : 'tx';
+		const { cursors, sizes } = this.#interpretTransactionSegment(r, mode);
+		r.cursor = cursors.identities;
+
+		return r.readPointersAndExtractDataChunks();
+	}
+	/** @param {number} height @param {number} txIndex */
 	getTransactionData(height, txIndex) {
 		const { blockBytes } = this.getBlockBytes(height, false) || {};
 		if (!blockBytes) return null;
 
-		return this.#extractTransactionDataFromBlockBytes(blockBytes, txIndex);
+		const serializedTx = this.#extractTransactionsBytesFromBlockBytes(blockBytes, [txIndex])?.[txIndex];
+		if (!serializedTx) return null;
+
+		const r = new BinaryReader(serializedTx);
+		const mode = specialMode[txIndex] ? specialMode[txIndex] : 'tx';
+		const { cursors, sizes } = this.#interpretTransactionSegment(r, mode);
+		r.cursor = cursors.data;
+		return r.read(sizes.data); // data is the last section of the transaction, so we can read until the end of the transaction bytes
 	}
 	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) */
 	getUtxos(anchors, breakOnSpent = false) {
@@ -308,7 +330,7 @@ export class BlockchainStorage {
 			this.bcHandlers[batchIndex] = new BinaryHandler(path.join(this.storage.PATH.BLOCKCHAIN, `blockchain-${batchIndex}.bin`));
 		return this.bcHandlers[batchIndex];
 	}
-	/** @param {Uint8Array} blockBytes @param {number[]} txIndexes */
+	/** @param {Buffer} blockBytes @param {number[]} txIndexes */
 	#extractTransactionsFromBlockBytes(blockBytes, txIndexes) {
 		const timestampOffset = serializer.dataPositions.timestampInFinalizedBlock;
 		const timestamp = this.converter.bytes6ToNumber(blockBytes.subarray(timestampOffset, timestampOffset + 6));
@@ -320,42 +342,53 @@ export class BlockchainStorage {
 		for (const i of txIndexes) txs[i] = serializer.deserialize.transaction(txsBytes[i], specialMode[i] || 'tx');
 		return { txs, timestamp };
 	}
-	/** Extract the data section of a transaction from block bytes without deserializing @param {Uint8Array} blockBytes @param {number} txIndex */
-	#extractTransactionDataFromBlockBytes(blockBytes, txIndex) {
-		const serializedTx = this.#extractTransactionsBytesFromBlockBytes(blockBytes, [txIndex])?.[txIndex];
-		if (!serializedTx) return null;
+	/** Extract the cursors of each section of a transaction (witnesses, identities, inputs, outputs, data) from the transaction bytes, without deserializing the sections *
+	 * @param {BinaryReader} r The serialized tx BinaryReader @param {'tx' | 'solver' | 'validator'} mode */
+	#interpretTransactionSegment(r, mode = 'tx') {
+		r.cursor = 0; // ensure cursor is at the beginning of the transaction bytes
+		const cursors = { witnesses: 0, identities: 0, inputs: 0, outputs: 0, data: 0 };
+		const sizes = { witnesses: 0, identities: 0, inputs: 0, outputs: 0, data: 0 };
+		const version 		= this.converter.bytes2ToNumber(r.read(2));
+		const nbOfWitnesses = this.converter.bytes2ToNumber(r.read(2));
+		const nbOfIndentities = this.converter.bytes2ToNumber(r.read(2));
+		const nbOfInputs 	= this.converter.bytes2ToNumber(r.read(2));
+		const nbOfOutputs 	= this.converter.bytes2ToNumber(r.read(2));
+		sizes.data 			= this.converter.bytes2ToNumber(r.read(2));
+		sizes.witnesses = nbOfWitnesses ? r.readPointers().endOfLastDataChunk : 0;
+		
+		cursors.witnesses = SIZES.txHeader.bytes; // witnesses section always start at the same position, right after the header
+		cursors.identities = cursors.witnesses + sizes.witnesses;
+		r.cursor = cursors.identities; // move cursor to the end of witnesses section (if exist) to read identities pointers
+		
+		sizes.identities = nbOfIndentities ? r.readPointers().endOfLastDataChunk : 0;
+		cursors.inputs = cursors.identities + sizes.identities;
 
-		const mode = specialMode[txIndex] ? specialMode[txIndex] : 'tx';
-		const nbOfWitnesses = this.converter.bytes2ToNumber(serializedTx.subarray(2, 4));
-		const nbOfInputs = this.converter.bytes2ToNumber(serializedTx.subarray(4, 6));
-		const nbOfOutputs = this.converter.bytes2ToNumber(serializedTx.subarray(6, 8));
-		const dataLength = this.converter.bytes2ToNumber(serializedTx.subarray(8, 10));
+		sizes.inputs = mode === 'tx' ? nbOfInputs * SIZES.anchor.bytes
+			: mode === 'solver' ? SIZES.nonce.bytes : SIZES.validatorInput.bytes;
+		cursors.outputs = cursors.inputs + sizes.inputs;
+		
+		sizes.outputs = nbOfOutputs * SIZES.miniUTXO.bytes;
+		cursors.data = cursors.outputs + sizes.outputs;
 
-		const headersBytesLength = SIZES.txHeader.bytes;
-		const witnessBytes = mode === 'validator' ? SIZES.validatorWitness.bytes : SIZES.witness.bytes;
-		const witnessesBytesLength = nbOfWitnesses * witnessBytes;
-		const inputsBytesLength = mode === 'tx' ? nbOfInputs * SIZES.anchor.bytes
-			: mode === 'solver' ? SIZES.nonce.bytes : SIZES.hash.bytes;
-		const outputsBytesLength = nbOfOutputs * SIZES.miniUTXO.bytes;
-		const start = headersBytesLength + witnessesBytesLength + inputsBytesLength + outputsBytesLength;
-		return serializedTx.subarray(start, start + dataLength);
+		return { cursors, sizes };
 	}
-	/** @param {Uint8Array} blockBytes @param {number[]} txIndexes */
+	/** @param {Buffer} blockBytes @param {number[]} txIndexes */
 	#extractTransactionsBytesFromBlockBytes(blockBytes, txIndexes) {
 		/** key: txIndex, value: transaction @type {Object<number, Uint8Array>} */
 		const txsBytes = {};
 		const nbOfTxs = this.converter.bytes2ToNumber(blockBytes.subarray(0, 2));
+		const pointerSectionlength = BinaryReader.calculatePointersSize(nbOfTxs, 'pointer32');
+		const pointersBytes = blockBytes.subarray(SIZES.blockFinalizedHeader.bytes, SIZES.blockFinalizedHeader.bytes + pointerSectionlength);
+		const r = new BinaryReader(pointersBytes);
+		const { pointers, endOfLastDataChunk } = r.readPointers('pointer32');
 		for (const i of txIndexes) {
 			if (txsBytes[i] !== undefined) continue; // already extracted
 			if (i + 1 > nbOfTxs) return null;
 
-			const pointerStart = SIZES.blockFinalizedHeader.bytes + (i * 4);
-			const pointerBuffer = blockBytes.subarray(pointerStart, pointerStart + 4);
-			const offsetStart = this.converter.bytes4ToNumber(pointerBuffer);
-			const offsetEnd = i + 1 === nbOfTxs ? blockBytes.length
-				: this.converter.bytes4ToNumber(blockBytes.subarray(pointerStart + 4, pointerStart + 8));
+			const offsetStart = pointers[i];
+			const offsetEnd = i + 1 !== nbOfTxs ? pointers[i + 1] : endOfLastDataChunk;
 			const txBytes = blockBytes.subarray(offsetStart, offsetEnd);
-			txsBytes[i] = txBytes;
+			txsBytes[i] = new Uint8Array(txBytes);
 		}
 
 		return txsBytes;

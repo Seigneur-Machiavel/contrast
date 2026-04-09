@@ -6,7 +6,6 @@ import { UTXO_RULES_GLOSSARY, UTXO } from '../../types/transaction.mjs';
 import { HashFunctions, AsymetricFunctions, QsafeSigner } from './conCrypto.mjs';
 
 /**
-* @typedef {import('@pinkparrot/qsafe-sig').QsafeSigner} QsafeSigner
 * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 * @typedef {import("../../types/transaction.mjs").TxId} TxId
 * @typedef {import("../../types/transaction.mjs").LedgerUtxo} LedgerUtxo */
@@ -55,19 +54,16 @@ export class Account {
 		if (!ADDRESS.checkConformity(`${this.prefix}${this.b58}`)) throw new Error('Derived address does not conform to expected format');
 	}
 
-	/** @param {Transaction} transaction @param {'hash' | 'pubKey'} [pubKeyMode] default: 'hash' - how to include the public key in the witness (as a hash or full pubKey) */
-	signTransaction(transaction, pubKeyMode = 'hash') {
+	/** @param {Transaction} transaction */
+	signTransaction(transaction) {
 		if (!this.signer) throw new Error('Account not initialized with signer');
 		if (!this.hybridKeyHex) throw new Error('Account not initialized with hybridKeyHex');
-		if (pubKeyMode !== 'hash' && pubKeyMode !== 'pubKey') throw new Error('Invalid pubKeyMode');
 		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
 
 		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
 		const hybridSig = this.signer.sign(serializer.converter.hexToBytes(toSign));
 		const hybridSigHex = serializer.converter.bytesToHex(hybridSig);
-
-		if (pubKeyMode === 'pubKey') transaction.witnesses.push(`${hybridSigHex}:${this.hybridKeyHex}`);
-		else transaction.witnesses.push(`${hybridSigHex}:${HashFunctions.xxHash32(this.hybridKeyHex, 8)}`);
+		transaction.witnesses.push(`${hybridSigHex}:${HashFunctions.xxHash32(this.hybridKeyHex, 8)}`);
 		return transaction;
 	}
 	/** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */

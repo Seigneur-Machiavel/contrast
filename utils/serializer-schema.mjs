@@ -7,29 +7,23 @@ import { ADDRESS } from '../types/address.mjs';
  * - str: The lengths in characters of the value (if applicable, otherwise null) */
 export const SIZES = {
 	// GENERAL
-	pointer: { bytes: 2, str: null }, // A pointer is an offset in the serialized buffer, represented as 4 bytes, allowing to point up to 4GB of data.
+	pointer16: { bytes: 2, str: null }, // A pointer is an offset in the serialized buffer, represented as 2 bytes, allowing to point up to 64KB of data.
+	pointer32: { bytes: 4, str: null }, // A pointer is an offset in the serialized buffer, represented as 4 bytes, allowing to point up to 4GB of data.
+	
 	/** Amount, represented as 6 bytes, allowing to represent up to 281 trillion tokens */
 	amount: { bytes: 6, str: null },
 	/** Timestamp, represented as 6 bytes, allowing to represent up to the year 2106 */
 	timestamp: { bytes: 6, str: null },
 
 	// CRYPTO/IDENTITY
-	/** 512 bits signature, represented as 64 bytes or 128 hex characters */
-	signature: { bytes: 64, str: 128 },
-	/** 256 bits public key, represented as 32 bytes or 64 hex characters */
-	pubKey: { bytes: 32, str: 64 },
 	/** 32 bits public key hash(xxHash32), represented as 4 bytes or 8 hex characters */
 	pubKeyHash: { bytes: 4, str: 8 },
 	/** Address, represented as a string of 7 characters or 5 bytes | ex: C123456 */
 	address: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES, str: ADDRESS.CRITERIA.TOTAL_LENGTH },
 
 	// TRANSACTION
-	/** Transaction header, represented as 10 bytes, containing: version(2) + witnessesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2) */
-	txHeader: { bytes: 2 + 2 + 2 + 2 + 2, str: null },
-	/** Validator witness, represented as 96 bytes, containing: signature(64) + pubKey(32) */
-	validatorWitness: { bytes: 96, str: 192 },
-	/** Regular witness, represented as 68 bytes, containing: signature(64) + pubKeyHash(4) */
-	witness: { bytes: 68, str: 136 },
+	/** Transaction header, represented as 12 bytes, containing: version(2) + witnessesCount(2) + identitiesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2) */
+	txHeader: { bytes: 2 + 2 + 2 + 2 + 2 + 2, str: null },
 	/** Anchor, represented as 8 bytes, containing: height(4) + txIndex(2) + vout(2) */
 	anchor: { bytes: 8, str: null },
 	/** Transaction ID, represented as 6 bytes, containing: height(4) + txIndex(2) */
@@ -38,6 +32,9 @@ export const SIZES = {
 	utxoState: { bytes: 5, str: null },
 	/** Mini UTXO, represented as 12 bytes, containing: address(5) + amount(6) + rule(1) */
 	miniUTXO: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 6 + 1, str: null },
+	/** Validator input, represented as 37 bytes, containing: validatorAddress(5) + hash(32)
+	 * - As string: <5 chars for address + : + 32 chars for hash in hex> */
+	validatorInput: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 32, str: ADDRESS.CRITERIA.TOTAL_LENGTH + 1 + 64 },
 
 	// LEDGERS
 	/** Ledger UTXO, represented as 15 bytes, containing: height(4) + txIndex(2) + vout(2) + amount(6) + rule(1) */
@@ -56,10 +53,10 @@ export const SIZES = {
 	// BLOCK INDEX ENTRY
 	/** Start entry, represented as 6 bytes, containing: height(4) + txIndex(2) */
 	startEntry: { bytes: 6, str: null },
-	/** Block bytes entry, represented as 4 bytes, containing: blockBytes(4) */
+	/** Block bytes entry, represented as 4 bytes, containing: blockBytesLen(4) */
 	blockBytesEntry: { bytes: 4, str: null },
-	/** UTXO states bytes entry, represented as 2 bytes, containing: utxosStatesBytes(2) */
+	/** UTXO states bytes entry, represented as 2 bytes, containing: utxosStatesBytesLen(2) */
 	utxosStatesBytesEntry: { bytes: 2, str: null },
-	/** Index entry, represented as 12 bytes, containing: start(6) + blockBytes(4) + utxosStatesBytes(2) */
+	/** Index entry, represented as 12 bytes, containing: start(6) + blockBytesLen(4) + utxosStatesBytesLen(2) */
 	indexEntry: { bytes: 12, str: null },
 };

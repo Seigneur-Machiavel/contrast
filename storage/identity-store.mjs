@@ -4,7 +4,7 @@ import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
 import { QsafeHelper } from '../node/src/conCrypto.mjs';
-import { serializer, SIZES } from '../utils/serializer.mjs';
+import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 
 /** 
@@ -13,13 +13,11 @@ import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("./bc-store.mjs").BlockchainStorage} BlockchainStorage */
 
-
 const ENTRY_BYTES = SIZES.txId.bytes;
 const MAX_ENTRIES_PER_FILE = (0xFFFFFFFF + 1) / 8; // 2^32 / 8 = 536,870,912 entries per file (8 files per prefix)
 const MAX_BYTES_PER_FILE = MAX_ENTRIES_PER_FILE * ENTRY_BYTES; // 24GB / 8 = 3GB per file
 
-/** Build identity entry, used to declare/record the pubkey(s) associated with an address in the data field of a transaction, to be retrieved later for identity resolution.
- * - ex: [address: 5b][nb_pubkeys: 1b][threshold: 1b][pubkey x nb_pubkeys: 32b each]
+/** Build identity entry, used to declare/record the pubkey(s) associated with an address in the identities filed of a transaction, to be retrieved later for identity resolution.
  * @param {string} address @param {string[]} pubKeysHex @param {number} [threshold] number of required signatures for multi-sig */
 export function buildEntry(address, pubKeysHex, threshold = 1) {
 	const a = ADDRESS.fromString(address);
@@ -30,40 +28,15 @@ export function buildEntry(address, pubKeysHex, threshold = 1) {
 	if (pubKeysHex.length > BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig) throw new Error(`buildEntry(): maximum number of pubkeys is ${BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig} for address ${address}`);
 	if (threshold > 255) throw new Error(`buildEntry(): threshold cannot be higher than 255`);
 	
-	for (const pk of pubKeysHex) {
-		const pkBytes = serializer.converter.hexToBytes(pk);
-		if (QsafeHelper.checkFormat(pkBytes)) continue;
-		else throw new Error(`buildEntry(): invalid pubkey ${pk}`);
-	}
+	for (const pk of pubKeysHex)
+		if (!QsafeHelper.checkFormat(serializer.converter.hexToBytes(pk)))
+			throw new Error(`buildEntry(): invalid pubkey ${serializer.converter.hexToBytes(pk)}`);
 
-	return serializer.serialize.identityEntry(a, pubKeysHex, threshold); // throws if non conform
-}
-/** Find and parse the identity entry in the data field of a transaction for a given address, throws if non conform or not found
- * @param {Uint8Array | undefined} data @param {string} address */
-export function findAndParseEntry(data, address, throwIfNot = true) {
-	try {
-		if (!data) throw new Error(`findAndParseEntry(): no data to parse for address ${address}`);
-
-		const a = ADDRESS.fromString(address);
-		const index = Buffer.from(data).indexOf(a.bytes); // use C++ indexOf() to find the address bytes
-		if (index === -1) throw new Error(`findAndParseEntry(): no identity entry found in data for address ${address}`);
-
-		const nbOfPubKeys = data[index + 5];
-		const entryBytesLength = 5 + 1 + 1 + nbOfPubKeys * SIZES.pubKey.bytes;
-		if (index + entryBytesLength > data.length) throw new Error(`findAndParseEntry(): non conform identity entry for address ${address} - not enough data for the declared number of pubkeys`);
-		
-		const entryBytes = data.subarray(index, index + entryBytesLength);
-		const identity = serializer.deserialize.identityEntry(entryBytes);
-		return identity;
-	} catch (error) {
-		if (throwIfNot) throw error;
-		return null; // NOT FOUND (non conform entry)
-	}
+	return serializer.serialize.identityEntry(a, threshold, pubKeysHex); // throws if non conform
 }
 
 export class IdentityStore {
 	buildEntry = buildEntry;
-	findAndParseEntry = findAndParseEntry;
 
 	/** The identities file handles by identifier @type {Object<string, BinaryHandler>} */
 	handlers = {};
@@ -86,10 +59,14 @@ export class IdentityStore {
 
 		// RETRIEVE TX AND PARSE IDENTITY ENTRY ASSOCIATED WITH THE ADDRESS
 		const { blockIndex, txIndex } = pointer;
-		const data = this.bcStorage.getTransactionData(blockIndex, txIndex);
-		if (!data) throw new Error(`IdentityStore.get: no data found for transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
+		const identities = this.bcStorage.getTransactionIdentities(blockIndex, txIndex);
+		if (!identities) throw new Error(`IdentityStore.get: no data found for transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
 
-		return findAndParseEntry(data, address);
+		for (const entry of identities)
+			if (ADDRESS.bytesToB58(entry.subarray(0, ADDRESS.CRITERIA.TOTAL_BYTES)) === address)
+				return serializer.deserialize.identityEntry(entry); // MATCH
+		
+		throw new Error(`IdentityStore.get: no identity entry found for address ${address} in transaction at ${blockIndex}:${txIndex} - unable to resolve identity`);
 	}
 	/** Lookup at the store to resolve identity, helper to know if we needs to include reservation data in transaction.
 	 * - 'UNKNOWN' if the address is not known in the store (no pointer, no entry)
@@ -134,16 +111,24 @@ export class IdentityStore {
 		/** Key: address, value: blockIndex @type {Map<string, number>} */
 		const known = new Map();
 
-		// OUTPUTS SCAN (IDENTITIES DISCOVERY)
+		/** @param {string} address @param {number} txIndex */
+		const handleAddress = (address, txIndex) => {
+			if (discovery.has(address) || known.has(address)) return;
+
+			const pointer = this.#getPointer(address);
+			if (pointer) known.set(address, pointer.blockIndex);
+			else discovery.set(address, txIndex);
+		};
+
 		for (let txIndex = 0; txIndex < block.Txs.length; txIndex++) {
-			for (const output of block.Txs[txIndex].outputs) {
-				const address = output.address;
-				if (discovery.has(address) || known.has(address)) continue;
-	
-				const pointer = this.#getPointer(address);
-				if (pointer) known.set(address, pointer.blockIndex);
-				else discovery.set(address, txIndex);
-			}
+			// OUTPUTS SCAN (IDENTITIES DISCOVERY)
+			for (const output of block.Txs[txIndex].outputs)
+				handleAddress(output.address, txIndex);
+
+			// INPUTS SCAN (VALIDATOR DISCOVERY)
+			for (const input of block.Txs[txIndex].inputs) 
+				if (input.length !== SIZES.validatorInput.str) continue; // not a validator input, skip
+				else handleAddress(input.split(':')[0], txIndex);
 		}
 		
 		return { discovery, known };

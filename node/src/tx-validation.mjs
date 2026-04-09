@@ -39,6 +39,21 @@ export class IdentitiesCache {
 
 const miniLogger = new MiniLogger('validation');
 export class TxValidation {
+	/** LOCAL HELPER @param {string} witness */
+    static #decomposeWitnessOrThrow(witness) {
+        if (typeof witness !== 'string') throw new Error(`Invalid witness: ${witness} !== string`);
+
+        const witnessParts = witness.split(':');
+		if (witnessParts.length !== 2) throw new Error('Invalid witness');
+
+        const [signature, pubKeyHash] = [witnessParts[0], witnessParts[1]];
+		if (pubKeyHash.length !== SIZES.pubKeyHash.str) throw new Error(`Invalid pubKeyHash length: ${pubKeyHash.length} !== ${SIZES.pubKeyHash.str}`);
+        if (!IS_VALID.HEX(signature)) throw new Error(`Invalid signature: ${signature} !== hex`);
+        if (!IS_VALID.HEX(pubKeyHash)) throw new Error(`Invalid pubKeyHash: ${pubKeyHash} !== hex`);
+
+        return { signature, pubKeyHash };
+    }
+
     /** ==> First validation, low computation cost. - control format of : amount, address, rule, version, TxID, UTXOs spendable
      * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {'solver' | 'validator'} [specialTx] */
     static isConformTransaction(involvedUTXOs, transaction, specialTx) {
@@ -48,7 +63,11 @@ export class TxValidation {
         if (!Array.isArray(transaction.inputs)) throw new Error('Invalid transaction inputs');
         if (!Array.isArray(transaction.outputs)) throw new Error('Invalid transaction outputs');
         if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid transaction witnesses');
-        if (specialTx && transaction.inputs.length !== 1) throw new Error(`Invalid coinbase transaction: ${transaction.inputs.length} inputs`);
+        if (!Array.isArray(transaction.identities)) throw new Error('Invalid transaction identities');
+		for (const identity of transaction.identities)
+			if (!(identity instanceof Uint8Array)) throw new Error('Invalid transaction identity entry, must be bytes');
+
+		if (specialTx && transaction.inputs.length !== 1) throw new Error(`Invalid coinbase transaction: ${transaction.inputs.length} inputs`);
         if (specialTx && transaction.outputs.length !== 1) throw new Error(`Invalid coinbase transaction: ${transaction.outputs.length} outputs`);
         if (transaction.inputs.length === 0) throw new Error('Invalid transaction: no inputs');
         if (transaction.outputs.length === 0) throw new Error('Invalid transaction: no outputs');
@@ -68,18 +87,16 @@ export class TxValidation {
 
         for (const input of transaction.inputs) {
             if (specialTx && typeof input !== 'string') throw new Error('Invalid coinbase/validator input type');
-			if (specialTx && !IS_VALID.HEX(input)) throw new Error(`Invalid coinbase/validator input(not HEX): ${input}`);
-			if (specialTx === 'validator' && input.length !== SIZES.hash.str) throw new Error('Invalid validator input length');
-			if (specialTx === 'solver' && input.length !== SIZES.nonce.str) throw new Error('Invalid coinbase input length');
+			if (specialTx === 'validator' && !IS_VALID.VALIDATOR_INPUT(input)) throw new Error('Invalid validator input format');
+			if (specialTx === 'solver' && !IS_VALID.SOLVER_INPUT(input)) throw new Error('Invalid coinbase input format');
 			if (specialTx) continue; // skip further checks for special txs
 
-            const anchor = input;
-            if (!IS_VALID.ANCHOR(anchor)) throw new Error('Invalid anchor');
+            if (!IS_VALID.ANCHOR(input)) throw new Error('Invalid anchor');
 
-            const utxo = involvedUTXOs[anchor];
-            if (!utxo) throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${anchor}`);
-            if (utxo.spent) throw new Error(`Invalid transaction: UTXO already spent: ${anchor}`);
-            if (utxo.rule === 'sigOrSlash') throw new Error(`Invalid transaction: sigOrSlash UTXO cannot be spend: ${anchor}`);
+            const utxo = involvedUTXOs[input];
+            if (!utxo) throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${input}`);
+            if (utxo.spent) throw new Error(`Invalid transaction: UTXO already spent: ${input}`);
+            if (utxo.rule === 'sigOrSlash') throw new Error(`Invalid transaction: sigOrSlash UTXO cannot be spend: ${input}`);
 		}
     }
     /** @param {TxOutput} txOutput */
@@ -132,54 +149,21 @@ export class TxValidation {
         }*/
     } // NOT SURE IF WE CONSERVE THIS
 
-    /** @param {string} witness */
-    static #decomposeWitnessOrThrow(witness) {
-        if (typeof witness !== 'string') throw new Error(`Invalid witness: ${witness} !== string`);
-
-        const witnessParts = witness.split(':');
-		if (witnessParts.length !== 2) throw new Error('Invalid witness');
-
-        const [p1, p2] = [witnessParts[0], witnessParts[1]];
-        if (!IS_VALID.HEX(p1)) throw new Error(`Invalid signature: ${p1} !== hex`);
-        if (!IS_VALID.HEX(p2)) throw new Error(`Invalid pubKeyHash: ${p2} !== hex`);
-		
-		// Control key & sig validity if full pubKey is provided
-		const isPubKeyHash = p2.length === SIZES.pubKeyHash.str;
-		if (!isPubKeyHash && !QsafeHelper.checkFormat(serializer.converter.hexToBytes(p2), serializer.converter.hexToBytes(p1))) throw new Error('QsafeHelper.checkFormat() failed!');
-
-        return { signature: p1, pubKeyHash: isPubKeyHash ? p2 : null, pubKey: !isPubKeyHash ? p2 : null };
-    }
-
-	/** ==> Fourth validation, low disk access cost. - control the discovery of new identities through outputs with unknown addresses
-	 * - Control that outputs with unknown addresses have pubKey in data for reservation
-	 * - Control that only one output with unknown address exist in the transaction (one reservation at a time)
-	 * - Store the discovered identity in identitiesCache map for loop optimization (avoid re-fetching in store)
-	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} [identitiesCache] */
-	static controlOutputsIdentities(node, tx, identitiesCache = new IdentitiesCache()) {
-		// PRE-CHECK: OUTPUTS WITH UNKNOWN ADDRESSES MUST HAVE VALID DATA FOR RESERVATION
-		const discoveredAddressesInThisTx = new Set();
-		for (const output of tx.outputs) {
-			if (discoveredAddressesInThisTx.has(output.address)) continue; // Already discovered in this loop, no need to check again
+	/** ==> Fourth validation, low disk access cost. - control the discovery of new identities
+	 * - Store the discovered identity in involvedIdentities map for loop optimization (avoid re-fetching in store)
+	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} [involvedIdentities] */
+	static controlIdentitiesReservation(node, tx, involvedIdentities = new IdentitiesCache()) {
+		for (const entry of tx.identities) {
+			const parsed = serializer.deserialize.identityEntry(entry);
+			this.#discoveryEntryCheck(parsed.address, parsed.pubKeysHex, parsed.threshold);
 			
-			// EXTRACT ENTRY FROM DATA AND VERIFY (IF ANY)
-			const entry = node.blockchain.identityStore.findAndParseEntry(tx.data, output.address, false);
-			if (entry) this.#discoveryEntryCheck(entry.address, entry.pubKeysHex, entry.threshold);
-			
-			// GET IDENTITY FROM CACHE OR STORE
-			const identity = identitiesCache.get(output.address) || node.blockchain.identityStore.getIdentity(output.address);
-			if (identity && !identitiesCache.has(output.address)) // FROM DISK => CACHE IT.
-				identitiesCache.set(identity.address, identity.pubKeysHex, identity.threshold);
-
-			if (!identity) // NO IDENTITY FOUND IN CACHE OR STORE -> SET ENTRY AS NEW IDENTITY
-				if (!entry) throw new Error(`Output with unknown address ${output.address} must have a reservation entry in data field of the transaction`);
-				else identitiesCache.set(entry.address, entry.pubKeysHex, entry.threshold); // cache the discovered identity for next iterations
-			else if (entry) { // IDENTITY FOUND IN CACHE OR STORE -> IF ENTRY THEN CHECK CONSISTENCY WITH CACHED IDENTITY
-				if (identity.threshold !== entry.threshold) throw new Error(`Identity reservation conflict for address ${output.address} has threshold mismatch with cached identity in loop`);
-				if (identity.pubKeysHex.length !== entry.pubKeysHex.length) throw new Error(`Identity reservation conflict for address ${output.address} has pubKey length mismatch with cached identity in loop`);
-				for (const pk of entry.pubKeysHex) if (!identity.pubKeysHex.includes(pk)) throw new Error(`Identity reservation conflict for address ${output.address} has pubKey mismatch with cached identity in loop`);
+			const identity = involvedIdentities.get(parsed.address) || node.blockchain.identityStore.getIdentity(parsed.address);
+			if (!identity) involvedIdentities.set(parsed.address, parsed.pubKeysHex, parsed.threshold); // cache the discovered identity for next iterations
+			else { // IDENTITY FOUND IN CACHE OR STORE -> CHECK CONSISTENCY
+				if (identity.threshold !== parsed.threshold) throw new Error(`Identity reservation conflict for address ${parsed.address} has threshold mismatch with cached identity in loop`);
+				if (identity.pubKeysHex.length !== parsed.pubKeysHex.length) throw new Error(`Identity reservation conflict for address ${parsed.address} has pubKey length mismatch with cached identity in loop`);
+				for (const pk of parsed.pubKeysHex) if (!identity.pubKeysHex.includes(pk)) throw new Error(`Identity reservation conflict for address ${parsed.address} has pubKey mismatch with cached identity in loop`);
 			}
-
-			discoveredAddressesInThisTx.add(output.address); // avoid re-checking the same address in the tx -> identity-store will only take first reservation it encounters
 		}
 	}
 	/** @param {string} address @param {string[]} pubKeysHex @param {number} threshold */
@@ -192,34 +176,65 @@ export class TxValidation {
 			else if (pubKeysHex.length < threshold) throw new Error(`Multi-Sig address ${address} reservation must have at least as many pubKeys in data field as the threshold`);
 	}
 
-    /** ==> Fifth validation, low disk access cost. ~0.1ms per address + low cpu cost (xxHash32).
-	 * - VALIDATOR/PROVER'S TX CAN'T SPEND UTXOS => NO OWNERSHIP TO CONTROL
+	/** Fifth validation. - control that outputs's addresses has identity in the cache or disk (reservation or known identity).
+	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} involvedIdentities */
+	static extractOutputsIdentities(node, tx, involvedIdentities) {
+		for (const output of tx.outputs) {
+			if (involvedIdentities.has(output.address)) continue; // Already discovered in this loop, no need to check again
+		
+			const identity = node.blockchain.identityStore.getIdentity(output.address);
+			if (!identity) throw new Error(`Output with unknown address ${output.address} must have a reservation entry (reservation or known idendity)`);
+			else involvedIdentities.set(output.address, identity.pubKeysHex, identity.threshold);
+		}
+	}
+
+    /** ==> Sixth validation, low disk access cost. ~0.1ms per address + low cpu cost (xxHash32).
+	 * - SOLVER'S TX CAN'T SPEND UTXOS => NO OWNERSHIP TO CONTROL
+	 * - VALIDATOR'S TX HAS TO BE CONTROLLED
 	 * - Control the inputAddresses/witnessesPubKeys correspondence
 	 * - Control the derivation of addresses<>pubKeys
 	 * - Throw if any problem found
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} tx */
     static extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities = new IdentitiesCache()) {
-		// EXTRACT IDENTITIES ( PUBKEY > ADDRESS )s FROM INPUTS
+		// SET THE ADDRESSES TO CONTROL.
+		// EXTRACT MISSING IDENTITIES FROM DISK (WHEN NOT ALREADY IN CACHE)
+		/** @type {Set<string>} */
+		const involvedAddresses = new Set();
+		for (let i = 0; i < tx.inputs.length; i++) {
+			const input = tx.inputs[i];
+			const isValidatorInput = input.length === SIZES.validatorInput.str;
+			const addressToVerify = isValidatorInput ? input.split(":")[0] : involvedUTXOs[input]?.address; // address is either in the validator input or in the UTXO
+			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${tx.inputs[i]}`);
+			
+			if (involvedAddresses.has(addressToVerify)) continue; // already in loop, no need to add again
+			else involvedAddresses.add(addressToVerify);
+			
+			if (involvedIdentities.has(addressToVerify)) continue; // already in cache, no need to fetch or check again
 
+			const identity = node.blockchain.identityStore.getIdentity(addressToVerify);
+			if (!identity) throw new Error(`Unable to find pubKey for address: ${addressToVerify}`);
+			involvedIdentities.set(addressToVerify, identity.pubKeysHex, identity.threshold); // cache for next iterations
+		}
+
+		// EXTRACT ADDRESSES<>PUBKEYS CORRESPONDENCE
+		/** Key: PubKey, Value: Set of associated addresses @type {Record<string, Set<string>>} */
+		const addressesToConfirmByPubKey = {};
 		/** Key: Hash, Value: PubKey @type {Record<string, string>} */
 		const pubKeysByHashes = {};
-		/** Key: PubKey, Value: Address @type {Record<string, Set<string>>} */
-		const addressesToConfirmByPubKey = {};
-		for (let i = 0; i < tx.inputs.length; i++) {
-			const addressToVerify = involvedUTXOs[tx.inputs[i]]?.address; // address is in the UTXO
-			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${tx.inputs[i]}`);
+		for (const address of involvedAddresses) {
+			const identity = involvedIdentities.get(address);
+			if (!identity) throw new Error(`Identity not found in cache for address ${address}, this should not happen as we fetched all identities for involved addresses in the previous step`);
 
-			const identity = involvedIdentities.get(addressToVerify) || node.blockchain.identityStore.getIdentity(addressToVerify);
-			if (!identity) throw new Error(`Unable to find pubKey for address: ${addressToVerify}`);
 			for (const pk of identity.pubKeysHex) {
+				if (addressesToConfirmByPubKey[pk]?.has(address)) continue; // already added, no need to add again
+				
 				const pubKeyHash = HashFunctions.xxHash32(pk, 8);
 				const existingPkForHash = pubKeysByHashes[pubKeyHash];
-				if (!existingPkForHash) pubKeysByHashes[pubKeyHash] = pk; // cache for lookup during witness confirmation
-				else if (existingPkForHash !== pk) throw new Error(`Hash collision detected for pubKey: ${pk} and existing pubKey: ${existingPkForHash}, this is extremely unlikely and should not be a problem for security, but consider changing the hash function if you encounter this warning frequently`);
+				if (existingPkForHash && existingPkForHash !== pk) throw new Error(`Hash collision detected for pubKey: ${pk} and existing pubKey: ${existingPkForHash}, this is extremely unlikely and should not be a problem for security, but consider changing the hash function if you encounter this warning frequently`);
+				else pubKeysByHashes[pubKeyHash] = pk; // cache for lookup during witness confirmation
 
-				if (!addressesToConfirmByPubKey[pk]) addressesToConfirmByPubKey[pk] = new Set([addressToVerify]);
-				else if (addressesToConfirmByPubKey[pk].has(addressToVerify)) continue; // already added, no need to add again
-				else addressesToConfirmByPubKey[pk].add(addressToVerify);
+				if (!addressesToConfirmByPubKey[pk]) addressesToConfirmByPubKey[pk] = new Set([address]);
+				else addressesToConfirmByPubKey[pk].add(address);
 			}
 		}
 
@@ -232,7 +247,7 @@ export class TxValidation {
 		return { pubKeysByHashes, addressesToConfirmByPubKey }; // to verify for the next step (associated witness confirmation)
 	}
 	
-	/** ==> Sixth validation, low computation cost. - control the presence of witnesses associated to the input addresses and pubKeys
+	/** ==> Seventh validation, low computation cost. - control the presence of witnesses associated to the input addresses and pubKeys
 	 * - Control that all the addresses associated to the pubKeys in witnesses are effectively confirmed by witnesses
 	 * - Throw if any problem found
 	 * @param {Transaction} tx @param {Record<string, string>} [pubKeysByHashes] Key: Hash, Value: PubKey @param {Record<string, Set<string>>} [addressesToConfirmByPubKey] Key: PubKey, Value: Set of associated addresses to confirm */
@@ -240,11 +255,12 @@ export class TxValidation {
 		/** Key: PubKey, Value: Signature @type {Set<string>} */
 		const seenPubKeys = new Set();
 		for (const w of tx.witnesses) {
-			const { signature, pubKeyHash, pubKey } = this.#decomposeWitnessOrThrow(w);
-			const pubKeyHex = pubKeyHash ? pubKeysByHashes[pubKeyHash] : pubKey;
+			const { signature, pubKeyHash } = this.#decomposeWitnessOrThrow(w);
+			const pubKeyHex = pubKeysByHashes[pubKeyHash];
 			if (!pubKeyHex) throw new Error(`No pubKey found for witness with pubKeyHash: ${pubKeyHash}`);
+			
 			if (seenPubKeys.has(pubKeyHex)) throw new Error('Duplicate pubKey in witnesses');
-			seenPubKeys.add(pubKeyHex);
+			else seenPubKeys.add(pubKeyHex); // local cache to detect duplicates in witnesses.
 
 			// REMOVE ASSOCIATED ADDRESSES FROM THE CONFIRMATION LIST
 			const addresses = addressesToConfirmByPubKey[pubKeyHex];
@@ -256,17 +272,16 @@ export class TxValidation {
 			if (addressesToConfirmByPubKey[pk].size > 0) throw new Error(`Not all addresses associated to pubKey ${pk} have been confirmed by witnesses: ${[...addressesToConfirmByPubKey[pk]].join(', ')}`);
 	}
 
-	/** ==> Seventh validation, medium computation cost. - control the signature of the inputs
+	/** ==> Eighth validation, medium computation cost. - control the signature of the inputs
      * @param {Transaction} transaction @param {Record<string, string>} [pubKeysByHashes] Key: Hash, Value: PubKey */
     static async controlAllWitnessesSignatures(transaction, pubKeysByHashes = {}) {
         if (!Array.isArray(transaction.witnesses)) throw new Error(`Invalid witnesses: ${transaction.witnesses} !== array`);
         
 		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
         for (let i = 0; i < transaction.witnesses.length; i++) {
-            const { signature, pubKeyHash, pubKey } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
-			const pubKeyHex = pubKeyHash ? pubKeysByHashes[pubKeyHash] : pubKey;
+            const { signature, pubKeyHash } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
+			const pubKeyHex = pubKeysByHashes[pubKeyHash];
 			if (!pubKeyHex) throw new Error(`No pubKey found for witness with pubKeyHash: ${pubKeyHash}`);
-			//AsymetricFunctions.verifySignature(signature, toSign, pubKeyHex); // will throw an error if the signature is invalid
 			await AsymetricFunctions.qsafeVerify(toSign, signature, pubKeyHex); // will throw an error if the signature is invalid
 		}
     }
@@ -278,9 +293,10 @@ export class TxValidation {
         this.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
         const fee = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, tx);
 		this.controlTransactionOutputsRulesConditions(tx);
-		this.controlOutputsIdentities(node, tx, involvedIdentities);
+		this.controlIdentitiesReservation(node, tx, involvedIdentities);
+		this.extractOutputsIdentities(node, tx, involvedIdentities);
 
-		const ext = specialTx ? null : this.extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities);
+		const ext = specialTx === 'solver' ? null : this.extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities);
 		this.controlAddressesHasAssociatedWitnesses(tx, ext?.pubKeysByHashes, ext?.addressesToConfirmByPubKey);
 		if (specialTx === 'solver') return { fee, success: true }; // solver's txs don't have to respect ownership rules, so we skip signature verification
 

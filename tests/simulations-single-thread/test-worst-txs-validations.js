@@ -62,30 +62,28 @@ const onBlockConfirmed = async (block) => {
 
 		account.setBalanceAndUTXOs(ledger.balance, ledger.ledgerUtxos);
 
-		/** @type {Uint8Array | undefined} */
-		let data;
+		const identityEntries = [];
 		const transfers = [];
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = wallet.accounts[i].address;
 			const pk = wallet.accounts[i].pubKey;
-			const d = identityStore.buildEntry(a, [pk]);
+			if (!pk) throw new Error('Pubkey not found for receipient account');
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const r = identityStore.resolveIdentity(a, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			
+			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(a, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
+
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
-				const mergedData = r === 'UNKNOWN' ? Transaction_Builder.mergeIdentityData(d, data) : data;
 				transfers.push(new Transfer(wallet.accounts[i].address, 1_000));
-				Transaction_Builder.createTransaction(account, transfers, 1, mergedData); // test if transaction can be created with current data size, if not stop adding outputs
-				data = mergedData; // only update data if merge was successful (didn't exceed max size)
+				Transaction_Builder.createTransaction(account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
 				break; // stop adding outputs if failed (most likely because of size limit)
 			}
 		}
 
-		const { tx } = Transaction_Builder.createTransaction(account, transfers, 1, data);
+		const { tx } = Transaction_Builder.createTransaction(account, transfers, 1, identityEntries);
 		const signedTx = account.signTransaction(tx);
 		if (!signedTx) return; // failed to create tx
 	
