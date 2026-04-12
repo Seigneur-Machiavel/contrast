@@ -154,7 +154,8 @@ export class MemPool {
 
 				try {
 					TxValidation.isConformTransaction(involvedUTXOs, oTx.tx);
-					TxValidation.controlOutputsIdentities(node, oTx.tx, identitiesCache);
+					TxValidation.controlIdentitiesReservation(node, oTx.tx, identitiesCache);
+					TxValidation.extractOutputsIdentities(node, oTx.tx, identitiesCache);
 				} catch (error) { invalidTransactions.push(oTx); continue; }
 				
 				// ADD THE TRANSACTION TO RESULT
@@ -190,6 +191,7 @@ export class MemPool {
         }
 
 		// REMOVE INVALID TRANSACTIONS FROM MEMPOOL & RETURN RESULT
+		console.log(`[MEMPOOL] Selected ${result.txs.length} txs, fee: ${result.totalFee} mC, size: ${result.bytes}b. Invalid txs removed: ${invalidTransactions.length}`);
 		for (const oTx of invalidTransactions) this.organizer.remove(oTx);
         return result;
     }

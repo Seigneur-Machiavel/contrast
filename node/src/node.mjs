@@ -192,8 +192,12 @@ export class ContrastNode {
 				try { await this.memPool.pushTransaction(this, tx); }
 				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'NewCandidate') 	// @ts-ignore: task.data = BlockCandidate
-			try { this.solver.updateBestCandidate(task.data); }
-			catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[P2P->SOLVER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
+			try {
+				const isLegitimate = await BlockValidation.validateLegitimacy(task.data, this.blockchain.vss, 'candidate');
+				if (!isLegitimate) throw new Error('Received block candidate is not legitimate');
+				if (this.blockchain.currentHeight + 1 !== task.data.index) return;
+				this.solver.updateBestCandidate(task.data);
+			} catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[P2P->SOLVER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'DigestBlock') 	// @ts-ignore: task.data = BlockFinalizedSerialized
 			await this.blockchain.digestFinalizedBlock(this, task.data);
 	}
@@ -203,9 +207,7 @@ export class ContrastNode {
 		try { // ignore block candidates that are not the next block
 			if (!(data instanceof Uint8Array)) throw new Error('Invalid block candidate data type');
 			const block = serializer.deserialize.blockCandidate(data);
-			if (this.blockchain.currentHeight + 1 !== block.index) return;
-			const isLegitimate = await BlockValidation.validateLegitimacy(block, this.blockchain.vss, 'candidate');
-			if (isLegitimate) this.taskQueue.push('NewCandidate', block);
+			if (this.blockchain.currentHeight + 1 === block.index) this.taskQueue.push('NewCandidate', block);
 		} catch (/** @type {any} */ error) { this.logger.log(`[SYNC] -onBlockCandidate- Error deserializing block candidate from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {GossipMessage} msg */

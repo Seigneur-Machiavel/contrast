@@ -23,11 +23,11 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
 const domain = undefined; // args.includes('--local') ? 'localhost' : '0.0.0.0';
 const nodePort = undefined; //args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
-const clearOnStart = true; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
+const clearOnStart = false; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
-const nbReceipients = nor || 6000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
-const nbOfSenders = nos || 1000; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nbReceipients = nor || 2000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
+const nbOfSenders = nos || 200; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 
@@ -70,15 +70,21 @@ const onBlockConfirmed = async (block) => {
 			if (!pk) throw new Error('Pubkey not found for receipient account');
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
+			const identityCountBefore = identityEntries.length;
 			const r = identityStore.resolveIdentity(a, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
 			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(a, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
+
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
 				transfers.push(new Transfer(wallet.accounts[i].address, 1_000));
-				Transaction_Builder.createTransaction(account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
+				const r = Transaction_Builder.createTransaction(account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
+				//const si = account.signTransaction(r.tx);
+				//const se = serializer.serialize.transaction(si);
+				//console.log(`s.Size: ${se.length}, r.Weight: ${r.weight}`);
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
+				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this receipient, we need to remove it as well
 				break; // stop adding outputs if failed (most likely because of size limit)
 			}
 		}

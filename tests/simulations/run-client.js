@@ -41,7 +41,7 @@ const tryStaking = async (block) => {
 	if (block.index === stakeHeight) return; // already processed
 	stakeHeight = block.index;
 	if (!clientNode.account) return; // account not ready
-	if (!clientNode.sync.isSynced) return; // only stake when synced to avoid staking on old blocks on every new peer connection
+	if (!clientNode.sync.isSynced.sameHeight) return; // only stake when synced to avoid staking on old blocks on every new peer connection
 
 	// UPDATE ACCOUNT BALANCE & UTXOS
 	const r = clientNode.account.address;
@@ -72,7 +72,7 @@ const trySpamming = async (block) => {
     if (block.index === spamHeight) return;
     spamHeight = block.index;
     if (!clientNode.account) return; // account not ready
-	if (!clientNode.sync.isSynced) return; // only spam when synced to avoid spamming old blocks on every new peer connection
+	if (!clientNode.sync.isSynced.sameHeight) return; // only spam when synced to avoid spamming old blocks on every new peer connection
 
 	const { address } = clientNode.account;
     if (block.index % 2 === 0) { // EVEN BLOCKS: one multi-output tx
@@ -81,19 +81,28 @@ const trySpamming = async (block) => {
         clientNode.account.setBalanceAndUTXOs(clientNode.account.balance, ledger.ledgerUtxos);
 
 		const identityStore = clientNode.blockchain.identityStore;
-        const transfers = [];
 		const identityEntries = [];
-        for (let i = 0; i < nbReceipients; i++) {
+		const transfers = [];
+		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
 			const pk = clientWallet.accounts[i].pubKey;
 			if (!pk) throw new Error('Pubkey not found for receipient account');
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
+			const identityCountBefore = identityEntries.length;
 			const r = identityStore.resolveIdentity(a, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
 			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(a, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
-			transfers.push(new Transfer(clientWallet.accounts[i].address, 1_000)); // self, patch recipients here
+
+			try { // create TX to check size, if too big it will throw, then we stop adding outputs
+				transfers.push(new Transfer(clientWallet.accounts[i].address, 1_000));
+				Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
+			} catch (/** @type {any} */ error) {
+				transfers.pop(); // remove last transfer that caused failure
+				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this receipient, we need to remove it as well
+				break; // stop adding outputs if failed (most likely because of size limit)
+			}
 		}
 
         const { tx } = Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries);

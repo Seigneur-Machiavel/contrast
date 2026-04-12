@@ -9,7 +9,7 @@ export const SIZES = {
 	// GENERAL
 	pointer16: { bytes: 2, str: null }, // A pointer is an offset in the serialized buffer, represented as 2 bytes, allowing to point up to 64KB of data.
 	pointer32: { bytes: 4, str: null }, // A pointer is an offset in the serialized buffer, represented as 4 bytes, allowing to point up to 4GB of data.
-	
+	ed25519Signature: { bytes: 64, str: 128 }, // ed25519 signature size is 64 bytes, represented as 128 hex characters when in string format
 	/** Amount, represented as 6 bytes, allowing to represent up to 281 trillion tokens */
 	amount: { bytes: 6, str: null },
 	/** Timestamp, represented as 6 bytes, allowing to represent up to the year 2106 */

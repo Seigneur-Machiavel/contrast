@@ -1,9 +1,10 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
+import { QsafeHelper } from './conCrypto.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { conditionnals } from '../../utils/conditionals.mjs';
-import { serializer, SIZES } from '../../utils/serializer.mjs';
+import { serializer, BinaryWriter, SIZES } from '../../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { Transaction, TxOutput, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
@@ -45,11 +46,13 @@ export class Transaction_Builder {
         const posOutput = new TxOutput(posReward, 'sig', rewardAddress);
 		return new Transaction([posInput], [posOutput], undefined, identities, data);
     }
-    /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
-    static createTransaction(senderAccount, transfers, feePerByte = 1, identities, data, inMaxAmount = false) {
-        const senderAddress = senderAccount.address;
+    /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
+    static createTransaction(senderAccount, transfers, feePerByte = 1, identities = [], data, inMaxAmount = false) {
+        const { address, hybridKey } = senderAccount;
+		if (!address || !hybridKey) throw new Error('Sender account is not properly initialized');
+
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
-        const UTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
+        const UTXOs = UTXO.fromLedgerUtxos(address, senderAccount.ledgerUtxos, ruleCodesToExclude);
 		if (UTXOs.length === 0) throw new Error('No UTXO to spend');
 
         this.checkMalformedAnchorsInUtxosArray(UTXOs);
@@ -59,8 +62,8 @@ export class Transaction_Builder {
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
 		
 		// SIMPLIFIED FEE ESTIMATION WITHOUT OPTIMIZATION (USE ALL UTXOs, IF EXCEEDS MAX SIZE THEN THROW)
-		const result = inMaxAmount ? Transaction_Builder.#countAllSpent(UTXOs, totalSpent, outputs.length, feePerByte, dataLength)
-			: Transaction_Builder.#addUtxoUntilAmount(UTXOs, totalSpent, outputs.length, feePerByte, dataLength);
+		const result = inMaxAmount ? Transaction_Builder.#countAllSpent(UTXOs, totalSpent, outputs.length, feePerByte, [hybridKey], identities, dataLength)
+			: Transaction_Builder.#addUtxoUntilAmount(UTXOs, totalSpent, outputs.length, feePerByte, [hybridKey], identities, dataLength);
 		
 		const { selectedUtxos, changeOutput, finalFee, weight } = result;
 		if (weight > BLOCKCHAIN_SETTINGS.maxTransactionSize) throw new Error(`Estimated transaction weight (${weight} bytes) exceeds maximum allowed (${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes)`);
@@ -74,12 +77,11 @@ export class Transaction_Builder {
 	/** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount - the account who is staking the VSS
 	 * @param {number} qty The quanity of stakes to create
-	 * @param {string} [authorizedPubkey] - the pubkey of the validator authorized to sign for this stake (default: the senderAccount pubkey)
+	 * @param {string[]} [authorizedPubkeys] - the pubkeys of the validators authorized to sign for this stake (default: the senderAccount pubkey)
      * @param {boolean} useOnlyNecessaryUtxos - if true, the transaction will use only the necessary UTXOs to reach the amount */
-    static createStakingVss(senderAccount, qty, authorizedPubkey = senderAccount.pubKey, useOnlyNecessaryUtxos = true) {
+    static createStakingVss(senderAccount, qty, authorizedPubkeys = [senderAccount.pubKey], useOnlyNecessaryUtxos = true) {
 		if (typeof qty !== 'number' || qty <= 0) throw new Error('Invalid quantity to stake');
-		if (typeof authorizedPubkey !== 'string' || authorizedPubkey.length !== 64)
-			throw new Error('Invalid authorized validator pubkey');
+		if (!Array.isArray(authorizedPubkeys) || authorizedPubkeys.some(pubkey => typeof pubkey !== 'string')) throw new Error('Invalid authorized validator pubkeys');
 
 		const senderAddress = senderAccount.address;
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
@@ -103,7 +105,12 @@ export class Transaction_Builder {
 
 		// SET THE AUTHORIZED VALIDATOR PUBKEY IN TX DATA
         const tx = Transaction.fromUTXOs(utxos, outputs);
-		tx.data = serializer.converter.hexToBytes(authorizedPubkey);
+		const pointersSize = BinaryWriter.calculatePointersSize(authorizedPubkeys.length);
+		const pubKeys = authorizedPubkeys.map(pk => serializer.converter.hexToBytes(pk));
+		const pubkeysSize = pubKeys.reduce((sum, pk) => sum + pk.length, 0);
+		const w = new BinaryWriter(pointersSize + pubkeysSize);
+		w.writePointersAndDataChunks(pubKeys);
+		tx.data = w.getBytes();
 		return { tx, finalFee: fee, totalConsumed: totalStake + fee };
     }
 	/** @param {UTXO[]} utxos @param {number} amount */
@@ -120,9 +127,9 @@ export class Transaction_Builder {
     }
 	static createUnstakingVss() { throw new Error('Not implemented yet'); }
 	static createSlashing() { throw new Error('Not implemented yet'); }
-	/** @param {UTXO[]} utxos @param {number} amount @param {number} outputCount @param {number} feePerByte */
-	static #addUtxoUntilAmount(utxos, amount, outputCount, feePerByte, dataWeight = 0, nbOfSigners = 1) {
-		let finalFee = Transaction_Builder.#calculateTransactionWeight(1, outputCount, dataWeight, 1); // start with 1 input and 1 output to get a baseline fee, then we will add UTXOs until we reach the amount needed with the fee
+	/** @param {UTXO[]} utxos @param {number} amount @param {number} outputCount @param {number} feePerByte @param {Uint8Array[]} hybridKeys @param {Uint8Array[]} [identities] */
+	static #addUtxoUntilAmount(utxos, amount, outputCount, feePerByte, hybridKeys, identities = [], dataSize = 0) {
+		let finalFee = Transaction_Builder.#calculateTransactionSize(1, outputCount, hybridKeys, identities, dataSize); // start with 1 input and 1 output to get a baseline fee, then we will add UTXOs until we reach the amount needed with the fee
 		let totalIn = 0;
 		let weight = 0;
 		const selectedUtxos = [];
@@ -134,7 +141,7 @@ export class Transaction_Builder {
 			
 			const needsChangeOutput = totalIn > amount + finalFee;
 			const nbOutputs = outputCount + (needsChangeOutput ? 1 : 0);
-			weight = this.#calculateTransactionWeight(selectedUtxos.length, nbOutputs, dataWeight, nbOfSigners);
+			weight = this.#calculateTransactionSize(selectedUtxos.length, nbOutputs, hybridKeys, identities, dataSize);
 			finalFee = Math.ceil(weight * feePerByte);
 			if (totalIn < amount + finalFee) continue; // keep adding UTXOs until we reach the amount needed
 		}
@@ -144,26 +151,41 @@ export class Transaction_Builder {
 		const changeOutput = change > BLOCKCHAIN_SETTINGS.unspendableUtxoAmount ? new TxOutput(change, 'sig', utxos[0].address) : undefined;
 		return { selectedUtxos, changeOutput, finalFee, weight };
 	}
-	/** @param {UTXO[]} utxos @param {number} amount @param {number} outputCount @param {number} feePerByte */
-	static #countAllSpent(utxos, amount, outputCount, feePerByte, dataWeight = 0, nbOfSigners = 1) {
-		const weight = Transaction_Builder.#calculateTransactionWeight(utxos.length, outputCount, dataWeight, nbOfSigners);
+	/** @param {UTXO[]} utxos @param {number} amount @param {number} outputCount @param {number} feePerByte @param {Uint8Array[]} hybridKeys @param {Uint8Array[]} identities */
+	static #countAllSpent(utxos, amount, outputCount, feePerByte, hybridKeys, identities, dataSize = 0) {
+		const weight = Transaction_Builder.#calculateTransactionSize(utxos.length, outputCount, hybridKeys, identities, dataSize);
 		return { selectedUtxos: utxos, changeOutput: undefined, finalFee: weight * feePerByte, weight };
 	}
-	/** @param {number} inputCount @param {number} outputCount */
-	static #calculateTransactionWeight(inputCount, outputCount, dataWeight = 0, nbOfSigners = 1) {
-		const headerWeight = SIZES.txHeader.bytes;
-		const inputsWeight = inputCount * SIZES.anchor.bytes;
-		const outputsWeight = outputCount * SIZES.miniUTXO.bytes;
-		const witnessesWeight = nbOfSigners * SIZES.witness.bytes;
-		return headerWeight + inputsWeight + outputsWeight + witnessesWeight + dataWeight;
+	/** @param {number} inputCount @param {number} outputCount @param {Uint8Array[]} hybridKeys @param {Uint8Array[]} identities */
+	static #calculateTransactionSize(inputCount, outputCount, hybridKeys, identities, dataSize = 0) {
+		const headerSize = SIZES.txHeader.bytes;
+		const inputsSize = inputCount * SIZES.anchor.bytes;
+		const outputsSize = outputCount * SIZES.miniUTXO.bytes;
+
+		let witnessesSize = BinaryWriter.calculatePointersSize(hybridKeys.length); // for each witness.
+		for (const hybridKey of hybridKeys) {
+			const desc = QsafeHelper.parseHeader(hybridKey)?.desc;
+			if (!desc) throw new Error('Invalid public key format in hybridKeys');
+
+			witnessesSize += BinaryWriter.calculatePointersSize(2); // for the 2 parts of the witness (sig and pubkeyHash)
+			witnessesSize += SIZES.ed25519Signature.bytes + SIZES.pubKeyHash.bytes + desc.sigSize;
+		}
+
+		const identitiesPointersSize = identities.length ? BinaryWriter.calculatePointersSize(identities.length) : 0;
+		const identitiesSumSize = identities.length ? identities.reduce((sum, identity) => sum + identity.length, 0) : 0;
+		const identitiesSize = identitiesPointersSize + identitiesSumSize;
+
+		return headerSize + inputsSize + outputsSize + witnessesSize + identitiesSize + dataSize;
 	}
-	/** @param {Account} account @param {number} feePerByte @param {Uint8Array} [data] */
-	static calculateMaxSendableAmount(account, feePerByte = 1, data) {
-		if (account.ledgerUtxos.length === 0) throw new Error('No UTXO to spend');
-		const nbIn = account.ledgerUtxos.length;
-		const txWeight = Transaction_Builder.#calculateTransactionWeight(nbIn, 1, data?.length || 0, 1); // estimate weight with 1 input and 1 output
-		const estimatedFee = txWeight * feePerByte;
-		const availableUTXOs = UTXO.fromLedgerUtxos(account.address, account.ledgerUtxos);
+	/** @param {Account} account @param {number} feePerByte @param {Uint8Array[]} identities @param {Uint8Array} [data] */
+	static calculateMaxSendableAmount(account, feePerByte = 1, identities, data) {
+		const { address, hybridKey, ledgerUtxos } = account;
+		if (!hybridKey || ledgerUtxos.length === 0) throw new Error('No UTXO to spend');
+
+		const nbIn = ledgerUtxos.length;
+		const txSize = Transaction_Builder.#calculateTransactionSize(nbIn, 1, [hybridKey], identities, data?.length || 0); // estimate weight with 1 input and 1 output
+		const estimatedFee = txSize * feePerByte;
+		const availableUTXOs = UTXO.fromLedgerUtxos(address, ledgerUtxos);
 		const totalAvailable = availableUTXOs.reduce((a, b) => a + b.amount, 0);
 		if (totalAvailable <= estimatedFee) throw new Error(`Not enough funds to cover fee: available ${totalAvailable}, estimated fee ${estimatedFee}`);
 		return totalAvailable - estimatedFee;
@@ -214,15 +236,15 @@ export class Transaction_Builder {
 
     // Multi-functions methods
     /** Fast method to create & sign a transaction in on call. (Only works with 1 signature, for more complex transactions use createTransaction + account.signTransaction separately)
-	 * @param {Account} senderAccount @param {number | 'max'} amount @param {string} recipientAddress @param {number} [feePerByte] @param {Uint8Array} [data] */
-    static createAndSignTransaction(senderAccount, amount, recipientAddress, feePerByte = 1, data) {
+	 * @param {Account} senderAccount @param {number | 'max'} amount @param {string} recipientAddress @param {number} [feePerByte]  @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
+    static createAndSignTransaction(senderAccount, amount, recipientAddress, feePerByte = 1, identities = [], data) {
 		if (amount !== 'max' && (typeof amount !== 'number' || amount <= 0)) throw new Error('Invalid amount');
-        
+
 		try {
 			const inMaxAmount = amount === 'max';
-			const amountToSend = !inMaxAmount ? amount : Transaction_Builder.calculateMaxSendableAmount(senderAccount, feePerByte, data);
+			const amountToSend = !inMaxAmount ? amount : Transaction_Builder.calculateMaxSendableAmount(senderAccount, feePerByte, identities, data);
 			const transfer = { recipientAddress, amount: amountToSend };
-			const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte, undefined, data, inMaxAmount);
+			const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte, identities, data, inMaxAmount);
 			senderAccount.signTransaction(tx);
 			return { signedTx: tx, finalFee, error: false };
         } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }

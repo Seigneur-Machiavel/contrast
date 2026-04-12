@@ -1,8 +1,5 @@
-/** @type {typeof import('hive-p2p')} */
-const HiveP2P = typeof window !== 'undefined' // @ts-ignore
-	? await import('../hive-p2p.min.js')
-	: await import('hive-p2p');
-const { xxHash32, Converter } = HiveP2P;
+// @ts-check
+import { xxHash32, Converter } from '../node/src/conCrypto.mjs';
 const converter = new Converter();
 
 /** @type {Record<string, {name: string, description: string, multiSig: boolean} | undefined>} */
@@ -23,22 +20,13 @@ const CRITERIA = { // WORK IN PROGRESS
 	MAX_NUM_VALUE: 4_294_967_295 // 2^32-1
 };
 
-/*
-	static #maxCacheSize = 100_000;
-	static #b58ToUint32Cache = new Map();
-	static b58ToUint32(str = '123456') {
-		if (ADDRESS.#b58ToUint32Cache.has(str)) return ADDRESS.#b58ToUint32Cache.get(str);
-		if (ADDRESS.#b58ToUint32Cache.size >= ADDRESS.#maxCacheSize) ADDRESS.#b58ToUint32Cache.clear();
-		const result = Converter.b58ToUint32(str);
-		ADDRESS.#b58ToUint32Cache.set(str, result);
-		return result;
-	}*/
-
 class ConverterCache {
 	maxCacheSize = 100_000;
 	cache = new Map();
 
+	/** @param {string | number} key */
 	get(key) { return this.cache.get(key); }
+	/** @param {string | number} key @param {any} value */
 	set(key, value) {
 		if (this.cache.size >= this.maxCacheSize) this.cache.clear();
 		this.cache.set(key, value);
@@ -90,6 +78,7 @@ export class ADDRESS {
 		return result;
 	}
 	static #bytesToB58Cache = new ConverterCache();
+	/** @param {Uint8Array} bytes length: 5, first byte is prefix */
 	static bytesToB58(bytes) {
 		const key = converter.bytesToHex(bytes);
 		/** @type {string | undefined} */

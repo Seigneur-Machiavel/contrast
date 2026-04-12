@@ -1,8 +1,8 @@
 // @ts-check
 import fs from 'fs';
 import path from 'path';
-import HiveP2P from 'hive-p2p';
 import { UTXO } from '../types/transaction.mjs';
+import { Converter } from '../node/src/conCrypto.mjs';
 import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs';
 
 /**
@@ -75,7 +75,7 @@ export class LedgersStorage {
 	cache = new Map(); // clear on new block & undo block
 	storage;
 	get logger() { return this.storage.miniLogger; }
-	converter = new HiveP2P.Converter();
+	converter = new Converter();
 
 	/** @param {import('./storage.mjs').ContrastStorage} storage */
 	constructor(storage) { this.storage = storage; }

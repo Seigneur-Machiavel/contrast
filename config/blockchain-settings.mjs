@@ -1,7 +1,7 @@
 export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     // BLOCK
-    targetBlockTime: 10_000, 		// 60_000, // 1 min
-    maxBlockSize: 102_400, 			// =100KB
+    targetBlockTime: 20_000, 		// 60_000, // 1 min
+    maxBlockSize: 200_000, 			// 102_400=100KB, 200_000=~200KB
 
     // DISTRIBUTION
     // 1 000 000mC = 1 Contrast

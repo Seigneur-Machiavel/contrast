@@ -1,8 +1,8 @@
 // @ts-check
 import { HashFunctions } from "./conCrypto.mjs";
 import { VssStorage } from "../../storage/vss-store.mjs";
-import { serializer, SIZES } from "../../utils/serializer.mjs";
 import { BLOCKCHAIN_SETTINGS } from "../../config/blockchain-settings.mjs";
+import { serializer, SIZES, BinaryReader } from "../../utils/serializer.mjs";
 
 /**
  * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
@@ -106,12 +106,13 @@ export class Vss {
 
 		const { height, txIndex, vout } = serializer.parseAnchor(anchor);
 		const data = this.blockchain.blockStorage.getTransactionData(height, txIndex);
-		if (!data || data.length % 32 !== 0) throw new Error(`Invalid stake transaction data for anchor: ${anchor}`);
+		if (!data) throw new Error(`Unable to retrieve transaction data for anchor: ${anchor}`);
 
 		/** @type {Set<string>} */
 		const authorizedPubkeys = new Set();
-		const hex = serializer.converter.bytesToHex(data);
-		for (let i = 0; i < hex.length; i += 64) authorizedPubkeys.add(hex.slice(i, i + 64));
+		const r = new BinaryReader(data);
+		const pubKeys = r.readPointersAndExtractDataChunks();
+		for (const pkBytes of pubKeys) authorizedPubkeys.add(serializer.converter.bytesToHex(pkBytes));
 		return { authorizedPubkeys, owner: utxo.address };
 	}
     /** @param {string} blockHash @param {number} [maxTry] */
@@ -131,8 +132,10 @@ export class Vss {
 			const hash = await HashFunctions.SHA256(`${i}${blockHash}`);
             const winningNumber = Number(BigInt('0x' + hash) % BigInt(maxRange)); // Calculate the maximum acceptable range to avoid bias
 			const roundAuth = this.#getStakeAuthorizations(winningNumber);
-			if (!roundAuth) continue; // Stake not found (should not happen)
-			if (!roundAuth.authorizedPubkeys || roundAuth.authorizedPubkeys.size === 0) { console.error(`[VSS] No authorized pubkeys for winning number: ${winningNumber}`); continue; }
+			if (!roundAuth?.authorizedPubkeys || roundAuth.authorizedPubkeys.size === 0) {
+				console.error(`[VSS] No authorized pubkeys for winning number: ${winningNumber}`);
+				continue;
+			}
 
             legitimacies.addPubkeys(roundAuth.authorizedPubkeys);
 			owners.push(roundAuth.owner);

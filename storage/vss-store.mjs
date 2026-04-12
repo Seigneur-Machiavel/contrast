@@ -32,7 +32,7 @@ export class VssStorage {
 		const { height, txIndex, vout } = serializer.parseAnchor(anchor);
 		this.vssHandler.cursor = this.vssHandler.size; // move to the end
 		this.vssHandler.write(serializer.serialize.anchor(anchor));
-		this.logger.log(`Added stake: ${anchor} (height: ${height}, txIndex: ${txIndex}, vout: ${vout})`, (m, c) => console.info(m, c));
+		this.logger.log(`Added stake: ${anchor} (height: ${height}, txIndex: ${txIndex}, vout: ${vout}) => total: ${this.stakesCount}`, (m, c) => console.info(m, c));
 	}
 	/** @param {TxAnchor[]} anchors */
 	hasStakes(anchors) {
@@ -70,7 +70,7 @@ export class VssStorage {
 		this.vssHandler.close();
 		fs.renameSync(tempPath, path.join(this.storage.PATH.STORAGE, 'vss.bin'));
 		this.vssHandler = new BinaryHandler(path.join(this.storage.PATH.STORAGE, 'vss.bin'));
-		//this.logger.log(`Removed ${anchors.length} stakes`, (m, c) => console.info(m, c));
+		this.logger.log(`Removed ${anchors.length} stakes => total: ${this.stakesCount}`, (m, c) => console.info(m, c));
 	}
 	/** @param {number} index */
 	getStakeAnchor(index) {

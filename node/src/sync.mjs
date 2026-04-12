@@ -129,11 +129,11 @@ export class Sync {
 
 	// API METHODS
 	get isSynced() {
-		if (!this.node.blockchain?.lastBlock) return false;
+		if (!this.node.blockchain?.lastBlock) return { sameHeight: false, isRobust: false }; // not synced if we don't have any block
 
 		const best = this.consensusMerger.best;
-		if (!best?.isRobust) return false; // NOT CLEAR CONSENSUS, CONSIDER NOT SYNCED
-		return best.blockHash === this.node.blockchain.lastBlock.hash;
+		const sameHeight = best?.blockHash === this.node.blockchain.lastBlock.hash;
+		return { sameHeight, isRobust: best?.isRobust };
 	}
 	/** Retreive a list of peers to ask for a specific block height and hash.
 	 * - Both params need to be filled or left empty together resulting in using the best consensus block height and hash.

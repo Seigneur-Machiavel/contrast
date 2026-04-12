@@ -43,9 +43,9 @@ export class BinaryWriter {
 	 * + The number of pointers (2 bytes)
 	 * + Each pointer (2 or 4 bytes)
 	 * + Pointer at the end of the map to indicate the end of the last data chunk. (2 or 4 bytes)
-	 * @param {Uint8Array[]} listOfData @param {'pointer16' | 'pointer32'} [pointerType] default: 'pointer16' */
-	static calculatePointersSize(listOfData, pointerType = 'pointer16') {
-		return 2 + (listOfData.length * SIZES[pointerType].bytes) + SIZES[pointerType].bytes;
+	 * @param {number} nbOfElements @param {'pointer16' | 'pointer32'} [pointerType] default: 'pointer16' */
+	static calculatePointersSize(nbOfElements, pointerType = 'pointer16') {
+		return 2 + (nbOfElements * SIZES[pointerType].bytes) + SIZES[pointerType].bytes;
 	}
 	/** Write a pointer, which is a list of offsets pointing to the start of each data chunk in the final serialized buffer.
 	 * @param {Uint8Array[]} listOfData @param {'pointer16' | 'pointer32'} [pointerType] default: 'pointer16' */
@@ -54,7 +54,7 @@ export class BinaryWriter {
 		this.#writeU16BE(listOfData.length, this.cursor);
 		
 		const writingFunction = pointerType === 'pointer16' ? this.#writeU16BE : this.#writeU32BE;
-		const pointersBytesLen = BinaryWriter.calculatePointersSize(listOfData, pointerType);
+		const pointersBytesLen = BinaryWriter.calculatePointersSize(listOfData.length, pointerType);
 		let o = this.cursor + pointersBytesLen; // calculate the offset where the data chunks will start (after the pointer map)
 		for (let i = 0; i < listOfData.length; i++) { // WRITE POINTERS (2b each)
 			const dataChunkLength = listOfData[i].length;

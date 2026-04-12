@@ -11,8 +11,8 @@ const bootstrapCount 	= parseInt(nextArg('-bootstraps')) || 0;
 const clientCount 		= parseInt(nextArg('-clients'))  || 0;
 const stakerCount  		= parseInt(nextArg('-stakers'))  || 0;
 const spammerCount 		= parseInt(nextArg('-spammers')) || 0;
-const nbReceipients 	= parseInt(nextArg('-nor')) || 4800;	// Number of receipient addresses in multi output transaction
-const nbOfSenders 		= parseInt(nextArg('-nos')) || 800; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nbReceipients 	= parseInt(nextArg('-nor')) || 2500;	// Number of receipient addresses in multi output transaction
+const nbOfSenders 		= parseInt(nextArg('-nos')) || 200; 	// Number of single output transactions to send (should be higher than nbReceipients)
 const totalClients 		= clientCount + stakerCount + spammerCount;
 
 // MANUAL SETUP

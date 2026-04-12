@@ -1,4 +1,6 @@
 // ts-check
+import { QsafeHelper } from './conCrypto.mjs';
+import { serializer, BinaryReader } from '../../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { Transaction, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
@@ -28,8 +30,10 @@ export class OutputCreationValidator {
 		}
 	
 		// 3. DATA SECTION SHOULD CONTAIN PUBKEY.S
-		if (!transaction.data || transaction.data.length % 32 !== 0) throw new Error('Invalid sigOrSlash transaction data');
-		if (transaction.data.length > 320) throw new Error('Too many authorized pubkeys in sigOrSlash transaction data (max: 10)');
+		const r = new BinaryReader(transaction.data);
+		const pubKeys = r.readPointersAndExtractDataChunks();
+		for (const pkBytes of pubKeys)
+			if (!QsafeHelper.checkFormat(pkBytes)) throw new Error('Invalid pubkey format in sigOrSlash transaction data');
 
 		// 4. REMAINING AMOUNT (FEE) SHOULD BE GREATER THAN STAKE AMOUNT
 		if (remainingAmount < BLOCKCHAIN_SETTINGS.stakeAmount) throw new Error('Sig_Or_Slash requires fee > stake amount');

@@ -7,7 +7,7 @@
 
 /** @type {import('@pinkparrot/qsafe-sig')} */
 const Qsafe = typeof window !== 'undefined' // @ts-ignore
-	? await import('@pinkparrot/qsafe-sig.min.js')
+	? await import('../../qsafe-sig.browser.min.js')
 	: await import('@pinkparrot/qsafe-sig');
 
 export const { QsafeSigner, QsafeHelper } = Qsafe;

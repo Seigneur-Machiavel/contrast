@@ -122,10 +122,10 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 			console.log('REQUESTING DASHBOARD.JS');
 			// replacee "PORT: 27261," by actual controllerPort in dashboard.js on the fly
 			let dashboardPath = path.join(rootFolder, 'board/dashboard/dashboard.js');
-			let dashboardMjs = fs.readFileSync(dashboardPath, 'utf8');
-			dashboardMjs = dashboardMjs.replace(/PORT:\s*\d{4,5}/, `PORT: ${controllerPort}`);
+			let dashboardJs = fs.readFileSync(dashboardPath, 'utf8');
+			dashboardJs = dashboardJs.replace(/PORT:\s*\d{4,5}/, `PORT: ${controllerPort}`);
 			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
-			return res.end(dashboardMjs);
+			return res.end(dashboardJs);
 		}
 
 		if (url === '/api/time') {
@@ -135,6 +135,12 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 
 		if (url === '/hive-p2p.min.js') {
 			const filePath = path.join(rootFolder, 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js');
+			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
+			return fs.createReadStream(filePath).pipe(res);
+		}
+
+		if (url === '/qsafe-sig.browser.min.js') {
+			const filePath = path.join(rootFolder, 'node_modules/@pinkparrot/qsafe-sig/dist/qsafe-sig.browser.min.js');
 			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
 			return fs.createReadStream(filePath).pipe(res);
 		}

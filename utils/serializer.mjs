@@ -6,6 +6,7 @@ import { Transaction_Builder } from '../node/src/transaction.mjs';
 import { BlockFinalized, BlockCandidate } from '../types/block.mjs';
 import { Converter, QsafeSigner, QsafeHelper } from '../node/src/conCrypto.mjs';
 import { Transaction, LedgerUtxo, TxOutput, UTXO_RULES_GLOSSARY, UTXO_RULESNAME_FROM_CODE } from '../types/transaction.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 export { SIZES, BinaryReader, BinaryWriter };
 
 /**
@@ -179,7 +180,7 @@ export const serializer = {
 		/** @param {ADDRESS} address @param {number} threshold @param {string[]} pubKeysHex */
 		identityEntry(address, threshold, pubKeysHex) {
 			const pks = pubKeysHex.map(hybridKeyHex => converter.hexToBytes(hybridKeyHex));
-			const pointersSize = BinaryWriter.calculatePointersSize(pks);
+			const pointersSize = BinaryWriter.calculatePointersSize(pks.length);
 			const totalPksSize = pks.reduce((sum, pk) => sum + pk.length, 0);
 			const w = new BinaryWriter(address.bytes.length + 1 + pointersSize + totalPksSize);
 			w.writeBytes(address.bytes);    	// 5b
@@ -193,7 +194,7 @@ export const serializer = {
 			if (s.length !== 2) throw new Error(`Invalid witness format: ${witness}`);
 
 			const witnessAsArray = [converter.hexToBytes(s[0]), converter.hexToBytes(s[1])];
-			const pointersSize = BinaryWriter.calculatePointersSize(witnessAsArray);
+			const pointersSize = BinaryWriter.calculatePointersSize(witnessAsArray.length);
 			const witnessSize = witnessAsArray.reduce((sum, w) => sum + w.length, 0);
 			const w = new BinaryWriter(pointersSize + witnessSize);
 			w.writePointersAndDataChunks(witnessAsArray);
@@ -204,7 +205,7 @@ export const serializer = {
 			const witnessesAsArrays = [];
 			for (const w of witnesses) witnessesAsArrays.push(this.witness(w));
 
-			const pointersSize = BinaryWriter.calculatePointersSize(witnessesAsArrays);
+			const pointersSize = BinaryWriter.calculatePointersSize(witnessesAsArrays.length);
 			const totalWitnessesSize = witnessesAsArrays.reduce((sum, w) => sum + w.length, 0);
 			const w = new BinaryWriter(pointersSize + totalWitnessesSize);
 			w.writePointersAndDataChunks(witnessesAsArrays);
@@ -221,7 +222,7 @@ export const serializer = {
 			const witnessesBytes = tx.witnesses.length ? this.witnessesArray(tx.witnesses) : null;
 			const witnessesSize = witnessesBytes ? witnessesBytes.length : 0;
 
-			const identitiesPointersSize = tx.identities.length ? BinaryWriter.calculatePointersSize(tx.identities) : 0;
+			const identitiesPointersSize = tx.identities.length ? BinaryWriter.calculatePointersSize(tx.identities.length) : 0;
 			const identitiesSumSize = tx.identities.length ? tx.identities.reduce((sum, identity) => sum + identity.length, 0) : 0;
 			const identitiesSize = identitiesPointersSize + identitiesSumSize;
 
@@ -231,9 +232,12 @@ export const serializer = {
 			const inputsSize = tx.inputs.length * inputSize;
 			const outputsSize = tx.outputs.length * SIZES.miniUTXO.bytes;
 			const dataSize = tx.data?.length || 0;	// arbitrary data
-			
+
 			// header (12) => version(2) + witnesses(2) + identities(2) + inputs(2) + outputs(2) + dataLength(2)
-			const w = new BinaryWriter(SIZES.txHeader.bytes + witnessesSize + identitiesSize + inputsSize + outputsSize + dataSize);
+			const totalSize = SIZES.txHeader.bytes + witnessesSize + identitiesSize + inputsSize + outputsSize + dataSize;
+			if (totalSize > BLOCKCHAIN_SETTINGS.maxTransactionSize) throw new Error(`Transaction size ${totalSize} exceeds maximum allowed size of ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
+			
+			const w = new BinaryWriter(totalSize);
 			w.writeBytes(converter.numberTo2Bytes(tx.version)); 				// version
 			w.writeBytes(converter.numberTo2Bytes(tx.witnesses?.length || 0)); 	// nb of witnesses
 			w.writeBytes(converter.numberTo2Bytes(tx.identities?.length || 0)); // nb of identities
@@ -267,7 +271,7 @@ export const serializer = {
             }
             
             let totalSize = mode === 'finalized' ? SIZES.blockFinalizedHeader.bytes : SIZES.blockCandidateHeader.bytes;
-			totalSize += BinaryWriter.calculatePointersSize(serializedTxs, 'pointer32') + totalTxsSize; // pointers + txs
+			totalSize += BinaryWriter.calculatePointersSize(serializedTxs.length, 'pointer32') + totalTxsSize; // pointers + txs
             
 			const w = new BinaryWriter(totalSize);
 			w.writeBytes(converter.numberTo2Bytes(blockData.Txs.length));	// nbOfTxs
@@ -512,6 +516,8 @@ export const serializer = {
 		},
 		/** @param {Uint8Array} serializedTx @param {'tx' | 'validator' | 'solver'} [mode] default: normal */
 		transaction(serializedTx, mode = 'tx') {
+			if (serializedTx.length > BLOCKCHAIN_SETTINGS.maxTransactionSize) throw new Error('Serialized transaction exceeds maximum allowed size');
+
 			const r = new BinaryReader(serializedTx);
 			const version = converter.bytes2ToNumber(r.read(2));
 			const nbOfWitnesses = converter.bytes2ToNumber(r.read(2));

@@ -14,6 +14,8 @@ export class Account {
 	#qsafeMasterHex; 	// qsafe-sig master key in hex
 	#qsafeMaster; 		// qsafe-sig master key in bytes
 	prefix;				// e.g., 'C'
+	/** @type {Uint8Array | undefined} qsafe-sig */
+	hybridKey;
 	/** @type {string | undefined} qsafe-sig hybrid public key. */
 	hybridKeyHex;
 	/** @type {QsafeSigner | undefined} qsafe-sig signer instance */
@@ -49,6 +51,7 @@ export class Account {
 	async init() {
 		this.signer = await QsafeSigner.create();
 		const { hybridKey } = this.signer.loadMasterKey(this.#qsafeMaster);
+		this.hybridKey = hybridKey;
 		this.hybridKeyHex = serializer.converter.bytesToHex(hybridKey);
 		this.b58 = ADDRESS.deriveB58(this.hybridKeyHex);
 		if (!ADDRESS.checkConformity(`${this.prefix}${this.b58}`)) throw new Error('Derived address does not conform to expected format');
