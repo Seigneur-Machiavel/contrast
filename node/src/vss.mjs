@@ -2,13 +2,12 @@
 import { HashFunctions } from "./conCrypto.mjs";
 import { VssStorage } from "../../storage/vss-store.mjs";
 import { BLOCKCHAIN_SETTINGS } from "../../config/blockchain-settings.mjs";
-import { serializer, SIZES, BinaryReader } from "../../utils/serializer.mjs";
+import { serializer, BinaryReader } from "../../utils/serializer.mjs";
 
 /**
- * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
  * @typedef {import('./blockchain.mjs').Blockchain} Blockchain
- * @typedef {import('../../storage/storage.mjs').ContrastStorage} ContrastStorage
- */
+ * @typedef {import('../../types/block.mjs').BlockFinalized} BlockFinalized
+ * @typedef {import('../../storage/storage.mjs').ContrastStorage} ContrastStorage */
 
 class RoundLegitimacies {
 	/** @type {Array<Set<string>>} */	legitimacies = [];
@@ -28,8 +27,7 @@ class RoundLegitimacies {
 export class Vss {
 	/** @type {Map<string, {legitimacies: RoundLegitimacies, owners: string[]}>} BlockHash: RoundLegitimacies */
 	blockLegitimaciesByAddress = new Map();
-    currentRoundHash = '';
-	maxCacheLenght = 100;
+	maxCacheLength = 100;
 	vssStorage;
 	blockchain;
 
@@ -40,16 +38,18 @@ export class Vss {
 	}
 
 	// PUBLIC API
-    /** @param {BlockFinalized} block @param {'control' | 'persist'} mode default 'control' */
-    digestBlockStakes(block, mode = 'control') {
+	/** @param {BlockFinalized} block @param {'control' | 'persist'} mode default 'control' */
+	digestBlockStakes(block, mode = 'control') {
 		const newStakeAnchors = this.#extractBlockStakes(block);
-        const upperBound = this.vssStorage.stakesCount * BLOCKCHAIN_SETTINGS.stakeAmount;
+		const upperBound = this.vssStorage.stakesCount * BLOCKCHAIN_SETTINGS.stakeAmount;
 		const newUpperBound = upperBound + (newStakeAnchors.length * BLOCKCHAIN_SETTINGS.stakeAmount);
 		if (newUpperBound > BLOCKCHAIN_SETTINGS.maxSupply / 2) throw new Error(`VSS stake limit exceeded in block #${block.index}`);
 		if (mode !== 'persist') return;
 
-		for (const anchor of newStakeAnchors) this.vssStorage.addStake(anchor);
-    }
+		for (const anchor of newStakeAnchors)
+			if (this.vssStorage.hasStakes([anchor])) continue; // Guard against double-add (e.g. re-sync or fork switch) | verify if check cost is acceptable.
+			else this.vssStorage.addStake(anchor);
+	}
 	/** @param {BlockFinalized} block */
 	revertBlockStakes(block) {
 		const newStakeAnchors = this.#extractBlockStakes(block);
@@ -75,8 +75,8 @@ export class Vss {
 	getRoundForExplorerIfExists(blockHash) {
 		const round = this.blockLegitimaciesByAddress.get(blockHash);
 		if (!round) return null;
-		
-		/** @type {Array<{address: string, pubkeys: Set<string>}>} */	const result = [];
+
+		/** @type {Array<{address: string, pubkeys: Set<string>}>} */ const result = [];
 		for (let i = 0; i < round.legitimacies.legitimacies.length; i++)
 			result.push({ address: round.owners[i], pubkeys: round.legitimacies.legitimacies[i] });
 		return result;
@@ -84,7 +84,6 @@ export class Vss {
 	reset() {
 		this.vssStorage.reset();
 		this.blockLegitimaciesByAddress.clear();
-		this.currentRoundHash = '';
 	}
 
 	// INTERNAL METHODS
@@ -113,10 +112,10 @@ export class Vss {
 		const data = this.blockchain.blockStorage.getTransactionData(height, txIndex);
 		if (!data) throw new Error(`Unable to retrieve transaction data for anchor: ${anchor}`);
 
-		/** @type {Set<string>} */
-		const authorizedPubkeys = new Set();
-		const r = new BinaryReader(data);
 		try {
+			/** @type {Set<string>} */
+			const authorizedPubkeys = new Set();
+			const r = new BinaryReader(data);
 			const pubKeys = r.readPointersAndExtractDataChunks();
 			for (const pkBytes of pubKeys) authorizedPubkeys.add(serializer.converter.bytesToHex(pkBytes));
 			return { authorizedPubkeys, owner: utxo.address };
@@ -125,44 +124,46 @@ export class Vss {
 			throw new Error(`Failed to extract pubkeys for anchor: ${anchor}`);
 		}
 	}
-    /** @param {string} blockHash @param {number} [maxTry] */
-    async #calculateRound(blockHash, maxTry = 100) {
+	/** @param {string} blockHash @param {number} [maxTry] */
+	async #calculateRound(blockHash, maxTry = 100) {
 		const existing = this.blockLegitimaciesByAddress.get(blockHash);
 		if (existing) return existing; // already calculated
-        
-		// everyone has considered 0 legitimacy when not enough stakes
-        const startTimestamp = Date.now();
+
 		/** @type {string[]} */ const owners = [];
 		const legitimacies = new RoundLegitimacies();
 		const maxRange = this.vssStorage.stakesCount;
-        if (maxRange < BLOCKCHAIN_SETTINGS.validatorsPerRound) // no calculation needed => set empty and return
-			{ this.blockLegitimaciesByAddress.set(blockHash, {legitimacies, owners}); return {legitimacies, owners}; }
-		let [ leg, i ] = [ 0, 0 ];
-        for (i; i < maxTry; i++) {
+		if (maxRange < BLOCKCHAIN_SETTINGS.validatorsPerRound) // not enough stakes => empty round
+			{ this.blockLegitimaciesByAddress.set(blockHash, { legitimacies, owners }); return { legitimacies, owners }; }
+
+		let leg = 0;
+		for (let i = 0; i < maxTry; i++) {
 			const hash = HashFunctions.SHA512(`${i}${blockHash}`).hashHex;
-            const winningNumber = Number(BigInt('0x' + hash) % BigInt(maxRange)); // Calculate the maximum acceptable range to avoid bias
+			// SHA512 mod maxRange: bias exists but negligible (2^512 >> maxRange)
+			const winningNumber = Number(BigInt('0x' + hash) % BigInt(maxRange));
 			const roundAuth = this.#getStakeAuthorizations(winningNumber);
 			if (!roundAuth?.authorizedPubkeys || roundAuth.authorizedPubkeys.size === 0) {
-				console.error(`[VSS] No authorized pubkeys for winning number: ${winningNumber}`);
+				console.warn(`[VSS] No authorized pubkeys for winning number: ${winningNumber}`);
 				continue;
 			}
 
-            legitimacies.addPubkeys(roundAuth.authorizedPubkeys);
+			legitimacies.addPubkeys(roundAuth.authorizedPubkeys);
 			owners.push(roundAuth.owner);
-            leg++;
+			leg++;
 
-            if (leg >= this.vssStorage.stakesCount) break; // If all stakes have been selected
-            if (leg >= BLOCKCHAIN_SETTINGS.validatorsPerRound) break; // If the array is full
-        }
+			if (leg >= this.vssStorage.stakesCount) break; // all stakes selected
+			if (leg >= BLOCKCHAIN_SETTINGS.validatorsPerRound) break; // round is full
+		}
 
-        //console.log(`[VSS] -- Calculated round legitimacies in ${((Date.now() - startTimestamp)/1000).toFixed(2)}s. | ${i} iterations. -->`);
-        //console.info(legitimacies);
-        this.blockLegitimaciesByAddress.set(blockHash, {legitimacies, owners});
+		// maxTry safety triggered: should never happen in normal operation
+		if (leg < BLOCKCHAIN_SETTINGS.validatorsPerRound && maxRange >= BLOCKCHAIN_SETTINGS.validatorsPerRound)
+			console.warn(`[VSS] Round incomplete: only ${leg}/${BLOCKCHAIN_SETTINGS.validatorsPerRound} validators selected after ${maxTry} iterations (blockHash: ${blockHash})`);
+
+		this.blockLegitimaciesByAddress.set(blockHash, { legitimacies, owners });
 		this.#pruneCache();
 		return { legitimacies, owners };
-    }
+	}
 	#pruneCache() {
-		const toRemove = this.blockLegitimaciesByAddress.size - this.maxCacheLenght;
+		const toRemove = this.blockLegitimaciesByAddress.size - this.maxCacheLength;
 		if (toRemove <= 0) return;
 
 		const keys = Array.from(this.blockLegitimaciesByAddress.keys());

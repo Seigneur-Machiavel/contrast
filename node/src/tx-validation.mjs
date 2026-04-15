@@ -193,11 +193,10 @@ export class TxValidation {
 		// EXTRACT MISSING IDENTITIES FROM DISK (WHEN NOT ALREADY IN CACHE)
 		/** @type {Set<string>} - Local to this function */
 		const involvedAddresses = new Set();
-		for (let i = 0; i < tx.inputs.length; i++) {
-			const input = tx.inputs[i];
+		for (const input of tx.inputs) {
 			const isValidatorInput = input.length === SIZES.validatorInput.str;
 			const addressToVerify = isValidatorInput ? input.split(":")[0] : involvedUTXOs[input]?.address; // address is either in the validator input or in the UTXO
-			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${tx.inputs[i]}`);
+			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${input}`);
 			
 			if (involvedAddresses.has(addressToVerify)) continue; // already in loop, no need to add again
 			else involvedAddresses.add(addressToVerify);
@@ -241,16 +240,18 @@ export class TxValidation {
 			else seenPubKeys.add(hint);
 			
 			// COUNT THE NUMBER OF WITNESSES PER ADDRESS, AND PREPARE THE QSAGE VERIFY TASKS
-			if (!WCPA[address]) WCPA[address] = 0; // init counter for this address if not already
-			for (const pk of idenditiesToConfirmByAddress[address].pubKeysHex)
+			WCPA[address] ??= 0; // init counter for this address if not already
+			for (const pk of idenditiesToConfirmByAddress[address].pubKeysHex) {
 				if (hint !== hybridKeyHint(pk)) continue; // compare hint.
-				else { WCPA[address]++; qsafeVerifyTasks.push({ signable, signature, hybridKey: pk }) };
+				qsafeVerifyTasks.push({ signable, signature, hybridKey: pk });
+				WCPA[address]++;
+			}
 		}
 
 		// CHECK IF ALL THRESHOLD ARE MET FOR ALL ADDRESSES, AND IF ALL ADDRESSES HAVE THEIR WITNESSES
 		for (const address in idenditiesToConfirmByAddress)
-			if ((WCPA[address] || 0) >= idenditiesToConfirmByAddress[address].threshold) continue;
-			else throw new Error(`Not enough witnesses for address ${address}`);
+			if ((WCPA[address] || 0) < idenditiesToConfirmByAddress[address].threshold)
+				throw new Error(`Not enough witnesses for address ${address}`);
 
 		return qsafeVerifyTasks; // to verify for the next step (signature verification)
 	}

@@ -208,7 +208,7 @@ export class Transaction_Builder {
     static isSolverOrValidatorTx(tx) {
         if (tx.inputs.length !== 1 || tx.outputs.length !== 1) return;
 
-        if (tx.inputs[0].length === SIZES.nonce.str) 		// SOLVER nonce lenght is 8
+        if (tx.inputs[0].length === SIZES.nonce.str) 		// SOLVER nonce length is 8
 			if (tx.witnesses.length === 0) return 'solver'; // and no witness
 
 		if (tx.witnesses.length !== 1) return; 				// VALIDATOR should have exactly 1 witness
