@@ -27,7 +27,7 @@ const clearOnStart = false; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
 const nbReceipients = nor || 2000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
-const nbOfSenders = nos || 400; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nbOfSenders = nos || 600; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 

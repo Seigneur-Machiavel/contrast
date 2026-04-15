@@ -189,7 +189,7 @@ export const serializer = {
 			w.writePointersAndDataChunks(pks);  // unspecified.
 			return w.getBytesOrThrow(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-		/** @param {Witness} witness 	ex: [address, pk.slice(3, 13), signature] */
+		/** @param {Witness} witness 	ex: [address, hint, signature] */
 		witness(witness) {
 			if (witness.length !== 3) throw new Error(`Invalid witness: should be an array of 3 elements [address, hint, signature], got ${witness.length} elements`);
 
@@ -200,7 +200,7 @@ export const serializer = {
 			w.writeBytes(signatureBytes); // signature
 			return w.getBytesOrThrow(`Witness serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-        /** @param {Witness[]} witnesses ex: [ [address, pk.slice(3, 13), signature], ...] */
+        /** @param {Witness[]} witnesses ex: [ [address, hint, signature], ...] */
         witnessesArray(witnesses) {
 			const witnessesAsArrays = [];
 			for (const w of witnesses) witnessesAsArrays.push(this.witness(w));

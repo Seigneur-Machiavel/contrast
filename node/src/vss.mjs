@@ -116,9 +116,14 @@ export class Vss {
 		/** @type {Set<string>} */
 		const authorizedPubkeys = new Set();
 		const r = new BinaryReader(data);
-		const pubKeys = r.readPointersAndExtractDataChunks();
-		for (const pkBytes of pubKeys) authorizedPubkeys.add(serializer.converter.bytesToHex(pkBytes));
-		return { authorizedPubkeys, owner: utxo.address };
+		try {
+			const pubKeys = r.readPointersAndExtractDataChunks();
+			for (const pkBytes of pubKeys) authorizedPubkeys.add(serializer.converter.bytesToHex(pkBytes));
+			return { authorizedPubkeys, owner: utxo.address };
+		} catch (error) {
+			console.error(`Failed to extract pubkeys for anchor: ${anchor} | error: ${error}`);
+			throw new Error(`Failed to extract pubkeys for anchor: ${anchor}`);
+		}
 	}
     /** @param {string} blockHash @param {number} [maxTry] */
     async #calculateRound(blockHash, maxTry = 100) {

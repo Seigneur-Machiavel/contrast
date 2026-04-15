@@ -1,5 +1,6 @@
 // @ts-check
 import { ADDRESS } from '../../types/address.mjs';
+import { hybridKeyHint } from '../../utils/common.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { UTXO_RULES_GLOSSARY, UTXO } from '../../types/transaction.mjs';
@@ -66,7 +67,7 @@ export class Account {
 		const hashBytes = Transaction_Builder.getTransactionSignable(transaction).hashBytes;
 		const hybridSig = this.signer.sign(hashBytes);
 		const hybridSigHex = serializer.converter.bytesToHex(hybridSig);
-		transaction.witnesses.push([this.address, this.hybridKeyHex.slice(3, 13), hybridSigHex]);
+		transaction.witnesses.push([this.address, hybridKeyHint(this.hybridKeyHex), hybridSigHex]);
 		return transaction;
 	}
 	/** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */

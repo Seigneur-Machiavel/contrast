@@ -1,6 +1,7 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
 import { solving } from '../../utils/conditionals.mjs';
+import { hybridKeyHint } from '../../utils/common.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { SIZES } from '../../utils/serializer-schema.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -132,7 +133,7 @@ export class BlockValidation {
 		if (!identity) throw new Error(`Identity not found for address: ${address}`);
 		
 		for (const pk of identity.pubKeysHex) {
-			if (hint !== pk.slice(3, 13)) continue; // compare hint.
+			if (hint !== hybridKeyHint(pk)) continue; // compare hint.
 			const legitimacy = await node.blockchain.vss.getPubkeyLegitimacy(pk, block.prevHash);
 			if (legitimacy === block.legitimacy) return true; // legitimacy validated
 		}

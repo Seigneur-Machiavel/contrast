@@ -3,6 +3,7 @@
 // The code is not the most readable but it's the fastest possible
 import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
+import { hybridKeyHint } from '../../utils/common.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { conditionnals } from '../../utils/conditionals.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -242,7 +243,7 @@ export class TxValidation {
 			// COUNT THE NUMBER OF WITNESSES PER ADDRESS, AND PREPARE THE QSAGE VERIFY TASKS
 			if (!WCPA[address]) WCPA[address] = 0; // init counter for this address if not already
 			for (const pk of idenditiesToConfirmByAddress[address].pubKeysHex)
-				if (hint !== pk.slice(3, 13)) continue; // compare hint.
+				if (hint !== hybridKeyHint(pk)) continue; // compare hint.
 				else { WCPA[address]++; qsafeVerifyTasks.push({ signable, signature, hybridKey: pk }) };
 		}
 
@@ -254,8 +255,7 @@ export class TxValidation {
 		return qsafeVerifyTasks; // to verify for the next step (signature verification)
 	}
 
-	/** ==> Eighth validation, medium computation cost. - control the signature of the inputs
-     * @param {qsafeVerifyTask[]} [qsafeVerifyTasks] */
+	/** ==> Eighth validation, medium computation cost. ~8ms/task @param {qsafeVerifyTask[]} [qsafeVerifyTasks] */
     static async controlAllWitnessesSignatures(qsafeVerifyTasks = []) {
 		for (const task of qsafeVerifyTasks) // will throw an error if the signature is invalid
 			await AsymetricFunctions.qsafeVerify(task.signable, task.signature, task.hybridKey);

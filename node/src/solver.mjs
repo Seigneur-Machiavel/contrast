@@ -1,6 +1,7 @@
 // @ts-check
 import { CURRENCY } from '../../utils/currency.mjs';
 import { solving } from '../../utils/conditionals.mjs';
+import { hybridKeyHint } from '../../utils/common.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { SolverWorker } from '../workers/solver-worker-wrapper.mjs';
@@ -43,7 +44,7 @@ export class Solver {
 		
 		const hint = block.Txs[0].witnesses[0][1];
 		const validatorAddress = block.Txs[0].outputs[0].address;
-        const isMyBlock = hint === this.node.account?.pubKey?.slice(3, 13);
+        const isMyBlock = this.node.account?.pubKey ? hint === hybridKeyHint(this.node.account.pubKey) : false;
         const posReward = block.Txs[0].outputs[0].amount;
         const powReward = block.powReward;
         if (!posReward || !powReward) throw new Error(`Invalid candidate (#${block.index} | v:${validatorAddress}) | posReward = ${posReward} | powReward = ${powReward}`);
