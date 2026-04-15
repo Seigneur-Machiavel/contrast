@@ -27,7 +27,7 @@ const clearOnStart = false; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
 const nbReceipients = nor || 2000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
-const nbOfSenders = nos || 200; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nbOfSenders = nos || 400; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 
@@ -79,7 +79,7 @@ const onBlockConfirmed = async (block) => {
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
 				transfers.push(new Transfer(wallet.accounts[i].address, 1_000));
 				const r = Transaction_Builder.createTransaction(account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
-				//const si = account.signTransaction(r.tx);
+				//const si = await account.signTransaction(r.tx);
 				//const se = serializer.serialize.transaction(si);
 				//console.log(`s.Size: ${se.length}, r.Weight: ${r.weight}`);
 			} catch (/** @type {any} */ error) {
@@ -90,7 +90,7 @@ const onBlockConfirmed = async (block) => {
 		}
 
 		const { tx } = Transaction_Builder.createTransaction(account, transfers, 1, identityEntries);
-		const signedTx = account.signTransaction(tx);
+		const signedTx = await account.signTransaction(tx);
 		if (!signedTx) return; // failed to create tx
 	
 		try {
@@ -110,7 +110,7 @@ const onBlockConfirmed = async (block) => {
 		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(sender.address);
 		if (ledger && ledger.ledgerUtxos) sender.ledgerUtxos = ledger.ledgerUtxos;
 		const receipient = wallet.accounts[1].address; // send back to main account
-		const signedTx2 = Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1)?.signedTx;
+		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1))?.signedTx;
 		if (signedTx2) txs.push(signedTx2);
 	}
 

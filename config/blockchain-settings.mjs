@@ -64,7 +64,7 @@ export const SOLVING = {
         mem: 2 ** 19,
         parallelism: 1,
         type: 2,
-        hashLen: 32,
+        hashLen: 64,
     },
     nonceLength: 4,
     initialDifficulty: 1, // 27

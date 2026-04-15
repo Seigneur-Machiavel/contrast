@@ -167,7 +167,7 @@ export class Sync {
 			await bc.undoBlock(true); // ROLLBACK AT LEAST ONE BLOCK TO AVOID STUCKING
 			while (bc.currentHeight > blockHeight) await bc.undoBlock(true);
 
-			if (!attempts) this.logger.log(`[SYNC-OUT] Catching up with network to h:${blockHeight} (hash: ${blockHash}) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
+			if (!attempts) this.logger.log(`[SYNC-OUT] Catching up with network to h:${blockHeight} (hash: ${blockHash.slice(0, 4)}...) from ${peersToAsk.length} peers`, (m, c) => console.log(m, c));
 			attempts++;
 
 			// DOWNLOAD AND APPLY BLOCKS UNTIL REASONABLE GAP

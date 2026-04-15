@@ -69,7 +69,7 @@ async function mineBlockUntilValid() {
 
 		try {
 			const startTime = performance.now();
-			const { signatureHex, nonce, block } = await prepareBlockCandidateBeforeSolving();
+			const { signatureHex, nonce, block } = prepareBlockCandidateBeforeSolving();
 			const blockHash = await solving.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
 			if (!blockHash) throw new Error('Invalid block hash');
 			
@@ -88,7 +88,7 @@ async function mineBlockUntilValid() {
 		}
 	}
 }
-async function prepareBlockCandidateBeforeSolving() {
+function prepareBlockCandidateBeforeSolving() {
 	//let time = performance.now();
 	//console.log(`prepareNextBlock: ${performance.now() - time}ms`); time = performance.now();
 	/** @ts-ignore Candidate transmute to Finalized @type {BlockFinalized | null} */
@@ -105,10 +105,10 @@ async function prepareBlockCandidateBeforeSolving() {
 	const now = Date.now() + solverVars.timeOffset;
 	block.timestamp = Math.max(block.posTimestamp + 1 + solverVars.bet, now);
 
-	const rewardTx = await Transaction_Builder.createSolverReward(coinbaseNonce, solverVars.sAddress, powReward, solverVars.identities);
+	const rewardTx = Transaction_Builder.createSolverReward(coinbaseNonce, solverVars.sAddress, powReward, solverVars.identities);
 	BlockUtils.setCoinbaseTransaction(block, rewardTx); // Will replace existing coinbase if any
 
-	const signatureHex = await BlockUtils.getBlockSignature(block);
+	const signatureHex = BlockUtils.getBlockSignature(block);
 	const nonce = `${headerNonce}${coinbaseNonce}`;
 	//console.log(`${ signatureHex}:${nonce}`);
 	//console.log(`getBlockSignature: ${performance.now() - time}ms`); time = performance.now();

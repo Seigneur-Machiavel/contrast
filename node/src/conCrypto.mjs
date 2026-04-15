@@ -10,7 +10,7 @@ const Qsafe = typeof window !== 'undefined' // @ts-ignore
 	? await import('../../qsafe-sig.browser.min.js')
 	: await import('@pinkparrot/qsafe-sig');
 
-export const { QsafeSigner, QsafeHelper } = Qsafe;
+export const { QsafeSigner, QsafeHelper, sha256, sha512 } = Qsafe;
 
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = typeof window !== 'undefined' // @ts-ignore
@@ -32,13 +32,19 @@ export class HashFunctions {
         const padding = '0'.repeat(minLength - hashHex.length);
         return `${padding}${hashHex}`;
     };
-	/** @param {string} message */
-    static async SHA256(message) {
-		const messageUint8 = converter.stringToBytes(message);
-        const arrayBuffer = await crypto.subtle.digest('SHA-256', messageUint8);
-        const uint8Array = new Uint8Array(arrayBuffer);
-		const hashHex = converter.bytesToHex(uint8Array);
-        return hashHex;
+	/** @param {string | Uint8Array} message */
+	static SHA256(message) {
+		const messageUint8 = typeof message === 'string' ? converter.stringToBytes(message) : message;
+		const hashBytes = sha256(messageUint8);
+		const hashHex = converter.bytesToHex(hashBytes);
+		return { hashBytes, hashHex };
+	}
+	/** @param {string | Uint8Array} message */
+    static SHA512(message) {
+		const messageUint8 = typeof message === 'string' ? converter.stringToBytes(message) : message;
+		const hashBytes = sha512(messageUint8);
+		const hashHex = converter.bytesToHex(hashBytes);
+        return { hashBytes, hashHex };
     };
 };
 export class AsymetricFunctions {
@@ -46,12 +52,12 @@ export class AsymetricFunctions {
 	static verifierInstance;
 
 	/** Verify a signature using Qsafe. Will throw an error if the signature is invalid
-	 * @param {string} message @param {string} signature @param {string} pubKeyHex */
+	 * @param {string | Uint8Array} message @param {string | Uint8Array} signature @param {string | Uint8Array} pubKeyHex */
 	static async qsafeVerify(message, signature, pubKeyHex) {
 		const verifier 		 = this.verifierInstance || await QsafeSigner.createFull();
-		const toSignBytes 	 = converter.hexToBytes(message);
-		const signatureBytes = converter.hexToBytes(signature);
-		const pubKeyBytes 	 = converter.hexToBytes(pubKeyHex);
+		const toSignBytes 	 = typeof message === 'string' ? converter.hexToBytes(message) : message;
+		const signatureBytes = typeof signature === 'string' ? converter.hexToBytes(signature) : signature;
+		const pubKeyBytes 	 = typeof pubKeyHex === 'string' ? converter.hexToBytes(pubKeyHex) : pubKeyHex;
 		const iValid = await verifier.verify(toSignBytes, signatureBytes, pubKeyBytes);
 		if (!iValid) throw new Error('Invalid signature');
 	}

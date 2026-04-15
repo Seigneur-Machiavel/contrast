@@ -50,23 +50,21 @@ class Organizer {
 		return '1000+';
 	}
 	/** @param {OrganizedTx} oTx */
-	async add(oTx) {
-		const txUniqueId = await HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs));
-		const rangeKey = this.#getRangeKey(oTx.feePerByte);
+	add(oTx) { // ADD BOTH MAPPINGS
+		if (oTx.feePerByte <= 0) throw new Error('Invalid feePerByte value');
 
-		// ADD BOTH MAPPINGS
+		const txUniqueId = HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs)).hashHex;
+		const rangeKey = this.#getRangeKey(oTx.feePerByte);
 		this.txsByRanges[rangeKey].set(txUniqueId, oTx);
 		for (const input of oTx.tx.inputs) this.byAnchor.set(input, oTx);
 		return true;
 	}
 	/** @param {OrganizedTx} oTx */
-	async remove(oTx) {
+	remove(oTx) { // REMOVE BOTH MAPPINGS
 		if (oTx.feePerByte <= 0) throw new Error('Invalid feePerByte value');
 
 		const rangeKey = this.#getRangeKey(oTx.feePerByte);
-		const txUniqueId = await HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs)); 
-
-		// REMOVE BOTH MAPPINGS
+		const txUniqueId = HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs)).hashHex;
 		for (const input of oTx.tx.inputs) this.byAnchor.delete(input);
 		return this.txsByRanges[rangeKey].delete(txUniqueId);
 	}
@@ -114,7 +112,7 @@ export class MemPool {
 		if (colliding && oTx.feePerByte <= colliding.oTx.feePerByte) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${colliding.oTx.feePerByte} >= ${oTx.feePerByte}`);
 		
 		// ADD TRANSACTION TO MEMPOOL
-		if (colliding?.oTx) await this.organizer.remove(colliding.oTx);
+		if (colliding?.oTx) this.organizer.remove(colliding.oTx);
 		this.organizer.add(oTx);
     }
 	/** @param {BlockFinalized} block */

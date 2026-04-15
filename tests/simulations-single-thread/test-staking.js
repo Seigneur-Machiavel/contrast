@@ -94,7 +94,7 @@ const onBlockConfirmed = async (block) => {
 		if (availableAmount < 10_000_000 * 2) continue; // not enough to stake
 
 		const { tx } = Transaction_Builder.createStakingVss(account, 1);
-		const signedTx = account.signTransaction(tx);
+		const signedTx = await account.signTransaction(tx);
 		if (!signedTx) continue; // failed to create tx
 
 		// TEST: push transaction

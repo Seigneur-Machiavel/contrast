@@ -6,7 +6,7 @@ import { solving } from '../../utils/conditionals.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { serializer } from '../../utils/serializer.mjs';
+import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { Transaction, UTXO, UtxoState } from '../../types/transaction.mjs';
 
 /**
@@ -16,10 +16,10 @@ import { Transaction, UTXO, UtxoState } from '../../types/transaction.mjs';
 export class BlockUtils {
 	// PRIVATE STATIC METHODS
     /** @param {BlockCandidate | BlockFinalized} block @param {boolean} excludeCoinbaseAndPos */
-    static async #getBlockTxsHash(block, excludeCoinbaseAndPos = false) {
+    static #getBlockTxsHash(block, excludeCoinbaseAndPos = false) {
 		const txsSignables = [];
 		for (const tx of block.Txs)
-			txsSignables.push(Transaction_Builder.getTransactionSignableString(tx));
+			txsSignables.push(Transaction_Builder.getTransactionSignable(tx).hashHex);
 
         let firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isSolverOrValidatorTx(block.Txs[0]) : undefined;
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
@@ -27,7 +27,7 @@ export class BlockUtils {
         if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
 
         const txsIDStr = txsSignables.join('');
-        return await HashFunctions.SHA256(txsIDStr);
+        return HashFunctions.SHA512(txsIDStr);
     };
 	/** @param {Object<string, UTXO>} involvedUTXOs @param {Transaction[]} Txs */
     static #calculateTxsTotalFees(involvedUTXOs, Txs) {
@@ -66,8 +66,8 @@ export class BlockUtils {
 
 		// CALCULATE REWARD => CREATE & SIGN VALIDATOR REWARD TX => ADD IT TO BLOCK CANDIDATE
 		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
-		const validatorFeeTx = await Transaction_Builder.createValidatorReward(posReward, block, account.address, rewardAddress, identityEntries);
-		const signedValidatorFeeTx = account.signTransaction(validatorFeeTx);
+		const validatorFeeTx = Transaction_Builder.createValidatorReward(posReward, block, account.address, rewardAddress, identityEntries);
+		const signedValidatorFeeTx = await account.signTransaction(validatorFeeTx);
 		block.Txs.unshift(signedValidatorFeeTx);
 		block.powReward = powReward; // Reward for the solver
 	}
@@ -75,20 +75,19 @@ export class BlockUtils {
 	// PUBLIC STATIC METHODS
     /** Get the block signature used for solving
      * @param {BlockCandidate | BlockFinalized} block
-     * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp
-     * @returns {Promise<string>} signature Hex */
-    static async getBlockSignature(block, isPosHash = false) {
-        const txsHash = await this.#getBlockTxsHash(block, isPosHash);
+     * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp */
+    static getBlockSignature(block, isPosHash = false) {
+        const txsHash = this.#getBlockTxsHash(block, isPosHash).hashHex;
         const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = block;
         let signatureStr = `${index}${supply}${coinBase}${difficulty}${legitimacy}${prevHash}${posTimestamp}${txsHash}`;
         if (!isPosHash && 'timestamp' in block) signatureStr += block.timestamp;
 
-        return await HashFunctions.SHA256(signatureStr);
+        return HashFunctions.SHA512(signatureStr).hashHex;
     }
     /** @param {BlockFinalized} block */
     static async getSolverHash(block) {
         if (typeof block.Txs[0].inputs[0] !== 'string') throw new Error('Invalid coinbase nonce');
-        const signatureHex = await this.getBlockSignature(block);
+        const signatureHex = this.getBlockSignature(block);
         const headerNonce = block.nonce;
         const coinbaseNonce = block.Txs[0].inputs[0];
         const nonce = `${headerNonce}${coinbaseNonce}`;
@@ -135,11 +134,6 @@ export class BlockUtils {
         const newDifficulty = solving.difficultyAdjustment(lastBlock, averageBlockTime, undefined, logs);
         return { averageBlockTime, newDifficulty };
     }
-	/** @param {BlockCandidate} block */
-    static getCandidateBlockHeader(block) { // DEPRECATED
-		const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = block;
-		return new BlockCandidateHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp);
-	}
 	/** @param {BlockFinalized} block */
 	static getFinalizedBlockHeader(block) {
 		const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = block;
@@ -153,7 +147,7 @@ export class BlockUtils {
 		if (!account || !account.pubKey) throw new Error('Node account not set');
 
 		const posTimestamp = blockchain.lastBlock?.timestamp ? blockchain.lastBlock.timestamp + 1 : time;
-		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '0000000000000000000000000000000000000000000000000000000000000000', [], posTimestamp);
+		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '00'.repeat(SIZES.hash.bytes), [], posTimestamp);
 		
 		// CHOOSE TO RETURN NULL IF NOT ELIGIBLE TO MINE
 		const prevHash = blockchain.lastBlock.hash;

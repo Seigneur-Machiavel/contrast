@@ -11,8 +11,9 @@ export { SIZES, BinaryReader, BinaryWriter };
 
 /**
 * @typedef {import("../types/transaction.mjs").UTXO} UTXO
-* @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../types/transaction.mjs").TxId} TxId
+* @typedef {import("../types/transaction.mjs").Witness} Witness
+* @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../types/transaction.mjs").UtxoState} UtxoState
 * @typedef {import("../types/sync.mjs").BlockHeightHash} BlockHeightHash
 *
@@ -188,19 +189,18 @@ export const serializer = {
 			w.writePointersAndDataChunks(pks);  // unspecified.
 			return w.getBytesOrThrow(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-		/** @param {string} witness 	ex: "signature:pubKey(Hash)" */
+		/** @param {Witness} witness 	ex: [address, pk.slice(3, 13), signature] */
 		witness(witness) {
-			const s = witness.split(':');
-			if (s.length !== 2) throw new Error(`Invalid witness format: ${witness}`);
+			if (witness.length !== 3) throw new Error(`Invalid witness: should be an array of 3 elements [address, hint, signature], got ${witness.length} elements`);
 
-			const witnessAsArray = [converter.hexToBytes(s[0]), converter.hexToBytes(s[1])];
-			const pointersSize = BinaryWriter.calculatePointersSize(witnessAsArray.length);
-			const witnessSize = witnessAsArray.reduce((sum, w) => sum + w.length, 0);
-			const w = new BinaryWriter(pointersSize + witnessSize);
-			w.writePointersAndDataChunks(witnessAsArray);
+			const signatureBytes = converter.hexToBytes(witness[2]);
+			const w = new BinaryWriter(SIZES.address.bytes + SIZES.hint.bytes + signatureBytes.length);
+			w.writeBytes(ADDRESS.B58_TO_BYTES(witness[0])); // address
+			w.writeBytes(converter.hexToBytes(witness[1])); // hint
+			w.writeBytes(signatureBytes); // signature
 			return w.getBytesOrThrow(`Witness serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-        /** @param {string[]} witnesses ex: [ "signature:pubKey(Hash)", ... ] */
+        /** @param {Witness[]} witnesses ex: [ [address, pk.slice(3, 13), signature], ...] */
         witnessesArray(witnesses) {
 			const witnessesAsArrays = [];
 			for (const w of witnesses) witnessesAsArrays.push(this.witness(w));
@@ -217,7 +217,7 @@ export const serializer = {
 			if (mode === 'solver' && (tx.inputs.length !== 1 || tx.inputs[0].length !== SIZES.nonce.str)) throw new Error('Invalid coinbase transaction');
             if (mode === 'validator' && (tx.inputs.length !== 1 || tx.inputs[0].length !== SIZES.validatorInput.str)) throw new Error('Invalid transaction: validator input must be posHash');
 			if (tx.data && !(tx.data instanceof Uint8Array)) throw new Error('Transaction data must be a Uint8Array');
-			
+
 			// Calculate the size of each part of the transaction for efficient serialization
 			const witnessesBytes = tx.witnesses.length ? this.witnessesArray(tx.witnesses) : null;
 			const witnessesSize = witnessesBytes ? witnessesBytes.length : 0;
@@ -499,12 +499,12 @@ export const serializer = {
 		},
 		/** @param {Uint8Array} serializedWitness */
 		witness(serializedWitness) {
+			if (serializedWitness.length < SIZES.address.bytes + SIZES.hint.bytes) throw new Error('Serialized witness is too short to contain required fields');
 			const r = new BinaryReader(serializedWitness);
-			const witnessAsArray = r.readPointersAndExtractDataChunks();
-			if (witnessAsArray.length !== 2) throw new Error('Invalid serialized witness: should contain exactly 2 data chunks');
-			const signature = converter.bytesToHex(witnessAsArray[0]);
-			const pubKey = converter.bytesToHex(witnessAsArray[1]);
-			if (r.isReadingComplete) return `${signature}:${pubKey}`;
+			const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+			const hint = converter.bytesToHex(r.read(SIZES.hint.bytes));
+			const signature = converter.bytesToHex(r.read(r.view.length - r.cursor));
+			if (r.isReadingComplete) return [address, hint, signature];
 			else throw new Error(`Witness is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {BinaryReader} r BinaryReader with cursor set at start of witnesses array */
@@ -556,15 +556,15 @@ export const serializer = {
 			const coinBase = converter.bytes4ToNumber(r.read(4));
 			const difficulty = converter.bytes4ToNumber(r.read(4));
 			const legitimacy = converter.bytes2ToNumber(r.read(2));
-			const prevHash = converter.bytesToHex(r.read(32));
+			const prevHash = converter.bytesToHex(r.read(SIZES.hash.bytes));
 			const posTimestamp = converter.bytes6ToNumber(r.read(6));
 
 			let timestamp, powReward, hash, nonce;
 			if (mode === 'candidate') powReward = converter.bytes6ToNumber(r.read(6));
 			else if (mode === 'finalized') {
-				timestamp = converter.bytes6ToNumber(r.read(6));
-				hash = converter.bytesToHex(r.read(32));
-				nonce = converter.bytesToHex(r.read(4));
+				timestamp = converter.bytes6ToNumber(r.read(SIZES.timestamp.bytes));
+				hash = converter.bytesToHex(r.read(SIZES.hash.bytes));
+				nonce = converter.bytesToHex(r.read(SIZES.nonce.bytes));
 			}
 
 			const txsSerialized = r.readPointersAndExtractDataChunks('pointer32');

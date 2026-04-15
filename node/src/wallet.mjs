@@ -57,14 +57,14 @@ export class Wallet {
 	/** @param {FrontStorage} frontStorage */
 	async loadAccountsFromFrontStorage(frontStorage) {
 		/** @ts-ignore @type {EncryptedGeneratedAccount[] | null} */
-		const accountsGeneratedEncrypted = await frontStorage.load(`accounts-${await this.#walletIdentifier()}`);
+		const accountsGeneratedEncrypted = await frontStorage.load(`accounts-${this.#walletIdentifier()}`);
 		if (!accountsGeneratedEncrypted) return false;
 		await this.#loadAccounts(accountsGeneratedEncrypted);
 	}
 	/** @param {FrontStorage} frontStorage */
 	async saveAccountsToFrontStorage(frontStorage) {
 		const encryptedAccounts = await this.#encryptAccounts();
-		await frontStorage.save(`accounts-${await this.#walletIdentifier()}`, encryptedAccounts);
+		await frontStorage.save(`accounts-${this.#walletIdentifier()}`, encryptedAccounts);
 	}
 	/** Derive accounts from master seed. (If storage is provide: load and save accounts)
 	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
@@ -80,7 +80,7 @@ export class Wallet {
 			
 			// from saved account
 			const { address, seedModifierHex } = this.accountsGenerated[i];
-			const qsafeMasterHex = await HashFunctions.SHA256(this.#masterHex + seedModifierHex);
+			const qsafeMasterHex = HashFunctions.SHA512(this.#masterHex + seedModifierHex).hashHex;
 			const account = await Account.initializedAccount(qsafeMasterHex, addressPrefix);
 			if (address !== account.address) throw new Error('Loaded account address does not match derived address');
 			this.accounts.push(account);
@@ -140,7 +140,7 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
         for (let i = 0; i < maxIterations; i++) {
             const seedModifier = seedModifierStart + i;
             const seedModifierHex = seedModifier.toString(16).padStart(12, '0'); // padStart(12, '0') => 48 bits (6 bytes), maxValue = 281 474 976 710 655
-			const qsafeMasterHex = await HashFunctions.SHA256(this.#masterHex + seedModifierHex);
+			const qsafeMasterHex = HashFunctions.SHA512(this.#masterHex + seedModifierHex).hashHex;
 			const account = await Account.initializedAccount(qsafeMasterHex, prefix);
 			this.accountsGenerated.push({ address: account.address, seedModifierHex });
 			return { account, iterations: i };
@@ -148,8 +148,8 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
 
 		throw new Error('Max iterations reached during account derivation');
     }
-    async #walletIdentifier() {
-        const hash = await HashFunctions.SHA256(`${this.#masterHex}-wallet-identifier`);
+    #walletIdentifier() {
+        const hash = HashFunctions.SHA512(`${this.#masterHex}-wallet-identifier`).hashHex;
         return hash.substring(0, 16);
     }
 	/** @param {EncryptedGeneratedAccount[]} accountsGeneratedEncrypted */

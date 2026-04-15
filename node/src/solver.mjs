@@ -1,8 +1,8 @@
 // @ts-check
 import { CURRENCY } from '../../utils/currency.mjs';
 import { solving } from '../../utils/conditionals.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
+import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { SolverWorker } from '../workers/solver-worker-wrapper.mjs';
 
 /**
@@ -41,16 +41,16 @@ export class Solver {
     updateBestCandidate(block) {
 		if (!block) throw new Error('Candidate is null or undefined');
 		
-		const validatorPubKey = block.Txs[0].witnesses[0].split(':')[1];
+		const hint = block.Txs[0].witnesses[0][1];
 		const validatorAddress = block.Txs[0].outputs[0].address;
-        const isMyBlock = validatorPubKey === this.node.account?.pubKey;
+        const isMyBlock = hint === this.node.account?.pubKey?.slice(3, 13);
         const posReward = block.Txs[0].outputs[0].amount;
         const powReward = block.powReward;
         if (!posReward || !powReward) throw new Error(`Invalid candidate (#${block.index} | v:${validatorAddress}) | posReward = ${posReward} | powReward = ${powReward}`);
 		if (Math.abs(posReward - powReward) > 1) throw new Error(`Invalid candidate (#${block.index} | v:${validatorAddress}) | posReward = ${posReward} | powReward = ${powReward} | Math.abs(posReward - powReward) > 1`);
 
-        const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '0000000000000000000000000000000000000000000000000000000000000000';
-        if (block.prevHash !== prevHash) throw new Error(`Invalid candidate prevHash (#${block.index} | v:${validatorAddress}) | expected: ${prevHash} | got: ${block.prevHash}`);
+        const prevHash = this.node.blockchain.lastBlock ? this.node.blockchain.lastBlock.hash : '00'.repeat(SIZES.hash.bytes);
+		if (block.prevHash !== prevHash) throw new Error(`Invalid candidate prevHash (#${block.index} | v:${validatorAddress}) | expected: ${prevHash.slice(0, 4)}... | got: ${block.prevHash.slice(0, 4)}...`);
         
         let reasonChange = 'none';
         if (!this.bestCandidate)

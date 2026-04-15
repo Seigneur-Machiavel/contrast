@@ -55,7 +55,7 @@ const tryStaking = async (block) => {
 	
 	// CREATE STAKING TRANSACTION
 	const { tx } = Transaction_Builder.createStakingVss(clientNode.account, 1);
-	const signedTx = clientNode.account.signTransaction(tx);
+	const signedTx = await clientNode.account.signTransaction(tx);
 	if (!signedTx) return; // failed to create tx
 
 	// PUSH TRANSACTION
@@ -106,7 +106,7 @@ const trySpamming = async (block) => {
 		}
 
         const { tx } = Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries);
-        const signedTx = clientNode.account.signTransaction(tx);
+        const signedTx = await clientNode.account.signTransaction(tx);
         if (!signedTx) return;
         try {
             clientNode.p2p.broadcast(serializer.serialize.transaction(signedTx), { topic: 'transaction' });
@@ -126,7 +126,7 @@ const trySpamming = async (block) => {
 		if (!ledger?.ledgerUtxos) continue;
 		sender.setBalanceAndUTXOs(sender.balance, ledger.ledgerUtxos);
 
-		const signedTx2 = Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1)?.signedTx;
+		const signedTx2 = await Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1)?.signedTx;
 		if (signedTx2) txs.push(signedTx2);
 	}
 

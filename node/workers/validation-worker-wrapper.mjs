@@ -1,19 +1,8 @@
 import { newWorker } from './unified-worker-initializer.mjs';
 
-/** @typedef {import('../../types/transaction.mjs').Transaction} Transaction */
-
-export class WorkerTask {
-	pubKeysByHashes;
-	specialTx;
-	tx;
-
-	/** @param {Transaction} tx @param {Record<string, string>} [pubKeysByHashes] @param {'validator' | 'tx' | undefined} [mode] */
-	constructor(tx, pubKeysByHashes, mode = 'tx') {
-		this.pubKeysByHashes = pubKeysByHashes;
-		this.specialTx = mode;
-		this.tx = tx;
-	}
-}
+/** 
+ * @typedef {import('../src/tx-validation.mjs').qsafeVerifyTask} qsafeVerifyTask
+ * @typedef {import('../../types/transaction.mjs').Transaction} Transaction */
 
 // CLASSES SIMPLIFYING USAGE OF THE WORKERS
 export class ValidationWorker {
@@ -23,7 +12,7 @@ export class ValidationWorker {
 
     constructor (id = 0) { this.id = id; }
 	
-	/** @param {WorkerTask[]} batch */
+	/** @param {qsafeVerifyTask[]} batch */
 	signatureValidation(batch) {
 		this.state = 'working';
 

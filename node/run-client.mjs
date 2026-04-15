@@ -10,7 +10,6 @@ import { Wallet } from './src/wallet.mjs';
 import { createContrastNode } from './src/node.mjs';
 import { serializer } from '../utils/serializer.mjs';
 import { ContrastStorage } from '../storage/storage.mjs';
-import { Transaction_Builder } from "./src/transaction.mjs";
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";

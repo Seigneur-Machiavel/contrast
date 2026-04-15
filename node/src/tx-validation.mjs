@@ -9,10 +9,20 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { OutputCreationValidator } from './tx-rule-checkers.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
-import { HashFunctions, AsymetricFunctions, QsafeHelper } from './conCrypto.mjs';
+import { AsymetricFunctions } from './conCrypto.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
+ * @typedef {Object} Identity
+ * @property {string} address
+ * @property {string[]} pubKeysHex
+ * @property {number} threshold
+ * 
+ * @typedef {Object} qsafeVerifyTask
+ * @property {string | Uint8Array} signable
+ * @property {string | Uint8Array} signature
+ * @property {string | Uint8Array} hybridKey
+ * 
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").TxOutput} TxOutput
@@ -21,7 +31,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
  * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
 
 export class IdentitiesCache {
-	/** @type {Map<string, { address: string, pubKeysHex: string[], threshold: number }>} */
+	/** @type {Map<string, Identity>} */
 	identities = new Map();
 
 	/** @param {string} address @param {string[]} pubKeysHex @param {number} threshold */
@@ -39,21 +49,6 @@ export class IdentitiesCache {
 
 const miniLogger = new MiniLogger('validation');
 export class TxValidation {
-	/** LOCAL HELPER @param {string} witness */
-    static #decomposeWitnessOrThrow(witness) {
-        if (typeof witness !== 'string') throw new Error(`Invalid witness: ${witness} !== string`);
-
-        const witnessParts = witness.split(':');
-		if (witnessParts.length !== 2) throw new Error('Invalid witness');
-
-        const [signature, pubKeyHash] = [witnessParts[0], witnessParts[1]];
-		if (pubKeyHash.length !== SIZES.pubKeyHash.str) throw new Error(`Invalid pubKeyHash length: ${pubKeyHash.length} !== ${SIZES.pubKeyHash.str}`);
-        if (!IS_VALID.HEX(signature)) throw new Error(`Invalid signature: ${signature} !== hex`);
-        if (!IS_VALID.HEX(pubKeyHash)) throw new Error(`Invalid pubKeyHash: ${pubKeyHash} !== hex`);
-
-        return { signature, pubKeyHash };
-    }
-
     /** ==> First validation, low computation cost. - control format of : amount, address, rule, version, TxID, UTXOs spendable
      * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {'solver' | 'validator'} [specialTx] */
     static isConformTransaction(involvedUTXOs, transaction, specialTx) {
@@ -72,9 +67,6 @@ export class TxValidation {
         if (transaction.inputs.length === 0) throw new Error('Invalid transaction: no inputs');
         if (transaction.outputs.length === 0) throw new Error('Invalid transaction: no outputs');
 		if (transaction.data && !(transaction.data instanceof Uint8Array)) throw new Error('Invalid transaction data');
-
-        try { for (const witness of transaction.witnesses) this.#decomposeWitnessOrThrow(witness);
-        } catch (/**@type {any}*/ error) { throw new Error('Invalid signature size'); }
         
 		const remainingAmount = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, transaction);
         for (let i = 0; i < transaction.outputs.length; i++) {
@@ -188,7 +180,7 @@ export class TxValidation {
 		}
 	}
 
-    /** ==> Sixth validation, low disk access cost. ~0.1ms per address + low cpu cost (xxHash32).
+    /** ==> Sixth validation, low disk access cost. ~0.1ms per address.
 	 * - SOLVER'S TX CAN'T SPEND UTXOS => NO OWNERSHIP TO CONTROL
 	 * - VALIDATOR'S TX HAS TO BE CONTROLLED
 	 * - Control the inputAddresses/witnessesPubKeys correspondence
@@ -198,7 +190,7 @@ export class TxValidation {
     static extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities = new IdentitiesCache()) {
 		// SET THE ADDRESSES TO CONTROL.
 		// EXTRACT MISSING IDENTITIES FROM DISK (WHEN NOT ALREADY IN CACHE)
-		/** @type {Set<string>} */
+		/** @type {Set<string>} - Local to this function */
 		const involvedAddresses = new Set();
 		for (let i = 0; i < tx.inputs.length; i++) {
 			const input = tx.inputs[i];
@@ -217,73 +209,56 @@ export class TxValidation {
 		}
 
 		// EXTRACT ADDRESSES<>PUBKEYS CORRESPONDENCE
-		/** Key: PubKey, Value: Set of associated addresses @type {Record<string, Set<string>>} */
-		const addressesToConfirmByPubKey = {};
-		/** Key: Hash, Value: PubKey @type {Record<string, string>} */
-		const pubKeysByHashes = {};
+		/** Local for each tx, Key: Address, Value: Identity @type {Record<string, Identity>} */
+		const idenditiesToConfirmByAddress = {};
 		for (const address of involvedAddresses) {
 			const identity = involvedIdentities.get(address);
 			if (!identity) throw new Error(`Identity not found in cache for address ${address}, this should not happen as we fetched all identities for involved addresses in the previous step`);
-
-			for (const pk of identity.pubKeysHex) {
-				if (addressesToConfirmByPubKey[pk]?.has(address)) continue; // already added, no need to add again
-				
-				const pubKeyHash = HashFunctions.xxHash32(pk, 8);
-				const existingPkForHash = pubKeysByHashes[pubKeyHash];
-				if (existingPkForHash && existingPkForHash !== pk) throw new Error(`Hash collision detected for pubKey: ${pk} and existing pubKey: ${existingPkForHash}, this is extremely unlikely and should not be a problem for security, but consider changing the hash function if you encounter this warning frequently`);
-				else pubKeysByHashes[pubKeyHash] = pk; // cache for lookup during witness confirmation
-
-				if (!addressesToConfirmByPubKey[pk]) addressesToConfirmByPubKey[pk] = new Set([address]);
-				else addressesToConfirmByPubKey[pk].add(address);
-			}
+			else idenditiesToConfirmByAddress[address] = identity;
 		}
 
-		// CONTROL DERIVATION (VERY LOW COST, XXHASH32 ON PUBKEYS + DERIVATION CONTROL)
-		for (const pk in addressesToConfirmByPubKey)
-			for (const address of addressesToConfirmByPubKey[pk])
-				if (ADDRESS.isMultiSigAddress(address)) continue; // skip derivation control for multi-sig addresses.
-				else if (!ADDRESS.isDerivedFrom(address, pk)) throw new Error(`PubKey ${pk} is not valid for address ${address}`);
-
-		return { pubKeysByHashes, addressesToConfirmByPubKey }; // to verify for the next step (associated witness confirmation)
+		return idenditiesToConfirmByAddress; // to verify for the next step (associated witness confirmation)
 	}
 	
 	/** ==> Seventh validation, low computation cost. - control the presence of witnesses associated to the input addresses and pubKeys
 	 * - Control that all the addresses associated to the pubKeys in witnesses are effectively confirmed by witnesses
 	 * - Throw if any problem found
-	 * @param {Transaction} tx @param {Record<string, string>} [pubKeysByHashes] Key: Hash, Value: PubKey @param {Record<string, Set<string>>} [addressesToConfirmByPubKey] Key: PubKey, Value: Set of associated addresses to confirm */
-	static controlAddressesHasAssociatedWitnesses(tx, pubKeysByHashes = {}, addressesToConfirmByPubKey = {}) {
+	 * @param {Transaction} tx @param {Record<string, Identity>} [idenditiesToConfirmByAddress] Key: Address, Value: Identity */
+	static controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress = {}) {
+		/** witnessesCountPerAddress
+		 * - Key: Address, Value: Number of associated witnesses found in the transaction for this address
+		 * @type {Record<string, number>} */
+		const WCPA = {};
 		/** Key: PubKey, Value: Signature @type {Set<string>} */
 		const seenPubKeys = new Set();
+		const qsafeVerifyTasks = [];
+		const signable = Transaction_Builder.getTransactionSignable(tx).hashBytes;
 		for (const w of tx.witnesses) {
-			const { signature, pubKeyHash } = this.#decomposeWitnessOrThrow(w);
-			const pubKeyHex = pubKeysByHashes[pubKeyHash];
-			if (!pubKeyHex) throw new Error(`No pubKey found for witness with pubKeyHash: ${pubKeyHash}`);
+			const [address, hint, signature] = w;
+			if (!idenditiesToConfirmByAddress[address]) throw new Error(`Witness address ${address} not found in identities to confirm, this should not happen as we fetched all identities for involved addresses in the previous step`);
+			if (seenPubKeys.has(hint)) throw new Error('Duplicate pubKey hint in witnesses');
+			else seenPubKeys.add(hint);
 			
-			if (seenPubKeys.has(pubKeyHex)) throw new Error('Duplicate pubKey in witnesses');
-			else seenPubKeys.add(pubKeyHex); // local cache to detect duplicates in witnesses.
-
-			// REMOVE ASSOCIATED ADDRESSES FROM THE CONFIRMATION LIST
-			const addresses = addressesToConfirmByPubKey[pubKeyHex];
-			if (addresses) for (const address of addresses) addressesToConfirmByPubKey[pubKeyHex].delete(address);
+			// COUNT THE NUMBER OF WITNESSES PER ADDRESS, AND PREPARE THE QSAGE VERIFY TASKS
+			if (!WCPA[address]) WCPA[address] = 0; // init counter for this address if not already
+			for (const pk of idenditiesToConfirmByAddress[address].pubKeysHex)
+				if (hint !== pk.slice(3, 13)) continue; // compare hint.
+				else { WCPA[address]++; qsafeVerifyTasks.push({ signable, signature, hybridKey: pk }) };
 		}
 
-		// CHECK ALL PUBKEYS HAVE THEIR ADDRESSES CONFIRMED BY WITNESSES
-		for (const pk in addressesToConfirmByPubKey)
-			if (addressesToConfirmByPubKey[pk].size > 0) throw new Error(`Not all addresses associated to pubKey ${pk} have been confirmed by witnesses: ${[...addressesToConfirmByPubKey[pk]].join(', ')}`);
+		// CHECK IF ALL THRESHOLD ARE MET FOR ALL ADDRESSES, AND IF ALL ADDRESSES HAVE THEIR WITNESSES
+		for (const address in idenditiesToConfirmByAddress)
+			if ((WCPA[address] || 0) >= idenditiesToConfirmByAddress[address].threshold) continue;
+			else throw new Error(`Not enough witnesses for address ${address}`);
+
+		return qsafeVerifyTasks; // to verify for the next step (signature verification)
 	}
 
 	/** ==> Eighth validation, medium computation cost. - control the signature of the inputs
-     * @param {Transaction} transaction @param {Record<string, string>} [pubKeysByHashes] Key: Hash, Value: PubKey */
-    static async controlAllWitnessesSignatures(transaction, pubKeysByHashes = {}) {
-        if (!Array.isArray(transaction.witnesses)) throw new Error(`Invalid witnesses: ${transaction.witnesses} !== array`);
-        
-		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
-        for (let i = 0; i < transaction.witnesses.length; i++) {
-            const { signature, pubKeyHash } = this.#decomposeWitnessOrThrow(transaction.witnesses[i]);
-			const pubKeyHex = pubKeysByHashes[pubKeyHash];
-			if (!pubKeyHex) throw new Error(`No pubKey found for witness with pubKeyHash: ${pubKeyHash}`);
-			await AsymetricFunctions.qsafeVerify(toSign, signature, pubKeyHex); // will throw an error if the signature is invalid
-		}
+     * @param {qsafeVerifyTask[]} [qsafeVerifyTasks] */
+    static async controlAllWitnessesSignatures(qsafeVerifyTasks = []) {
+		for (const task of qsafeVerifyTasks) // will throw an error if the signature is invalid
+			await AsymetricFunctions.qsafeVerify(task.signable, task.signature, task.hybridKey);
     }
 
     /** ==> Sequentially call the set of validations (DON'T give a specialTx to this function)
@@ -295,12 +270,11 @@ export class TxValidation {
 		this.controlTransactionOutputsRulesConditions(tx);
 		this.controlIdentitiesReservation(node, tx, involvedIdentities);
 		this.extractOutputsIdentities(node, tx, involvedIdentities);
-
-		const ext = specialTx === 'solver' ? null : this.extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities);
-		this.controlAddressesHasAssociatedWitnesses(tx, ext?.pubKeysByHashes, ext?.addressesToConfirmByPubKey);
 		if (specialTx === 'solver') return { fee, success: true }; // solver's txs don't have to respect ownership rules, so we skip signature verification
-
-		await this.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
+		
+		const idenditiesToConfirmByAddress = this.extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities);
+		const qsafeVerifyTasks = this.controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress);
+		await this.controlAllWitnessesSignatures(qsafeVerifyTasks);
 		return { fee, success: true };
     }
 }

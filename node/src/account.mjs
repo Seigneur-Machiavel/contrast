@@ -50,7 +50,7 @@ export class Account {
 
 	async init() {
 		this.signer = await QsafeSigner.create();
-		const { hybridKey } = this.signer.loadMasterKey(this.#qsafeMaster);
+		const { hybridKey } = this.signer.loadMasterKey(this.#qsafeMaster.slice(0, 32));
 		this.hybridKey = hybridKey;
 		this.hybridKeyHex = serializer.converter.bytesToHex(hybridKey);
 		this.b58 = ADDRESS.deriveB58(this.hybridKeyHex);
@@ -58,15 +58,15 @@ export class Account {
 	}
 
 	/** @param {Transaction} transaction */
-	signTransaction(transaction) {
+	async signTransaction(transaction) {
 		if (!this.signer) throw new Error('Account not initialized with signer');
 		if (!this.hybridKeyHex) throw new Error('Account not initialized with hybridKeyHex');
 		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
 
-		const toSign = Transaction_Builder.getTransactionSignableString(transaction);
-		const hybridSig = this.signer.sign(serializer.converter.hexToBytes(toSign));
+		const hashBytes = Transaction_Builder.getTransactionSignable(transaction).hashBytes;
+		const hybridSig = this.signer.sign(hashBytes);
 		const hybridSigHex = serializer.converter.bytesToHex(hybridSig);
-		transaction.witnesses.push(`${hybridSigHex}:${HashFunctions.xxHash32(this.hybridKeyHex, 8)}`);
+		transaction.witnesses.push([this.address, this.hybridKeyHex.slice(3, 13), hybridSigHex]);
 		return transaction;
 	}
 	/** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */

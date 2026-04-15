@@ -72,7 +72,7 @@ const onBlockConfirmed = async (block) => {
 	if (!ledger.ledgerUtxos) return;
 
 	a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);
-	const tx = Transaction_Builder.createAndSignTransaction(a, 10, receipient)?.signedTx;
+	const tx = (await Transaction_Builder.createAndSignTransaction(a, 10, receipient))?.signedTx;
 	if (!tx) return; // failed to create tx
 
 	// TEST: push transaction

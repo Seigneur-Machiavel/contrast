@@ -2,17 +2,18 @@
 import { BlockUtils } from './block.mjs';
 import { solving } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { serializer } from '../../utils/serializer.mjs';
+import { SIZES } from '../../utils/serializer-schema.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { IdentitiesCache, TxValidation } from './tx-validation.mjs';
-import { WorkerTask, ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
+import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
- * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
+ * @typedef {import('../src/tx-validation.mjs').qsafeVerifyTask} qsafeVerifyTask */
 
 const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {
@@ -24,7 +25,7 @@ const failureErrorMessages = {
 	missingUtxo: '!applyOffense! At least one UTXO not found or spent in blockchain during block validation',
 	invalidReward: '!applyOffense! Invalid rewards',
 	doubleSpending: '!applyOffense! Double spending detected',
-	discoveredDerivationFailure: '!applyOffense! Address derivation control failed during block validation',
+	signatureValidationFailed: '!applyOffense! Witness signature validation failed during block validation'
 }
 
 class WorkerDispatcher {
@@ -36,7 +37,7 @@ class WorkerDispatcher {
 	/** @param {ValidationWorker[]} workers */
 	constructor(workers) { this.workers = workers; }
 
-	/** @param {WorkerTask[]} batch */
+	/** @param {qsafeVerifyTask[]} batch */
 	#assignJobToWorker(batch) {
 		const w = this.workers[this.workerIndex];
 		if (!w) throw new Error('Worker index overflow');
@@ -45,7 +46,7 @@ class WorkerDispatcher {
 		this.workerIndex++;
 	}
 
-	/** @param {WorkerTask[]} tasks */
+	/** @param {qsafeVerifyTask[]} tasks */
 	async dispatchJobAndWaitResult(tasks) {
 		let batch = [];
         const batchSize = Math.ceil(tasks.length / this.workers.length);
@@ -83,12 +84,12 @@ export class BlockValidation {
         if (block.hash !== hex) throw new Error(`!applyOffense! Invalid pow hash (not corresponding): ${block.hash} - expected: ${hex}`);
 
 		// VALIDATE BLOCK PREVHASH
-		const lastBlockHash = lastBlock?.hash || '0000000000000000000000000000000000000000000000000000000000000000';
+		const lastBlockHash = lastBlock?.hash || '00'.repeat(SIZES.hash.bytes);
         if (lastBlockHash !== block.prevHash) throw new Error(`#${block.index} Rejected -> invalid prevHash: ${block.prevHash.slice(0, 4)}... - expected: ${lastBlockHash.slice(0, 4)}...`);
 
 		// VALIDATE BLOCK TIMESTAMPS && LEGITIMACY
 		this.#validateTimestamps(block, lastBlock, node.time);
-        await this.validateLegitimacy(block, node.blockchain.vss);
+        await this.validateLegitimacy(node, block);
 
 		// VALIDATE BLOCK DIFFICULTY EQUAL TO EXPECTED
         const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node, true);
@@ -117,18 +118,26 @@ export class BlockValidation {
 		await this.#fullBlockTxsValidation(node, block, involvedUTXOs);
         return { hashConfInfo, powReward, posReward, totalFees, involvedAnchors, involvedUTXOs, size: serializedBlock.length };
     }
-	/** @param {BlockFinalized | BlockCandidate} block @param {import("./vss.mjs").Vss} vss @param {'finalized' | 'candidate'} mode */
-    static async validateLegitimacy(block, vss, mode = 'finalized') {
+	/** @param {ContrastNode} node @param {BlockFinalized | BlockCandidate} block @param {'finalized' | 'candidate'} mode */
+    static async validateLegitimacy(node, block, mode = 'finalized') {
+		// EARLY RETURN IF BLOCK LEGITIMACY IS "WORSE"
+		if (block.legitimacy === await node.blockchain.vss.getWorseLegitimacy(block.prevHash)) return true; // worst legitimacy is always valid (even if not legit for the round, it means that no one was legit, so we accept the block with the worst legitimacy)
+
         const txs = block.Txs;
         const validatorTx = mode === 'candidate' ? txs[0] : txs[1];
         if (!validatorTx) throw new Error('Validator transaction not found');
 
-        const validatorPubKey = validatorTx.witnesses[0].split(':')[1];
-        if (!validatorPubKey) throw new Error('Validator pubKey not found');
+		const [address, hint, signature] = validatorTx.witnesses[0];
+		const identity = node.blockchain.identityStore.getIdentity(address);
+		if (!identity) throw new Error(`Identity not found for address: ${address}`);
+		
+		for (const pk of identity.pubKeysHex) {
+			if (hint !== pk.slice(3, 13)) continue; // compare hint.
+			const legitimacy = await node.blockchain.vss.getPubkeyLegitimacy(pk, block.prevHash);
+			if (legitimacy === block.legitimacy) return true; // legitimacy validated
+		}
 
-        const validatorLegitimacy = await vss.getPubkeyLegitimacy(validatorPubKey, block.prevHash);
-        if (validatorLegitimacy === block.legitimacy) return true;
-        else throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - expected: ${validatorLegitimacy}`);
+		throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - no matching pubkey with expected legitimacy found for validator address ${address}`);
     }
 
 	// PRIVATE STATIC METHODS
@@ -187,18 +196,16 @@ export class BlockValidation {
 			TxValidation.controlTransactionOutputsRulesConditions(tx);
 			TxValidation.controlIdentitiesReservation(node, tx, identitiesCache);
 			TxValidation.extractOutputsIdentities(node, tx, identitiesCache);
-
-			const ext = specialTx === 'solver' ? null : TxValidation.extractInputsIdentities(node, involvedUTXOs, tx, identitiesCache);
-			TxValidation.controlAddressesHasAssociatedWitnesses(tx, ext?.pubKeysByHashes, ext?.addressesToConfirmByPubKey);
 			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
-			
-			await TxValidation.controlAllWitnessesSignatures(tx, ext?.pubKeysByHashes);
-			signatureVerificationTasks.push(new WorkerTask(tx, ext?.pubKeysByHashes, specialTx));
+
+			const idenditiesToConfirmByAddress = TxValidation.extractInputsIdentities(node, involvedUTXOs, tx, identitiesCache);
+			const qsafeVerifyTasks = TxValidation.controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress);
+			signatureVerificationTasks.push(...qsafeVerifyTasks);
 		}
 
 		// SIGNATURE VERIFICATION (MULTI-THREADING)
 		const dispatchedSuccessfully = await workerDispatcher.dispatchJobAndWaitResult(signatureVerificationTasks);
-		if (!dispatchedSuccessfully) throw new Error(failureErrorMessages.discoveredDerivationFailure);
+		if (!dispatchedSuccessfully) throw new Error(failureErrorMessages.signatureValidationFailed);
 
 		// ALL VALIDATIONS PASSED
 		validationMiniLogger.log(`(${node.workers.validations.length} threads) ${block.Txs.length} Txs validated in ${Date.now() - validationStart} ms`, (m, c) => console.info(m, c));

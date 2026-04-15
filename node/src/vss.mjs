@@ -66,6 +66,11 @@ export class Vss {
 		const bestLeg = round.legitimacies.getPubkeyBestLegitimacy(pubkey);
 		return bestLeg !== undefined ? bestLeg : round.legitimacies.legitimacies.length;
 	}
+	/** Return the worse legitimacy (highest number) for the round, if no stakes: return 0 @param {string} prevHash */
+	async getWorseLegitimacy(prevHash) {
+		const round = await this.#calculateRound(prevHash);
+		return round.legitimacies.legitimacies.length;
+	}
 	/** @param {string} blockHash */
 	getRoundForExplorerIfExists(blockHash) {
 		const round = this.blockLegitimaciesByAddress.get(blockHash);
@@ -129,7 +134,7 @@ export class Vss {
 			{ this.blockLegitimaciesByAddress.set(blockHash, {legitimacies, owners}); return {legitimacies, owners}; }
 		let [ leg, i ] = [ 0, 0 ];
         for (i; i < maxTry; i++) {
-			const hash = await HashFunctions.SHA256(`${i}${blockHash}`);
+			const hash = HashFunctions.SHA512(`${i}${blockHash}`).hashHex;
             const winningNumber = Number(BigInt('0x' + hash) % BigInt(maxRange)); // Calculate the maximum acceptable range to avoid bias
 			const roundAuth = this.#getStakeAuthorizations(winningNumber);
 			if (!roundAuth?.authorizedPubkeys || roundAuth.authorizedPubkeys.size === 0) {

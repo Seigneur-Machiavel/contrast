@@ -7,7 +7,8 @@
  * @property {number} [withdrawLockBlocks] - Number of blocks to lock for 'sigOrSlash' rule
  * @property {number} [lockUntilBlock] - Block height until which the UTXO is locked for 'lockUntilBlock' rule
  * 
- * @typedef {Uint8Array} IdentityEntry binary entry, e.g: [address: 5b][threshold: 1b][pointers & pubkeys]
+ * @typedef {string[]} Witness 	- A string array in the format [address, pk.slice(3, 13), signature]
+ * @typedef {Uint8Array} IdentityEntry - binary entry, e.g: [address: 5b][threshold: 1b][pointers & pubkeys]
  *
  * @typedef {string} TxAnchor 	- The path to the UTXO, ex: blockHeight:txIndex:vout
  * @typedef {string} TxId 		- The path to the transaction, ex: blockHeight:txIndex
@@ -107,7 +108,8 @@ export class Transfer {
 export class Transaction {
 	/**
 	 * @param {TxAnchor[]} inputs @param {TxOutput[]} outputs
-	 * @param {string[]} [witnesses] @param {IdentityEntry[]} [identities] The newly delaclared identities.
+	 * @param {Witness[]} [witnesses]
+	 * @param {IdentityEntry[]} [identities] The newly delaclared identities.
 	 * @param {Uint8Array | undefined} [data] Arbitrary data attached to the transaction
 	 * @param {number} [version]  @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight]
 	 * @param {Record<string, number>} [inAmountByAddress] */

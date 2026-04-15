@@ -1,11 +1,12 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
 import { QsafeHelper } from './conCrypto.mjs';
+import { HashFunctions } from './conCrypto.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
 import { conditionnals } from '../../utils/conditionals.mjs';
-import { serializer, BinaryWriter, SIZES } from '../../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
+import { serializer, BinaryWriter, SIZES } from '../../utils/serializer.mjs';
 import { Transaction, TxOutput, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
 /**
@@ -27,7 +28,7 @@ export class Transaction_Builder {
         if (conditionnals.arrayIncludeDuplicates(anchors)) throw new Error('Duplicate UTXO anchors in UTXOs');
     }
     /** @param {string} nonceHex @param {string} address @param {number} amount @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
-    static async createSolverReward(nonceHex, address, amount, identities, data) {
+    static createSolverReward(nonceHex, address, amount, identities, data) {
         if (typeof nonceHex !== 'string') throw new Error('Invalid nonceHex');
         if (typeof address !== 'string') throw new Error('Invalid address');
         if (typeof amount !== 'number') throw new Error('Invalid amount');
@@ -37,11 +38,11 @@ export class Transaction_Builder {
 		return new Transaction([nonceHex], [coinbaseOutput], undefined, identities, data);
     }
     /** @param {number} posReward @param {BlockCandidate} blockCandidate @param {string} validatorAddress @param {string} rewardAddress - who will receive the reward @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
-    static async createValidatorReward(posReward, blockCandidate, validatorAddress, rewardAddress, identities, data) {
+    static createValidatorReward(posReward, blockCandidate, validatorAddress, rewardAddress, identities, data) {
         if (typeof rewardAddress !== 'string') throw new Error('Invalid rewardAddress');
         if (data && !(data instanceof Uint8Array)) throw new Error('Invalid data');
 
-        const posHashHex = await BlockUtils.getBlockSignature(blockCandidate, true);
+        const posHashHex = BlockUtils.getBlockSignature(blockCandidate, true);
         const posInput = `${validatorAddress}:${posHashHex}`;
         const posOutput = new TxOutput(posReward, 'sig', rewardAddress);
 		return new Transaction([posInput], [posOutput], undefined, identities, data);
@@ -79,8 +80,9 @@ export class Transaction_Builder {
 	 * @param {number} qty The quanity of stakes to create
 	 * @param {string[]} [authorizedPubkeys] - the pubkeys of the validators authorized to sign for this stake (default: the senderAccount pubkey)
      * @param {boolean} useOnlyNecessaryUtxos - if true, the transaction will use only the necessary UTXOs to reach the amount */
-    static createStakingVss(senderAccount, qty, authorizedPubkeys = [senderAccount.pubKey], useOnlyNecessaryUtxos = true) {
+    static createStakingVss(senderAccount, qty, authorizedPubkeys, useOnlyNecessaryUtxos = true) {
 		if (typeof qty !== 'number' || qty <= 0) throw new Error('Invalid quantity to stake');
+		if (!authorizedPubkeys && senderAccount.pubKey) authorizedPubkeys = [senderAccount.pubKey];
 		if (!Array.isArray(authorizedPubkeys) || authorizedPubkeys.some(pubkey => typeof pubkey !== 'string')) throw new Error('Invalid authorized validator pubkeys');
 
 		const senderAddress = senderAccount.address;
@@ -166,9 +168,7 @@ export class Transaction_Builder {
 		for (const hybridKey of hybridKeys) {
 			const desc = QsafeHelper.parseHeader(hybridKey)?.desc;
 			if (!desc) throw new Error('Invalid public key format in hybridKeys');
-
-			witnessesSize += BinaryWriter.calculatePointersSize(2); // for the 2 parts of the witness (sig and pubkeyHash)
-			witnessesSize += SIZES.ed25519Signature.bytes + SIZES.pubKeyHash.bytes + desc.sigSize;
+			witnessesSize += SIZES.address.bytes + SIZES.hint.bytes + SIZES.ed25519Signature.bytes + desc.sigSize;
 		}
 
 		const identitiesPointersSize = identities.length ? BinaryWriter.calculatePointersSize(identities.length) : 0;
@@ -237,7 +237,7 @@ export class Transaction_Builder {
     // Multi-functions methods
     /** Fast method to create & sign a transaction in on call. (Only works with 1 signature, for more complex transactions use createTransaction + account.signTransaction separately)
 	 * @param {Account} senderAccount @param {number | 'max'} amount @param {string} recipientAddress @param {number} [feePerByte]  @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
-    static createAndSignTransaction(senderAccount, amount, recipientAddress, feePerByte = 1, identities = [], data) {
+    static async createAndSignTransaction(senderAccount, amount, recipientAddress, feePerByte = 1, identities = [], data) {
 		if (amount !== 'max' && (typeof amount !== 'number' || amount <= 0)) throw new Error('Invalid amount');
 
 		try {
@@ -245,16 +245,18 @@ export class Transaction_Builder {
 			const amountToSend = !inMaxAmount ? amount : Transaction_Builder.calculateMaxSendableAmount(senderAccount, feePerByte, identities, data);
 			const transfer = { recipientAddress, amount: amountToSend };
 			const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte, identities, data, inMaxAmount);
-			senderAccount.signTransaction(tx);
+			await senderAccount.signTransaction(tx);
 			return { signedTx: tx, finalFee, error: false };
         } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }
     }
 	/** @param {Transaction} transaction */
-	static getTransactionSignableString(transaction) {
-		const i = JSON.stringify(transaction.inputs);
-		const o = JSON.stringify(transaction.outputs);
-		const d = JSON.stringify((transaction.data || []).join());
-		const v = transaction.version.toString();
-		return i + o + d + v;
+	static getTransactionSignable(transaction) {
+		const inStr = JSON.stringify(transaction.inputs);
+		const outStr = JSON.stringify(transaction.outputs);
+		const idStr = JSON.stringify(transaction.identities || []);
+		const dataStr = JSON.stringify(transaction.data || []);
+		const verStr = transaction.version.toString();
+		const raw = inStr + outStr + idStr + dataStr + verStr;
+		return HashFunctions.SHA512(raw);
 	}
 }

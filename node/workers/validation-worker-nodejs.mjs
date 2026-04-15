@@ -1,12 +1,11 @@
 import { parentPort } from 'worker_threads';
-import { serializer } from '../../utils/serializer.mjs';
 import { TxValidation } from '../src/tx-validation.mjs';
 
-/** @typedef {import('./validation-worker-wrapper.mjs').WorkerTask} WorkerTask */
+/** @typedef {import('../src/tx-validation.mjs').qsafeVerifyTask} qsafeVerifyTask */
 
 // WORKER SIDE
-let abortOperationRequested = false;
 let workerId = undefined;
+let abortOperationRequested = false;
 parentPort.on('message', async (task) => {
     const id = task.id;
     workerId = workerId || id;
@@ -16,12 +15,11 @@ parentPort.on('message', async (task) => {
 		case 'signatureValidation':
 			abortOperationRequested = false; // Reset for new task
 			try {
-				/** @type {WorkerTask[]} */
+				/** @type {qsafeVerifyTask[]} */
 				const batch = task.batch;
-				for (const task of batch) { // Validate all witnesses signatures
+				for (const task of batch) // Validate all witnesses signatures
 					if (abortOperationRequested) return;
-					await TxValidation.controlAllWitnessesSignatures(task.tx, task.pubKeysByHashes);
-				}
+					else await TxValidation.controlAllWitnessesSignatures([task]);
 				
 			} catch (/**@type {any}*/ error) {
 				console.error(`[VALIDATION_WORKER ${task.id}] signatureValidation error: ${error.message}`);
