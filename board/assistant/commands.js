@@ -24,13 +24,18 @@ export class CommandInterpreter {
 		const inputValue = this.#inputValueWithoutCommandPrefix;
 		if (!inputValue) return this.a.sendMessage('Please enter a command after the "/"');
 
-		if (inputValue === 'language') return this.a.interactor.requestLanguageSelection();
-		if (inputValue === 'cancel') return this.a.interactor.cancelInteraction();
-		if (inputValue === 'copy_logs') return this.a.sendMessage('Not implemented yet, sorry'); // this.requestLogsHistory();
-		if (inputValue === 'change_password') return this.a.interactor.requestPasswordToChange();
-		if (inputValue === 'reveal_seed') return this.a.interactor.requestPasswordToExtract();
-		if (inputValue === 'reset') return this.a.interactor.reset();
+		const cmd = this.commandsCorrespondences[inputValue];
+		if (!cmd) return this.a.sendMessage('Unknown command');
+		else if (this.a.userGrade < commands[cmd].minUserGrade) return this.a.sendMessage('You do not have the required grade to execute this command');
+
+		if (cmd === 'language') return this.a.interactor.requestLanguageSelection();
+		if (cmd === 'cancel') return this.a.interactor.cancelInteraction();
+		if (cmd === 'copy_logs') return this.a.sendMessage('Not implemented yet, sorry'); // this.requestLogsHistory();
+		if (cmd === 'change_password') return this.a.interactor.requestPasswordToChange();
+		if (cmd === 'reveal_seed') return this.a.interactor.requestPasswordToExtract();
+		if (cmd === 'reset') return this.a.interactor.reset();
 		this.a.sendMessage('Unknown command');
+		console.warn('Unknown command:', cmd);
     }
 	/** Map the translated command to the original command key (e.g. "annuler" => "cancel" in French)
 	 * - Called the language change or at startup when language is loaded. */

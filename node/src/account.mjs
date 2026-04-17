@@ -14,6 +14,8 @@ import { HashFunctions, AsymetricFunctions, QsafeSigner } from './conCrypto.mjs'
 export class Account {
 	#qsafeMasterHex; 	// qsafe-sig master key in hex
 	#qsafeMaster; 		// qsafe-sig master key in bytes
+	#mayoVariant;		// The Mayo variant to use for signature generation.
+	#qsafeSigVersion;	// qsafe-sig version as string, e.g., '1'
 	prefix;				// e.g., 'C'
 	/** @type {Uint8Array | undefined} qsafe-sig */
 	hybridKey;
@@ -31,9 +33,11 @@ export class Account {
 	/** @type {number} */					totalReceived = 0;
 	/** @type {number} */					spendableBalance = 0;
 
-	/** @param {string} qsafeMasterHex @param {string} [prefix] default: 'C' */
-	constructor(qsafeMasterHex, prefix = 'C') {
+	/** @param {string} qsafeMasterHex @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {string} [prefix] default: 'C' */
+	constructor(qsafeMasterHex, mayoVariant = 'mayo1', qsafeSigVersion = '1', prefix = 'C') {
 		this.#qsafeMasterHex = qsafeMasterHex;
+		this.#mayoVariant = mayoVariant;
+		this.#qsafeSigVersion = qsafeSigVersion;
 		this.#qsafeMaster = serializer.converter.hexToBytes(qsafeMasterHex);
 		this.prefix = prefix;
 	}
@@ -42,15 +46,15 @@ export class Account {
 	get nbHistory() { return this.historyIds.length; }
 	get pubKey() { return this.hybridKeyHex; }
 
-	/** Factory method to create and initialize an Account instance. @param {string} qsafeMasterHex @param {string} [prefix] default: 'C' */
-	static async initializedAccount(qsafeMasterHex, prefix = 'C') {
-		const account = new Account(qsafeMasterHex, prefix);
+	/** Factory method to create and initialize an Account instance. @param {string} qsafeMasterHex @param {string} [prefix] default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
+	static async initializedAccount(qsafeMasterHex, prefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1') {
+		const account = new Account(qsafeMasterHex, mayoVariant, qsafeSigVersion, prefix);
 		await account.init();
 		return account;
 	}
 
 	async init() {
-		this.signer = await QsafeSigner.create();
+		this.signer = await QsafeSigner.create(this.#mayoVariant, this.#qsafeSigVersion);
 		const { hybridKey } = this.signer.loadMasterKey(this.#qsafeMaster.slice(0, 32));
 		this.hybridKey = hybridKey;
 		this.hybridKeyHex = serializer.converter.bytesToHex(hybridKey);

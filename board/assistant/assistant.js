@@ -27,7 +27,7 @@ import { CommandInterpreter } from './commands.js';
 export class Assistant {
 	/** The user knowledge level, used to unlock more complex commands in the assistant.
 	 * - 0 = Newbie, 1 = Intermediate, 2 = Expert */
-	userGrade = 0;
+	userGrade = 2; // DEBUG, initial: 0;
     isFirstMessage = true;
 	isReady = false;
     activeInput = 'idle';
@@ -135,7 +135,6 @@ export class Assistant {
         messageDiv.classList.add(sender);
 
         const needObfuscate = sender === 'user' && this.eHTML.input.type === 'password';
-        //messageDiv.textContent = needObfuscate ? this.#obfuscateString(message) : message;
         const secureText = message.replace(/&/g, "&amp;").replace(/</g, "&lt;")
             .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 

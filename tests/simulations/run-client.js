@@ -28,7 +28,7 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 const clientStorage = new ContrastStorage(seed);
 if (clearOnStart) clientStorage.clear(); // start fresh
 const clientWallet = new Wallet(seed);
-await clientWallet.deriveAccounts(2 + Math.max(nbReceipients, nbOfSenders), 'C', clientStorage);
+await clientWallet.deriveAccounts(2 + Math.max(nbReceipients, nbOfSenders), 'C', 'mayo1', '1', clientStorage); // derive all accounts we will need for the test (main account + senders + receipients)
 
 const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
 const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps, controllerPort: false });
@@ -79,9 +79,9 @@ const trySpamming = async (block) => {
         const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(address);
         if (!ledger?.ledgerUtxos) return;
         clientNode.account.setBalanceAndUTXOs(clientNode.account.balance, ledger.ledgerUtxos);
-
+		
 		const identityStore = clientNode.blockchain.identityStore;
-		const identityEntries = [];
+		const identityEntries = []; 
 		const transfers = [];
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
@@ -108,11 +108,10 @@ const trySpamming = async (block) => {
         const { tx } = Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries);
         const signedTx = await clientNode.account.signTransaction(tx);
         if (!signedTx) return;
-        try {
-            clientNode.p2p.broadcast(serializer.serialize.transaction(signedTx), { topic: 'transaction' });
-            console.log(`[SPAMMER] block #${block.index} — multi-output tx (${nbReceipients} outputs)`);
-        } catch (/** @type {any} */ error) { console.error('[SPAMMER] multi-output failed:', error.message); }
-        return;
+
+		const s = serializer.serialize.transaction(signedTx);
+		clientNode.p2p.broadcast(s, { topic: 'transaction' });
+		console.log(`[SPAMMER] block #${block.index} — multi-output tx (${nbReceipients} outputs) - ${identityEntries.length} identity entries.`);
     }
 
     // ODD BLOCKS: flood single-output txs
@@ -126,21 +125,15 @@ const trySpamming = async (block) => {
 		if (!ledger?.ledgerUtxos) continue;
 		sender.setBalanceAndUTXOs(sender.balance, ledger.ledgerUtxos);
 
-		const signedTx2 = await Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1)?.signedTx;
+		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1))?.signedTx;
 		if (signedTx2) txs.push(signedTx2);
 	}
 
-	if (txs.length > 0) console.log(`[SPAMMER] block #${block.index} — prepared ${txs.length} single-output txs to send`);
-	let nbSent = 0;
-	for (const tx of txs) { // FLOOD!
-		try {
-			const s = serializer.serialize.transaction(tx);
-			clientNode.p2p.broadcast(s, { topic: 'transaction' });
-			nbSent++;
-		} catch (/** @type {any} */ error) { console.error('[SPAMMER] Failed to push transaction to mempool:', error.message); }
-	}
+	if (txs.length === 0) return; // no tx to send
+	else console.log(`[SPAMMER] block #${block.index} — prepared ${txs.length} single-output txs to send`);
 	
-	if (nbSent > 0) console.log(`[SPAMMER] block #${block.index} — sent ${nbSent} single-output txs`);
+	// SPEND EVERYTHING AT ONCE
+	clientNode.p2p.broadcast(serializer.serialize.transactions(txs), { topic: 'transactions' });
 }
 
 if (isStaker) clientNode.on('onBlockConfirmed', tryStaking);

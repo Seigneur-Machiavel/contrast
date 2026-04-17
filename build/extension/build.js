@@ -18,6 +18,7 @@ const FILES = [
 	{ in: 'build/extension/manifest.json', out: 'manifest.json' },
 	{ in: 'build/extension/background.js', out: 'background.js' },
 	{ in: 'node_modules/hive-p2p/dist/browser/hive-p2p.min.js', out: 'hive-p2p.min.js' },
+	{ in: 'node_modules/@pinkparrot/qsafe-sig/dist/qsafe-sig.browser.min.js', out: 'qsafe-sig.browser.min.js' },
 
 	{ in: 'external-libs/d3.v7.min.js' },
 	{ in: 'external-libs/anime.min.js' },
@@ -28,26 +29,31 @@ const FILES = [
 	{ in: 'config/blockchain-settings.mjs' },
 	{ in: 'miniLogger/mini-logger.mjs' },
 
-	{ in: 'node/src/sync.mjs' },
+	{ in: 'node/src/account.mjs' },
 	{ in: 'node/src/block.mjs' },
-	{ in: 'node/src/wallet.mjs' },
 	{ in: 'node/src/conCrypto.mjs' },
+	{ in: 'node/src/sync.mjs' },
 	{ in: 'node/src/transaction.mjs' },
-	{ in: 'node/src/tx-validation.mjs' },
 	{ in: 'node/src/tx-rule-checkers.mjs' },
+	{ in: 'node/src/tx-validation.mjs' },
+	{ in: 'node/src/wallet.mjs' },
 
-	{ in: 'types/sync.mjs' },
-	{ in: 'types/block.mjs' },
 	{ in: 'types/address.mjs' },
-	{ in: 'types/validation.mjs' },
+	{ in: 'types/block.mjs' },
+	{ in: 'types/sync.mjs' },
 	{ in: 'types/transaction.mjs' },
+	{ in: 'types/validation.mjs' },
 
-	{ in: 'utils/currency.mjs' },
-	{ in: 'utils/serializer.mjs' },
-	{ in: 'utils/networking.mjs' },
+	{ in: 'utils/binary-helpers.mjs' },
+	{ in: 'utils/common.mjs' },
 	{ in: 'utils/conditionals.mjs' },
+	{ in: 'utils/currency.mjs' },
+	{ in: 'utils/cypher.mjs' },
 	{ in: 'utils/front-storage.mjs' },
-	{ in: 'utils/progress-logger.mjs' }
+	{ in: 'utils/networking.mjs' },
+	{ in: 'utils/progress-logger.mjs' },
+	{ in: 'utils/serializer-schema.mjs' },
+	{ in: 'utils/serializer.mjs' },
 ];
 const FOLDERS = [
 	{ in: 'board' },
@@ -90,6 +96,6 @@ archive.directory(path.resolve(DIST_DIR), false);
 await archive.finalize();
 
 // REMOVE DIST FOLDER
-fs.rmSync(DIST_DIR, { recursive: true });
+//fs.rmSync(DIST_DIR, { recursive: true });
 
 console.log('✓ Extension build completed');

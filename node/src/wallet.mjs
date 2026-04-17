@@ -11,16 +11,18 @@ import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
 * @typedef {import("../../utils/front-storage.mjs").FrontStorage} FrontStorage */
 
 class GeneratedAccount {
-	/** @param {string} address @param {string} seedModifierHex */
-	constructor(address, seedModifierHex) {
+	/** @param {string} address @param {string} seedModifierHex @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
+	constructor(address, seedModifierHex, mayoVariant = 'mayo1', qsafeSigVersion = '1') {
 		this.address = address;
+		this.mayoVariant = mayoVariant;
+		this.qsafeSigVersion = qsafeSigVersion;
 		this.seedModifierHex = seedModifierHex;
 	};
 }
 class EncryptedGeneratedAccount extends GeneratedAccount {
-	/** @param {string} address @param {string} seedModifierHex @param {string} iv */
-	constructor(address, seedModifierHex, iv) {
-		super(address, seedModifierHex);
+	/** @param {string} address @param {string} seedModifierHex @param {string} iv @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
+	constructor(address, seedModifierHex, iv, mayoVariant = 'mayo1', qsafeSigVersion = '1') {
+		super(address, seedModifierHex, mayoVariant, qsafeSigVersion);
 		this.iv = iv;
 	}
 }
@@ -67,8 +69,8 @@ export class Wallet {
 		await frontStorage.save(`accounts-${this.#walletIdentifier()}`, encryptedAccounts);
 	}
 	/** Derive accounts from master seed. (If storage is provide: load and save accounts)
-	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
-    async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', contrastStorage, frontStorage) {
+	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
+    async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1', contrastStorage, frontStorage) {
 		if (contrastStorage) await this.loadAccountsFromStorage(contrastStorage);
 		if (frontStorage) await this.loadAccountsFromFrontStorage(frontStorage);
 
@@ -81,7 +83,7 @@ export class Wallet {
 			// from saved account
 			const { address, seedModifierHex } = this.accountsGenerated[i];
 			const qsafeMasterHex = HashFunctions.SHA512(this.#masterHex + seedModifierHex).hashHex;
-			const account = await Account.initializedAccount(qsafeMasterHex, addressPrefix);
+			const account = await Account.initializedAccount(qsafeMasterHex, addressPrefix, mayoVariant, qsafeSigVersion);
 			if (address !== account.address) throw new Error('Loaded account address does not match derived address');
 			this.accounts.push(account);
         }
@@ -121,10 +123,10 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
 		
         return { derivedAccounts: this.accounts, avgIterations: avgIterations };
     }
-	/** @param {string} [addressPrefix] - default: 'C' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
-	async deriveOneAccount(addressPrefix = 'C', contrastStorage, frontStorage) {
+	/** @param {string} [addressPrefix] - default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
+	async deriveOneAccount(addressPrefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1', contrastStorage, frontStorage) {
 		const accountsBefore = this.accounts.length;
-		const result = await this.deriveAccounts(accountsBefore + 1, addressPrefix, contrastStorage, frontStorage);
+		const result = await this.deriveAccounts(accountsBefore + 1, addressPrefix, mayoVariant, qsafeSigVersion, contrastStorage, frontStorage);
 		if (!result.derivedAccounts || result.derivedAccounts.length <= accountsBefore) return null;
 		return result.derivedAccounts[accountsBefore];
 	}
@@ -132,8 +134,8 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
 	get stakedBalance() { return this.accounts.reduce((sum, account) => sum + account.filteredBalance(Infinity, [], ['sigOrSlash']), 0); }
 
 	// INTERNALS
-	/** @param {number} accountIndex @param {string} [prefix] default 'C' */
-    async #tryDerivationUntilValidAccount(accountIndex = 0, prefix = 'C') {
+	/** @param {number} accountIndex @param {string} [prefix] default 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
+    async #tryDerivationUntilValidAccount(accountIndex = 0, prefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1') {
         // To be sure we have enough iterations, but avoid infinite loop
         const maxIterations = 65_536;
         const seedModifierStart = accountIndex * maxIterations;
@@ -141,8 +143,8 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
             const seedModifier = seedModifierStart + i;
             const seedModifierHex = seedModifier.toString(16).padStart(12, '0'); // padStart(12, '0') => 48 bits (6 bytes), maxValue = 281 474 976 710 655
 			const qsafeMasterHex = HashFunctions.SHA512(this.#masterHex + seedModifierHex).hashHex;
-			const account = await Account.initializedAccount(qsafeMasterHex, prefix);
-			this.accountsGenerated.push({ address: account.address, seedModifierHex });
+			const account = await Account.initializedAccount(qsafeMasterHex, prefix, mayoVariant, qsafeSigVersion);
+			this.accountsGenerated.push({ address: account.address, seedModifierHex, mayoVariant, qsafeSigVersion });
 			return { account, iterations: i };
         }
 

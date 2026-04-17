@@ -1,7 +1,7 @@
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 
 /**
- * @typedef { 'PushTx' | 'DigestBlock' | 'NewCandidate' | 'Sync' } TaskType
+ * @typedef { 'PushTxs' | 'DigestBlock' | 'NewCandidate' | 'Sync' } TaskType
  */
 
 export class TaskQueue {

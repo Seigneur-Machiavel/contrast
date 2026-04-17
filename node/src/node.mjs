@@ -9,7 +9,7 @@ import { Blockchain } from './blockchain.mjs';
 import { ADDRESS } from "../../types/address.mjs";
 import { NodeController } from "./node-controller.mjs";
 import { Transaction_Builder } from "./transaction.mjs";
-import { serializer } from "../../utils/serializer.mjs";
+import { BinaryReader, serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
@@ -51,15 +51,15 @@ export async function createContrastNode(options = { bootstraps: [] }) {
 }
 
 export class ContrastNode {
-	/** @type {Object<string, Function>} */
+	/** @type {Record<string, Function>} */
 	callbacks = {}; // Callbacks used by the script who start the node to hook their functions (no sensitive data)
 	controller;		// Callbacks to manage the node and display info via local WebSocket (can imply sensitive data)
 	running = true;
 
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
-	/** @type {{ vAddress: string | null, vPubkeys: string[] | null, sAddress: string | null, sPubkeys: string[] | null }} */
-	rewardsInfo = { vAddress: null, vPubkeys: null, sAddress: null, sPubkeys: null };
+	/** @type {{ vAddress: string | undefined, vPubkeys: string[] | undefined, sAddress: string | undefined, sPubkeys: string[] | undefined }} */
+	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, sAddress: undefined, sPubkeys: undefined };
 
 	mainStorage; blockchain;
 	taskQueue; memPool; p2p;
@@ -94,7 +94,8 @@ export class ContrastNode {
 
 		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
-		p2pNode.gossip.on('transaction', this.#onTransactionReceived);
+		p2pNode.gossip.on('transaction', this.#onTransaction);
+		p2pNode.gossip.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
 		p2pNode.messager.on('transactions_request', this.#onTransactionsRequest);
 		p2pNode.messager.on('blocks_timestamps_request', this.#onBlocksTimestampsRequest);
@@ -117,7 +118,7 @@ export class ContrastNode {
 		this.controller?.sendEncryptedMessage('stateUpdate', newState);
     }
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
-	async start(wallet, startFromScratch = false) {
+	async start(wallet) {
 		this.logger.log(`Starting Contrast node...`, (m, c) => console.log(m, c)); // control the clock
 		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
@@ -137,6 +138,9 @@ export class ContrastNode {
 	}
 	async stop() {
 		if (this.verb >= 1) this.logger.log(`Stopping Contrast node...`, (m, c) => console.log(m, c));
+		for (const timeout in this.timeouts) if (this.timeouts[timeout]) clearTimeout(this.timeouts[timeout]);
+		this.p2p.destroy();
+		this.running = false;
 	}
 	async restart() {
 		if (this.verb >= 1) this.logger.log(`Restarting Contrast node...`, (m, c) => console.log(m, c));
@@ -170,7 +174,11 @@ export class ContrastNode {
 			this.p2p.broadcast(serialized, { topic: 'block_candidate' });
 			this.callbacks.onBroadcastNewCandidate?.(myCandidate);
 			this.controller?.sendEncryptedMessage('newBlockCandidate', myCandidate);
-		} catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(error.stack, (m, c) => console.error(m, c)); }
+		} catch (/** @type {any} */ error) {
+			if (this.verb >= 2)
+				if (error.message.startsWith('Failed')) this.logger.log(error.stack, (m, c) => console.error(m, c));
+				else this.logger.log(error.message, (m, c) => console.warn(m, c));
+		}
 		
 		this.updateState("idle", "creating block candidate");
 	}
@@ -193,10 +201,11 @@ export class ContrastNode {
 				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'NewCandidate') 	// @ts-ignore: task.data = BlockCandidate
 			try {
-				const isLegitimate = await BlockValidation.validateLegitimacy(this, task.data, 'candidate');
+				const candidate = serializer.deserialize.blockCandidate(task.data);
+				const isLegitimate = await BlockValidation.validateLegitimacy(this, candidate, 'candidate');
 				if (!isLegitimate) throw new Error('Received block candidate is not legitimate');
-				if (this.blockchain.currentHeight + 1 !== task.data.index) return;
-				this.solver.updateBestCandidate(task.data);
+				if (this.blockchain.currentHeight + 1 !== candidate.index) return; // check again.
+				this.solver.updateBestCandidate(candidate);
 			} catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[P2P->SOLVER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
 		else if (task.type === 'DigestBlock') 	// @ts-ignore: task.data = BlockFinalizedSerialized
 			await this.blockchain.digestFinalizedBlock(this, task.data);
@@ -204,22 +213,41 @@ export class ContrastNode {
 	/** @param {GossipMessage} msg */
 	#onBlockCandidate = async (msg) => {
 		const { senderId, data, HOPS } = msg;
-		try { // ignore block candidates that are not the next block
-			if (!(data instanceof Uint8Array)) throw new Error('Invalid block candidate data type');
-			const block = serializer.deserialize.blockCandidate(data);
-			if (this.blockchain.currentHeight + 1 === block.index) this.taskQueue.push('NewCandidate', block);
-		} catch (/** @type {any} */ error) {
-			this.logger.log(`[SYNC] -onBlockCandidate- Error deserializing block candidate from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+		if (!(data instanceof Uint8Array)) {
+			this.logger.log(`[SYNC] -onBlockCandidate- Invalid block candidate data type from ${senderId}`, (m, c) => console.error(m, c));
+			return;
+		}
+
+		const index = serializer.converter.bytes4ToNumber(new Uint8Array(data.slice(2, 6)));
+		if (index === this.blockchain.currentHeight + 1) this.taskQueue.push('NewCandidate', data);
+		else this.logger.log(`[SYNC] -onBlockCandidate- Received block candidate with invalid index ${index} from ${senderId} (current height: ${this.blockchain.currentHeight})`, (m, c) => console.warn(m, c));
 	}
 	/** @param {GossipMessage} msg */
 	#onBlockFinalized = (msg) => {
 		const { senderId, data, HOPS } = msg;
-		this.taskQueue.push('DigestBlock', data);
+		if (data instanceof Uint8Array) this.taskQueue.push('DigestBlock', data);
+		else this.logger.log(`[SYNC] -onBlockFinalized- Invalid block finalized data type from ${senderId}`, (m, c) => console.error(m, c));
 	}
 	/** @param {GossipMessage} msg */
-	#onTransactionReceived = (msg) => {
+	#onTransaction = (msg) => {
 		const { senderId, data, HOPS } = msg;
-		this.taskQueue.push('PushTx', data);
+		try {
+			if (!(data instanceof Uint8Array)) throw new Error('Invalid transaction data type from ' + senderId);
+			this.taskQueue.push('PushTxs', [data]);
+		} catch (/** @type {any} */ error) { this.logger.log(`[P2P] -onTransaction- Error deserializing transaction from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	}
+	/** @param {GossipMessage} msg */
+	#onTransactions = (msg) => {
+		const { senderId, data, HOPS } = msg;
+		try {
+			if (!(data instanceof Uint8Array)) throw new Error('Invalid transactions data type from ' + senderId);
+			const r = new BinaryReader(data);
+			const { pointers, endOfLastDataChunk } = r.readPointers('pointer32');
+			if (pointers.length > BLOCKCHAIN_SETTINGS.maxTransactionsBatchSize) throw new Error(`Too many transactions in batch from ${senderId} (count: ${pointers.length}, max: ${BLOCKCHAIN_SETTINGS.maxTransactionsBatchSize})`);
+			const txs = r.readFollowingThePointers(pointers, endOfLastDataChunk	);
+			if (!r.isReadingComplete) throw new Error('Invalid chunks in transactions');
+			this.taskQueue.push('PushTxs', txs);
+		} catch (/** @type {any} */ error) { this.logger.log(`[P2P] -onTransactions- Error deserializing transactions from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */
 	#onAddressLedgerRequest = async (msg) => {

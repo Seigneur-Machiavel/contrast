@@ -23,7 +23,7 @@ const assistantCommands = {
 	},
 	reveal_seed: {
 		en: { key: 'reveal_seed', description: 'Reveal your private seed' },
-		fr: { key: 'revealer_grain', description: 'Révéler votre graine privée' },
+		fr: { key: 'reveler_graine', description: 'Révéler votre graine privée' },
 	},
 	reset: {
 		en: { key: 'reset', description: 'Delete your private key(seed) and/or all data' },

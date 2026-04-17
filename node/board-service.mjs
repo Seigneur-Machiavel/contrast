@@ -31,7 +31,7 @@ const start = args.includes('--start') || args.includes('-s');
 const hostPubkey = args.includes('-hpk') ? nextArg('-hpk') : undefined;
 
 const SERVICE_PORT = 27262;
-const CSP_BASE = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline';`;
+const CSP_BASE = `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval';`;
 const CSP_CONNECT = [
     `connect-src 'self'`,
     `https://time.cloudflare.com`,

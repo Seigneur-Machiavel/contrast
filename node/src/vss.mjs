@@ -76,10 +76,10 @@ export class Vss {
 		const round = this.blockLegitimaciesByAddress.get(blockHash);
 		if (!round) return null;
 
-		/** @type {Array<{address: string, pubkeys: Set<string>}>} */ const result = [];
-		for (let i = 0; i < round.legitimacies.legitimacies.length; i++)
-			result.push({ address: round.owners[i], pubkeys: round.legitimacies.legitimacies[i] });
-		return result;
+		//** @type {Array<{address: string, pubkeys: Set<string>}>} */ const result = [];
+		//for (let i = 0; i < round.legitimacies.legitimacies.length; i++)
+		//	result.push({ address: round.owners[i], pubkeys: round.legitimacies.legitimacies[i] });
+		return round.owners.map((owner, index) => ({ address: owner, pubkeys: round.legitimacies.legitimacies[index] }));
 	}
 	reset() {
 		this.vssStorage.reset();
@@ -87,7 +87,8 @@ export class Vss {
 	}
 
 	// INTERNAL METHODS
-	/** @param {BlockFinalized} block @returns {string[]} */
+	
+	/** @param {BlockFinalized} block */
 	#extractBlockStakes(block) {
 		const newStakeAnchors = [];
 		for (let txId = 2; txId < block.Txs.length; txId++) // skip coinbase and pos fee Txs
@@ -97,7 +98,7 @@ export class Vss {
 				if (amount !== BLOCKCHAIN_SETTINGS.stakeAmount) throw new Error(`Invalid stake amount in block #${block.index}, Tx #${txId}, Vout #${voudId}`);
 				newStakeAnchors.push(`${block.index}:${txId}:${voudId}`);
 			}
-
+		
 		return newStakeAnchors;
 	}
 	/** @param {number} index */
@@ -132,8 +133,10 @@ export class Vss {
 		/** @type {string[]} */ const owners = [];
 		const legitimacies = new RoundLegitimacies();
 		const maxRange = this.vssStorage.stakesCount;
-		if (maxRange < BLOCKCHAIN_SETTINGS.validatorsPerRound) // not enough stakes => empty round
-			{ this.blockLegitimaciesByAddress.set(blockHash, { legitimacies, owners }); return { legitimacies, owners }; }
+		if (maxRange < BLOCKCHAIN_SETTINGS.validatorsPerRound) { // not enough stakes => empty round
+			this.blockLegitimaciesByAddress.set(blockHash, { legitimacies, owners });
+			return { legitimacies, owners };
+		}
 
 		let leg = 0;
 		for (let i = 0; i < maxTry; i++) {

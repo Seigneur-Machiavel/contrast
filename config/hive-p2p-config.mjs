@@ -41,6 +41,8 @@ export const HIVE_P2P_CONFIG = {
 			'253': 'sync_status',
 			transaction: 252,
 			'252': 'transaction',
+			transactions: 251,
+			'251': 'transactions',
 		},
 	}
 }

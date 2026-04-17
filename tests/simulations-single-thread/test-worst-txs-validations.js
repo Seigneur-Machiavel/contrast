@@ -21,8 +21,8 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 // CONFIG
 function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
-const domain = undefined; // args.includes('--local') ? 'localhost' : '0.0.0.0';
-const nodePort = undefined; //args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
+const domain = 'localhost'; // args.includes('--local') ? 'localhost' : '0.0.0.0';
+const nodePort = 27260; //args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const clearOnStart = false; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
@@ -37,7 +37,7 @@ const storage = new ContrastStorage(seed);
 if (clearOnStart) storage.clear(); // start fresh
 
 const wallet = new Wallet(seed);
-await wallet.deriveAccounts(2 + nbReceipients, 'C', storage);
+await wallet.deriveAccounts(2 + nbReceipients, 'C', 'mayo2', '1', storage); // derive all accounts we will need for the test (main account + senders + receipients)
 
 const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect to
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed);
@@ -95,9 +95,9 @@ const onBlockConfirmed = async (block) => {
 	
 		try {
 			const s = serializer.serialize.transaction(signedTx);
-			if (node.p2p.peerStore.neighborsList.length > 0) node.p2p.broadcast(s, { topic: 'transaction' });
-			else await node.memPool.pushTransaction(node, s);
-			console.log(`Sent 1 multi output transaction with ${tx.outputs.length} outputs.`);
+			node.p2p.broadcast(s, { topic: 'transaction' });
+			await node.memPool.pushTransaction(node, s);
+			console.log(`Sent 1 multi output transaction with ${tx.outputs.length} outputs. (${identityEntries.length} identity entries)`);
 		} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.stack); }
 		
 		return; // only one multi output tx every 2 blocks
@@ -114,16 +114,12 @@ const onBlockConfirmed = async (block) => {
 		if (signedTx2) txs.push(signedTx2);
 	}
 
-	let nbSent = 0;
-	for (const tx of txs) { // FLOOD!
-		try {
-			const s = serializer.serialize.transaction(tx);
-			if (node.p2p.peerStore.neighborsList.length > 0) node.p2p.broadcast(s, { topic: 'transaction' });
-			else await node.memPool.pushTransaction(node, s);
-			nbSent++;
-		} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.stack); }
-	}
+	if (txs.length === 0) return; // no tx to send
+	else console.log(`Prepared ${txs.length} single output transactions to send.`);
 
-	if (nbSent > 0) console.log(`Sent ${nbSent}/${nbOfSenders} single output transactions.`);
+	// SPEND EVERYTHING AT ONCE
+	node.p2p.broadcast(serializer.serialize.transactions(txs), { topic: 'transactions' });
+	for (const tx of txs) // if no peer to broadcast to, push them one by one to mempool
+		await node.memPool.pushTransaction(node, serializer.serialize.transaction(tx));
 }
 node.on('onBlockConfirmed', onBlockConfirmed);

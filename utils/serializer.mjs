@@ -259,6 +259,16 @@ export const serializer = {
 			
 			return w.getBytesOrThrow(`Transaction serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
+		/** @param {Transaction[]} txs - Validator or solver tx excluded. */
+		transactions(txs) {
+			const serializedTxs = [];
+			for (const tx of txs) serializedTxs.push(this.transaction(tx));
+			const pointersSize = BinaryWriter.calculatePointersSize(serializedTxs.length, 'pointer32');
+			const totalTxsSize = serializedTxs.reduce((sum, tx) => sum + tx.length, 0);
+			const w = new BinaryWriter(pointersSize + totalTxsSize);
+			w.writePointersAndDataChunks(serializedTxs, 'pointer32');
+			return w.getBytesOrThrow(`Transactions serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
 		/** @param {BlockFinalized | BlockCandidate} blockData @param {'finalized' | 'candidate'} [mode] default: finalized */
         block(blockData, mode = 'finalized') {
             /** @type {Uint8Array<ArrayBuffer>[]} */
@@ -339,20 +349,23 @@ export const serializer = {
 		},
 		/** @param {Array<{address: string, pubkeys: Set<string>}>} roundsLegitimacies */
 		roundsLegitimaciesResponse(roundsLegitimacies) {
-			let totalSize = 2; // nb of entries (2)
+			let entries = [];
 			for (const entry of roundsLegitimacies) {
-				totalSize += SIZES.address.bytes; // address
-				totalSize += 2; // nb of pubkeys (2)
-				totalSize += entry.pubkeys.size * SIZES.pubKey.bytes; // pubkeys
-			}
-			const w = new BinaryWriter(totalSize);
-			w.writeBytes(converter.numberTo2Bytes(roundsLegitimacies.length));
-			for (const entry of roundsLegitimacies) {
+				let pubKeysBytes = [];
+				for (const pubkey of entry.pubkeys) pubKeysBytes.push(converter.hexToBytes(pubkey));
+				
+				const pointersSize = BinaryWriter.calculatePointersSize(pubKeysBytes.length);
+				const w = new BinaryWriter(SIZES.address.bytes + pointersSize + pubKeysBytes.reduce((sum, bytes) => sum + bytes.length, 0));
 				w.writeBytes(ADDRESS.B58_TO_BYTES(entry.address));
-				w.writeBytes(converter.numberTo2Bytes(entry.pubkeys.size));
-				for (const pubkey of entry.pubkeys) w.writeBytes(converter.hexToBytes(pubkey));
+				w.writePointersAndDataChunks(pubKeysBytes);
+				entries.push(w.getBytesOrThrow(`Round legitimacy entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`));
 			}
-			return w.getBytes();
+
+			const pointersSize = BinaryWriter.calculatePointersSize(entries.length);
+			const totalSize = pointersSize + entries.reduce((sum, bytes) => sum + bytes.length, 0);
+			const w = new BinaryWriter(totalSize);
+			w.writePointersAndDataChunks(entries);
+			return w.getBytesOrThrow(`Rounds legitimacies response serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
 		/** @param {Record<TxId, Transaction>} txs @param {Record<TxAnchor, UTXO>} impliedUtxos */
 		transactionsResponse(txs, impliedUtxos) {
@@ -547,6 +560,15 @@ export const serializer = {
 			if (!r.isReadingComplete) throw new Error('Transaction is not fully deserialized');
 			return new Transaction(inputs, outputs, witnesses, identities, data, version);
 		},
+		/** @param {Uint8Array} serializedTxs - Validator and solver txs should be excluded */
+		transactions(serializedTxs) {
+			const r = new BinaryReader(serializedTxs);
+			const txs = r.readPointersAndExtractDataChunks('pointer32');
+			const transactions = [];
+			for (const tx of txs) transactions.push(this.transaction(tx));
+			if (!r.isReadingComplete) throw new Error('Transactions are not fully deserialized');
+			return transactions;
+		},
 		/** @param {Uint8Array} serializedBlock @param {'finalized' | 'candidate'} [mode] default: finalized */
 		blockData(serializedBlock, mode = 'finalized') { // local use only
 			const r = new BinaryReader(serializedBlock);
@@ -636,13 +658,14 @@ export const serializer = {
 		roundsLegitimaciesResponse(serializedResponse) {
 			const r = new BinaryReader(serializedResponse);
 			const roundsLegitimacies = [];
-			const nbOfEntries = converter.bytes2ToNumber(r.read(2));
-			for (let i = 0; i < nbOfEntries; i++) {
-				const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
-				const nbOfPubkeys = converter.bytes2ToNumber(r.read(2));
-				const pubkeys = new Set();
-				for (let j = 0; j < nbOfPubkeys; j++) pubkeys.add(converter.bytesToHex(r.read(SIZES.pubKey.bytes)));
-				roundsLegitimacies.push({ address, pubkeys });
+			const entries = r.readPointersAndExtractDataChunks();
+			for (const entry of entries) {
+				const entryReader = new BinaryReader(entry);
+				const address = ADDRESS.BYTES_TO_B58(entryReader.read(SIZES.address.bytes));
+				const pubKeys = new Set();
+				const pubKeysBytes = entryReader.readPointersAndExtractDataChunks();
+				for (const pubKeyBytes of pubKeysBytes) pubKeys.add(converter.bytesToHex(pubKeyBytes));
+				roundsLegitimacies.push({ address, pubKeys });
 			}
 			return roundsLegitimacies;
 		},
