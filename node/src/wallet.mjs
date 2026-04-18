@@ -96,7 +96,7 @@ export class Wallet {
 		for (let i = nbOfExistingAccounts; i < nbOfAccounts; i++) {
             if (this.accounts[i]) continue; // already derived account (should not append here)
             
-			const derivationResult = await this.#tryDerivationUntilValidAccount(i, addressPrefix);
+			const derivationResult = await this.#tryDerivationUntilValidAccount(i, addressPrefix, mayoVariant, qsafeSigVersion);
             if (!derivationResult) {
                 const derivedAccounts = this.accounts.slice(nbOfExistingAccounts).length;
                 this.miniLogger.log(`Failed to derive account (derived: ${derivedAccounts})`, (m, c) => console.info(m, c));

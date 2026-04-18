@@ -1,7 +1,7 @@
 export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     // BLOCK
     targetBlockTime: 20_000, 		// 60_000, // 1 min
-    maxBlockSize: 200_000, 			// 102_400=100KB, 200_000=~200KB
+    maxBlockSize: 204_800, 			// 102_400=100KB, 204_800=~200KB
 
     // DISTRIBUTION
     // 1 000 000mC = 1 Contrast
@@ -24,30 +24,6 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
 
     // VSS (STAKING)
 	validatorsPerRound: 10, 	// maximum number of validators per round
-    stakeAmount: 10_000_000, 	// 10_000_000 mC = 10 C
-};
-
-export const BLOCKCHAIN_SETTINGS_120SEC = { // DEPRECATED
-    // BLOCK
-    targetBlockTime: 10_000, // 120_000, // 2 min
-    maxBlockSize: 200_000, // ~200KB
-    maxTransactionSize: 180_000, // ~180KB
-    
-    // DISTRIBUTION
-    // 1 000 000mC = 1 Contrast
-    // In the code we only speak in mC, but in the UI we will use the Contrast unit
-    rewardMagicNb1: 102_334_155, // Fibonacci n+2
-    rewardMagicNb2: 63_245_986, // Fibonacci n+1
-    blockReward: 102_334_155 - 63_245_986, // Fibonacci n = 39_088_169
-    minBlockReward: 1,
-    halvingInterval: 262_980, // 1 year at 2 min per block
-    maxSupply: 27_000_000_000_000, // last 6 zeros are considered as decimals ( can be stored as 8 bytes )
-
-    // TRANSACTION
-    minTransactionFeePerByte: 1,
-    unspendableUtxoAmount: 200,
-
-    // VSS (STAKING)
     stakeAmount: 10_000_000, 	// 10_000_000 mC = 10 C
 };
 
