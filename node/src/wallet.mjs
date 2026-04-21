@@ -4,7 +4,7 @@ import { ADDRESS } from '../../types/address.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ProgressLogger } from '../../utils/progress-logger.mjs';
-import { HashFunctions, AsymetricFunctions } from './conCrypto.mjs';
+import { HashFunctions, AsymetricFunctions, randomBytes } from './conCrypto.mjs';
 
 /**
 * @typedef {import("../../storage/storage.mjs").ContrastStorage} ContrastStorage
@@ -19,18 +19,14 @@ class GeneratedAccount {
 		this.seedModifierHex = seedModifierHex;
 	};
 }
-class EncryptedGeneratedAccount extends GeneratedAccount {
-	/** @param {string} address @param {string} seedModifierHex @param {string} iv @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
-	constructor(address, seedModifierHex, iv, mayoVariant = 'mayo1', qsafeSigVersion = '1') {
-		super(address, seedModifierHex, mayoVariant, qsafeSigVersion);
-		this.iv = iv;
-	}
-}
 
 export class Wallet {
     #masterHex = '';
 	converter = serializer.converter;
     miniLogger = new MiniLogger('wallet');
+	get walletIdentifier() { return HashFunctions.SHA512(this.#masterHex).hashHex.substring(0, 8); }
+	get balance() { return this.accounts.reduce((sum, account) => sum + account.balance, 0); }
+	get stakedBalance() { return this.accounts.reduce((sum, account) => sum + account.filteredBalance(Infinity, [], ['sigOrSlash']), 0); }
 
     /** @type {Account[]} */			accounts = [];
     /** @type {GeneratedAccount[]} */	accountsGenerated = [];
@@ -39,40 +35,33 @@ export class Wallet {
     constructor(masterHex) { this.#masterHex = masterHex; }
 
 	// API
-	static generateRandomMasterHex() {
-		const randomBytes = new Uint8Array(24);
-		crypto.getRandomValues(randomBytes);
-		return serializer.converter.bytesToHex(randomBytes);
+	static generateRandomMasterHex(bytesLength = 32) {
+		return serializer.converter.bytesToHex(randomBytes(bytesLength));
 	}
-	/** @param {ContrastStorage} contrastStorage */
-	async loadAccountsFromStorage(contrastStorage) {
-		/** @type {EncryptedGeneratedAccount[] | null} */
-		const accountsGeneratedEncrypted = contrastStorage.loadJSON(`accounts-${contrastStorage.localIdentifier}`);
-		if (!accountsGeneratedEncrypted) return false;
-		await this.#loadAccounts(accountsGeneratedEncrypted);
+	/** @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
+	async loadAccountsFromStorage(contrastStorage, frontStorage) {
+		const key = `accounts-${this.walletIdentifier}`;
+		if (!contrastStorage && !frontStorage) throw new Error('No storage provided');
+
+		/** @type {GeneratedAccount[] | null} */ // @ts-ignore
+		const accountsGenerated = contrastStorage ? contrastStorage.loadJSON(key) : await frontStorage.load(key);
+		if (!accountsGenerated?.length) return false;
+
+		// Derive all loaded accounts (fast as they are saved)
+		this.accountsGenerated = accountsGenerated;
+		await this.deriveAccounts(this.accountsGenerated.length, 'C', 'mayo1', '1', contrastStorage, frontStorage);
 	}
-	/** @param {ContrastStorage} contrastStorage */
-	async saveAccountsToStorage(contrastStorage) {
-		const encryptedAccounts = await this.#encryptAccounts();
-		contrastStorage.saveJSON(`accounts-${contrastStorage.localIdentifier}`, encryptedAccounts);
-	}
-	/** @param {FrontStorage} frontStorage */
-	async loadAccountsFromFrontStorage(frontStorage) {
-		/** @ts-ignore @type {EncryptedGeneratedAccount[] | null} */
-		const accountsGeneratedEncrypted = await frontStorage.load(`accounts-${this.#walletIdentifier()}`);
-		if (!accountsGeneratedEncrypted) return false;
-		await this.#loadAccounts(accountsGeneratedEncrypted);
-	}
-	/** @param {FrontStorage} frontStorage */
-	async saveAccountsToFrontStorage(frontStorage) {
-		const encryptedAccounts = await this.#encryptAccounts();
-		await frontStorage.save(`accounts-${this.#walletIdentifier()}`, encryptedAccounts);
+	/** @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
+	async removeAccountsFromStorage(contrastStorage, frontStorage) {
+		const key = `accounts-${this.walletIdentifier}`;
+		if (!contrastStorage && !frontStorage) throw new Error('No storage provided');
+		if (contrastStorage) contrastStorage.deleteFile(`${key}.json`);
+		else if (frontStorage) await frontStorage.remove(key);
 	}
 	/** Derive accounts from master seed. (If storage is provide: load and save accounts)
 	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
     async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1', contrastStorage, frontStorage) {
-		if (contrastStorage) await this.loadAccountsFromStorage(contrastStorage);
-		if (frontStorage) await this.loadAccountsFromFrontStorage(frontStorage);
+		if (!this.accountsGenerated) await this.loadAccountsFromStorage(contrastStorage, frontStorage);
 
         const nbOfExistingAccounts = this.accountsGenerated.length;
         const accountToLoad = Math.min(nbOfExistingAccounts, nbOfAccounts);
@@ -118,9 +107,7 @@ export class Wallet {
         if (derivedAccounts.length) this.miniLogger.log(`[WALLET] ${derivedAccounts.length} accounts derived with prefix: ${addressPrefix}
 avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
 
-		if (contrastStorage) await this.saveAccountsToStorage(contrastStorage);
-		if (frontStorage) await this.saveAccountsToFrontStorage(frontStorage);
-		
+		await this.#saveAccountsToStorage(contrastStorage, frontStorage);
         return { derivedAccounts: this.accounts, avgIterations: avgIterations };
     }
 	/** @param {string} [addressPrefix] - default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
@@ -130,8 +117,11 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
 		if (!result.derivedAccounts || result.derivedAccounts.length <= accountsBefore) return null;
 		return result.derivedAccounts[accountsBefore];
 	}
-	get balance() { return this.accounts.reduce((sum, account) => sum + account.balance, 0); }
-	get stakedBalance() { return this.accounts.reduce((sum, account) => sum + account.filteredBalance(Infinity, [], ['sigOrSlash']), 0); }
+	async destroy() {
+		this.#masterHex = '';
+		this.accounts = [];
+		this.accountsGenerated = [];
+	}
 
 	// INTERNALS
 	/** @param {number} accountIndex @param {string} [prefix] default 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
@@ -150,66 +140,12 @@ avgIterations/account: ${avgIterations}`, (m, c) => console.info(m, c));
 
 		throw new Error('Max iterations reached during account derivation');
     }
-    #walletIdentifier() {
-        const hash = HashFunctions.SHA512(`${this.#masterHex}-wallet-identifier`).hashHex;
-        return hash.substring(0, 16);
-    }
-	/** @param {EncryptedGeneratedAccount[]} accountsGeneratedEncrypted */
-    async #loadAccounts(accountsGeneratedEncrypted) {
-		/** @type {GeneratedAccount[]} */
-		const decryptedAccounts = [];
-        const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
-        const key = await crypto.subtle.importKey(
-            "raw",
-			masterHexUint8,
-            { name: "AES-GCM" },
-            false, // extractable
-            ["encrypt", "decrypt"]
-        );
-		for (const account of accountsGeneratedEncrypted) {
-			const iv = this.converter.hexToBytes(account.iv);
-			const seedModifierDecrypted = await crypto.subtle.decrypt(
-				{ name: "AES-GCM", iv },
-				key,
-				this.converter.hexToBytes(account.seedModifierHex)
-			);
-			const seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierDecrypted));
-			const decryptedAccount = new GeneratedAccount(account.address, seedModifierHex);
-			decryptedAccounts.push(decryptedAccount);
-		}
+	/** @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
+	async #saveAccountsToStorage(contrastStorage, frontStorage) {
+		const key = `accounts-${this.walletIdentifier}`;
+		if (!contrastStorage && !frontStorage) throw new Error('No storage provided');
 
-        this.accountsGenerated = decryptedAccounts;
-		if (!this.accountsGenerated.length) return;
-		
-		// Derive all loaded accounts (fast as they are saved)
-		await this.deriveAccounts(this.accountsGenerated.length);
-    }
-    async #encryptAccounts() {
-		/** @type {EncryptedGeneratedAccount[]} */
-		const encryptedAccounts = [];
-		const masterHexUint8 = this.converter.hexToBytes(this.#masterHex);
-        const key = await crypto.subtle.importKey(
-            "raw",
-			masterHexUint8,
-            { name: "AES-GCM" },
-            false, // extractable
-            ["encrypt", "decrypt"]
-        );
-		
-		for (const account of this.accountsGenerated) {
-			const iv = new Uint8Array(12);
-			crypto.getRandomValues(iv);
-			const seedModifierEncrypted = await crypto.subtle.encrypt(
-				{ name: "AES-GCM", iv },
-				key,
-				this.converter.hexToBytes(account.seedModifierHex)
-			);
-
-			const seedModifierHex = this.converter.bytesToHex(new Uint8Array(seedModifierEncrypted));
-			const encryptedAccount = new EncryptedGeneratedAccount(account.address, seedModifierHex, this.converter.bytesToHex(iv));
-			encryptedAccounts.push(encryptedAccount);
-		}
-
-		return encryptedAccounts;
-    }
+		if (contrastStorage) contrastStorage.saveJSON(key, this.accountsGenerated);
+		else if (frontStorage) await frontStorage.save(key, this.accountsGenerated);
+	}
 }

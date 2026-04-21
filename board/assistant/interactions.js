@@ -3,9 +3,9 @@
 export class Interactor {
 	/** @type {{ commandKey: string | null, value: string | null } | null} */
 	#userResponse = null;
+	assistant;
 
 	get a() { return this.assistant; }
-	assistant;
 	
 	/** @param {import('./assistant').Assistant} assistant */
 	constructor(assistant) { this.assistant = assistant; }
@@ -41,81 +41,138 @@ export class Interactor {
         }
     }
 
-	// PASSWORD SETUP INTERACTIONS
+	// PASSWORD INTERACTIONS
+	async setOrChangePassword() {
+		const authInfo = await this.a.biw.getAuthInfo();
+		if (authInfo.hasPassword) return this.#requestPasswordToChange();
+		else return this.requestNewPassword();
+	}
 	/** @param {string | false} failureMsg */
-    async requestNewPassword(failureMsg = false) {
-        if (failureMsg === false) await this.a.welcome(true);
-
+    requestNewPassword = async (failureMsg = false) => {
         setTimeout(() => {
-            this.onResponse = this.#verifyNewPassword;
-            //this.sendMessage(`(1) ${failureMsg || 'Please enter a new password or press enter to skip (less secure):'}`);
+            this.a.onResponse = this.#verifyNewPassword;
 			this.a.sendMessage(`(1) ${failureMsg || this.a.translator.PleaseEnterNewPassword}`);
-			this.a.setActiveInput('password', 'Your new password...', true);
-        }, failureMsg ? 0 : 5000);
+			this.a.setActiveInput('password', this.a.translator.YourNewPasswordPlaceholder, true);
+        }, failureMsg ? 0 : 3000);
     }
-    #verifyNewPassword(password = 'toto') {
-        if (password === '') {
-            ipcRenderer.send('set-password', 'fingerPrint'); // less secure: use the finger print as password
-            this.a.setActiveInput('idle');
-            return;
-        }
+    #verifyNewPassword = (password = 'ContrastWallet') => {
+        const isValid = typeof password === 'string' && password.length > 3 && password.length < 31;
+        if (!isValid) return this.a.sendMessage(this.a.translator.MustBeBetween4And30Characters); // re ask confirmation (2)
 
-        const isValid = typeof password === 'string' && password.length > 5 && password.length < 31;
-        if (!isValid) return this.a.sendMessage('Must be between 6 and 30 characters.'); // re ask confirmation (2)
+		if (password === 'ContrastWallet') return this.#onConfirmedNewPassword(password); // skip confirmation step if default password is used (less secure)
 
+		// CUSTOM PASSOWRD, ASK FOR CONFIRMATION
         this.#userResponse = { commandKey: null, value: password };
-        this.onResponse = this.#confirmNewPassword;
-        this.a.sendMessage('(2) Confirm your password');
-        this.a.setActiveInput('password', 'Confirm your password...', true);
+        this.a.onResponse = this.#confirmNewPassword;
+        this.a.sendMessage(`(2) ${this.a.translator.ConfirmYourPassword}`);
+        this.a.setActiveInput('password', this.a.translator.ConfirmYourPasswordPlaceholder, true);
     }
-    #confirmNewPassword(password = 'toto') {
-        if (typeof password !== 'string') return this.a.sendMessage('What the hell are you typing?');
-        if (password !== this.#userResponse?.value) return this.requestNewPassword('Passwords do not match.'); // Retry at step (1)
-
-        ipcRenderer.send('set-password', password);
-        this.a.setActiveInput('idle');
+    #confirmNewPassword = (password = 'toto') => {
+        if (typeof password !== 'string') return this.a.sendMessage(this.a.translator.InvalidPasswordInput);
+        if (password !== this.#userResponse?.value) return this.requestNewPassword(this.a.translator.PasswordsDoNotMatch); // Retry at step (1)
+		this.a.setActiveInput('idle');
+		this.#onConfirmedNewPassword(password);
     }
-
-	// PASSWORD CHANGE INTERACTIONS
-	requestPasswordToChange() {
+	/** @param {string} password */
+	#onConfirmedNewPassword = async (password) => {
+		const authInfo = await this.a.biw.getAuthInfo();
+		if (authInfo.hasWallet) {
+			const success = await this.a.biw.overwritePrivateKeyWithNewPassword('ContrastWallet', password);
+			this.a.sendMessage(success ? 'Password updated successfully' : 'Password update failed');
+			this.a.setActiveInput('text');
+			return this.a.onResponse = null;
+		}
+		
+		this.requestChoice({
+			'Generate new wallet': async () => {
+				this.a.setActiveInput('idle');
+				await this.a.biw.savePrivateKey(password);
+				await this.a.biw.loadWalletFromStoredPrivateKey(password);
+				this.a.sendMessage('Wallet generated successfully');
+				this.a.setActiveInput('text');
+				return this.a.onResponse = null;
+			},
+			'Use existing wallet': () => this.a.requestPrivateKey()
+		});
+	}
+	#requestPasswordToChange = () => {
         this.a.sendMessage('Please enter your current password to change it');
         this.a.setActiveInput('password', 'Your current password...', true);
-        this.onResponse = this.#removePasswordToChange;
+        this.a.onResponse = this.#removePasswordToChange;
     }
-    #removePasswordToChange(password = 'toto') {
-        let existingPassword = password === '' ? 'fingerPrint' : password; // less secure: use the finger print as password
-        const isValid = typeof existingPassword === 'string' && existingPassword.length > 5 && existingPassword.length < 31;
-        if (!isValid) return this.a.sendMessage('Must be between 6 and 30 characters.');
-
-        ipcRenderer.send('remove-password', existingPassword);
-    }
-    askNewPassowrdIfRemovedSuccessfully(success = false) {
+    #removePasswordToChange = async (password = 'ContrastWallet') => {
+		const authInfo = await this.a.biw.getAuthInfo();
+		if (!authInfo.hasPassword) throw new Error('No password set, cannot change password'); // should not happen, but just in case
+		if (!authInfo.hasWallet) throw new Error('No wallet found, cannot change password'); // should not happen, but just in case
+        
+		let existingPassword = password === '' ? 'fingerPrint' : password; // less secure: use the finger print as password
+        const isValid = typeof existingPassword === 'string' && existingPassword.length > 3 && existingPassword.length < 31;
+        if (!isValid) return this.a.sendMessage(this.a.translator.MustBeBetween4And30Characters); // re ask current password
+		
+		const success = await this.a.biw.overwritePrivateKeyWithNewPassword(existingPassword, 'ContrastWallet');
+		this.#askNewPasswordIfRemovedSuccessfully(success);
+	}
+    #askNewPasswordIfRemovedSuccessfully = (success = false) => {
         if (success) return this.requestNewPassword('Password removed successfully, please enter a new password or press enter to skip (less secure)');
         this.a.sendMessage('Password removal failed, wrong password!');
 		this.a.idleMenu();
     }
 
 	// PRIVATE KEY EXTRACTION INTERACTIONS
-	requestPasswordToExtract() {
+	requestPasswordToExtract = () => {
         this.a.sendMessage('Please enter your password to extract your private key');
         this.a.setActiveInput('password', 'Your password...', true);
-        this.onResponse = this.#verifyPasswordAndExtract;
+        this.a.onResponse = this.#verifyPasswordAndExtract;
     }
-    #verifyPasswordAndExtract(password = 'toto') {
-        const isValid = typeof password === 'string';
-        if (!isValid) return this.a.sendMessage('Must be between 6 and 30 characters.');
+    #verifyPasswordAndExtract = (password = 'ContrastWallet') => {
+        const isValid = typeof password === 'string' && password.length > 3 && password.length < 31;
+        if (!isValid) return this.a.sendMessage(this.a.translator.MustBeBetween4And30Characters);
 
-        ipcRenderer.send('extract-private-key', password);
+    	// TODO
         setTimeout(() => this.a.idleMenu(), 1000);
     }
 
 	// RESET INTERACTIONS
 	reset() {
-	    this.a.sendMessage('Your private key will be lost, are you sure?');
+	    this.a.sendMessage('Select what you want to reset carefully, this action cannot be undone!');
         this.a.interactor.requestChoice({
-            'Delete private key': () => ipcRenderer.send('reset-private-key'), // should restart the app
-            'Delete all data': () => ipcRenderer.send('reset-all-data'), // should restart the app
-            'No': () => this.a.idleMenu()
+            'Delete user preferences': () => {
+				this.a.sendMessage('Are you sure you want to delete user preferences?', 'system');
+				this.a.interactor.requestChoice({
+					'Yes': async () => {
+						await this.a.biw.boardStorage.remove('language');
+						this.a.sendMessage('User preferences deleted successfully');
+						await new Promise(resolve => setTimeout(resolve, 2000)); // time to read
+						location.reload(); // Reload the page to apply changes
+					},
+					'No': () => this.a.idleMenu()
+				})
+			},
+            'Delete wallet': () => {
+				this.a.sendMessage('Are you sure you want to delete your wallet? This will make you lose access to your wallet if you do not have it backed up!', 'system');
+				this.a.interactor.requestChoice({
+					'Yes': async () => { // @ts-ignore: 'chrome' does exit.
+						await this.a.biw.disconnectedWallet(true);
+						this.a.sendMessage('Wallet deleted successfully');
+						await new Promise(resolve => setTimeout(resolve, 600)); // time to read
+						this.a.start(); // Call entry point
+					},
+					'No': () => this.a.idleMenu()
+				})
+			},
+            'Delete all data': () => {
+				this.a.sendMessage('Are you sure you want to delete all data? This will reset everything and make you lose access to your wallet if you do not have it backed up!', 'system');
+				this.a.interactor.requestChoice({
+					'Yes': async () => {
+						await this.a.biw.boardStorage.reset();
+						this.a.sendMessage('All data deleted successfully');
+						await new Promise(resolve => setTimeout(resolve, 2000)); // time to read
+						location.reload(); // Reload the page to reset everything
+					},
+					'No': () => this.a.idleMenu()
+				})
+			},
+			'No': () => this.a.idleMenu()
         });
 	}
 }

@@ -6,7 +6,7 @@
 			"name": "Run-client",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/run-client.mjs",
-			"args": ["--max-old-space-size=16384", "-cp", "27259"],
+			"args": ["-cp", "27259"],
 			"runtimeArgs": ["--inspect"]
 		},
 		{
@@ -15,7 +15,7 @@
 			"name": "Run-client-with-board-service",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/run-client.mjs",
-			"args": ["--max-old-space-size=16384", "-cp", "27259", "--board-service"],
+			"args": ["-cp", "27259", "--board-service"],
 			"runtimeArgs": ["--inspect"]
 		},
 		{
@@ -56,7 +56,7 @@
 			"name": "Test: Worst TXs Validations",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/tests/simulations-single-thread/test-worst-txs-validations.js",
-			"args": ["--max-old-space-size=16384"],
+			"args": ["--mayo2"],
 			"runtimeArgs": ["--inspect"]
 		},
 		{

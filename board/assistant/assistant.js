@@ -7,6 +7,7 @@ import { Interactor } from './interactions.js';
 import { CommandInterpreter } from './commands.js';
 
 /**
+ * @typedef {import('../utils/apps-manager.js').AppsManager} AppsManager
  * @typedef {import('../wallet/biw.js').BoardInternalWallet} BoardInternalWallet
  * @typedef {import('../utils/translator.js').Translator} Translator */
 
@@ -33,6 +34,8 @@ export class Assistant {
     activeInput = 'idle';
 	idPrefix = 'board'
 	commandInterpreter;
+	appsManager;
+	isExtension;
 	translator;
 	interactor;
 	biw;
@@ -53,10 +56,12 @@ export class Assistant {
 	/** @type {NodeJS.Timeout | null} */	nextActiveInputTimeout = null;
     /** @type {Function | null} */			onResponse = null;
 
-	/** @param {BoardInternalWallet} biw @param {Translator} translator */
-    constructor(biw, translator) {
+	/** @param {BoardInternalWallet} biw @param {Translator} translator @param {AppsManager} appsManager @param {boolean} isExtension */
+    constructor(biw, translator, appsManager, isExtension) {
 		this.biw = biw;
 		this.translator = translator;
+		this.appsManager = appsManager;
+		this.isExtension = isExtension;
 		this.interactor = new Interactor(this);
 		this.commandInterpreter = new CommandInterpreter(this);
 		this.init();
@@ -85,10 +90,15 @@ export class Assistant {
 	async welcome(displaySetupMessage = false) {
 		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 200)); // Wait until the assistant is ready
 		console.log('-- Assistant displaying welcome message --');
-		setTimeout(() => this.sendMessage(this.translator.Welcome), 600);
-		setTimeout(() => this.sendMessage(this.translator.JoinDiscord), 1600);
-		if (displaySetupMessage) setTimeout(() => this.sendMessage(this.translator.SetupProcess), 2200);
-		setTimeout(() => this.idleMenu(), displaySetupMessage ? 2800 : 2200);
+		await new Promise(resolve => setTimeout(resolve, 600));
+		this.sendMessage(this.translator.Welcome);
+		await new Promise(resolve => setTimeout(resolve, 1000));
+		this.sendMessage(this.translator.JoinDiscord);
+		await new Promise(resolve => setTimeout(resolve, 600));
+		if (!displaySetupMessage) return this.idleMenu();
+
+		this.sendMessage(this.translator.SetupProcess);
+		await new Promise(resolve => setTimeout(resolve, 600));
 	}
     #setupEventListeners() {
         this.eHTML.sendBtn.addEventListener('click', () => {
@@ -139,7 +149,7 @@ export class Assistant {
             .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 
         // Replace line breaks with <br> tags for HTML rendering
-        if (needObfuscate) messageDiv.innerText = this.#obfuscateString(message);
+        if (needObfuscate) messageDiv.innerText = this.translator.UserResponseHidden; // show a generic message instead of the actual user response to avoid displaying sensitive info
         else messageDiv.innerHTML = secureText.replace(/\n/g, "<br>");
         
         this.eHTML.messagesContainer.appendChild(messageDiv);
@@ -148,10 +158,8 @@ export class Assistant {
 
         if (sender === 'system') return;
 		//console.log(this.onResponse); // DEBUG => Log the callback fnc
-        this.onResponse?.(message);
-    }
-	#obfuscateString(string = '') {
-        return string.replace(/./g, '•');
+		const response = message !== '' ? message : undefined; // if message is empty, set response to undefined to let default values work in callbacks
+        this.onResponse?.(response);
     }
 	/** @param {HTMLElement} messageDiv */
     #addMessageDeleteBtn(messageDiv) {
@@ -163,10 +171,38 @@ export class Assistant {
     }
 
     requestPrivateKey() {
-        this.sendMessage('Please enter your private key (64 characters hexadecimal or 24 words list)');
-        this.setActiveInput('password', 'Your private key...', true);
-        this.onResponse = this.#verifyPrivateKey;
+		this.interactor.requestChoice({
+			'Generate new wallet': async () => {
+				this.setActiveInput('idle');
+				await this.biw.savePrivateKey(); // Generate and save a new private key with default password
+				await this.biw.loadWalletFromStoredPrivateKey();
+				this.interactor.requestNewPassword();
+			},
+			'Use existing wallet': () => {
+				this.sendMessage('Please enter your private key (64 characters hexadecimal or 24 words list)');
+				this.setActiveInput('text', 'Your private key...', true);
+				this.onResponse = this.#verifyPrivateKey;
+			}
+		});
     }
+	/** @param {string} pk */
+    async #verifyPrivateKey(pk) {
+        if (typeof pk !== 'string') return this.sendMessage('Invalid private key. (must be a string)');
+
+		const isWordsList = pk.split(' ').length > 1;
+        const privKeyHex = isWordsList ? this.#digestWordsListStr(pk) : pk;
+		if (!privKeyHex) return this.sendMessage('Invalid private key');
+
+        // hex only, 64 characters
+        const isValidPrivHex = privKeyHex.length === 64 && this.#isHexadecimal(privKeyHex);
+        if (!isValidPrivHex) return this.sendMessage('Invalid private key. (retry)');
+        
+		this.setActiveInput('idle');
+        await this.biw.savePrivateKey(undefined, privKeyHex);
+        await this.biw.loadWalletFromStoredPrivateKey();
+		this.interactor.requestNewPassword();
+    }
+	/** @return {null | string} */
     #digestWordsListStr(wordsList = 'toto toto ...') {
         const split = wordsList.split(' ');
         const words = [];
@@ -188,35 +224,30 @@ export class Assistant {
         if (str && str.length % 2 === 0 && regex.test(str)) { return true; }
         return false;
     }
-	/** @param {string} privateKey */
-    #verifyPrivateKey(privateKey) {
-        if (typeof privateKey !== 'string') return this.sendMessage('Invalid private key. (must be a string)');
 
-        //console.log('privateKey:', privateKey);
-		const isWordsList = privateKey.split(' ').length > 1;
-        const privKeyHex = isWordsList ? this.#digestWordsListStr(privateKey) : privateKey;
-		if (isWordsList && !privKeyHex) return this.sendMessage('Invalid private key (words list).');
-
-        // hex only, 64 characters
-        const isValidPrivHex = privKeyHex.length === 64 && this.#isHexadecimal(privKeyHex);
-        if (!isValidPrivHex) return this.sendMessage('Invalid private key. (retry)');
-        
-        this.sendMessage('Initializing node... (can take a up to a minute)');
-        ipcRenderer.send('set-private-key-and-start-node', privKeyHex);
-        this.setActiveInput('idle');
-    }
-
+	async start() {
+		this.setActiveInput('idle');
+		const authInfo = await this.biw.getAuthInfo();
+		console.log('authInfo:', authInfo);
+		if (!authInfo.hasWallet) return this.requestPrivateKey();
+		if (authInfo.hasPassword) return this.requestPasswordToUnlock();
+		await this.biw.loadWalletFromStoredPrivateKey();
+		this.sendMessage(this.translator.WalletUnlocked);
+		this.idleMenu();
+	}
     requestPasswordToUnlock(failed = false) {
-        this.sendMessage(failed ? 'Wrong password, try again' : 'Please enter your password to unlock');
-        this.setActiveInput('password', 'Your password...', true);
+        this.sendMessage(failed ? this.translator.WrongPasswordTryAgain : this.translator.PleaseEnterPasswordToUnlock);
+        this.setActiveInput('password', this.translator.YourPasswordPlaceholder, true);
         this.onResponse = this.#verifyPasswordAndUnlock;
     }
-    #verifyPasswordAndUnlock(password = 'toto') {
-        const isValid = typeof password === 'string' && password.length > 5 && password.length < 31;
-        if (!isValid) { this.sendMessage('Must be between 6 and 30 characters.'); return; }
-
-        ipcRenderer.send('set-password', password);
-        this.setActiveInput('idle');
+    async #verifyPasswordAndUnlock(password = 'ContrastWallet') {
+        const isValid = typeof password === 'string' && password.length > 3 && password.length < 31;
+        if (!isValid) return this.sendMessage(this.translator.MustBeBetween4And30Characters); // re ask password
+		this.setActiveInput('idle');
+		try { await this.biw.loadWalletFromStoredPrivateKey(password); }
+		catch (e) { return this.requestPasswordToUnlock(true); }
+		this.sendMessage(this.translator.WalletUnlocked);
+		this.idleMenu();
     }
 
 	/** @param {string} privateKeyHex @param {boolean} [asWords] default false */

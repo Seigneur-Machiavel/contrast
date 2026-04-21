@@ -6,16 +6,19 @@ import { ADDRESS } from '../../types/address.mjs';
 import { Wallet } from '../../node/src/wallet.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { eHTML_STORE } from '../utils/board-helpers.js';
+import { serializer } from '../../utils/serializer.mjs';
 import { MiniformComponent } from './miniform-component.js';
 import { AccountsComponent } from './accounts-component.js';
 import { Transaction_Builder } from '../../node/src/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
+import { FrontCryptoWorker } from '../../node/workers/front-crypto-wrapper.mjs';
 import { ButtonHoldAnimation, horizontalBtnLoading } from '../utils/htmlAnimations.js';
 
 /** 
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction 
  * @typedef {import("../../types/transaction.mjs").TxId} TxId */
 
+const frontCrypto = new FrontCryptoWorker();
 const eHTML = new eHTML_STORE('biw-', 'container');
 export class BoardInternalWallet {
 	components = {											// @ts-ignore
@@ -24,8 +27,9 @@ export class BoardInternalWallet {
 		/** @type {Interpreter} */ 	  interpreter: null,
 	}
 
+	/** @type {Wallet | null} */
+	wallet = null;
 	eHTML = eHTML;
-	wallet = new Wallet("0000000000000000000000000000000000000000000000000000000000000000");
 	boardStorage;
 	connector;
 	historyItemsPerPage = 5;
@@ -33,6 +37,8 @@ export class BoardInternalWallet {
 	// User preferences
 	balanceDecimals = 2;
 	autoRefresh = true;
+	/** @type {{ hasWallet: boolean, hasPassword: boolean } | null} */
+	authInfo = null;
 
 	/** @type {Record<string, anime.AnimeInstance | null>} */
 	animations = {};
@@ -41,7 +47,7 @@ export class BoardInternalWallet {
 	/** @type {NodeJS.Timeout | null} */	textInfoTimeout1 = null;
     /** @type {NodeJS.Timeout | null} */	textInfoTimeout2 = null;
 
-	get activeAccount() { return this.wallet.accounts[this.components.accounts.activeAccountIndex]; }
+	get activeAccount() { return this.wallet?.accounts[this.components.accounts.activeAccountIndex]; }
 
 	/** @param {import('../utils/connector.js').Connector} connector @param {import('../../utils/front-storage.mjs').FrontStorage} boardStorage */
 	constructor(connector, boardStorage) {
@@ -51,7 +57,8 @@ export class BoardInternalWallet {
 	}
 
 	// API METHODS
-	/** @param {string} text @param {HTMLElement | null} [infoElmnt] @param {number} [timeout] @param {boolean} [eraseAnyCurrentTextInfo] @param {boolean} [important] */
+	/** Display information text in the wallet interface for a certain amount of time. If another text is already displayed, it will be replaced only if eraseAnyCurrentTextInfo is true.
+	 * @param {string} text @param {HTMLElement | null} [infoElmnt] @param {number} [timeout] @param {boolean} [eraseAnyCurrentTextInfo] @param {boolean} [important] */
 	textInfo(text, infoElmnt = eHTML.get('globalTextInfo'), timeout = 3000, eraseAnyCurrentTextInfo = false, important = false) {
 		if (!infoElmnt) return;
         if (!eraseAnyCurrentTextInfo && this.currentTextInfo) return;
@@ -72,6 +79,8 @@ export class BoardInternalWallet {
         this.textInfoTimeout2 = setTimeout(() => infoElmnt.innerText = "", timeout + 200);
     }
 	async refreshAccounts(force = false) {
+		if (!this.wallet || !this.wallet.accounts.length) return;
+		eHTML.get('buttonBarTransfer')?.classList.remove('disabled');
 		if (force) for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
 		if (this.accountThatNeedsRefresh.size === 0) return;
 
@@ -94,7 +103,7 @@ export class BoardInternalWallet {
 			this.accountThatNeedsRefresh.delete(account.address);
         }
 
-		if (this.activeAccount.historyIds.length > 0) eHTML.get('buttonBarHistory')?.classList.remove('disabled');
+		if ((this.activeAccount?.historyIds || []).length > 0) eHTML.get('buttonBarHistory')?.classList.remove('disabled');
 		else eHTML.get('buttonBarHistory')?.classList.add('disabled');
 
 		this.components.accounts.updateLabels();
@@ -106,6 +115,9 @@ export class BoardInternalWallet {
         buttonRefresh.classList.remove('active');
     }
 	async getAndDisplayTransactionsDetails(page = this.components.accounts.activeAccountHistoryPage) {
+		const activeAccount = this.activeAccount;
+		if (!activeAccount) throw new Error('No active account selected');
+
 		this.components.miniform.resetHistoryList();
 		this.components.miniform.startHistoryLoading();
 		this.components.miniform.updatePaginationButtonsState(true); // lock buttons while loading
@@ -131,7 +143,7 @@ export class BoardInternalWallet {
 			const inAmount = specialTxType ? 0
 				: tx.inputs.reduce((sum, input) => {
 					const utxo = this.connector.utxosByAnchors.get(input);
-					if (utxo?.address !== this.activeAccount.address) return sum; // only count inputs from the active account
+					if (utxo?.address !== activeAccount.address) return sum; // only count inputs from the active account
 					return sum + (utxo ? utxo.amount : 0);
 				}, 0);
 
@@ -148,6 +160,8 @@ export class BoardInternalWallet {
 	}
 	/** @param {string} address */
     selectAccountLabel(address) {
+		if (!this.wallet || !this.activeAccount) throw new Error('Wallet not initialized');
+
 		const accountIndex = this.#getWalletAccountIndexByAddress(address);
 		this.components.accounts.setActiveAccountIndex(accountIndex);
 		this.components.accounts.activeAccountHistoryPage = 0; // reset
@@ -172,6 +186,70 @@ export class BoardInternalWallet {
 			else btn.classList.remove('active');
 		}
 	}
+	async getAuthInfo() {
+		if (this.authInfo !== null) return this.authInfo; // return cached info if available
+		
+		/** @ts-ignore @type {string | null} */
+		const blobHex = await this.boardStorage.load('wallet_blob_hex');
+		this.authInfo = { hasWallet: false, hasPassword: false }; // init values
+		if (!blobHex) return this.authInfo; // no wallet found in storage
+
+		this.authInfo.hasWallet = true; // wallet found
+		try { await frontCrypto.decipher(serializer.converter.hexToBytes(blobHex), 'ContrastWallet'); }
+		catch (e) { this.authInfo.hasPassword = true; } // unable to decipher with default password, so we assume a password is set
+		return this.authInfo;
+	}
+	/** @param {string} [password] undefined => default password @param {string} [pk] undefined => generate a new private key */
+	async savePrivateKey(password = 'ContrastWallet', pk = Wallet.generateRandomMasterHex()) {
+		const blob = await frontCrypto.cipher(serializer.converter.hexToBytes(pk), password);
+		const blobHex = serializer.converter.bytesToHex(blob);
+		await this.boardStorage.save('wallet_blob_hex', blobHex);
+		this.authInfo = { hasWallet: true, hasPassword: password !== 'ContrastWallet' };
+	}
+	async overwritePrivateKeyWithNewPassword(oldPassword = 'ContrastWallet', newPassword = 'ContrastWallet') {
+		try {
+			/** @ts-ignore @type {string | null} */
+			const blobHex = await this.boardStorage.load('wallet_blob_hex');
+			if (!blobHex) throw new Error('No private key found in storage');
+	
+			const blob = serializer.converter.hexToBytes(blobHex);
+			const pk = await frontCrypto.decipher(blob, oldPassword);
+			const newBlob = await frontCrypto.cipher(pk, newPassword);
+			const newBlobHex = serializer.converter.bytesToHex(newBlob);
+			await this.boardStorage.save('wallet_blob_hex', newBlobHex);
+			this.authInfo = { hasWallet: true, hasPassword: newPassword !== 'ContrastWallet' };
+			return true;
+		} catch (error) { return false; }
+	}
+	async loadWalletFromStoredPrivateKey(password = 'ContrastWallet') {
+		/** @ts-ignore @type {string | null} */
+		const blobHex = await this.boardStorage.load('wallet_blob_hex');
+		if (!blobHex) throw new Error('No private key found in storage');
+
+		const blob = serializer.converter.hexToBytes(blobHex);
+		const privateKey = await frontCrypto.decipher(blob, password);
+		const privateKeyHex = serializer.converter.bytesToHex(privateKey);
+
+        this.wallet = new Wallet(privateKeyHex);
+        await this.wallet.loadAccountsFromStorage(undefined, this.boardStorage);
+		this.components.accounts.updateLabels();
+		await this.refreshAccounts();
+		if (this.wallet.accounts.length > 0) this.selectAccountLabel(this.wallet.accounts[0].address);
+		for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
+	}
+	async disconnectedWallet(eraseWallet = false) {
+		if (eraseWallet) {
+			await this.boardStorage.remove('wallet_blob_hex');
+			await this.wallet?.removeAccountsFromStorage(undefined, this.boardStorage);
+			this.authInfo = { hasWallet: false, hasPassword: false };
+		}
+		await this.wallet?.destroy();
+		this.wallet = null;
+		this.components.accounts.updateLabels();
+		eHTML.get('buttonBarTransfer')?.classList.add('disabled');
+		eHTML.get('buttonBarHistory')?.classList.add('disabled');
+		this.textInfo('Wallet deleted successfully');
+	}
 
 	// INTERNAL METHODS
 	async #initWhileDomReady() {
@@ -184,19 +262,10 @@ export class BoardInternalWallet {
 		this.components.interpreter = new Interpreter();
 		await this.#loadUserPreferences();
 
-		/** @ts-ignore @type {string | null} */
-		const savedPrivateKey = await this.boardStorage.load('board_internal_wallet_private_key');
-		const privateKey = savedPrivateKey || Wallet.generateRandomMasterHex();
-        this.wallet = new Wallet(privateKey);
-        await this.wallet.loadAccountsFromFrontStorage(this.boardStorage);
-		this.components.accounts.updateLabels();
-		if (this.wallet.accounts.length > 0) this.selectAccountLabel(this.wallet.accounts[0].address);
-		for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
-
 		this.connector.on('consensus_height_change', this.#onConsensusHeightChange);
     }
 	#onConsensusHeightChange = async (newHeight = 0) => {
-		if (!this.autoRefresh) return;
+		if (!this.autoRefresh || !this.wallet?.accounts?.length) return;
 
 		// CHECK WHICH ACCOUNTS NEED REFRESH (because they are involved in the new finalized block)
 		const block = this.connector.blocks.finalized[this.connector.hash];
@@ -216,11 +285,15 @@ export class BoardInternalWallet {
 		await this.refreshAccounts();
 	}
 	#getWalletAccountIndexByAddress(address = '') {
+		if (!this.wallet) throw new Error('Wallet not initialized');
         for (let j = 0; j < this.wallet.accounts.length; j++)
 			if (this.wallet.accounts[j].address === address) return j;
         return -1;
     }
 	async #generateNewAddress() {
+		if (!this.wallet) return this.textInfo('Wallet not initialized');
+		// TODO: MAYBE CALL ASSIISTANT
+
 		const btn = eHTML.get('newAddressBtn');
 		const isGenerating = eHTML.get('newAddressBtn')?.innerHTML !== '+';
 		if (!btn || isGenerating) return;
@@ -238,7 +311,7 @@ export class BoardInternalWallet {
 			easing: 'easeInOutQuad'
 		});
 
-		await this.wallet.deriveOneAccount('C', undefined, this.boardStorage);
+		await this.wallet.deriveOneAccount('C', undefined, undefined, undefined, this.boardStorage);
 		await new Promise(r => setTimeout(r, 800)); // wait a bit to show the animation
 		this.components.accounts.updateLabels();
 
@@ -343,8 +416,8 @@ export class BoardInternalWallet {
 				this.components.accounts.updateLabels();
 				const balanceElement = eHTML.get('balanceStr');
 				const stakedBalanceElement = eHTML.get('stakedStr');
-				if (balanceElement) balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance, this.balanceDecimals);
-				if (stakedBalanceElement) stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.stakedBalance, this.balanceDecimals);
+				if (balanceElement) balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet?.balance || 0, this.balanceDecimals);
+				if (stakedBalanceElement) stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet?.stakedBalance || 0, this.balanceDecimals);
 				this.#saveUserPreferences();
 				break;
 			case 'biw-new-address':
@@ -456,6 +529,9 @@ export class BoardInternalWallet {
 		
 		const cb = async () => { // AWAIT HOLD TIME TO SIGN AND BROADCAST
 			try {
+				const activeAccount = this.activeAccount;
+				if (!activeAccount) throw new Error('No active account selected');
+
 				this.connector.p2pNode.broadcast(r.serialized, { topic: 'transaction' });
 				this.textInfo('Transaction broadcasted');
 

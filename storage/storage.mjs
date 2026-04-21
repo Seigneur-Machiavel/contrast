@@ -4,7 +4,7 @@
 import fs from 'fs';
 import url from 'url';
 import path from 'path';
-import { HashFunctions } from '../node/src/conCrypto.mjs';
+import { HashFunctions, sha512 } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /** THE COMMON CLASS TO HANDLE THE STORAGE PATHS */
@@ -16,7 +16,7 @@ class StorageRoot {
 
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
 	constructor(masterHex = null) {
-		this.localIdentifier = masterHex ? this.#getLocalIdentifier(masterHex) : null;
+		this.localIdentifier = masterHex ? HashFunctions.SHA512(masterHex).hashHex.substring(0, 8) : null;
 		console.log(`Storage localIdentifier: ${this.localIdentifier}`);
 
 		const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
@@ -51,16 +51,6 @@ class StorageRoot {
 			fs.mkdirSync(path.join(path.dirname(this.rootFolder), 'contrast-storage'));
 		for (const dirPath of Object.values(this.PATH))
 			if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath);
-	}
-	#getLocalIdentifier(masterHex = 'ff') {
-		const separatorParts = 'local-identifier-separator'.split('');
-		const keyParts = masterHex.split('');
-		const input = [];
-		for (let i = 0; i < keyParts.length; i++) {
-			input.push(keyParts[i]);
-			input.push(separatorParts[i % separatorParts.length]);
-		}
-		return HashFunctions.xxHash32(input.join(''));
 	}
 	clear(passHash = true, nodeSettings = true, vssData = true) {
 		const dirPaths = [

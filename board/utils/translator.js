@@ -32,6 +32,10 @@ const assistantCommands = {
 
 }
 const assistant = {
+	UserResponseHidden: {
+		en: 'User response (hidden)',
+		fr: 'Réponse de l\'utilisateur (cachée)',
+	},
 	InteractionCancelled: {
 		en: '*Interaction cancelled*',
 		fr: '*Interaction annulée*',
@@ -55,6 +59,46 @@ const assistant = {
 	PleaseEnterNewPassword: {
 		en: 'Please enter a new password or press enter to skip (less secure):',
 		fr: 'Veuillez entrer un nouveau mot de passe ou appuyez sur entrée pour passer (moins sécurisé) :',
+	},
+	PleaseEnterPasswordToUnlock: {
+		en: 'Please enter your password to unlock:',
+		fr: 'Veuillez entrer votre mot de passe pour déverrouiller :',
+	},
+	WrongPasswordTryAgain: {
+		en: 'Wrong password, try again',
+		fr: 'Mot de passe incorrect, réessayez',
+	},
+	YourPasswordPlaceholder: {
+		en: 'Your password...',
+		fr: 'Votre mot de passe...',
+	},
+	YourNewPasswordPlaceholder: {
+		en: 'Your new password...',
+		fr: 'Votre nouveau mot de passe...',
+	},
+	ConfirmYourPassword: {
+		en: 'Confirm your password:',
+		fr: 'Confirmez votre mot de passe :',
+	},
+	ConfirmYourPasswordPlaceholder: {
+		en: 'Confirm your password...',
+		fr: 'Confirmez votre mot de passe...',
+	},
+	MustBeBetween4And30Characters: {
+		en: 'Must be between 4 and 30 characters.',
+		fr: 'Doit être compris entre 4 et 30 caractères.',
+	},
+	InvalidPasswordInput: {
+		en: 'Invalid password input.',
+		fr: 'Entrée de mot de passe invalide.',
+	},
+	PasswordsDoNotMatch: {
+		en: 'Passwords do not match.',
+		fr: 'Les mots de passe ne correspondent pas.',
+	},
+	WalletUnlocked: {
+		en: 'Wallet unlocked successfully!',
+		fr: 'Portefeuille déverrouillé avec succès !',
 	},
 }
 
@@ -207,7 +251,7 @@ export class Translator {
 	availableLanguages = ['en', 'fr'];
 	/** @type {Language} */	lang;
 
-	/** @param {function(Language):void} onLanguageChange */
+	/** @param {function(Language, boolean):void} onLanguageChange */
 	constructor(onLanguageChange) { this.onLanguageChange = onLanguageChange; }
 	
 	/** @param {Language} lang */
@@ -236,12 +280,23 @@ export class Translator {
 		if (!cmd) throw new Error(`No command found for key "${cmdKey}"`);
 		return cmd[this.lang] || cmd.en; // fallback to English if translation is missing
 	}
+	get UserResponseHidden() { return assistant.UserResponseHidden[this.lang] || assistant.UserResponseHidden.en; }
 	get InteractionCancelled() { return assistant.InteractionCancelled[this.lang] || assistant.InteractionCancelled.en; }
 	get TypeYourCommand() { return assistant.TypeYourCommand[this.lang] || assistant.TypeYourCommand.en; }
 	get Welcome() { return assistant.Welcome[this.lang] || assistant.Welcome.en; }
 	get JoinDiscord() { return assistant.JoinDiscord[this.lang] || assistant.JoinDiscord.en; }
 	get SetupProcess() { return assistant.SetupProcess[this.lang] || assistant.SetupProcess.en; }
 	get PleaseEnterNewPassword() { return assistant.PleaseEnterNewPassword[this.lang] || assistant.PleaseEnterNewPassword.en; }
+	get PleaseEnterPasswordToUnlock() { return assistant.PleaseEnterPasswordToUnlock[this.lang] || assistant.PleaseEnterPasswordToUnlock.en; }
+	get WrongPasswordTryAgain() { return assistant.WrongPasswordTryAgain[this.lang] || assistant.WrongPasswordTryAgain.en; }
+	get YourPasswordPlaceholder() { return assistant.YourPasswordPlaceholder[this.lang] || assistant.YourPasswordPlaceholder.en; }
+	get YourNewPasswordPlaceholder() { return assistant.YourNewPasswordPlaceholder[this.lang] || assistant.YourNewPasswordPlaceholder.en; }
+	get ConfirmYourPassword() { return assistant.ConfirmYourPassword[this.lang] || assistant.ConfirmYourPassword.en; }
+	get ConfirmYourPasswordPlaceholder() { return assistant.ConfirmYourPasswordPlaceholder[this.lang] || assistant.ConfirmYourPasswordPlaceholder.en; }
+	get MustBeBetween4And30Characters() { return assistant.MustBeBetween4And30Characters[this.lang] || assistant.MustBeBetween4And30Characters.en; }
+	get InvalidPasswordInput() { return assistant.InvalidPasswordInput[this.lang] || assistant.InvalidPasswordInput.en; }
+	get PasswordsDoNotMatch() { return assistant.PasswordsDoNotMatch[this.lang] || assistant.PasswordsDoNotMatch.en; }
+	get WalletUnlocked() { return assistant.WalletUnlocked[this.lang] || assistant.WalletUnlocked.en; }
 
 	// EXPLORER
 	get ConsensusNotRobustMessage() { return explorer.ConsensusNotRobustMessage[this.lang] || explorer.ConsensusNotRobustMessage.en; }

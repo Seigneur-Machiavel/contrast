@@ -16,14 +16,15 @@ import { BoardInternalWallet } from './wallet/biw.js';
 //import { InfoManager } from './info-manager.js';
 
 // INIT P2P NODE AND CORE COMPONENTS
-const host = window.location.hostname;
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
-if (host !== 'lehhaaegmiabahiailaddaihneihbaam') HiveP2P.CLOCK.proxyUrl = '/api/time';
+const isExtension = window.location.protocol.endsWith('-extension:');
+if (!isExtension) HiveP2P.CLOCK.proxyUrl = '/api/time'; // Use proxy for web version, direct connection for extension (not possible to use proxy in extension background page context)
 
 const version = '0.6.12'; // Overwrite by board-service.mjs on the fly, based on "contrast/package.json" version field. Used for display in the UI and for update checks.
 const bootstraps = ['ws://localhost:27260'];
 const hostPubkeyStr = null; // Pass from launcher args to board-service.
-const hiveNode = await HiveP2P.createNode({ bootstraps });
+const hiveNode = await HiveP2P.createNode({ bootstraps, autoStart: false });
+hiveNode.start();
 
 const hasPassword = false; // TODO
 const boardStorage = new FrontStorage('board');
@@ -33,28 +34,29 @@ const language = await boardStorage.load('language');
 const translator = new Translator(async (lang) => {
 	boardStorage.save('language', lang);
 	assistant.commandInterpreter.updateCommandsCorrespondences();
-	if (!language) assistant.requestNewPassword(); // FIRST TIME SETUP
-	else if (hasPassword) assistant.requestPasswordToExtract();
-	else await assistant.welcome();
+
+	await assistant.welcome(language ? false : true); // Only display setup message if language is not set (first time setup)
+	assistant.start(); // GO DIRECTLY.
 });
 
 // INIT OTHER MANAGERS AND COMPONENTS
 const connector = new Connector(hiveNode);
-const explorer = new Explorer(connector);
+const explorer 	= new Explorer(connector);
 const dashboard = new Dashboard(connector, hostPubkeyStr);
-const biw = new BoardInternalWallet(connector, boardStorage);
-const assistant = new Assistant(biw, translator);
+const biw 		= new BoardInternalWallet(connector, boardStorage);
 
 if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
 else document.body.classList.remove('dark-mode');
 
 const boardVersionElement = document.getElementById('board-version');
 if (boardVersionElement) boardVersionElement.textContent = `v${version}`;
+
 const visualizer = new NetworkVisualizer(connector, HiveP2P.CryptoCodex);
 const windowsWrapElement = document.getElementById('board-windows-wrap');
 const settingsMenuElement = document.getElementById('board-settings-menu');
 const bottomButtonsBarElement = document.getElementById('board-apps-buttons-bar');
 const appsManager = new AppsManager(windowsWrapElement, bottomButtonsBarElement);
+const assistant = new Assistant(biw, translator, appsManager, isExtension);
 if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.networkVisualizer = visualizer; // Expose for debugging
 	window.appsManager = appsManager;
@@ -197,7 +199,8 @@ connector.on('peer_connect', onPeerCountChange);
 connector.on('peer_disconnect', onPeerCountChange);
 
 // OPENING => HANDLE PASSWORD AND LANGUAGE SELECTION
-if (!language || hasPassword) appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP
+appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP
+
 while (!assistant.isReady) await new Promise(resolve => setTimeout(resolve, 20));
 if (!language) assistant.interactor.requestLanguageSelection();
 else translator.setLanguage(language);

@@ -37,6 +37,8 @@ const FILES = [
 	{ in: 'node/src/tx-rule-checkers.mjs' },
 	{ in: 'node/src/tx-validation.mjs' },
 	{ in: 'node/src/wallet.mjs' },
+	{ in: 'node/workers/front-crypto-worker.mjs' },
+	{ in: 'node/workers/front-crypto-wrapper.mjs' },
 
 	{ in: 'types/address.mjs' },
 	{ in: 'types/block.mjs' },

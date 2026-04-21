@@ -24,10 +24,11 @@ const args = process.argv.slice(2); // digest the start args
 const domain = 'localhost'; // args.includes('--local') ? 'localhost' : '0.0.0.0';
 const nodePort = 27260; 	// args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const clearOnStart = false; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
+const mayoVariant = args.includes('--mayo2') ? 'mayo2' : 'mayo1'; // MAYO VARIANT TO USE FOR TESTING (AFFECTS SIGNATURE SIZE, AND THEREFORE MAX NUMBER OF OUTPUTS IN MULTI OUTPUT TRANSACTION)
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
 const nbReceipients = nor || 2000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
-const nbOfSenders = nos || 600; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nbOfSenders = nos || 660; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 
@@ -37,7 +38,7 @@ const storage = new ContrastStorage(seed);
 if (clearOnStart) storage.clear(); // start fresh
 
 const wallet = new Wallet(seed);
-await wallet.deriveAccounts(2 + nbReceipients, 'C', 'mayo2', '1', storage); // derive all accounts we will need for the test (main account + senders + receipients)
+await wallet.deriveAccounts(2 + nbReceipients, 'C', mayoVariant, '1', storage); // derive all accounts we will need for the test (main account + senders + receipients)
 
 const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect to
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed);

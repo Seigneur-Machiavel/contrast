@@ -1,3 +1,4 @@
+// unified-wroker-initializer.mjs
 let WorkerModule;
 try { WorkerModule = (await import('worker_threads')).Worker }
 catch (/**@type {any}*/ error) { WorkerModule = Worker }

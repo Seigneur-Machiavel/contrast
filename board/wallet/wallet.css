@@ -162,6 +162,9 @@
     filter: brightness(0.8);
     box-shadow: 3px 2px 5px var(--neumo-color2), -2px -2px 4px var(--neumo-color1);
 }
+#biw-buttonBar button span {
+	pointer-events: none;
+}
 #biw-buttonBar button img {
     pointer-events: none;
 	opacity: .8;

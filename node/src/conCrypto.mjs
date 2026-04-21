@@ -16,8 +16,8 @@ export const { QsafeSigner, QsafeHelper, sha256, sha512 } = Qsafe;
 const HiveP2P = typeof window !== 'undefined' // @ts-ignore
 	? await import('../../hive-p2p.min.js')
 	: await import('hive-p2p');
-const { xxHash32, Converter, Argon2Unified, ed25519 } = HiveP2P;
-export { xxHash32, Converter, Argon2Unified, ed25519 };
+const { xxHash32, Converter, Argon2Unified, ed25519, xchacha20poly1305, randomBytes } = HiveP2P;
+export { xxHash32, Converter, Argon2Unified, ed25519, xchacha20poly1305, randomBytes };
 
 const argon2 = new Argon2Unified();
 const converter = new Converter();
@@ -62,3 +62,41 @@ export class AsymetricFunctions {
 		if (!iValid) throw new Error('Invalid signature');
 	}
 };
+export class SymetricFunctions {
+
+	/** Use Argon2Id + XChaCha20-Poly1305 to encrypt data with a password. Will return a blob containing the salt, nonce and cipher text.
+	 * @param {Uint8Array} data @param {string} password */
+	static async cipher(data, password) {
+		const salt 		 = randomBytes(32);
+		const saltStr 	 = converter.bytesToHex(salt);
+		const a 		 = await argon2.hash(password, saltStr, 128 * 1024, 2, 2, 2, 32);
+		if (!a) throw new Error('Argon2 hashing failed');
+		
+		const nonce 	 = randomBytes(24);
+		const cipher 	 = xchacha20poly1305(a.hash, nonce);
+		const cipherData= cipher.encrypt(data);
+
+		const blob 		 = new Uint8Array(32 + 24 + cipherData.length);
+		blob.set(salt, 0);
+		blob.set(nonce, 32);
+		blob.set(cipherData, 32 + 24);
+		return blob;
+	}
+
+	/** Decrypt a blob created by the cipher method with the same password. Will throw an error if decryption fails (e.g., wrong password or corrupted data)
+	 * @param {Uint8Array} blob @param {string} password */
+	static async decipher(blob, password) {
+		const salt 		 = blob.slice(0, 32);
+		const nonce		 = blob.slice(32, 32 + 24);
+		const cipherData = blob.slice(32 + 24);
+
+		const saltStr 	 = converter.bytesToHex(salt);
+		const a 		 = await argon2.hash(password, saltStr, 128 * 1024, 2, 2, 2, 32);
+		if (!a) throw new Error('Argon2 hashing failed');
+
+		const cipher 	 = xchacha20poly1305(a.hash, nonce);
+		const decrypted  = cipher.decrypt(cipherData);
+		if (!decrypted) throw new Error('Decryption failed. Possible wrong password or corrupted data.');
+		return decrypted;
+	}
+}
