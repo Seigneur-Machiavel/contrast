@@ -87,9 +87,8 @@ export class AppsManager {
 				appToFocus = this.ordering[appName];
 			}
 		}
-		window.addEventListener('load', () => document.getElementById('demo').textContent = "toto");
+		
 		console.log('appToFocus', appToFocus);
-
 		const delay = appToFocus === appName ? 0 : this.transitionsDuration;
 		setTimeout(() => this.setFrontWindow(appToFocus), delay);
 	}

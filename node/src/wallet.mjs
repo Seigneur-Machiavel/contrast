@@ -35,8 +35,10 @@ export class Wallet {
     constructor(masterHex) { this.#masterHex = masterHex; }
 
 	// API
-	static generateRandomMasterHex(bytesLength = 32) {
-		return serializer.converter.bytesToHex(randomBytes(bytesLength));
+	static generateRandomMasterHex(bytesLength = 24) {
+		const bytes = randomBytes(bytesLength);
+		const hex =  serializer.converter.bytesToHex(bytes);
+		return { bytes, hex };
 	}
 	/** @param {ContrastStorage} [contrastStorage] @param {FrontStorage} [frontStorage] */
 	async loadAccountsFromStorage(contrastStorage, frontStorage) {

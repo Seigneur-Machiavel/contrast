@@ -97,31 +97,40 @@
 
 #board-assistant-inputs-wrap {
     position: relative;
-    min-height: 42px;
+	min-height: 42px;
     margin: 10px;
+	transition: min-height .2s;
+}
+#board-assistant-inputs-wrap.choices {
+	min-height: 82px;
 }
 #board-assistant-text-input-form,
 #board-assistant-choices-container,
 #board-assistant-input-idle {
-    position: absolute;
     display: flex;
     gap: 10px;
-    min-height: 42px;
     width: 100%;
     opacity: 1;
-    transition: opacity .2s .6s;
+	min-height: 42px;
+	transition: min-height .2s, opacity .2s;
+	/*transition: opacity .2s;*/
 }
 #board-assistant-choices-container {
     justify-content: center;
-    gap: 40px;
+	align-items: center;
+	min-height: 82px;
+	flex-wrap: wrap;
+    gap: 6px 12px;
 }
 #board-assistant-choices-container button:hover {
 	background-color: var(--color2);
 }
-#board-assistant-text-input-form.disabled,
-#board-assistant-choices-container.disabled,
-#board-assistant-input-idle.disabled {
-    transition: opacity .2s .2s;
+/*#board-assistant-text-input-form.disabled,*/
+/*#board-assistant-choices-container.disabled,*/
+#board-assistant-inputs-wrap:not(.text) #board-assistant-text-input-form,
+#board-assistant-inputs-wrap:not(.choices) #board-assistant-choices-container,
+#board-assistant-inputs-wrap:not(.idle) #board-assistant-input-idle {
+	position: absolute;
     opacity: 0;
     pointer-events: none;
 }
@@ -154,7 +163,7 @@
     border: none !important;
     outline: none !important;
     text-align: left;
-    box-shadow: inset 0px 0px 0px 1px var(--color1_1);
+    box-shadow: inset 0px 0px 0px 1px var(--color1_3);
     padding: 10px;
 }
 #board-messages-input:focus {
@@ -167,7 +176,8 @@
 }
 
 #board-assistant-choices-container button {
-    padding: 4px 20px;
+	font-size: .75em;
+    padding: 12px 20px;
     opacity: 0;
 	background: var(--color2);
     animation: choiceAppear .4s .8s forwards;

@@ -18,8 +18,17 @@ export class Interactor {
 	requestLanguageSelection = () => {
 		this.a.sendMessage('Please select your language');
 		this.requestChoice({
-			'English': () => this.a.translator.setLanguage('en'),
-			'Français': () => this.a.translator.setLanguage('fr')
+			'English':		() => this.a.translator.setLanguage('en'),
+			'Français':		() => this.a.translator.setLanguage('fr'),
+			'Italiano':		() => this.a.translator.setLanguage('it'),
+			'Español':		() => this.a.translator.setLanguage('es'),
+			'Português':	() => this.a.translator.setLanguage('pt'),
+			'Deutsch':		() => this.a.translator.setLanguage('de'),
+			'Čeština':		() => this.a.translator.setLanguage('cs'),
+			'한국어':		() => this.a.translator.setLanguage('ko'),
+			'日本語':		() => this.a.translator.setLanguage('ja'),
+			'中文（简体）':	() => this.a.translator.setLanguage('zh-s'),
+			'中文（繁體）':	() => this.a.translator.setLanguage('zh-t')
 		});
 	}
 	/** @param {import('./assistant').ChoicesActions} choices */
@@ -37,7 +46,7 @@ export class Interactor {
                 this.a.sendMessage(choice, 'user');
             });
             this.a.eHTML.choicesContainer.appendChild(choiceBtn);
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 60));
         }
     }
 
@@ -105,7 +114,7 @@ export class Interactor {
 		if (!authInfo.hasPassword) throw new Error('No password set, cannot change password'); // should not happen, but just in case
 		if (!authInfo.hasWallet) throw new Error('No wallet found, cannot change password'); // should not happen, but just in case
         
-		let existingPassword = password === '' ? 'fingerPrint' : password; // less secure: use the finger print as password
+		let existingPassword = password === '' ? 'ContrastWallet' : password; // less secure: use the finger print as password
         const isValid = typeof existingPassword === 'string' && existingPassword.length > 3 && existingPassword.length < 31;
         if (!isValid) return this.a.sendMessage(this.a.translator.MustBeBetween4And30Characters); // re ask current password
 		
@@ -119,60 +128,79 @@ export class Interactor {
     }
 
 	// PRIVATE KEY EXTRACTION INTERACTIONS
-	requestPasswordToExtract = () => {
-        this.a.sendMessage('Please enter your password to extract your private key');
-        this.a.setActiveInput('password', 'Your password...', true);
+	async revealSeed() {
+		const authInfo = await this.a.biw.getAuthInfo();
+		if (!authInfo.hasWallet) return this.a.sendMessage(this.a.translator.NoWalletFoundCannotRevealSeed);
+		
+		if (!authInfo.hasPassword) return this.#verifyPasswordAndExtract(); // if no password, directly reveal the seed without asking for password
+		this.#requestPasswordToExtract();
+	}
+	#requestPasswordToExtract = () => {
+        this.a.sendMessage(this.a.translator.PleaseEnterPasswordToExtract);
+        this.a.setActiveInput('password', this.a.translator.YourPasswordPlaceholder, true);
         this.a.onResponse = this.#verifyPasswordAndExtract;
     }
-    #verifyPasswordAndExtract = (password = 'ContrastWallet') => {
+    #verifyPasswordAndExtract = async (password = 'ContrastWallet') => {
         const isValid = typeof password === 'string' && password.length > 3 && password.length < 31;
         if (!isValid) return this.a.sendMessage(this.a.translator.MustBeBetween4And30Characters);
 
-    	// TODO
-        setTimeout(() => this.a.idleMenu(), 1000);
+    	const pk = await this.a.biw.getPrivateKey(password);
+		if (!pk) return this.a.sendMessage(this.a.translator.WrongPasswordTryAgain);
+		
+		/** @type {Record<string, () => void>} */
+		const choices = {};
+		choices[this.a.translator.HexadecimalChoice] = () => { this.a.showPrivateKey(pk, false); this.a.idleMenu(); };
+		choices[this.a.translator.WordListChoice] = () => { this.a.showPrivateKey(pk, true); this.a.idleMenu(); };
+		choices[this.a.translator.CancelChoice] = () => this.a.idleMenu();
+
+		this.a.sendMessage(this.a.translator.SelectSeedFormatChoice);
+		this.a.interactor.requestChoice(choices);
     }
 
 	// RESET INTERACTIONS
 	reset() {
-	    this.a.sendMessage('Select what you want to reset carefully, this action cannot be undone!');
-        this.a.interactor.requestChoice({
-            'Delete user preferences': () => {
-				this.a.sendMessage('Are you sure you want to delete user preferences?', 'system');
-				this.a.interactor.requestChoice({
-					'Yes': async () => {
-						await this.a.biw.boardStorage.remove('language');
-						this.a.sendMessage('User preferences deleted successfully');
-						await new Promise(resolve => setTimeout(resolve, 2000)); // time to read
-						location.reload(); // Reload the page to apply changes
-					},
-					'No': () => this.a.idleMenu()
-				})
-			},
-            'Delete wallet': () => {
-				this.a.sendMessage('Are you sure you want to delete your wallet? This will make you lose access to your wallet if you do not have it backed up!', 'system');
-				this.a.interactor.requestChoice({
-					'Yes': async () => { // @ts-ignore: 'chrome' does exit.
-						await this.a.biw.disconnectedWallet(true);
-						this.a.sendMessage('Wallet deleted successfully');
-						await new Promise(resolve => setTimeout(resolve, 600)); // time to read
-						this.a.start(); // Call entry point
-					},
-					'No': () => this.a.idleMenu()
-				})
-			},
-            'Delete all data': () => {
-				this.a.sendMessage('Are you sure you want to delete all data? This will reset everything and make you lose access to your wallet if you do not have it backed up!', 'system');
-				this.a.interactor.requestChoice({
-					'Yes': async () => {
-						await this.a.biw.boardStorage.reset();
-						this.a.sendMessage('All data deleted successfully');
-						await new Promise(resolve => setTimeout(resolve, 2000)); // time to read
-						location.reload(); // Reload the page to reset everything
-					},
-					'No': () => this.a.idleMenu()
-				})
-			},
-			'No': () => this.a.idleMenu()
-        });
+	    this.a.sendMessage(this.a.translator.SelectWhatYouWantToResetCarefully);
+
+		/** @type {Record<string, () => void>} */
+		const choices = {};
+		choices[this.a.translator.DeleteUserPreferencesChoice] = () => {
+			this.a.sendMessage(this.a.translator.AreYouSureYouWantToDeleteUserPreferences);
+			this.a.interactor.requestChoice({
+				'Yes': async () => {
+					await this.a.biw.boardStorage.remove('language');
+					this.a.sendMessage(this.a.translator.DeletedUserPreferencesSuccessfully);
+					await new Promise(resolve => setTimeout(resolve, 2000)); // time to read
+					location.reload(); // Reload the page to apply changes
+				},
+				'No': () => this.a.idleMenu()
+			})
+		};
+		choices[this.a.translator.DeleteWalletChoice] = () => {
+			this.a.sendMessage(this.a.translator.AreYouSureYouWantToDeleteWallet);
+			this.a.interactor.requestChoice({
+				'Yes': async () => { // @ts-ignore: 'chrome' does exit.
+					await this.a.biw.disconnectedWallet(true);
+					this.a.sendMessage(this.a.translator.WalletDeletedSuccessfully);
+					await new Promise(resolve => setTimeout(resolve, 600)); // time to read
+					this.a.start(); // Call entry point
+				},
+				'No': () => this.a.idleMenu()
+			})
+		};
+		choices[this.a.translator.DeleteAllDataChoice] = () => {
+			this.a.sendMessage(this.a.translator.AreYouSureYouWantToDeleteAllData);
+			this.a.interactor.requestChoice({
+				'Yes': async () => {
+					await this.a.biw.boardStorage.reset();
+					this.a.sendMessage(this.a.translator.AllDataDeletedSuccessfully);
+					await new Promise(resolve => setTimeout(resolve, 2000)); // time to read
+					location.reload(); // Reload the page to reset everything
+				},
+				'No': () => this.a.idleMenu()
+			})
+		};
+		choices[this.a.translator.CancelChoice] = () => this.a.idleMenu();
+
+		this.a.interactor.requestChoice(choices);
 	}
 }

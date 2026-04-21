@@ -1,10 +1,10 @@
-/** @typedef {'en' | 'fr'} Language */
+/** @typedef {'en' | 'fr' | 'it' | 'es'  | 'pt' | 'de' | 'cs' | 'ko' | 'ja' | 'zh-s' | 'zh-t'} Language */
 
 // FIRST WE DEFINE THE TRANSLATION STRINGS FOR EACH LANGUAGE IN A STRUCTURED WAY,
 // EACH OBJECT CORRESPOND TO ONE BOARD APP.
 // NAMING CORRESPOND TO THE "data-translatorkey" ATTRIBUTE OF THE HTML ELEMENTS TO TRANSLATE.
 /** @type {Record<string, Record<Language, { key: string, description: string }>>} */
-const assistantCommands = {
+const assistantCommands_DEPRECATED = {
 	cancel: {
 		en: { key: 'cancel', description: 'Cancel current interaction' },
 		fr: { key: 'annuler', description: 'Annuler l\'interaction en cours' },
@@ -31,7 +31,7 @@ const assistantCommands = {
 	},
 
 }
-const assistant = {
+const assistant_DEPRECATED = {
 	UserResponseHidden: {
 		en: 'User response (hidden)',
 		fr: 'Réponse de l\'utilisateur (cachée)',
@@ -64,9 +64,17 @@ const assistant = {
 		en: 'Please enter your password to unlock:',
 		fr: 'Veuillez entrer votre mot de passe pour déverrouiller :',
 	},
+	PleaseEnterPasswordToExtract: {
+		en: 'Please enter your password to extract your seed:',
+		fr: 'Veuillez entrer votre mot de passe pour extraire votre graine :',
+	},
 	WrongPasswordTryAgain: {
 		en: 'Wrong password, try again',
 		fr: 'Mot de passe incorrect, réessayez',
+	},
+	NoWalletFoundCannotRevealSeed: {
+		en: 'No wallet found, cannot reveal seed.',
+		fr: 'Aucun portefeuille trouvé, impossible de révéler la graine.',
 	},
 	YourPasswordPlaceholder: {
 		en: 'Your password...',
@@ -100,9 +108,74 @@ const assistant = {
 		en: 'Wallet unlocked successfully!',
 		fr: 'Portefeuille déverrouillé avec succès !',
 	},
-}
+	SelectWhatYouWantToResetCarefully: {
+		en: 'Select what you want to reset carefully, this action cannot be undone!',
+		fr: 'Sélectionnez soigneusement ce que vous souhaitez réinitialiser, cette action est irréversible !',
+	},
+	AreYouSureYouWantToDeleteUserPreferences: {
+		en: 'Are you sure you want to delete user preferences?',
+		fr: 'Êtes-vous sûr de vouloir supprimer les préférences utilisateur ?',
+	},
+	DeletedUserPreferencesSuccessfully: {
+		en: 'User preferences deleted successfully.',
+		fr: 'Préférences utilisateur supprimées avec succès.',
+	},
+	AreYouSureYouWantToDeleteWallet: {
+		en: 'Are you sure you want to delete your wallet? This will make you lose access to your wallet if you do not have it backed up!',
+		fr: 'Êtes-vous sûr de vouloir supprimer votre portefeuille ? Cela vous fera perdre l\'accès à votre portefeuille si vous ne l\'avez pas sauvegardé !',
+	},
+	WalletDeletedSuccessfully: {
+		en: 'Wallet deleted successfully.',
+		fr: 'Portefeuille supprimé avec succès.',
+	},
+	AreYouSureYouWantToDeleteAllData: {
+		en: 'Are you sure you want to delete all data? This will reset everything and make you lose access to your wallet if you do not have it backed up!',
+		fr: 'Êtes-vous sûr de vouloir supprimer toutes les données ? Cela réinitialisera tout et vous fera perdre l\'accès à votre portefeuille si vous ne l\'avez pas sauvegardé !',
+	},
+	AllDataDeletedSuccessfully: {
+		en: 'All data deleted successfully.',
+		fr: 'Toutes les données ont été supprimées avec succès.',
+	},
 
-const explorer = {
+	// CHOICES
+	YesChoice: {
+		en: 'Yes',
+		fr: 'Oui',
+	},
+	NoChoice: {
+		en: 'No',
+		fr: 'Non',
+	},
+	CancelChoice: {
+		en: 'Cancel',
+		fr: 'Annuler',
+	},
+	DeleteUserPreferencesChoice: {
+		en: 'Delete user preferences',
+		fr: 'Supprimer les préférences utilisateur',
+	},
+	DeleteWalletChoice: {
+		en: 'Delete wallet',
+		fr: 'Supprimer le portefeuille',
+	},
+	DeleteAllDataChoice: {
+		en: 'Delete all data',
+		fr: 'Supprimer toutes les données',
+	},
+	SelectSeedFormatChoice: {
+		en: 'Select seed format',
+		fr: 'Sélectionnez le format de la graine',
+	},
+	HexadecimalChoice: {
+		en: 'Hexadecimal',
+		fr: 'Hexadécimal',
+	},
+	WordListChoice: {
+		en: 'Word list',
+		fr: 'Liste de mots',
+	},
+}
+const explorer_DEPRECATED = {
 	ConsensusNotRobustMessage: {
 		en: 'Consensus isn\'t robust - Should not be considered reliable yet.',
 		fr: 'Le consensus n\'est pas robuste - Ne pas considérer comme fiable pour le moment.',
@@ -164,8 +237,7 @@ const explorer = {
 		fr: 'L\'écart de temps entre les 60 derniers blocs ; cela aide à contrôler la stabilité du réseau en affichant la déviation du temps de bloc.',
 	},
 }
-
-const wallet = {
+const wallet_DEPRECATED = {
 		// SETTINGS
 	AutoRefresh: {
 		en: 'Auto-refresh',
@@ -242,13 +314,32 @@ const wallet = {
 		fr: 'Confirmer',
 	},
 }
+// THESE TRANSLATIONS ARE MOVED TO translations.js
+// TODO: erase 'DEPRECATED' when everything is migrated and tested.
 
+import { assistantCommands, assistant, explorer, wallet } from './translations.js';
+
+function getBip39CorrespondingLanguage(lang) {
+	switch (lang) {
+		case 'en': return 'english';
+		case 'fr': return 'french';
+		case 'it': return 'italian';
+		case 'es': return 'spanish';
+		case 'pt': return 'portuguese';
+		case 'cs': return 'czech';
+		case 'ko': return 'korean';
+		case 'ja': return 'japanese';
+		case 'zh-s': return 'chinese_simplified';
+		case 'zh-t': return 'chinese_traditional';
+		default: return 'english';
+	}
+}
 // THE TRANSLATOR CLASS IS USED TO MANAGE THE TRANSLATION OF THE BOARD
 // IT PROVIDES A SET OF GETTERS FOR EACH TRANSLATABLE TEXT, AND A METHOD TO SET THE LANGUAGE AND UPDATE THE TEXT CONTENT OF THE BOARD ACCORDINGLY.
 // IT ALSO DEFINES THE AVAILABLE LANGUAGES AND A CALLBACK FUNCTION THAT CAN BE CALLED WHEN THE LANGUAGE CHANGES.
 export class Translator {
 	onLanguageChange = null; // Callback function when language changes, receives new language as argument
-	availableLanguages = ['en', 'fr'];
+	availableLanguages = ['en', 'fr', 'it', 'es', 'pt', 'de', 'cs', 'ko', 'ja', 'zh-s', 'zh-t']; // List of available languages
 	/** @type {Language} */	lang;
 
 	/** @param {function(Language, boolean):void} onLanguageChange */
@@ -275,6 +366,7 @@ export class Translator {
 	// BOARD
 
 	// ASSISTANT
+	get bip39Language() { return getBip39CorrespondingLanguage(this.lang); }
 	assistantCommand(cmdKey = 'language') {
 		const cmd = assistantCommands[cmdKey];
 		if (!cmd) throw new Error(`No command found for key "${cmdKey}"`);
@@ -288,7 +380,9 @@ export class Translator {
 	get SetupProcess() { return assistant.SetupProcess[this.lang] || assistant.SetupProcess.en; }
 	get PleaseEnterNewPassword() { return assistant.PleaseEnterNewPassword[this.lang] || assistant.PleaseEnterNewPassword.en; }
 	get PleaseEnterPasswordToUnlock() { return assistant.PleaseEnterPasswordToUnlock[this.lang] || assistant.PleaseEnterPasswordToUnlock.en; }
+	get PleaseEnterPasswordToExtract() { return assistant.PleaseEnterPasswordToExtract[this.lang] || assistant.PleaseEnterPasswordToExtract.en; }
 	get WrongPasswordTryAgain() { return assistant.WrongPasswordTryAgain[this.lang] || assistant.WrongPasswordTryAgain.en; }
+	get NoWalletFoundCannotRevealSeed() { return assistant.NoWalletFoundCannotRevealSeed[this.lang] || assistant.NoWalletFoundCannotRevealSeed.en; }
 	get YourPasswordPlaceholder() { return assistant.YourPasswordPlaceholder[this.lang] || assistant.YourPasswordPlaceholder.en; }
 	get YourNewPasswordPlaceholder() { return assistant.YourNewPasswordPlaceholder[this.lang] || assistant.YourNewPasswordPlaceholder.en; }
 	get ConfirmYourPassword() { return assistant.ConfirmYourPassword[this.lang] || assistant.ConfirmYourPassword.en; }
@@ -297,6 +391,23 @@ export class Translator {
 	get InvalidPasswordInput() { return assistant.InvalidPasswordInput[this.lang] || assistant.InvalidPasswordInput.en; }
 	get PasswordsDoNotMatch() { return assistant.PasswordsDoNotMatch[this.lang] || assistant.PasswordsDoNotMatch.en; }
 	get WalletUnlocked() { return assistant.WalletUnlocked[this.lang] || assistant.WalletUnlocked.en; }
+	get SelectWhatYouWantToResetCarefully() { return assistant.SelectWhatYouWantToResetCarefully[this.lang] || assistant.SelectWhatYouWantToResetCarefully.en; }
+	get AreYouSureYouWantToDeleteUserPreferences() { return assistant.AreYouSureYouWantToDeleteUserPreferences[this.lang] || assistant.AreYouSureYouWantToDeleteUserPreferences.en; }
+	get DeletedUserPreferencesSuccessfully() { return assistant.DeletedUserPreferencesSuccessfully[this.lang] || assistant.DeletedUserPreferencesSuccessfully.en; }
+	get AreYouSureYouWantToDeleteWallet() { return assistant.AreYouSureYouWantToDeleteWallet[this.lang] || assistant.AreYouSureYouWantToDeleteWallet.en; }
+	get WalletDeletedSuccessfully() { return assistant.WalletDeletedSuccessfully[this.lang] || assistant.WalletDeletedSuccessfully.en; }
+	get AreYouSureYouWantToDeleteAllData() { return assistant.AreYouSureYouWantToDeleteAllData[this.lang] || assistant.AreYouSureYouWantToDeleteAllData.en; }
+	get AllDataDeletedSuccessfully() { return assistant.AllDataDeletedSuccessfully[this.lang] || assistant.AllDataDeletedSuccessfully.en; }
+	// ASSISTANT CHOICES
+	get YesChoice() { return assistant.YesChoice[this.lang] || assistant.YesChoice.en; }
+	get NoChoice() { return assistant.NoChoice[this.lang] || assistant.NoChoice.en; }
+	get CancelChoice() { return assistant.CancelChoice[this.lang] || assistant.CancelChoice.en; }
+	get DeleteUserPreferencesChoice() { return assistant.DeleteUserPreferencesChoice[this.lang] || assistant.DeleteUserPreferencesChoice.en; }
+	get DeleteWalletChoice() { return assistant.DeleteWalletChoice[this.lang] || assistant.DeleteWalletChoice.en; }
+	get DeleteAllDataChoice() { return assistant.DeleteAllDataChoice[this.lang] || assistant.DeleteAllDataChoice.en; }
+	get SelectSeedFormatChoice() { return assistant.SelectSeedFormatChoice[this.lang] || assistant.SelectSeedFormatChoice.en; }
+	get HexadecimalChoice() { return assistant.HexadecimalChoice[this.lang] || assistant.HexadecimalChoice.en; }
+	get WordListChoice() { return assistant.WordListChoice[this.lang] || assistant.WordListChoice.en; }
 
 	// EXPLORER
 	get ConsensusNotRobustMessage() { return explorer.ConsensusNotRobustMessage[this.lang] || explorer.ConsensusNotRobustMessage.en; }

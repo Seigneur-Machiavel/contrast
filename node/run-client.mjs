@@ -17,16 +17,16 @@ import { HIVE_P2P_CONFIG } from '../config/hive-p2p-config.mjs';
 HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
-const seed = startupStorage.loadBinary('seed') || await HiveP2P.CryptoCodex.generateNewSybilIdentity(false);
+const walletSeed = startupStorage.loadBinary('seed') || Wallet.generateRandomMasterHex().bytes; // GENERATE A RANDOM SEED IF NOT EXISTING FOR NEXT STEPS (NODE CREATION, STORAGE PATHS, ETC...).
+const walletSeedHex = serializer.converter.bytesToHex(walletSeed);
+const storage = new ContrastStorage(walletSeedHex); // ACCESS TO 'contrast-storage/{localIdentifier}'.
+const wallet = new Wallet(walletSeedHex);
+await wallet.deriveAccounts(2, 'C', undefined, undefined, storage);
 
 // LOAD BOOTSTRAP URLS FROM "contrast/bootstraps.json" IF EXISTS, OTHERWISE USE DEFAULT
 const bootstraps = startupStorage.loadJSON('config/bootstraps', true) || ['ws://localhost:27260'];
-const seedHex = serializer.converter.bytesToHex(seed);
-const storage = new ContrastStorage(seedHex);	// ACCESS TO 'contrast-storage/{localIdentifier}'.
-const wallet = new Wallet(seedHex);
-await wallet.deriveAccounts(2, 'C', storage);
-
-const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
+const codexSeed = await HiveP2P.CryptoCodex.generateNewSybilIdentity(false);
+const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, codexSeed);
 const clientNode = await createContrastNode({
 	cryptoCodex,
 	storage,
@@ -38,7 +38,7 @@ const clientNode = await createContrastNode({
 await clientNode.start(wallet);
 
 // PERSIST THE SEED FOR NEXT STARTUPS IF NODE IS ABLE TO START SUCCESSFULLY
-startupStorage.saveBinary('seed', seed);
+startupStorage.saveBinary('seed', walletSeed);
 
 // LOG THE CONTROLLER PUBKEY IF NECESSARY
 if (!unsafeServePubKey && !serverChachaSeedHex && clientNode.controller)

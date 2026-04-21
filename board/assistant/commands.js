@@ -32,7 +32,7 @@ export class CommandInterpreter {
 		if (cmd === 'cancel') return this.a.interactor.cancelInteraction();
 		if (cmd === 'copy_logs') return this.a.sendMessage('Not implemented yet, sorry'); // this.requestLogsHistory();
 		if (cmd === 'change_password') return this.a.interactor.setOrChangePassword();
-		if (cmd === 'reveal_seed') return this.a.interactor.requestPasswordToExtract();
+		if (cmd === 'reveal_seed') return this.a.interactor.revealSeed();
 		if (cmd === 'reset') return this.a.interactor.reset();
 		this.a.sendMessage('Unknown command');
 		console.warn('Unknown command:', cmd);

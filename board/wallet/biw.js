@@ -81,6 +81,7 @@ export class BoardInternalWallet {
 	async refreshAccounts(force = false) {
 		if (!this.wallet || !this.wallet.accounts.length) return;
 		eHTML.get('buttonBarTransfer')?.classList.remove('disabled');
+
 		if (force) for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
 		if (this.accountThatNeedsRefresh.size === 0) return;
 
@@ -200,7 +201,7 @@ export class BoardInternalWallet {
 		return this.authInfo;
 	}
 	/** @param {string} [password] undefined => default password @param {string} [pk] undefined => generate a new private key */
-	async savePrivateKey(password = 'ContrastWallet', pk = Wallet.generateRandomMasterHex()) {
+	async savePrivateKey(password = 'ContrastWallet', pk = Wallet.generateRandomMasterHex().hex) {
 		const blob = await frontCrypto.cipher(serializer.converter.hexToBytes(pk), password);
 		const blobHex = serializer.converter.bytesToHex(blob);
 		await this.boardStorage.save('wallet_blob_hex', blobHex);
@@ -249,6 +250,14 @@ export class BoardInternalWallet {
 		eHTML.get('buttonBarTransfer')?.classList.add('disabled');
 		eHTML.get('buttonBarHistory')?.classList.add('disabled');
 		this.textInfo('Wallet deleted successfully');
+	}
+	async getPrivateKey(password = 'ContrastWallet') {
+		/** @ts-ignore @type {string | null} */
+		const blobHex = await this.boardStorage.load('wallet_blob_hex');
+		if (!blobHex) throw new Error('No private key found in storage');
+		const blob = serializer.converter.hexToBytes(blobHex);
+		const privateKey = await frontCrypto.decipher(blob, password);
+		return serializer.converter.bytesToHex(privateKey);
 	}
 
 	// INTERNAL METHODS
@@ -313,6 +322,7 @@ export class BoardInternalWallet {
 
 		await this.wallet.deriveOneAccount('C', undefined, undefined, undefined, this.boardStorage);
 		await new Promise(r => setTimeout(r, 800)); // wait a bit to show the animation
+		eHTML.get('buttonBarTransfer')?.classList.remove('disabled'); // ensure transfer button is enabled
 		this.components.accounts.updateLabels();
 
 		// STOP ANIMATION

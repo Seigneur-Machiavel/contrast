@@ -17,6 +17,7 @@ import { CommandInterpreter } from './commands.js';
  * @typedef {Object} HtmlElements
  * @property {HTMLElement} assistantContainer
  * @property {HTMLElement} messagesContainer
+ * @property {HTMLElement} inputsWrap
  * @property {HTMLElement} inputForm
  * @property {HTMLElement} inputIdle
  * @property {HTMLElement} inputIdleText
@@ -44,6 +45,7 @@ export class Assistant {
     eHTML = {						// @ts-ignore
         assistantContainer: null,	// @ts-ignore
         messagesContainer: null,	// @ts-ignore
+		inputsWrap: null,			// @ts-ignore
         inputForm: null,			// @ts-ignore
         inputIdle: null,			// @ts-ignore
         inputIdleText: null,		// @ts-ignore
@@ -76,8 +78,9 @@ export class Assistant {
 		// @ts-ignore
         this.eHTML.assistantContainer = document.getElementById(`${this.idPrefix}-assistant-container`);	// @ts-ignore
         this.eHTML.messagesContainer = document.getElementById(`${this.idPrefix}-messages-container`);		// @ts-ignore
+        this.eHTML.inputsWrap = document.getElementById(`${this.idPrefix}-assistant-inputs-wrap`);					// @ts-ignore
         this.eHTML.inputForm = document.getElementById(`${this.idPrefix}-assistant-text-input-form`);		// @ts-ignore
-        this.eHTML.input = document.getElementById(`${this.idPrefix}-messages-input`);						// @ts-ignore
+		this.eHTML.input = document.getElementById(`${this.idPrefix}-messages-input`);						// @ts-ignore
         this.eHTML.possibilities = document.getElementById(`${this.idPrefix}-messages-input-possibilitiesList`); // @ts-ignore
         this.eHTML.sendBtn = document.getElementById(`${this.idPrefix}-send-btn`);							// @ts-ignore
         this.eHTML.inputIdle = document.getElementById(`${this.idPrefix}-assistant-input-idle`);			// @ts-ignore
@@ -131,7 +134,7 @@ export class Assistant {
 		this.setActiveInput('text', this.translator.TypeYourCommand, true);
         this.onResponse = this.commandInterpreter.processCommand;
     }
-	/** @param {string} message @param {string} sender */
+	/** @param {string} message @param {'system' | 'user'} [sender] default is 'system' */
     async sendMessage(message, sender = 'system') {
         if (sender === 'system' && !this.isFirstMessage) await new Promise(resolve => setTimeout(resolve, 200));
         this.isFirstMessage = false;
@@ -179,7 +182,7 @@ export class Assistant {
 				this.interactor.requestNewPassword();
 			},
 			'Use existing wallet': () => {
-				this.sendMessage('Please enter your private key (64 characters hexadecimal or 24 words list)');
+				this.sendMessage('Please enter your private key (48 characters hexadecimal or 24 words list)');
 				this.setActiveInput('text', 'Your private key...', true);
 				this.onResponse = this.#verifyPrivateKey;
 			}
@@ -193,8 +196,8 @@ export class Assistant {
         const privKeyHex = isWordsList ? this.#digestWordsListStr(pk) : pk;
 		if (!privKeyHex) return this.sendMessage('Invalid private key');
 
-        // hex only, 64 characters
-        const isValidPrivHex = privKeyHex.length === 64 && this.#isHexadecimal(privKeyHex);
+        // hex only, 48 characters
+        const isValidPrivHex = privKeyHex.length === 48 && this.#isHexadecimal(privKeyHex);
         if (!isValidPrivHex) return this.sendMessage('Invalid private key. (retry)');
         
 		this.setActiveInput('idle');
@@ -207,16 +210,20 @@ export class Assistant {
         const split = wordsList.split(' ');
         const words = [];
         //console.log('split:', split);
-        for (const part of split) {
-            let cleaned = part.trim().toLowerCase(); // remove spaces and lowercase
-            cleaned = cleaned.replace(/[^a-z]/g, ''); // remove all non-alphabetic characters
-            if (cleaned.length > 0) words.push(cleaned);
-        }
+		for (const part of split) { // clean each part to keep only the word, in case user enter "1. word" or "1) word" for better readability
+			const cleaned = part.trim().toLowerCase().replace(/^\d+[.)]\s*/, ''); // strip leading "1." or "1)"
+			if (cleaned.length > 0) words.push(cleaned);
+		}
 
         if (words.length % 2 !== 0) return null; // must be even
 
-        const wl = words.join(' '); // @ts-ignore
-        return bip39.mnemonicToEntropy(wl).toString('hex');
+        const wl = words.join(' '); 				// @ts-ignore
+		for (const language in bip39.wordlists) { 	// @ts-ignore
+			bip39.setDefaultWordlist(language); 	// @ts-ignore
+			try { return bip39.mnemonicToEntropy(wl).toString('hex') }
+			catch { continue }
+		}
+		return null;
     }
 	/** @param {string} str */
     #isHexadecimal(str) {
@@ -225,6 +232,7 @@ export class Assistant {
         return false;
     }
 
+	/** Based on authInfo => RequestPrivateKey or RequestPasswordToUnlock or load wallet. */
 	async start() {
 		this.setActiveInput('idle');
 		const authInfo = await this.biw.getAuthInfo();
@@ -252,7 +260,8 @@ export class Assistant {
 
 	/** @param {string} privateKeyHex @param {boolean} [asWords] default false */
     showPrivateKey(privateKeyHex, asWords = false) {
-        if (!asWords) return this.sendMessage(privateKeyHex, 'system');
+        if (!asWords) return this.sendMessage(privateKeyHex, 'system'); // @ts-ignore
+		bip39.setDefaultWordlist(this.translator.bip39Language);
 
         /** @type {string} */										// @ts-ignore
         const wordsList = bip39.entropyToMnemonic(privateKeyHex); 	// @ts-ignore
@@ -287,20 +296,21 @@ export class Assistant {
         this.eHTML.messagesContainer.appendChild(messageDiv);
         this.#addMessageDeleteBtn(messageDiv);
         this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
+		this.idleMenu();
     }
     /** @param {string} input - 'text', 'password' or 'choices' - default 'idle' */
     setActiveInput(input = 'idle', placeholder = '', resetValue = false) {
         this.eHTML.input.value = '';
-        this.eHTML.inputForm.classList.add('disabled');
-        this.eHTML.choicesContainer.classList.add('disabled');
-        this.eHTML.inputIdle.classList.add('disabled');
+		this.eHTML.inputsWrap.classList.remove('idle');
+		this.eHTML.inputsWrap.classList.remove('text');
+		this.eHTML.inputsWrap.classList.remove('choices');
 
         const delay = this.activeInput === input ? 0 : 200;
         if (this.nextActiveInputTimeout) clearTimeout(this.nextActiveInputTimeout);
-        this.nextActiveInputTimeout = setTimeout(() => {
+        this.nextActiveInputTimeout = setTimeout(async () => {
             switch (input) {
                 case 'idle':
-                    this.eHTML.inputIdle.classList.remove('disabled');
+					this.eHTML.inputsWrap.classList.add('idle');
                     break;
                 case 'text':
                     this.#setTextInputTypeAndFocus('text', placeholder, resetValue);
@@ -309,11 +319,13 @@ export class Assistant {
                     this.#setTextInputTypeAndFocus('password', placeholder, resetValue);
                     break;
                 case 'choices':
-                    this.eHTML.choicesContainer.classList.remove('disabled');
+					this.eHTML.inputsWrap.classList.add('choices');
                     break;
                 default:
-                    console.error('Unknown input type:', input);
+                    return console.error('Unknown input type:', input);
             }
+			await new Promise(resolve => setTimeout(resolve, 250)); // wait for the input to be visible before focusing
+			this.eHTML.messagesContainer.scrollTop = this.eHTML.messagesContainer.scrollHeight;
         }, delay);
     }
     #setTextInputTypeAndFocus(type = 'text', placeholder = '', resetValue = false) {
@@ -322,7 +334,7 @@ export class Assistant {
         this.eHTML.input.placeholder = placeholder;
         if (resetValue) this.eHTML.input.value = '';
 
-        this.eHTML.inputForm.classList.remove('disabled');
+		this.eHTML.inputsWrap.classList.add('text');
         this.eHTML.input.focus();
     }
     async #idleInfiniteAnimation() {
