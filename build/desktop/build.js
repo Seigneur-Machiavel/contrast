@@ -1,27 +1,21 @@
 // @ts-check
 import fs from 'fs';
-import url from 'url';
 import path from 'path';
 import crypto from 'crypto';
 import archiver from 'archiver';
 import { createWriteStream } from 'fs';
+import { ContrastStorage } from '../../storage/storage.mjs';
 
 // ---- BUILD RELEASE --------------------------------------------------
-// FOCUS THE ROOT FOLDER
-const filePath = url.fileURLToPath(import.meta.url);
-let rootFolder = filePath; // loop until we find "contrast" folder
-while (!rootFolder.endsWith('contrast'))
-	if (rootFolder === path.dirname(rootFolder)) throw new Error('Could not find contrast root folder');
-	else rootFolder = path.dirname(rootFolder);
-
-const RELEASE_DIR = path.join(rootFolder, 'build/desktop/release');
+const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
+const RELEASE_DIR = path.join(startupStorage.rootFolder, 'build/desktop/release');
 const RESOURCES_DIST = path.join(RELEASE_DIR, 'dist');
 
 // ---- WHAT GOES IN resources.zip (updates) ----------------------------------------
 /** @type {{in: string, out?: string}[]} */
 const RESOURCES_FILES = [
-	{ in: 'package.json' }, 			// for version display and update checks
-	//{ in: 'bootstraps.json' },			// bootstraps URLs list
+	{ in: 'setup.bat' },					// for windows users initial setup
+	{ in: 'package.json' }, 				// for version display and update checks
 	{ in: 'client/launcher.mjs' },			// launcher patching
 	{ in: 'client/node-manager.mjs' },  	// launcher patching
 	{ in: 'client/updater.mjs' },			// launcher patching
@@ -35,14 +29,13 @@ const RESOURCES_FOLDERS = [
     { in: 'miniLogger' },
     { in: 'node' },
     { in: 'storage' },
-	// { in: 'tests' }, // not used
     { in: 'types' },
     { in: 'utils' },
 ];
 
 // node_modules PROD ONLY (EXCLUDE devDependencies)
 const DEV_DEPS = ['archiver', 'esbuild', '@yao-pkg/pkg', 'postject'];
-const NM_SRC = path.join(rootFolder, 'node_modules');
+const NM_SRC = path.join(startupStorage.rootFolder, 'node_modules');
 const NM_DIST = path.join(RESOURCES_DIST, 'node_modules');
 
 // ---- WHAT GOES IN contrast.zip (initial install) ---------------------------------
@@ -78,9 +71,9 @@ function copyFile(src, dest) {
 /** @param {string} distDir @param {{in: string, out?: string}[]} files @param {{in: string, out?: string}[]} folders */
 function copyAssets(distDir, files, folders) {
     for (const file of files)
-        copyFile(path.join(rootFolder, file.in), path.join(distDir, file.out || file.in));
+        copyFile(path.join(startupStorage.rootFolder, file.in), path.join(distDir, file.out || file.in));
     for (const folder of folders) {
-        const src = path.join(rootFolder, folder.in);
+        const src = path.join(startupStorage.rootFolder, folder.in);
         const dest = path.join(distDir, folder.out || folder.in);
         if (fs.existsSync(src)) fs.cpSync(src, dest, { recursive: true });
         else console.warn(`[skip] ${src} not found`);
@@ -120,7 +113,7 @@ async function main() {
     const resourcesZipPath = path.join(RELEASE_DIR, 'resources.zip');
     await createZip(RESOURCES_DIST, resourcesZipPath, true);
     const manifest = {
-        version: JSON.parse(fs.readFileSync('package.json', 'utf8')).version,
+        version: JSON.parse(fs.readFileSync(path.join(startupStorage.rootFolder, 'package.json'), 'utf8')).version,
         resourcesChecksum: sha256(resourcesZipPath),
     };
     fs.writeFileSync(path.join(RELEASE_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2));

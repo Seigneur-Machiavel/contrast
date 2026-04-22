@@ -28,7 +28,7 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 const clientStorage = new ContrastStorage(seed);
 if (clearOnStart) clientStorage.clear(); // start fresh
 const clientWallet = new Wallet(seed);
-await clientWallet.deriveAccounts(2 + Math.max(nbReceipients, nbOfSenders), 'C', 'mayo1', '1', clientStorage); // derive all accounts we will need for the test (main account + senders + receipients)
+await clientWallet.deriveAccounts(2 + Math.max(nbReceipients, nbOfSenders), 'C', undefined, undefined, clientStorage); // derive all accounts we will need for the test (main account + senders + receipients)
 
 const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
 const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps, controllerPort: false });

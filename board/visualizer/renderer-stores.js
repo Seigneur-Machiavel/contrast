@@ -46,7 +46,8 @@ export class NodesStore {
 			unknown: 0,
 			maxDistance: 0, // max node distance from center x or y, used for auto zoom
 		};
-		for (const node of Object.values(this.store)) {
+		for (const key in this.store) {
+			const node = this.store[key];
 			result.total++;
 			result.maxDistance = Math.max(result.maxDistance, Math.abs(node.position.x), Math.abs(node.position.y));
 			if (node.isPublic) result.totalPublic++;
@@ -226,7 +227,7 @@ export class ConnectionsStore {
 	}
 	getConnectionsCount() {
 		const result = { connsCount: Object.keys(this.store).length, linesCount: 0 };
-		for (const peerConn of Object.values(this.store)) if (peerConn.line) result.linesCount++;
+		for (const key in this.store) if (this.store[key].line) result.linesCount++;
 		return result;
 	}
 	destroy() {

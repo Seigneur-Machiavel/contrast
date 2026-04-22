@@ -371,18 +371,16 @@ export const serializer = {
 		transactionsResponse(txs, impliedUtxos) {
 			const modes = [];
 			const serializedTxs = [];
-			const ids = Object.keys(txs);
-			const txsValues = Object.values(txs);
-			for (const tx of txsValues) { // SERIALIZE TXs WITH SPECIAL MODE IF VALIDATOR/SOLVER TX
-				const mode = Transaction_Builder.isSolverOrValidatorTx(tx);
+			for (const id in txs) { // SERIALIZE TXs WITH SPECIAL MODE IF VALIDATOR/SOLVER TX
+				const mode = Transaction_Builder.isSolverOrValidatorTx(txs[id]);
 				modes.push(!mode ? 0 : mode === 'solver' ? 1 : 2); // 0 = tx, 1 = solver, 2 = validator
-				serializedTxs.push(this.transaction(tx, mode));
+				serializedTxs.push(this.transaction(txs[id], mode));
 			}
 
 			const serializedUtxos = this.miniUTXOsObj(impliedUtxos);
-			const idsSize = SIZES.txId.bytes * txsValues.length;
-			const modeSize = txsValues.length; // mode for each tx (solver/validator/tx)
-			const offsetSize = 4 * txsValues.length; // pointer for each tx
+			const idsSize = SIZES.txId.bytes * serializedTxs.length;
+			const modeSize = serializedTxs.length; 		 // mode(1b) for each tx (solver/validator/tx)
+			const offsetSize = 4 * serializedTxs.length; // pointer(4b) for each tx
 			const txsSize = serializedTxs.reduce((sum, tx) => sum + tx.length, 0);
 			const totalSize = idsSize + modeSize + offsetSize + txsSize + 4 + serializedUtxos.length;
 			
@@ -390,8 +388,9 @@ export const serializer = {
 			w.writeBytes(converter.numberTo4Bytes(serializedUtxos.length));
 			w.writeBytes(serializedUtxos);
 
-			for (let i = 0; i < ids.length; i++) {
-				const { height, txIndex } = serializer.parseTxId(ids[i]);
+			let i = 0;
+			for (const id in txs) {
+				const { height, txIndex } = serializer.parseTxId(id);
 				w.writeBytes(converter.numberTo4Bytes(height));
 				w.writeBytes(converter.numberTo2Bytes(txIndex));
 				w.writeByte(modes[i]);
@@ -399,6 +398,7 @@ export const serializer = {
 				const serializedTx = serializedTxs[i];
 				w.writeBytes(converter.numberTo4Bytes(serializedTx.length)); // pointer
 				w.writeBytes(serializedTx);
+				i++;
 			}
 
 			return w.getBytes();

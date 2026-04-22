@@ -1,6 +1,4 @@
-// @ts-ignore
 // NODEJS VERSION OF THE MINI LOGGER
-
 const supportsAnsi = typeof process !== 'undefined' && process.stdout.isTTY && process.env.TERM !== 'dumb';
 const isNode = typeof self === 'undefined';
 let fs;
@@ -15,9 +13,8 @@ let basePath = __dirname;
     try { url = await import('url'); } catch (error) { url = window.url; }
 
     while (!url) { await new Promise(resolve => setTimeout(resolve, 10)); }
-    const __filename = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
-    const parentFolder = path.dirname(__filename);
-    basePath = path.join(path.dirname(parentFolder), 'miniLogger');
+    const __filename = url.fileURLToPath(import.meta.url);
+    basePath = path.dirname(__filename);
 })();
 /**
  * @typedef MiniLoggerConfig
@@ -31,10 +28,9 @@ class MiniLoggerConfig {
 	colors = { };
 }
 async function loadedImports() {
-	for (let i = 0; i < 10; i++) {
+	for (let i = 0; i < 10; i++)
 		if (fs && path && basePath) return true;
-		await new Promise(resolve => setTimeout(resolve, 100));
-	}
+		else await new Promise(resolve => setTimeout(resolve, 100));
 }
 
 /** @returns {MiniLoggerConfig} */

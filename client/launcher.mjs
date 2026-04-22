@@ -7,12 +7,11 @@ import { spawn } from 'child_process';
 import { Updater } from './updater.mjs';
 import { execSync } from 'child_process';
 
-const safeConnexionToken = crypto.randomBytes(32).toString('hex');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const NEUTRALINO_EXE = path.join(__dirname, 'neutralino-win_x64.exe');
 const CONFIG_PATH = path.join(__dirname, 'launcher-config.json');
 const CONTRAST_EXE = path.join(__dirname, 'contrast.exe');
 const RESOURCES_DIR = path.join(__dirname, '..');
-const NEUTRALINO_EXE = path.join(__dirname, 'neutralino-win_x64.exe');
 const GITHUB_API = 'https://api.github.com/repos/Seigneur-Machiavel/contrast/releases';
 const pkg = JSON.parse(fs.readFileSync(path.join(RESOURCES_DIR, 'package.json'), 'utf8'));
 const version = pkg.version; // ex: '0.6.12'
@@ -63,6 +62,7 @@ async function main() {
 	const { NodeManager } = await import('./node-manager.mjs');
 	const node = new NodeManager(CONTRAST_EXE);
 
+	const safeConnexionToken = crypto.randomBytes(32).toString('hex');
 	const { startBoardService } = await import('../node/board-service.mjs');
 	startBoardService(safeConnexionToken, node.serverPubKeyHex);
 

@@ -80,18 +80,6 @@ const update = () => {
 requestAnimationFrame(update);
 
 // CENTRALIZED EVENT HANDLING
-async function clickTitleBarButtonsHandler(e) { // DEPRECATED
-	const button = e.target.closest('button');
-	if (!button) return;
-	try {
-		const ipcRenderer = await import('electron').then(module => module.ipcRenderer);
-		switch(button.id) {
-			case 'minimize-btn': ipcRenderer.send('minimize-btn-click'); break;
-			case 'maximize-btn': ipcRenderer.send('maximize-btn-click'); break;
-			case 'close-btn': ipcRenderer.send('close-btn-click'); break;
-		}
-	} catch (error) {}
-}
 document.addEventListener('click', (e) => {
 	//clickTitleBarButtonsHandler(e);
 	appsManager.clickHandler(e);
@@ -146,36 +134,6 @@ window.addEventListener('resize', function(e) { // Trigger on main window resize
 		appsManager.windows[app].element.style.maxWidth = width - 4 + 'px';
 		appsManager.windows[app].element.style.maxHeight = height - 6 + 'px';
 	}
-});
-window.addEventListener('message', function(e) { // TODO
-	//console.log('message received:', e.data);
-	//console.log(e);
-	if (e.data?.type === 'iframeClick') {
-		for (const app in appsManager.windows) {
-			if (!appsManager.windows[app].origin) continue;
-			if (formatedUrl(appsManager.windows[app].origin) !== formatedUrl(e.origin)) continue;
-			appsManager.setFrontWindow(app);
-			break;
-		}
-	}
-
-	if (e.data?.type === 'copy_text') {
-		const authorizedCopyTextOrigins = ['https://cybercon.app'];
-		if (!authorizedCopyTextOrigins.includes(formatedUrl(e.origin))) {
-			console.error('Unauthorized origin for copy_text:', e.origin);
-			return;
-		}
-
-		navigator.clipboard.writeText(e.data.value).then(() => { console.log('Text copied to clipboard!');
-		}).catch(err => { console.error('Failed to copy text to clipboard:', err); });
-	}
-
-	const isCyberCon = formatedUrl(e.origin) === formatedUrl(appsManager.windows.cybercon?.origin);
-	if (isCyberCon && e.data?.type === 'set_auth_info')
-		ipcRenderer.send('store-app-data', 'cyberCon', 'auth_info', e.data.value, true);
-
-	if (isCyberCon && e.data?.type === 'reset_game')
-		ipcRenderer.send('delete-app-data', 'cyberCon', 'auth_info');
 });
 
 // CONNECTOR EVENTS

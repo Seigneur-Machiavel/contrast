@@ -21,7 +21,7 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 const bootstrapStorage = new ContrastStorage(seed);
 if (clearOnStart) bootstrapStorage.clear(); // start fresh
 const bootstrapWallet = new Wallet(seed);
-await bootstrapWallet.deriveAccounts(2, 'C', bootstrapStorage);
+await bootstrapWallet.deriveAccounts(2, 'C', undefined, undefined, bootstrapStorage);
 
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed); // @ts-ignore
 const bootstrapNode = await createContrastNode({

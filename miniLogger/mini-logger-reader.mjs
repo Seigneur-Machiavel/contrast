@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import url from 'url';
 
-const __filename = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
+const __filename = url.fileURLToPath(import.meta.url);
 const parentFolder = path.dirname(__filename);
 const basePath = path.join(path.dirname(parentFolder), 'miniLogger');
 const historyPath = path.join(basePath, 'history');

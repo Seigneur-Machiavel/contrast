@@ -7,7 +7,8 @@
 
 export class FrontCryptoWorker {
 
-    // Pending promise callbacks, keyed by message id
+	/** Pending promise callbacks, keyed by message id 
+	 * @type {Object<string, { resolve: function, reject: function }>} */
     #pending = {};
     #nextId  = 0;
     #worker;
@@ -18,22 +19,22 @@ export class FrontCryptoWorker {
         this.#worker.onerror   = (e) => this.#onWorkerError(e);
     }
 
+	/** Handle incoming messages from the worker, resolve or reject the corresponding promise */
     #onMessage({ id, result, error }) {
         const pending = this.#pending[id];
         if (!pending) return;
         delete this.#pending[id];
         if (error) pending.reject(new Error(error));
-        else       pending.resolve(result);
+        else pending.resolve(result);
     }
 
+	/** Reject all pending promises if the worker crashes */
     #onWorkerError(e) {
-        // Reject all pending promises if the worker crashes
-        for (const { reject } of Object.values(this.#pending))
-            reject(new Error(`Worker error: ${e.message}`));
+		for (const id in this.#pending) this.#pending[id].reject(new Error(`Worker error: ${e.message}`));
         this.#pending = {};
     }
 
-    // Send a message to the worker, return a promise that resolves with the result
+    /** Send a message to the worker, return a promise that resolves with the result */
     #dispatch(op, payload, transfer = []) {
         const id = this.#nextId++;
         return new Promise((resolve, reject) => {

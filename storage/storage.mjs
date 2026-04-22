@@ -4,61 +4,50 @@
 import fs from 'fs';
 import url from 'url';
 import path from 'path';
-import { HashFunctions, sha512 } from '../node/src/conCrypto.mjs';
+import { HashFunctions } from '../node/src/conCrypto.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 
 /** THE COMMON CLASS TO HANDLE THE STORAGE PATHS */
 class StorageRoot {
 	/** The local identifier used as subFolder */	localIdentifier;
-	/** Is running in electron environment */		  isElectronEnv;
-	/** Root folder path @type {string} */				 rootFolder; // 'contrast/'
-	/** Paths used for storage */							   PATH; // 'constrat-storage/'
+	/** Root folder path @type {string} */				 rootFolder; // 'contrast/' or 'contrast-mainnet/' or 'contrast-testnet/'
+	/** Paths used for storage */							   PATH; // 'constrat-storage-mainnet/' or 'contrast-storage-testnet/'
+	/** Suffix used for storage paths */					 SUFFIX;
 
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
 	constructor(masterHex = null) {
+		this.rootFolder = path.dirname(path.dirname(url.fileURLToPath(import.meta.url)));
 		this.localIdentifier = masterHex ? HashFunctions.SHA512(masterHex).hashHex.substring(0, 8) : null;
 		console.log(`Storage localIdentifier: ${this.localIdentifier}`);
 
-		const filePath = url.fileURLToPath(import.meta.url).replace('app.asar', 'app.asar.unpacked');
-		this.isElectronEnv = filePath.includes('app.asar');
-
-		this.rootFolder = !this.isElectronEnv ? path.dirname(path.dirname(filePath))
-			: path.dirname(path.dirname(path.dirname(path.dirname(filePath))))
+		const rootFolderName = path.basename(this.rootFolder);
+		this.SUFFIX = ['contrast', 'contrast-mainnet'].includes(rootFolderName)
+			? '-mainnet'
+			: `-testnet`;
 	
-		const basePath = !this.localIdentifier ? path.join(path.dirname(this.rootFolder), 'contrast-storage')
-			: path.join(path.dirname(this.rootFolder), 'contrast-storage', this.localIdentifier);
+		const basePath = !this.localIdentifier ? path.join(path.dirname(this.rootFolder), `contrast-storage${this.SUFFIX}`)
+			: path.join(path.dirname(this.rootFolder), `contrast-storage${this.SUFFIX}`, this.localIdentifier);
 	
 		this.PATH = {
-			/** path to the storage.mjs file */
-			BASE_FILE: filePath,
-			/** path to the storage folder (out of the root directory) */
-			CONTRAST: this.rootFolder,
 			STORAGE: basePath,
 			TRASH: path.join(basePath, 'trash'),
 			LEDGERS: path.join(basePath, 'ledgers'),
 			BLOCKCHAIN: path.join(basePath, 'blockchain'),
-			IDENTITIES: path.join(basePath, 'identities'),
-			TEST_STORAGE: path.join(basePath, 'test')
+			IDENTITIES: path.join(basePath, 'identities')
 		};
 
-		if (masterHex) this.#init();
+		if (masterHex) this.#init(); // create storage folders.
 	}
-	#init() {
-		// create the contrast-storage folder if it doesn't exist, and any of subfolder
-		// @ts-ignore
-		if (this.isElectronEnv) delete this.PATH.TEST_STORAGE;
-		if (!fs.existsSync(path.join(path.dirname(this.rootFolder), 'contrast-storage')))
-			fs.mkdirSync(path.join(path.dirname(this.rootFolder), 'contrast-storage'));
+	#init() { // create the contrast-storage folder if it doesn't exist, and any of subfolder
 		for (const dirPath of Object.values(this.PATH))
-			if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath);
+			if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true });
 	}
 	clear(passHash = true, nodeSettings = true, vssData = true) {
 		const dirPaths = [
 			this.PATH.TRASH,
 			this.PATH.LEDGERS,
 			this.PATH.BLOCKCHAIN,
-			this.PATH.IDENTITIES,
-			this.PATH.TEST_STORAGE
+			this.PATH.IDENTITIES
 		];
 		const filePaths = [];
 		if (passHash) filePaths.push(path.join(this.PATH.STORAGE, 'passHash.bin'));

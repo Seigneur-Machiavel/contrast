@@ -12,6 +12,15 @@
 		{
 			"type": "node",
 			"request": "launch",
+			"name": "Run-public",
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node/run-public.mjs",
+			"args": ["-cp", "27259"],
+			"runtimeArgs": ["--inspect"]
+		},
+		{
+			"type": "node",
+			"request": "launch",
 			"name": "Run-client-with-board-service",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/run-client.mjs",
@@ -24,7 +33,7 @@
 			"name": "Run-public-with-board-service",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/run-public.mjs",
-			"args": ["--max-old-space-size=16384", "-cp", "27259", "--board-service"],
+			"args": ["-cp", "27259", "--board-service"],
 			"runtimeArgs": ["--inspect"]
 		},
 		{
