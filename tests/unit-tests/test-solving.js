@@ -175,8 +175,7 @@ async function mineBlockUntilValid(hps = hashPerSecond) {
             const newDiff = solving.difficultyAdjustment({ index: success + adjustDiffEveryCrop, difficulty: baseDifficulty }, avgSuccessTime, targetBlockTime);
             const averageFinalDiff = sessionFinalDiffs.reduce((a, b) => a + b, 0) / sessionFinalDiffs.length;
             const avgDiffWL = sessionDiffWL.reduce((a, b) => a + b, 0) / sessionDiffWL.length;
-            //const estGlobalHasrate = solving.estimateGlobalHashrate(averageFinalDiff, avgSuccessTime, targetBlockTime, success + adjustDiffEveryCrop);
-            const estGlobalHasrate = solving.estimateGlobalHashrate(avgDiffWL, avgSuccessTime, targetBlockTime);
+            const estGlobalHasrate = solving.estimateGlobalHashrate(newDiff);
             console.log(`avgFD: ${averageFinalDiff.toFixed(2)} | EGH: ${estGlobalHasrate.toFixed(2)} H/s | betTime: ${betTime.toFixed(2)}`);
             
             //if (baseDifficulty === newDiff) continue; // no adjustment needed

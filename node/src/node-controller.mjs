@@ -1,5 +1,6 @@
 // ts-check
 import { WebSocketServer } from 'ws';
+import { solving } from '../../utils/conditionals.mjs';
 
 /** 
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
@@ -29,10 +30,31 @@ export class NodeController {
 		console.log('[NodeController] waiting for client connection...');
 		//console.log(`[NodeController] Public key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPub)}`);
 		//console.log(`[NodeController] Private key: ${this.node.p2p.cryptoCodex.converter.bytesToHex(this.myKeypair.myPriv)}`);
-		this.pingInterval = setInterval(() => {
+		this.pingInterval = setInterval(async () => {
 			if (!this.wsConnection || !this.sharedSecret) return;
 			this.sendEncryptedMessage('currentHeight', this.node.blockchain.currentHeight);
+			this.sendEncryptedMessage('validationHeight', this.node.solver.bestCandidateIndex);
+			this.sendEncryptedMessage('networkPower', this.node.solver.networkPower);
+			this.sendEncryptedMessage('solverPower', this.node.solver.hashRateStats.effective);
+			this.sendEncryptedMessage('solverLegitimacy', this.node.solver.bestCandidateLegitimacy);
+			this.sendEncryptedMessage('dailyRewardEstimation', this.node.solver.estimatedDailyReward);
+			this.sendEncryptedMessage('solverThreadCount', this.node.solver.nbOfWorkers);
+
+			this.sendEncryptedMessage('publicAddress', this.node.account?.address);
+			this.sendEncryptedMessage('solverRewardAddress', this.node.rewardsInfo.sAddress);
+			this.sendEncryptedMessage('validatorRewardAddress', this.node.rewardsInfo.vAddress);
+			//this.sendEncryptedMessage('clientVersion', this.node.); // TODO
+			this.sendEncryptedMessage('txInMempool', this.node.memPool.organizer.byAnchor.size);
+			this.sendEncryptedMessage('neighborsCount', this.node.p2p.peerStore.neighborsList.length);
 			//this.sendEncryptedMessage('ping', Date.now());
+			if (this.node.rewardsInfo.sAddress) {
+				const ledger = await this.node.blockchain.ledgersStorage.getAddressLedger(this.node.rewardsInfo.sAddress);
+				this.sendEncryptedMessage('solverBalance', ledger ? ledger.balance : 0);
+			}
+			if (this.node.rewardsInfo.vAddress) {
+				const ledger = await this.node.blockchain.ledgersStorage.getAddressLedger(this.node.rewardsInfo.vAddress);
+				this.sendEncryptedMessage('validatorBalance', ledger ? ledger.balance : 0);
+			}
 		}, 1_000);
 	}
 
@@ -51,13 +73,13 @@ export class NodeController {
 			if (!this.sharedSecret) {
 				if (message.length !== 32) return; // expecting 32-byte public key
 				this.#handleKeyExchange(new Uint8Array(message));
+				this.sendEncryptedMessage('nodePeerId', this.node.p2p.id);
 				return;
 			}
 
-			const parsedMessage = this.#parseEncryptedMessage(new Uint8Array(message.data));
-			const { type, data } = parsedMessage;
+			const { type, data } = this.#parseEncryptedMessage(new Uint8Array(message));
 			if (!type) throw new Error('Message type is missing');
-			this.handleDecryptedMessage(type, data);
+			this.#handleDecryptedMessage(type, data);
 		} catch (/**@type {any} */ error) {
 			console.error(error.message);
 			if (!this.sharedSecret) return;
@@ -79,6 +101,14 @@ export class NodeController {
 		const decrypted = this.node.p2p.cryptoCodex.decryptData(encryptedData, this.sharedSecret);
 		const decodedStr = this.textDecoder.decode(decrypted);
 		return JSON.parse(decodedStr);
+	}
+	/** @param {string} type @param {any} data */
+	#handleDecryptedMessage(type, data) {
+		switch (type) {
+			case 'decreaseThreads': return this.node.solver.decreaseThreads();
+			case 'increaseThreads': return this.node.solver.increaseThreads();
+			default: console.log(`[NodeController] Received unknown message of type "${type}":`, data);
+		}
 	}
 	/** @param {string} [reason] */
 	#handleClose = (reason) => {
@@ -105,9 +135,5 @@ export class NodeController {
 		const encoded = this.textEncoder.encode(str);
 		const encrypted = this.node.p2p.cryptoCodex.encryptData(encoded, this.sharedSecret);
 		this.wsConnection.send(encrypted);
-	}
-	/** @param {string} type @param {any} data */
-	handleDecryptedMessage(type, data) {
-		
 	}
 }

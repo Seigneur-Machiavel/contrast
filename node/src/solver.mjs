@@ -5,6 +5,7 @@ import { hybridKeyHint } from '../../utils/common.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { SolverWorker } from '../workers/solver-worker-wrapper.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
@@ -15,6 +16,8 @@ export class Solver {
 	node;
 	version = 1;
 	nbOfWorkers = 1;
+	minNbOfWorkers = 1;
+	maxNbOfWorkers = 4;
 	terminated = false;
 	useBetTimestamp = true;
 	logger = new MiniLogger('solver');
@@ -23,13 +26,15 @@ export class Solver {
 	/** @type {BlockCandidate | null} */				bestCandidate = null;
 	/** @type {SolverWorker[]} */						workers = [];
 	/** @type {number[]} */								bets = [];
-	/** @type {{min: number, max: number}} will bet between 70% and 90% of the expected blockTime */
-	betRange = { min: .7, max: .9 };
+	/** @type {{min: number, max: number}} will bet between 80% and 95% of the expected blockTime */
+	betRange = { min: .80, max: .95 };
 	powBroadcastState = { foundHeight: -1, sentTryCount: 0, maxTryCount: 1 };
 	canProceedSolving = true;
 	hashPeriodStart = 0;
+	networkPower = 0;
 	hashCount = 0;
-	hashRate = 0; // hash rate in H/s
+	/** @type {{raw: number, effective: number, stalenessRatio: number}} */
+	hashRateStats = { raw: 0, effective: 0, stalenessRatio: 0 }; // V2
 
     /** @param {ContrastNode} node */
     constructor(node) { this.node = node; }
@@ -38,6 +43,13 @@ export class Solver {
     get bestCandidateLegitimacy() { return this.bestCandidate ? this.bestCandidate.legitimacy : 0; }
 
 	// API METHODS
+	get estimatedDailyReward() {
+		if (!this.hashRateStats.effective || !this.networkPower || !this.bestCandidate) return 0;
+		const expectedBlocksPerDay = 24 * 3600 / ( BLOCKCHAIN_SETTINGS.targetBlockTime * .001 );
+		const expectedRewardPerBlock = this.bestCandidate.coinBase / 2; // 50/50 between pow and pos reward
+		const myPowerShare = Math.min(1, this.hashRateStats.effective / this.networkPower);
+		return Math.round(myPowerShare * expectedBlocksPerDay * expectedRewardPerBlock);
+	}
     /** @param {BlockCandidate} block */
     updateBestCandidate(block) {
 		if (!block) throw new Error('Candidate is null or undefined');
@@ -87,6 +99,8 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         this.#prepareBets();
         return true;
     }
+	decreaseThreads() { if (this.nbOfWorkers > this.minNbOfWorkers) this.nbOfWorkers--; }
+	increaseThreads() { if (this.nbOfWorkers < this.maxNbOfWorkers) this.nbOfWorkers++; }
 	async tick() {
 		if (this.terminated) return;
 
@@ -101,10 +115,12 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		this.#togglePausedWorkers();
 		await this.#terminateUnusedWorkers();
 		const readyWorkers = await this.#createMissingWorkers(sAddress, identityEntries);
-		this.hashRate = this.#getAverageHashrate();
+		this.hashRateStats = this.#computeHashRateStats();
 		
 		const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
-		for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
+		const promises = [];
+		for (let i = 0; i < readyWorkers; i++) promises.push(this.workers[i].updateCandidate(blockCandidate));
+		await Promise.all(promises);
 		
 		timings.workersUpdate = Date.now();
 		for (let i = 0; i < readyWorkers; i++) {
@@ -165,11 +181,21 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 
         this.bets = bets;
     }
-    #getAverageHashrate() {
-        let totalHashRate = 0;
-        for (const worker of this.workers) { totalHashRate += worker.hashRate; }
-        return totalHashRate;
-    }
+	#computeHashRateStats() {
+    	let raw = 0, weightedSum = 0, stalenessSum = 0;
+		for (const worker of this.workers) {
+			raw += worker.hashRate;
+			//weightedSum += worker.hashRate * (worker.difficulty / Math.max(worker.finalDifficulty, 1));
+			weightedSum += worker.hashRate * Math.min(worker.difficulty / Math.max(worker.finalDifficulty, 1), 1);
+			stalenessSum += worker.stalenessRatio;
+		}
+		const count = this.workers.length || 1;
+		return {
+			raw,
+			effective: weightedSum * (1 - stalenessSum / count),
+			stalenessRatio: stalenessSum / count,
+		};
+	}
     /** @param {BlockFinalized} block */
     async #broadcastFinalizedBlock(block) {
         // Avoid sending the block pow if a higher block candidate is available to be mined

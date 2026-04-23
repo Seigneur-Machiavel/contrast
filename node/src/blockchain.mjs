@@ -1,6 +1,7 @@
 // @ts-check
 import { Vss } from './vss.mjs';
 import { BlockUtils } from './block.mjs';
+import { solving } from '../../utils/conditionals.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -104,6 +105,11 @@ export class Blockchain {
 		// EXEC CALLBACK
 		try { await node.callbacks.onBlockConfirmed?.(block);
 		} catch (/** @type {any} */ error) { this.logger.log(`onBlockConfirmed callback error: ${error.message}`, (m, c) => console.error(m, c)); }
+
+		if (node.controller?.sharedSecret && block.index > 12) {
+			const headers = this.blockStorage.getBlocksHeaders(block.index - 12, block.index);
+			if (headers) node.solver.networkPower = solving.estimateGlobalHashrate(headers);
+		}
 
 		// CREATE AND SHARE NEW CANDIDATE AFTER A SHORT DELAY
 		if (broadcastNewCandidate && !isSync) {

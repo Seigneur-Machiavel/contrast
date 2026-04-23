@@ -12,6 +12,9 @@ export class SolverWorker {
 	isWorking = false;
 	paused = false;
 	hashRate = 0;
+	finalDifficulty = 1;   // last known finalDifficulty from worker
+	stalenessRatio = 0;    // ratio of stale hashes in last reporting period
+	difficulty = 1;        // base difficulty of current candidate (for effective rate weighting)
 	sAddress;
 	identityEntries;
 
@@ -32,7 +35,12 @@ export class SolverWorker {
 			console.log('SolverWorker paused new state:', message.paused);
 			return;
 		}
-		if (message.hashRate) { this.hashRate = message.hashRate; return; }
+		if (message.hashRate) {
+			this.hashRate = message.hashRate;
+			if (message.finalDifficulty) this.finalDifficulty = message.finalDifficulty;
+			if (message.stalenessRatio !== undefined) this.stalenessRatio = message.stalenessRatio;
+			return;
+		}
 		if (message.result?.error) console.error(message.result.error);
 		if (message.result && !message.result.error) this.result = message.result;
 		this.isWorking = false;
@@ -83,6 +91,7 @@ export class SolverWorker {
 		if (this.#isSameBlockCandidate(blockCandidate)) return;
 
 		this.blockCandidate = blockCandidate;
+		this.difficulty = blockCandidate.difficulty; // track base difficulty for weighting
 		this.worker.postMessage({ type: 'newCandidate', blockCandidate });
 
 		await new Promise(resolve => setTimeout(resolve, 200));

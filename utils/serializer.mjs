@@ -569,9 +569,8 @@ export const serializer = {
 			if (!r.isReadingComplete) throw new Error('Transactions are not fully deserialized');
 			return transactions;
 		},
-		/** @param {Uint8Array} serializedBlock @param {'finalized' | 'candidate'} [mode] default: finalized */
-		blockData(serializedBlock, mode = 'finalized') { // local use only
-			const r = new BinaryReader(serializedBlock);
+		/** @param {BinaryReader} r BinaryReader with cursor set at start of block header @param {'finalized' | 'candidate'} [mode] default: finalized */
+		blockHeader(r, mode = 'finalized') {
 			const nbOfTxs = converter.bytes2ToNumber(r.read(2));
 			const index = converter.bytes4ToNumber(r.read(4));
 			const supply = converter.bytes6ToNumber(r.read(6));
@@ -580,7 +579,6 @@ export const serializer = {
 			const legitimacy = converter.bytes2ToNumber(r.read(2));
 			const prevHash = converter.bytesToHex(r.read(SIZES.hash.bytes));
 			const posTimestamp = converter.bytes6ToNumber(r.read(6));
-
 			let timestamp, powReward, hash, nonce;
 			if (mode === 'candidate') powReward = converter.bytes6ToNumber(r.read(6));
 			else if (mode === 'finalized') {
@@ -588,7 +586,13 @@ export const serializer = {
 				hash = converter.bytesToHex(r.read(SIZES.hash.bytes));
 				nonce = converter.bytesToHex(r.read(SIZES.nonce.bytes));
 			}
-
+			// We accept partial deserialization of the block header.
+			return { nbOfTxs, index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce, powReward };
+		},
+		/** @param {Uint8Array} serializedBlock @param {'finalized' | 'candidate'} [mode] default: finalized */
+		blockData(serializedBlock, mode = 'finalized') { // local use only
+			const r = new BinaryReader(serializedBlock);
+			const { nbOfTxs, index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce, powReward } = this.blockHeader(r, mode);
 			const txsSerialized = r.readPointersAndExtractDataChunks('pointer32');
 			const txs = [];
 			for (let i = 0; i < nbOfTxs; i++) txs.push(this.transaction(txsSerialized[i], serializer.specialMode[mode][i]));

@@ -1,6 +1,6 @@
 import fs from 'fs';
-import path from 'path';
 import url from 'url';
+import path from 'path';
 
 const __filename = url.fileURLToPath(import.meta.url);
 const parentFolder = path.dirname(__filename);

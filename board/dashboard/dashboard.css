@@ -71,12 +71,14 @@
 	align-items: baseline;
 	gap: 0 8px;
 }
-#cnd-threadsIncrementalInput input {
-    width: 60px;
+#cnd-threadsIncrementalInput h3 {
+    font-size: 1.1em;
+    font-weight: bold;
+    color: var(--color3);
 }
 #cnd-threadsIncrementalInput button {
 	background: var(--color1);
-    color: var(--color2);
+    color: var(--color3);
     padding: 0px 6px 4px;
 	border-radius: 50%;
 	line-height: 24px;
@@ -84,6 +86,10 @@
 #cnd-threadsIncrementalInput button:hover {
 	background: var(--color2);
     color: var(--color1);
+}
+#cnd-threadsIncrementalInput button:disabled {
+	opacity: .5;
+	cursor: not-allowed;
 }
 
 .cnd-spacedText {

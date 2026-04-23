@@ -30,23 +30,24 @@
                 <h3>~ <span id="cnd-networkPower"></span> H/s</h3>
             </div>
             <div class="cnd-spacedText" data-translatorkey="myPower">
-                <h3>My power</h3>
-                <h3><span id="cnd-hashRate"></span> H/s</h3>
+                <h3>Solver power</h3>
+                <h3><span id="cnd-solverPower"></span> H/s</h3>
             </div>
 			<div class="cnd-spacedText" data-translatorkey="myLegitimacy">
-                <h3>My legitimacy</h3>
-                <h3><span id="cnd-legitimacy" data-translatorkey="legitimacy">0</span></h3>
+                <h3>Solver legitimacy</h3>
+                <h3><span id="cnd-solverLegitimacy" data-translatorkey="legitimacy">0</span></h3>
             </div>
             <div class="cnd-spacedText" data-translatorkey="myDailyReward">
-                <h3>My daily reward</h3>
+                <h3>Daily reward est.</h3>
                 <h3>~ <span id="cnd-dailyReward"></span></h3>
             </div>
             <div class="cnd-spacedText">
                 <h3>Threads</h3>
                 <div id="cnd-threadsIncrementalInput" class="cnd-incrementalInput">
-                    <button>-</button>
-                    <input id="cnd-threadsInput" type="number" value="1"> <!-- min="1" max="4"> (managed with js) -->
-                    <button>+</button>
+                    <button data-action="decreaseThreads">-</button>
+                    <!--<input id="cnd-threadsInput" type="number" value="1">--> <!-- min="1" max="4"> (managed with js) -->
+					<h3><span id="cnd-solverThreadCount">1</span></h3>
+                    <button data-action="increaseThreads">+</button>
                 </div>
             </div>
         </div>
@@ -59,30 +60,30 @@
                 <h3>Public Address</h3>
                 <h3 id="cnd-publicAddress"></h3>
             </div>
-            <div class="cnd-spacedText" data-translatorkey="validationAddress">
+            <div class="cnd-spacedText" data-translatorkey="solverRewardAddress">
                 <h3>Solving reward</h3>
                 <h3 class="cnd-editable-address-wrap">
                     <div class="cnd-link-to-amount">]</div>
-                    <span id="cnd-validationAddress"></span>
-                    <div id="cnd-validationAddressEditBtn" class="cnd-editButton">✎</div>
+                    <span id="cnd-solverRewardAddress"></span>
+                    <div id="cnd-solverRewardAddressEditBtn" class="cnd-editButton">✎</div>
                 </h3>
             </div>
             <div class="cnd-spacedText" data-translatorkey="balance">
                 <h3>Balance</h3>
-                <h3 id="cnd-validationBalance">0.000000</h3>
+                <h3 id="cnd-solverBalance">0.000000</h3>
             </div>
-            <div class="cnd-spacedText" data-translatorkey="validationRewardAddress">
+            <div class="cnd-spacedText" data-translatorkey="validatorRewardAddress">
                 <h3>Validation reward</h3>
                 <h3 class="cnd-editable-address-wrap">
                     <div class="cnd-link-to-amount">]</div>
                     <div class="cnd-link-to-amount">]</div>
                     <span id="cnd-validatorRewardAddress"></span>
-                    <div id="cnd-validatorAddressEditBtn" class="cnd-editButton">✎</div>
+                    <div id="cnd-validatorRewardAddressEditBtn" class="cnd-editButton">✎</div>
                 </h3>
             </div>
             <div class="cnd-spacedText" data-translatorkey="balance">
                 <h3>Balance</h3>
-                <h3 id="cnd-publicBalance">0.000000</h3>
+                <h3 id="cnd-validatorBalance">0.000000</h3>
             </div>
             <div class="cnd-spacedText" data-translatorkey="stakedBalance">
                 <h3>Staked</h3>

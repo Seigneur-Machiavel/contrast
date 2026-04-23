@@ -9,6 +9,9 @@ export class ValidationWorker {
 	/** @type {Worker} worker */
 	worker = newWorker('./validation-worker-nodejs.mjs');
 	state = 'idle';
+	difficulty = 0;
+	stalenessRatio = 0;
+	finalDifficulty = 0;
 
     constructor (id = 0) { this.id = id; }
 	

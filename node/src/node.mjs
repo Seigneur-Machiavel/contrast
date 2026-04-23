@@ -128,7 +128,8 @@ export class ContrastNode {
 			await this.p2p.start();
 		}
 		
-		this.#stackExecution();
+		this.#startStackExecution();
+		this.#startSolverExecution();
 		await this.createAndShareMyBlockCandidate();
 		if (this.blockchain.lastBlock) // SHARE MY STATUS IF ANY BLOCK EXISTS
 			this.sync.setAndshareMyStatus(this.blockchain.lastBlock);
@@ -166,8 +167,8 @@ export class ContrastNode {
 			if (myCandidate === null) throw new Error('Failed to create block candidate');
 			if (myCandidate === false) throw new Error('Not eligible to create a block candidate at this time (low legitimacy or already ahead, or too far behind)');
 
+			this.controller?.sendEncryptedMessage('myLastLegitimacy', myCandidate.legitimacy);
 			await BlockUtils.signBlockCandidate(this, myCandidate);
-
 			this.solver.updateBestCandidate(myCandidate); // throw if not updated
 			
 			const serialized = serializer.serialize.block(myCandidate, 'candidate');
@@ -184,10 +185,15 @@ export class ContrastNode {
 	}
 	
 	// INTERNALS ------------------------------------------------------------------------
-	async #stackExecution() {
+	async #startStackExecution() {
 		while (this.running) {
 			await this.#executeNextTask();
-			try { await this.solver.tick(); } catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[NODE-STACK] Error in tick: ${error.stack}`, (m, c) => console.error(m, c)); }
+			await new Promise(r => setTimeout(r, 10));
+		}
+	}
+	async #startSolverExecution() {
+		while (this.running) {
+			try { await this.solver.tick(); } catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[NODE-SOLVER] Error in tick: ${error.stack}`, (m, c) => console.error(m, c)); }
 			await new Promise(r => setTimeout(r, 10));
 		}
 	}

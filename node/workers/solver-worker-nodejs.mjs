@@ -3,57 +3,50 @@ import { parentPort } from 'worker_threads';
 import { BlockUtils } from '../src/block.mjs';
 import { HashFunctions } from '../src/conCrypto.mjs';
 import { solving } from '../../utils/conditionals.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 if (parentPort === null) throw new Error('No parent port in solver worker');
 
 /**
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
- * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- */
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
-class hashrateCalculator {
-	calculateAndSendEvery = 10; // in hashes
-	periodStart = Date.now();
-	hashCount = 0;
-	/** @type {number[]} */	hashTimes = [];
+class HashrateCalculatorV2 {
+    #windowSize = 60; // number of hashes to keep in the window
+    /** @type {{ t: number, stale: boolean, finalDifficulty: number }[]} */
+    #window = [];
+    #isStale = false;
+    #lastFinalDifficulty = 1;
 
-	/** @param {import("worker_threads").MessagePort} parentPort */
-	constructor(parentPort) {
-		this.parentPort = parentPort;
-	}
-	/** @param {number} hashTime */
-	newHash(hashTime) {
-		this.hashCount++;
-		//this.hashTimes.push(hashTime); // dev
-		//this.#logHashTimeIfNecessary(); // dev
-		this.#sendHashRateIfNecessary();
-	}
-	#sendHashRateIfNecessary() {
-		if (this.hashCount === 0) { return; }
-		if (this.hashCount % this.calculateAndSendEvery !== 0) { return; }
+    /** @param {import("worker_threads").MessagePort} parentPort */
+    constructor(parentPort) { this.parentPort = parentPort; }
 
-		const hashRate = this.hashCount / ((Date.now() - this.periodStart) / 1000);
-		this.parentPort.postMessage({ hashRate });
-		//console.log(`Hash rate: ${hashRate.toFixed(2)} H/s - ${this.hashCount}/${(Date.now() - this.periodStart).toFixed(2)}ms`);
-		
-		// for faster updates we reset the counter and time
-		this.hashCount = 0;
-		this.periodStart = Date.now();
-	}
-	#logHashTimeIfNecessary() { // dev
-		if (this.hashCount === 0) return;
-		if (this.hashCount % this.calculateAndSendEvery !== 0) return;
+    /** @param {number} finalDifficulty */
+    onNewCandidate(finalDifficulty) {
+        this.#isStale = true; // hashes in flight until next newHash are stale
+        this.#lastFinalDifficulty = finalDifficulty;
+    }
 
-		const avgTime = this.hashTimes.reduce((a, b) => a + b, 0) / this.hashTimes.length;
-		console.log('Average hash time:', avgTime.toFixed(2), 'ms');
-		this.hashTimes = [];
+	/** @param {number} finalDifficulty */
+	newHash(finalDifficulty) {
+		this.#isStale = false;
+		this.#lastFinalDifficulty = finalDifficulty;
+		this.#window.push({ t: Date.now(), stale: this.#isStale, finalDifficulty });
+		if (this.#window.length > this.#windowSize) this.#window.shift();
+
+		const elapsed = (this.#window[this.#window.length - 1].t - this.#window[0].t) / 1000;
+		if (elapsed === 0) return; // single entry, can't compute rate yet
+
+		const staleCount = this.#window.filter(h => h.stale).length;
+		const hashRate = this.#window.length / elapsed;
+		const stalenessRatio = staleCount / this.#window.length;
+
+		this.parentPort.postMessage({ hashRate, stalenessRatio, finalDifficulty: this.#lastFinalDifficulty });
 	}
 }
+
 async function mineBlockUntilValid() {
 	if (parentPort === null) throw new Error('No parent port in solver worker');
 
-	const hashRateCalculator = new hashrateCalculator(parentPort);
 	while (true) {
 		if (solverVars.exiting) return { error: 'Exiting' };
 		if (solverVars.paused) { await new Promise((resolve) => setTimeout(resolve, 100)); continue; }
@@ -74,10 +67,11 @@ async function mineBlockUntilValid() {
 			if (!blockHash) throw new Error('Invalid block hash');
 			
 			block.hash = blockHash.hex;
-			hashRateCalculator.newHash(performance.now() - startTime);
-			//console.log('hashTime', Math.round(performance.now() - startTime), 'ms');
 			
-			if (!solving.verifyBlockHashConformToDifficulty(blockHash.bitsString, block).conform) continue;
+			const { conform, finalDifficulty } = solving.verifyBlockHashConformToDifficulty(blockHash.bitsString, block);
+			hashRateCalculatorV2.newHash(finalDifficulty);
+			if (!conform) continue;
+
 			const now = Date.now() + solverVars.timeOffset;
 			const blockReadyIn = Math.max(block.timestamp - now, 0);
 			await new Promise((resolve) => setTimeout(resolve, blockReadyIn));
@@ -133,6 +127,7 @@ const solverVars = {
 	testSolvingSpeedPenality: 0 // TODO: set to 0 after testing
 };
 
+const hashRateCalculatorV2 = new HashrateCalculatorV2(parentPort);
 parentPort.on('message', async (task) => {
 	if (parentPort === null) throw new Error('No parent port in solver worker');
 
@@ -145,9 +140,10 @@ parentPort.on('message', async (task) => {
 			solverVars.identities = task.identityEntries || [];
 			return;
         case 'newCandidate':
-			solverVars.highestBlockHeight = task.blockCandidate.index;
-			solverVars.blockCandidate = task.blockCandidate;
 			solverVars.pausedAtTime = null;
+			solverVars.blockCandidate = task.blockCandidate;
+			solverVars.highestBlockHeight = task.blockCandidate.index;
+			hashRateCalculatorV2.onNewCandidate(solving.getBlockFinalDifficulty(task.blockCandidate).finalDifficulty);
 			return;
 		case 'mineUntilValid':
 			if (solverVars.working) return;

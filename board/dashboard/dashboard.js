@@ -1,7 +1,6 @@
-//import { Transaction_Builder, UTXO } from '../src/transaction.mjs';
-//import { convert } from '../../utils/converters.mjs';
 import { eHTML_STORE } from '../utils/board-helpers.js';
 import { serializer } from '../../utils/serializer.mjs';
+import { CURRENCY } from '../../utils/currency.mjs';
 
 /**
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
@@ -12,8 +11,6 @@ const WS_SETTINGS = {
     PROTOCOL: "ws:",
     DOMAIN: "127.0.0.1",
     PORT: 27261,
-    RECONNECT_INTERVAL: 5000,
-    GET_NODE_INFO_INTERVAL: 5000,
 }
 
 const ACTIONS = {
@@ -51,6 +48,10 @@ export class Dashboard {
 	}
 
 	// HANDLERS
+	clickHandler(e) {
+		if (e.target.dataset.action === 'decreaseThreads') this.sendEncryptedMessage('decreaseThreads');
+		if (e.target.dataset.action === 'increaseThreads') this.sendEncryptedMessage('increaseThreads');
+	}
 	inputHandler(e) { if (e.target.dataset.action === 'setPubkeyFromInput') this.#setControllerPubkeyFromInput(); }
 	pasteHandler(e) { if (e.target.dataset.action === 'setPubkeyFromInput') this.#setControllerPubkeyFromInput(); }
 
@@ -82,9 +83,8 @@ export class Dashboard {
 		this.ws.onopen = () => this.#handleConnection();
 		this.ws.onclose = () => this.#handleClose();
 	}
-	/** @param {import('ws').WebSocket} ws */
-	#handleConnection = async (ws) => {
-		this.wsConnection = ws;
+	/** @param {import('ws').WebSocket} wsConn */
+	#handleConnection = async (wsConn) => {
 		this.isWsAccessible = true;
 		eHTML.get('establishing-connection-text').classList.add('hidden');
 		
@@ -94,7 +94,6 @@ export class Dashboard {
 	/** @param {string} [reason] */
 	#handleClose = (reason) => {
 		this.ws = null;
-		this.wsConnection = null;
 		this.sharedSecret = null;
 		this.isConnected = false;
 		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair(); // Prepare new keypair for next connection
@@ -141,7 +140,7 @@ export class Dashboard {
 			if (!type) return this.#handleClose('Unable to parse encrypted message.');
 
 			if (!this.isConnected) this.#setConnected();
-			this.handleDecryptedMessage(type, data);
+			this.#handleDecryptedMessage(type, data);
 		} catch (/**@type {any} */ error) { console.error(error.stack); }
 	}
 	#setConnected() {
@@ -159,9 +158,29 @@ export class Dashboard {
 			return JSON.parse(decodedStr);
 		} catch (error) { return null; }
 	}
-	/** @param {string} data */
-	#handleStateUpdate = (data) => {
-		eHTML.get('nodeState').textContent = data;
+	/** @param {string} type @param {any} data */
+	#handleDecryptedMessage(type, data) {
+		// NODE
+		if (type === 'currentHeight') return eHTML.get('nodeHeight').textContent = data;
+		if (type === 'stateUpdate') return eHTML.get('nodeState').textContent = data;
+		// VALIDATION
+		if (type === 'validationHeight') return eHTML.get('validationHeight').textContent = data;
+		if (type === 'networkPower') return eHTML.get('networkPower').textContent = data.toFixed(2);
+		if (type === 'solverLegitimacy') return eHTML.get('solverLegitimacy').textContent = data;
+		if (type === 'solverPower') return eHTML.get('solverPower').textContent = data.toFixed(2);
+		if (type === 'dailyRewardEstimation') return eHTML.get('dailyReward').textContent = CURRENCY.formatNumberAsCurrency(data, 2);
+		if (type === 'solverThreadCount') return eHTML.get('solverThreadCount').textContent = data.toString().toFixed(2);
+		// ADDRESSES
+		if (type === 'publicAddress') return eHTML.get('publicAddress').textContent = data;
+		if (type === 'solverRewardAddress') return eHTML.get('solverRewardAddress').textContent = data;
+		if (type === 'solverBalance') return eHTML.get('solverBalance').textContent = CURRENCY.formatNumberAsCurrency(data, 2);
+		if (type === 'validatorRewardAddress') return eHTML.get('validatorRewardAddress').textContent = data;
+		if (type === 'validatorBalance') return eHTML.get('validatorBalance').textContent = CURRENCY.formatNumberAsCurrency(data, 2);
+		// DETAILS
+		if (type === 'txInMempool') return eHTML.get('txInMempool').textContent = data;
+		if (type === 'nodePeerId') return eHTML.get('peerId').textContent = data;
+		if (type === 'neighborsCount') return eHTML.get('neighborsCount').textContent = data;
+		// console.log(`[Dashboard] Received unknown message of type "${type}":`, data);
 	}
 
 	// PUBLIC METHODS
@@ -177,16 +196,11 @@ export class Dashboard {
 	}
 	/** @param {string} type @param {any} data */
 	sendEncryptedMessage = (type, data) => {
-		if (!this.sharedSecret || !this.wsConnection) return;
+		console.log(`[Dashboard] Sending message of type "${type}" with data:`, data);
+		if (!this.sharedSecret || !this.isWsAccessible) return;
 		const str = JSON.stringify({ type, data });
 		const encoded = this.textEncoder.encode(str);
 		const encrypted = this.connector.p2pNode.cryptoCodex.encryptData(encoded, this.sharedSecret);
-		this.wsConnection.send(encrypted);
-	}
-	/** @param {string} type @param {any} data */
-	handleDecryptedMessage(type, data) {
-		if (type === 'currentHeight') return eHTML.get('nodeHeight').textContent = data;
-		if (type === 'stateUpdate') return this.#handleStateUpdate(data);
-		console.log(`[Dashboard] Received unknown message of type "${type}":`, data);
+		this.ws.send(encrypted);
 	}
 }

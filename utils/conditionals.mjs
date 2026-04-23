@@ -1,5 +1,4 @@
 // @ts-check
-import { serializer } from './serializer.mjs';
 import { IS_VALID } from '../types/validation.mjs';
 import { MiniLogger } from '../miniLogger/mini-logger.mjs';
 import { BLOCKCHAIN_SETTINGS, SOLVING } from '../config/blockchain-settings.mjs';
@@ -7,7 +6,8 @@ import { BLOCKCHAIN_SETTINGS, SOLVING } from '../config/blockchain-settings.mjs'
 /**
  * @typedef {import("../node/src/conCrypto.mjs").argon2Hash} argon2Hash
  * @typedef {import("../types/block.mjs").BlockCandidate} BlockCandidate
- * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
+ * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
+ * @typedef {import("../types/block.mjs").BlockFinalizedHeader} BlockFinalizedHeader */
 
 export const conditionnals = {
     /** Check if the string starts with a certain amount of zeros @param {string} string @param {number} zeros */
@@ -114,7 +114,7 @@ export const solving = {
         const newBlockHash = await argon2HashFunction(blockSignature, nonce, mem, time, parallelism, type, hashLen);
         return newBlockHash;
     },
-    /** @param {BlockCandidate | BlockFinalized} blockData */
+    /** @param {BlockCandidate | BlockFinalized | BlockFinalizedHeader} blockData */
     getBlockFinalDifficulty: (blockData, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
         const { difficulty, legitimacy, posTimestamp } = blockData;
 		const timestamp = 'timestamp' in blockData ? blockData.timestamp : undefined;
@@ -156,25 +156,17 @@ export const solving = {
         if (result.message === 'na') { result.conform = true; result.message = 'lucky'; }
         return result;
     },
-	/** @param {number} avgDiffWithLegitimacy @param {number} avgTimeGap @param {number} [targetBlockTime] */
-    estimateGlobalHashrate: (avgDiffWithLegitimacy, avgTimeGap, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime) => {
-        if (typeof avgDiffWithLegitimacy !== 'number') return 1;
-        if (avgDiffWithLegitimacy < 1) return 1;
-        if (typeof avgTimeGap !== 'number') return 1;
-        if (avgTimeGap < 1) return 1;
-        
-        const timeDiffRatio = targetBlockTime / avgTimeGap;
-        const base1HsDiff = SOLVING.oneHsDiffBasis; // Difficulty for 1H/s: 77
-        const exceedingDiff = avgDiffWithLegitimacy - base1HsDiff; // 130 - 77 = 53
-        if (exceedingDiff <= 0) return 1 * timeDiffRatio; // 1H/s
+	/** @param {BlockFinalizedHeader[]} blockFinalizedHeaders */
+	estimateGlobalHashrate: (blockFinalizedHeaders) => {
+		if (blockFinalizedHeaders.length === 0) return 0;
 
-        const exp = Math.floor(exceedingDiff / SOLVING.doubleDiffPoints); // 18 / 53 = 3
-        const rem = exceedingDiff % SOLVING.doubleDiffPoints; // 53 % 16 = 5
-        const percentPerPoint = 1 / SOLVING.doubleDiffPoints; // 1 / 16 = 0.0625
-        
-        let totalHashrate = Math.pow(2, exp); // 2^3 = 8H/s
-        totalHashrate *= 1 + (rem * percentPerPoint); // 8 * (1 + (5 * 0.0625)) = 8 * 1.3125 = 10.5H/s
+		let totalAttempts = 0;
+		for (const block of blockFinalizedHeaders) {
+			const { finalDifficulty } = solving.getBlockFinalDifficulty(block);
+			totalAttempts += Math.pow(2, finalDifficulty / 16);
+		}
 
-        return totalHashrate * timeDiffRatio; // ~10.5H/s
-    }
+		const avgAttempts = totalAttempts / blockFinalizedHeaders.length;
+		return avgAttempts / (BLOCKCHAIN_SETTINGS.targetBlockTime / 1000);
+	}
 };

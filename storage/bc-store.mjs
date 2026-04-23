@@ -6,8 +6,10 @@ import HiveP2P from "hive-p2p";
 import { UTXO } from '../types/transaction.mjs';
 import { BlockUtils } from '../node/src/block.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
-import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
+import { BlockFinalizedHeader } from '../types/block.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
+import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
+import { time } from 'console';
 
 /**
  * @typedef {import("hive-p2p").Converter} Converter
@@ -212,6 +214,31 @@ export class BlockchainStorage {
 			timestamps.push(timestamp);
 		}
 		return { heights, timestamps };
+	}
+	getSerializedBlocksHeaders(fromHeight = this.lastBlockIndex - 1, toHeight = this.lastBlockIndex) {
+		if (fromHeight < 0 || toHeight > this.lastBlockIndex || fromHeight > toHeight) return null;
+		if (toHeight - fromHeight > 120) return null; // limit to 120 blocks at a time
+
+		const offsets = this.#getOffsetsOfRangeOfBlocksData(fromHeight, toHeight);
+		if (!offsets) return null;
+
+		/** @type {Uint8Array[]} */ const headers = [];
+		for (let h = fromHeight; h <= toHeight; h++) 
+			headers.push(this.#getBlockchainHandler(h).read(offsets[h].start, SIZES.blockFinalizedHeader.bytes));
+		return headers;
+	}
+	getBlocksHeaders(fromHeight = this.lastBlockIndex - 1, toHeight = this.lastBlockIndex) {
+		const serializedHeaders = this.getSerializedBlocksHeaders(fromHeight, toHeight);
+		if (!serializedHeaders) return null;
+
+		/** @type {BlockFinalizedHeader[]} */ const headers = [];
+		for (const headerBuffer of serializedHeaders) {
+			const r = new BinaryReader(headerBuffer);
+			const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = serializer.deserialize.blockHeader(r, 'finalized');
+			if (!timestamp || !hash || !nonce) throw new Error(`Corrupted block header`);
+			headers.push(new BlockFinalizedHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce));
+		}
+		return headers;
 	}
 	/** Undo the last block added to the blockchain @param {TxAnchor[]} [involvedAnchors] If missing: will erase block without restoring UTXOs */
     unstore(involvedAnchors) {

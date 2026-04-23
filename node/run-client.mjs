@@ -42,7 +42,7 @@ startupStorage.saveBinary('seed', walletSeed);
 
 // LOG THE CONTROLLER PUBKEY IF NECESSARY
 if (!unsafeServePubKey && !serverChachaSeedHex && clientNode.controller)
-	console.log(`[CONTROLLER PUBKEY: ${serializer.converter.bytesToHex(clientNode.controller?.myKeypair.myPub)}`);
+	console.log(`[CONTROLLER PUBKEY: ${serializer.converter.bytesToHex(clientNode.controller.myKeypair.myPub)}`);
 
 // START THE BOARD SERVICE IF THE FLAG IS ENABLED
 if (enableBoardService) {

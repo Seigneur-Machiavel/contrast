@@ -41,9 +41,9 @@ const translator = new Translator(async (lang) => {
 
 // INIT OTHER MANAGERS AND COMPONENTS
 const connector = new Connector(hiveNode);
-const explorer 	= new Explorer(connector);
+const explorer = new Explorer(connector);
 const dashboard = new Dashboard(connector, hostPubkeyStr);
-const biw 		= new BoardInternalWallet(connector, boardStorage);
+const biw = new BoardInternalWallet(connector, boardStorage);
 
 if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
 else document.body.classList.remove('dark-mode');
@@ -84,6 +84,7 @@ document.addEventListener('click', (e) => {
 	//clickTitleBarButtonsHandler(e);
 	appsManager.clickHandler(e);
 	visualizer.clickHandler(e);
+	dashboard.clickHandler(e);
 	explorer.clickHandler(e);
 	biw.clickHandler(e);
 	//infoManager.clickInfoButtonHandler(e);
