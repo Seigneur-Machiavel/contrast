@@ -49,7 +49,7 @@ export class BoardInternalWallet {
 
 	get activeAccount() { return this.wallet?.accounts[this.components.accounts.activeAccountIndex]; }
 
-	/** @param {import('../utils/connector.js').Connector} connector @param {import('../../utils/front-storage.mjs').FrontStorage} boardStorage */
+	/** @param {import('../utils/connector-p2p.js').Connector} connector @param {import('../../utils/front-storage.mjs').FrontStorage} boardStorage */
 	constructor(connector, boardStorage) {
 		this.connector = connector;
 		this.boardStorage = boardStorage;

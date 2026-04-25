@@ -13,7 +13,6 @@ export class SolverWorker {
 	paused = false;
 	hashRate = 0;
 	finalDifficulty = 1;   // last known finalDifficulty from worker
-	stalenessRatio = 0;    // ratio of stale hashes in last reporting period
 	difficulty = 1;        // base difficulty of current candidate (for effective rate weighting)
 	sAddress;
 	identityEntries;
@@ -38,7 +37,6 @@ export class SolverWorker {
 		if (message.hashRate) {
 			this.hashRate = message.hashRate;
 			if (message.finalDifficulty) this.finalDifficulty = message.finalDifficulty;
-			if (message.stalenessRatio !== undefined) this.stalenessRatio = message.stalenessRatio;
 			return;
 		}
 		if (message.result?.error) console.error(message.result.error);

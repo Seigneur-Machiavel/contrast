@@ -20,10 +20,12 @@
     padding: 10px;
     border-radius: 5px;
 	background-color: var(--color1_2);
+	box-shadow: inset -1px -1px 9px -5px var(--color1);
     color: var(--color2_3);
-    opacity: 0;
+    opacity: 1;
     transform-origin: left;
-    animation: messageAppear .2s forwards;
+	transform: scaleX(1) translateY(0%);
+    animation: messageAppear .2s;
 }
 .board-message .board-delete-btn {
     position: absolute;
@@ -58,7 +60,7 @@
     color: var(--color1_1);
     background-color: var(--color2);
     transform-origin: right;
-    animation: messageAppear .2s forwards;
+    animation: messageAppear .2s;
 }
 .board-message.user .board-delete-btn {
     right: auto;

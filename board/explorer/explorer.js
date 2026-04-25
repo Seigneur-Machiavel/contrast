@@ -53,7 +53,7 @@ export class Explorer {
 	navigator = new Navigator();
 	connector;
 
-	/** @param {import('../utils/connector.js').Connector} connector */
+	/** @param {import('../utils/connector-p2p.js').Connector} connector */
 	constructor(connector) {
 		this.connector = connector;
 		this.connector.on('connection_established', () => setTimeout(this.getAndDisplayBlocksTimegaps, 2000));

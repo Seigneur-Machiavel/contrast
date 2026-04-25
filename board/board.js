@@ -2,7 +2,8 @@
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('../hive-p2p.min.js');
 import { NetworkVisualizer } from './visualizer/visualizer.js';
-import { Connector } from './utils/connector.js';
+import { Connector } from './utils/connector-p2p.js';
+import { ConnectorNode } from './utils/connector-node.js';
 import { Translator } from './utils/translator.js';
 import { FrontStorage } from '../utils/front-storage.mjs';
 import { HIVE_P2P_CONFIG } from '../config/hive-p2p-config.mjs';
@@ -26,6 +27,7 @@ const hostPubkeyStr = null; // Pass from launcher args to board-service.
 const hiveNode = await HiveP2P.createNode({ bootstraps, autoStart: false });
 hiveNode.start();
 
+const WS_SETTINGS = { PROTOCOL: "ws:", DOMAIN: "127.0.0.1", PORT: 27261 }; // Overwrite by board-service.mjs on the fly, based on launcher args if provided, otherwise default to these values. Used for ConnectorNode to connect to board-service's WebSocket server.
 const hasPassword = false; // TODO
 const boardStorage = new FrontStorage('board');
 const language = await boardStorage.load('language');
@@ -40,10 +42,11 @@ const translator = new Translator(async (lang) => {
 });
 
 // INIT OTHER MANAGERS AND COMPONENTS
-const connector = new Connector(hiveNode);
-const explorer = new Explorer(connector);
-const dashboard = new Dashboard(connector, hostPubkeyStr);
-const biw = new BoardInternalWallet(connector, boardStorage);
+const connectorP2P = new Connector(hiveNode);
+const connectorNode = new ConnectorNode(connectorP2P, WS_SETTINGS, hostPubkeyStr);
+const explorer = new Explorer(connectorP2P);
+const dashboard = new Dashboard(connectorP2P, connectorNode);
+const biw = new BoardInternalWallet(connectorP2P, boardStorage);
 
 if (await boardStorage.load('darkModeState')) document.body.classList.add('dark-mode');
 else document.body.classList.remove('dark-mode');
@@ -51,7 +54,7 @@ else document.body.classList.remove('dark-mode');
 const boardVersionElement = document.getElementById('board-version');
 if (boardVersionElement) boardVersionElement.textContent = `v${version}`;
 
-const visualizer = new NetworkVisualizer(connector, HiveP2P.CryptoCodex);
+const visualizer = new NetworkVisualizer(connectorP2P, HiveP2P.CryptoCodex);
 const windowsWrapElement = document.getElementById('board-windows-wrap');
 const settingsMenuElement = document.getElementById('board-settings-menu');
 const bottomButtonsBarElement = document.getElementById('board-apps-buttons-bar');
@@ -61,7 +64,8 @@ if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.networkVisualizer = visualizer; // Expose for debugging
 	window.appsManager = appsManager;
 	window.hiveNode = hiveNode;
-	window.connector = connector;
+	window.connectorP2P = connectorP2P;
+	window.connectorNode = connectorNode;
 	window.assistant = assistant;
 	window.explorer = explorer;
 	window.dashboard = dashboard;
@@ -139,8 +143,8 @@ window.addEventListener('resize', function(e) { // Trigger on main window resize
 
 // CONNECTOR EVENTS
 const onPeerCountChange = () => {
-	const totalPeers = connector.p2pNode.peerStore.neighborsList.length;
-	const connectedBootstraps = connector.p2pNode.peerStore.publicNeighborsList.length;
+	const totalPeers = connectorP2P.p2pNode.peerStore.neighborsList.length;
+	const connectedBootstraps = connectorP2P.p2pNode.peerStore.publicNeighborsList.length;
 	const connexionResume = document.getElementById('board-connexion-resume');
 	const connexionStatusText = document.getElementById('board-connexion-status-text');
 	if (!connexionResume || !connexionStatusText) return;
@@ -154,8 +158,8 @@ const onPeerCountChange = () => {
 	else if (totalPeers < 2) connexionStatusText.textContent = `${totalPeers} peer [${connectedBootstraps}bstrap]`;
 	else connexionStatusText.textContent = `${totalPeers} peers [${connectedBootstraps}bstrap]`;
 };
-connector.on('peer_connect', onPeerCountChange);
-connector.on('peer_disconnect', onPeerCountChange);
+connectorP2P.on('peer_connect', onPeerCountChange);
+connectorP2P.on('peer_disconnect', onPeerCountChange);
 
 // OPENING => HANDLE PASSWORD AND LANGUAGE SELECTION
 appsManager.buttonsBar.buttons[0].click(); // OPEN ASSISTANT FOR FIRST TIME SETUP

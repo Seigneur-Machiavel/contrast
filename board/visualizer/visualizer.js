@@ -13,7 +13,7 @@ export class NetworkVisualizer {
 	peersList = {};
 	hidden = false;
 
-	/** @param {import('../connector.js').Connector} connector @param {import('hive-p2p').CryptoCodex} CryptoCodex @param {boolean} isSimulation */
+	/** @param {import('../utils/connector-p2p.js').Connector} connector @param {import('hive-p2p').CryptoCodex} CryptoCodex @param {boolean} isSimulation */
 	constructor(connector, CryptoCodex) {
 		this.connector = connector;
 		this.node = connector.p2pNode;
@@ -24,7 +24,7 @@ export class NetworkVisualizer {
 	async #initWhileRendererReady() {
 		await this.networkRenderer.initWhileDomReady();
 		
-		this.#resetNetwork(connector.p2pNode.id);
+		this.#resetNetwork(this.connector.p2pNode.id);
 
 		// This one will not work because we needs to handle all msg types,
 		// -> but messager.on('..') => return message.data

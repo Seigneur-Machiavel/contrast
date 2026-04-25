@@ -36,19 +36,32 @@ export const conditionnals = {
  
  const logger = new MiniLogger('solving-functions');
 export const solving = {
-    /** @param {BlockFinalized} lastBlock @param {number} averageBlockTimeMS @param {number} [targetBlockTime] */
-    difficultyAdjustment: (lastBlock, averageBlockTimeMS, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime, logs = true) => {
-        const blockIndex = lastBlock.index;
-        const difficulty = lastBlock.difficulty;
+    /** @param {BlockFinalizedHeader[]} periodBlocks @param {number} [targetBlockTime] */
+    difficultyAdjustment: (periodBlocks, targetBlockTime = BLOCKCHAIN_SETTINGS.targetBlockTime, logs = true) => {
+        const finalDifficulties = [], difficulties = [];
+		for (const block of periodBlocks) {
+			finalDifficulties.push(solving.getBlockFinalDifficulty(block).finalDifficulty);
+			difficulties.push(block.difficulty);
+		}
 
-		if (typeof difficulty !== 'number') { logger.log('Invalid difficulty', (m, c) => console.error(m, c)); return 1; }
-		if (difficulty < 1) { logger.log('Invalid difficulty < 1', (m, c) => console.error(m, c)); return 1; }
+		const firstBlock = periodBlocks[0];
+		const lastBLock = periodBlocks[periodBlocks.length - 1];
+		const averageBlockTimeMS = solving.calculateAverageBlockTime(lastBLock, firstBlock);
+		//const averageBlockTimeMS = blockTimes.reduce((a, b) => a + b, 0) / blockTimes.length;
+		const timeDeviation = 1 - (averageBlockTimeMS / targetBlockTime);
 
-        if (typeof blockIndex !== 'number') { logger.log('Invalid blockIndex', (m, c) => console.error(m, c)); return difficulty; }
-		if (blockIndex === 0) return difficulty;
-        if (blockIndex % SOLVING.blocksBeforeAdjustment !== 0) return difficulty;
+		const avgFinalDifficulty = finalDifficulties.reduce((a, b) => a + b, 0) / finalDifficulties.length;
+		const avgDifficulty = difficulties.reduce((a, b) => a + b, 0) / difficulties.length;
+		const diffDeviation = Math.round(avgFinalDifficulty - avgDifficulty);
 
-        const deviation = 1 - (averageBlockTimeMS / targetBlockTime);
+		const diffAdjustment = Math.floor(timeDeviation * 100 / SOLVING.thresholdPerDiffIncrement);
+		const diffDevAdjustment = Math.floor(diffDeviation / SOLVING.thresholdPerDiffIncrement);
+		const sum = diffAdjustment + diffDevAdjustment;
+		const capedDiffIncrement = Math.min(Math.abs(sum), SOLVING.maxDiffIncrementPerAdjustment);
+		const diffIncrement = sum > 0 ? capedDiffIncrement : -capedDiffIncrement;
+        const newDifficulty = Math.max(lastBLock.difficulty + diffIncrement, 1);
+		
+		/*const deviation = 1 - (averageBlockTimeMS / targetBlockTime);
         const deviationPercentage = deviation * 100; // over zero = too fast / under zero = too slow
 
         if (logs) {
@@ -59,7 +72,7 @@ export const solving = {
         const diffAdjustment = Math.floor(Math.abs(deviationPercentage) / SOLVING.thresholdPerDiffIncrement);
         const capedDiffIncrement = Math.min(diffAdjustment, SOLVING.maxDiffIncrementPerAdjustment);
         const diffIncrement = deviation > 0 ? capedDiffIncrement : -capedDiffIncrement;
-        const newDifficulty = Math.max(difficulty + diffIncrement, 1); // cap at 1 minimum
+        const newDifficulty = Math.max(difficulty + diffIncrement, 1); // cap at 1 minimum*/
 
         if (logs) {
             const state = diffIncrement === 0 ? 'maintained' : diffIncrement > 0 ? 'increased' : 'decreased';
@@ -82,7 +95,7 @@ export const solving = {
         const maxSupplyWillBeReached = blockData.supply + coinBase >= BLOCKCHAIN_SETTINGS.maxSupply;
         return maxSupplyWillBeReached ? BLOCKCHAIN_SETTINGS.maxSupply - blockData.supply : coinBase;
     },
-    /** @param {BlockFinalized} lastBlock @param {BlockFinalized} olderBlock */
+    /** @param {BlockFinalized | BlockFinalizedHeader} lastBlock @param {BlockFinalized | BlockFinalizedHeader} [olderBlock] */
     calculateAverageBlockTime: (lastBlock, olderBlock) => {
         if (!olderBlock) return BLOCKCHAIN_SETTINGS.targetBlockTime;
         if (lastBlock.index <= olderBlock.index) return BLOCKCHAIN_SETTINGS.targetBlockTime;

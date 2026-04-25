@@ -104,20 +104,11 @@ export function startBoardService(safeConnexionToken = null, hostPubkeyStr = nul
 		if (url === '/board.js') {
 			let patched = boardMjs.replace(/const bootstraps = \[.*?\];/, `const bootstraps = ${JSON.stringify(bootstraps)};`);
 			patched = patched.replace(/const version = '.*?';/, `const version = '${version}';`);
+			patched = patched.replace(/PORT:\s*\d{4,5}/, `PORT: ${controllerPort}`);
 			if (hpkStr && isSafeSource)
 				patched = patched.replace(/const hostPubkeyStr = null;/, `const hostPubkeyStr = '${hpkStr}';`);
 			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
 			return res.end(patched);
-		}
-
-		if (url === '/dashboard/dashboard.js') {
-			console.log('REQUESTING DASHBOARD.JS');
-			// replacee "PORT: 27261," by actual controllerPort in dashboard.js on the fly
-			let dashboardPath = path.join(startupStorage.rootFolder, 'board/dashboard/dashboard.js');
-			let dashboardJs = fs.readFileSync(dashboardPath, 'utf8');
-			dashboardJs = dashboardJs.replace(/PORT:\s*\d{4,5}/, `PORT: ${controllerPort}`);
-			res.writeHead(200, { 'Content-Type': 'application/javascript', 'Content-Security-Policy': CSP });
-			return res.end(dashboardJs);
 		}
 
 		if (url === '/api/time') {

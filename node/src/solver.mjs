@@ -26,15 +26,15 @@ export class Solver {
 	/** @type {BlockCandidate | null} */				bestCandidate = null;
 	/** @type {SolverWorker[]} */						workers = [];
 	/** @type {number[]} */								bets = [];
-	/** @type {{min: number, max: number}} will bet between 80% and 95% of the expected blockTime */
-	betRange = { min: .80, max: .95 };
+	/** @type {{min: number, max: number}} will bet between 70% and 95% of the expected blockTime */
+	betRange = { min: .7, max: .95 };
 	powBroadcastState = { foundHeight: -1, sentTryCount: 0, maxTryCount: 1 };
 	canProceedSolving = true;
 	hashPeriodStart = 0;
 	networkPower = 0;
 	hashCount = 0;
-	/** @type {{raw: number, effective: number, stalenessRatio: number}} */
-	hashRateStats = { raw: 0, effective: 0, stalenessRatio: 0 }; // V2
+	/** @type {{raw: number, effective: number}} */
+	hashRateStats = { raw: 0, effective: 0 }; // V2
 
     /** @param {ContrastNode} node */
     constructor(node) { this.node = node; }
@@ -102,7 +102,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 	decreaseThreads() { if (this.nbOfWorkers > this.minNbOfWorkers) this.nbOfWorkers--; }
 	increaseThreads() { if (this.nbOfWorkers < this.maxNbOfWorkers) this.nbOfWorkers++; }
 	async tick() {
-		if (this.terminated) return;
+		if (this.terminated || !this.canProceedSolving) return;
 
 		const { sAddress, identityEntries } = this.#getAddressAndDataForRewardTx();
 		const blockCandidate = this.bestCandidate;
@@ -118,9 +118,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		this.hashRateStats = this.#computeHashRateStats();
 		
 		const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
-		const promises = [];
-		for (let i = 0; i < readyWorkers; i++) promises.push(this.workers[i].updateCandidate(blockCandidate));
-		await Promise.all(promises);
+		for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
 		
 		timings.workersUpdate = Date.now();
 		for (let i = 0; i < readyWorkers; i++) {
@@ -182,19 +180,13 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         this.bets = bets;
     }
 	#computeHashRateStats() {
-    	let raw = 0, weightedSum = 0, stalenessSum = 0;
+		let raw = 0, effective = 0;
 		for (const worker of this.workers) {
 			raw += worker.hashRate;
-			//weightedSum += worker.hashRate * (worker.difficulty / Math.max(worker.finalDifficulty, 1));
-			weightedSum += worker.hashRate * Math.min(worker.difficulty / Math.max(worker.finalDifficulty, 1), 1);
-			stalenessSum += worker.stalenessRatio;
+			effective += worker.hashRate;
+			//effective += worker.hashRate * Math.min(worker.difficulty / Math.max(worker.finalDifficulty, 1), 1);
 		}
-		const count = this.workers.length || 1;
-		return {
-			raw,
-			effective: weightedSum * (1 - stalenessSum / count),
-			stalenessRatio: stalenessSum / count,
-		};
+		return { raw, effective };
 	}
     /** @param {BlockFinalized} block */
     async #broadcastFinalizedBlock(block) {

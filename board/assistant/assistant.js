@@ -179,6 +179,13 @@ export class Assistant {
 				this.setActiveInput('idle');
 				await this.biw.savePrivateKey(); // Generate and save a new private key with default password
 				await this.biw.loadWalletFromStoredPrivateKey();
+				if (!this.biw.wallet) throw new Error('Failed to load wallet after generating private key');
+				if (!(await this.biw.wallet.deriveAccounts(2))?.derivedAccounts) throw new Error('Failed to derive accounts from the generated private key');
+				
+				const [ vAccount, sAccount ] = this.biw.wallet.accounts;
+				//this.setRewardAddress('validator', vAccount.address, [vAccount.pubKey]);
+				//this.#setRewardAddress('solver', sAccount.address, [sAccount.pubKey]);
+		
 				this.interactor.requestNewPassword();
 			},
 			'Use existing wallet': () => {

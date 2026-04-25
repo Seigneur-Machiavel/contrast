@@ -2,7 +2,7 @@
 import { BLOCKCHAIN_SETTINGS, SOLVING } from '../../config/blockchain-settings.mjs';
 import { BlockFinalizedHeader, BlockFinalized,
 	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
-import { solving } from '../../utils/conditionals.mjs';
+import { conditionnals, solving } from '../../utils/conditionals.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
@@ -119,20 +119,16 @@ export class BlockUtils {
         return { powReward, posReward, totalFees };
     }
 	/** @param {ContrastNode} node */
-	static calculateAverageBlockTimeAndDifficulty(node, logs = false) {
+	static calculateAdjustedDifficulty(node, logs = false) {
         const lastBlock = node.blockchain.lastBlock;
-        if (!lastBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: SOLVING.initialDifficulty };
-        
-		// const olderBlockHeight = lastBlock.index - SOLVING.blocksBeforeAdjustment;
-		// if (olderBlockHeight < 0) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: SOLVING.initialDifficulty };
-		
-		const olderBlockHeight = Math.max(0, lastBlock.index - SOLVING.blocksBeforeAdjustment);
-        const olderBlock = node.blockchain.getBlock(olderBlockHeight);
-        if (!olderBlock) return { averageBlockTime: BLOCKCHAIN_SETTINGS.targetBlockTime, newDifficulty: SOLVING.initialDifficulty };
+        if (!lastBlock) return SOLVING.initialDifficulty;
 
-		const averageBlockTime = solving.calculateAverageBlockTime(lastBlock, olderBlock);
-        const newDifficulty = solving.difficultyAdjustment(lastBlock, averageBlockTime, undefined, logs);
-        return { averageBlockTime, newDifficulty };
+		if (lastBlock.index === 0) return lastBlock.difficulty; // Genesis block, keep initial difficulty
+		if (lastBlock.index % SOLVING.blocksBeforeAdjustment !== 0) return lastBlock.difficulty; // Not time for adjustment yet, keep current difficulty
+		
+		const periodBlocks = node.blockchain.blockStorage.getBlocksHeaders(lastBlock.index - SOLVING.blocksBeforeAdjustment, lastBlock.index);
+		if (!periodBlocks || periodBlocks.length === 0) throw new Error('Unable to retrieve period blocks for difficulty adjustment');
+		return solving.difficultyAdjustment(periodBlocks, undefined, logs);
     }
 	/** @param {BlockFinalized} block */
 	static getFinalizedBlockHeader(block) {
@@ -160,8 +156,12 @@ export class BlockUtils {
 			else if (solverBestIndex < blockchain.lastBlock.index) return false;// ALREADY BEHIND, WAIT FOR OTHER BLOCKS TO CATCH UP
 		if (myLegitimacy > BLOCKCHAIN_SETTINGS.validatorsPerRound) return false;// TOO LOW LEGITIMACY, DON'T WASTE RESOURCES
 
-		const { averageBlockTime, newDifficulty } = this.calculateAverageBlockTimeAndDifficulty(node);
-		node.info.averageBlockTime = averageBlockTime;
+		/* DEPRECATED: USELESS
+		const olderBlockHeight = Math.max(0, blockchain.lastBlock.index - SOLVING.blocksBeforeAdjustment);
+        const olderBlock = node.blockchain.getBlock(olderBlockHeight);
+		node.info.averageBlockTime = solving.calculateAverageBlockTime(blockchain.lastBlock, olderBlock);*/
+		
+		const newDifficulty = BlockUtils.calculateAdjustedDifficulty(node, true);
 		const coinBaseReward = solving.calculateNextCoinbaseReward(blockchain.lastBlock);
 		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch(node);
 		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, txs, posTimestamp);

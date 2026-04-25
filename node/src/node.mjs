@@ -57,9 +57,9 @@ export class ContrastNode {
 	running = true;
 
 	logger = new MiniLogger('node');
-	info = { lastLegitimacy: 0, averageBlockTime: 0, state: 'idle' };
-	/** @type {{ vAddress: string | undefined, vPubkeys: string[] | undefined, sAddress: string | undefined, sPubkeys: string[] | undefined }} */
-	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, sAddress: undefined, sPubkeys: undefined };
+	info = { lastLegitimacy: 0, state: 'idle' };
+	/** @type {{ vAddress: string | undefined, vPubkeys: string[] | undefined, vBalance: number, sAddress: string | undefined, sPubkeys: string[] | undefined, sBalance: number }} */
+	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, vBalance: 0, sAddress: undefined, sPubkeys: undefined, sBalance: 0 };
 
 	mainStorage; blockchain;
 	taskQueue; memPool; p2p;
@@ -129,7 +129,6 @@ export class ContrastNode {
 		}
 		
 		this.#startStackExecution();
-		this.#startSolverExecution();
 		await this.createAndShareMyBlockCandidate();
 		if (this.blockchain.lastBlock) // SHARE MY STATUS IF ANY BLOCK EXISTS
 			this.sync.setAndshareMyStatus(this.blockchain.lastBlock);
@@ -153,10 +152,27 @@ export class ContrastNode {
 	associateWallet(wallet) {
 		if (!wallet.accounts[0].pubKey || !wallet.accounts[1].pubKey) throw new Error('Wallet accounts must be initialized with pubKeys before associating with the node');
 		this.account = wallet.accounts[0];
-		this.rewardsInfo.vAddress = wallet.accounts[0].address;
-		this.rewardsInfo.vPubkeys = [wallet.accounts[0].pubKey];
-		this.rewardsInfo.sAddress = wallet.accounts[1].address;
-		this.rewardsInfo.sPubkeys = [wallet.accounts[1].pubKey];
+		this.#setRewardAddress('validator', wallet.accounts[0].address, [wallet.accounts[0].pubKey]);
+		this.#setRewardAddress('solver', wallet.accounts[1].address, [wallet.accounts[1].pubKey]);
+	}
+	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} [pubKeysHex] */
+	handleAddressUpdate(type, address, pubKeysHex) {
+		const pks = pubKeysHex || this.blockchain.identityStore.getIdentity(address)?.pubKeysHex;
+		if (!pks) return this.logger.log(`Failed to update ${type} address to ${address}: no pubkeys found for this address`, (m, c) => console.warn(m, c));
+		this.#setRewardAddress(type, address, pks);
+	}
+	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} pubKeysHex */
+	async #setRewardAddress(type, address, pubKeysHex) {
+		if (!ADDRESS.checkConformity(address)) return this.logger.log(`Failed to set ${type} reward address to ${address}: invalid address`, (m, c) => console.warn(m, c));
+		if (type === 'solver') {
+			this.rewardsInfo.sAddress = address;
+			this.rewardsInfo.sPubkeys = pubKeysHex;
+			this.rewardsInfo.sBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
+		} else {
+			this.rewardsInfo.vAddress = address;
+			this.rewardsInfo.vPubkeys = pubKeysHex;
+			this.rewardsInfo.vBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
+		}
 	}
 	async createAndShareMyBlockCandidate() {
 		try {
@@ -188,12 +204,8 @@ export class ContrastNode {
 	async #startStackExecution() {
 		while (this.running) {
 			await this.#executeNextTask();
-			await new Promise(r => setTimeout(r, 10));
-		}
-	}
-	async #startSolverExecution() {
-		while (this.running) {
 			try { await this.solver.tick(); } catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[NODE-SOLVER] Error in tick: ${error.stack}`, (m, c) => console.error(m, c)); }
+			//await this.controller?.shareNodeInfo();
 			await new Promise(r => setTimeout(r, 10));
 		}
 	}

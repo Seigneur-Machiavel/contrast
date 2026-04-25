@@ -106,10 +106,15 @@ export class Blockchain {
 		try { await node.callbacks.onBlockConfirmed?.(block);
 		} catch (/** @type {any} */ error) { this.logger.log(`onBlockConfirmed callback error: ${error.message}`, (m, c) => console.error(m, c)); }
 
-		if (node.controller?.sharedSecret && block.index > 12) {
+		// UPDATE NODE INFO
+		if (node.controller?.sharedSecret && block.index >= 12) {
 			const headers = this.blockStorage.getBlocksHeaders(block.index - 12, block.index);
 			if (headers) node.solver.networkPower = solving.estimateGlobalHashrate(headers);
 		}
+		if (node.controller?.sharedSecret && node.rewardsInfo.sAddress)
+			node.rewardsInfo.sBalance = (await this.ledgersStorage.getAddressLedger(node.rewardsInfo.sAddress))?.balance || 0;
+		if (node.controller?.sharedSecret && node.rewardsInfo.vAddress)
+			node.rewardsInfo.vBalance = (await this.ledgersStorage.getAddressLedger(node.rewardsInfo.vAddress))?.balance || 0;
 
 		// CREATE AND SHARE NEW CANDIDATE AFTER A SHORT DELAY
 		if (broadcastNewCandidate && !isSync) {

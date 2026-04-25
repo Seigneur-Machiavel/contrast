@@ -10,173 +10,170 @@ if (parentPort === null) throw new Error('No parent port in solver worker');
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
-class HashrateCalculatorV2 {
-    #windowSize = 60; // number of hashes to keep in the window
-    /** @type {{ t: number, stale: boolean, finalDifficulty: number }[]} */
+class HashrateCalculator {
+    #windowSize = 30;
+    /** @type {{ t: number, finalDifficulty: number }[]} */
     #window = [];
-    #isStale = false;
-    #lastFinalDifficulty = 1;
 
     /** @param {import("worker_threads").MessagePort} parentPort */
     constructor(parentPort) { this.parentPort = parentPort; }
 
     /** @param {number} finalDifficulty */
-    onNewCandidate(finalDifficulty) {
-        this.#isStale = true; // hashes in flight until next newHash are stale
-        this.#lastFinalDifficulty = finalDifficulty;
+    newHash(finalDifficulty) {
+        this.#window.push({ t: Date.now(), finalDifficulty });
+        if (this.#window.length > this.#windowSize) this.#window.shift();
+        if (this.#window.length < 2) return;
+
+        const elapsed = (this.#window[this.#window.length - 1].t - this.#window[0].t) / 1000;
+        if (elapsed === 0) return;
+
+        const hashRate = (this.#window.length - 1) / elapsed;
+        const finalDiffAvg = this.#window.reduce((s, h) => s + h.finalDifficulty, 0) / this.#window.length;
+        this.parentPort.postMessage({ hashRate, finalDifficulty: finalDiffAvg });
     }
+}
 
-	/** @param {number} finalDifficulty */
-	newHash(finalDifficulty) {
-		this.#isStale = false;
-		this.#lastFinalDifficulty = finalDifficulty;
-		this.#window.push({ t: Date.now(), stale: this.#isStale, finalDifficulty });
-		if (this.#window.length > this.#windowSize) this.#window.shift();
+const hashRateCalculator = new HashrateCalculator(parentPort);
 
-		const elapsed = (this.#window[this.#window.length - 1].t - this.#window[0].t) / 1000;
-		if (elapsed === 0) return; // single entry, can't compute rate yet
+const solverVars = {
+    exiting: false,
+    working: false,
+    /** @type {string | undefined} */       sAddress: undefined,
+    bet: 0,
+    timeOffset: 0,
+    paused: false,
+    /** @type {BlockCandidate | null} */    blockCandidate: null,
+    /** @type {BlockFinalized | null} */    readyBlock: null,
+    readyBlockTimestamp: 0,
+    /** @type {number | null} */            pausedAtTime: null,
+    /** @type {Uint8Array[]} */             identities: [],
+    hashingTime: 500,
+    testSolvingSpeedPenality: 0,
+};
 
-		const staleCount = this.#window.filter(h => h.stale).length;
-		const hashRate = this.#window.length / elapsed;
-		const stalenessRatio = staleCount / this.#window.length;
+function now() { return Date.now() + solverVars.timeOffset; }
 
-		this.parentPort.postMessage({ hashRate, stalenessRatio, finalDifficulty: this.#lastFinalDifficulty });
-	}
+function prepareBlock(applyBet = true) {
+    if (!solverVars.blockCandidate) throw new Error('No block candidate available');
+	if (!solverVars.blockCandidate.powReward) throw new Error('Block candidate has no powReward');
+    if (!solverVars.sAddress) throw new Error('No reward address provided');
+
+    /** @type {BlockFinalized} */ // @ts-ignore
+    const block = solverVars.blockCandidate;
+    const headerNonce = solving.generateRandomNonce().Hex;
+    const coinbaseNonce = solving.generateRandomNonce().Hex;
+    block.nonce = headerNonce;
+    block.timestamp = applyBet
+        ? Math.max(block.posTimestamp + 1 + solverVars.bet, now() + solverVars.hashingTime)
+        : now() + Math.max(solverVars.hashingTime - 100, 0);
+
+    const rewardTx = Transaction_Builder.createSolverReward(
+        coinbaseNonce, solverVars.sAddress, solverVars.blockCandidate.powReward, solverVars.identities
+    );
+    BlockUtils.setCoinbaseTransaction(block, rewardTx);
+
+    const signatureHex = BlockUtils.getBlockSignature(block);
+    return { signatureHex, nonce: `${headerNonce}${coinbaseNonce}`, block, candidateIndex: block.index };
 }
 
 async function mineBlockUntilValid() {
-	if (parentPort === null) throw new Error('No parent port in solver worker');
+    while (true) {
+        // Submit preshot block if its timestamp is reached
+        if (solverVars.readyBlock?.index === solverVars.blockCandidate?.index
+			&& solverVars.readyBlock?.prevHash === solverVars.blockCandidate?.prevHash
+			&& solverVars.readyBlockTimestamp <= now())
+			return solverVars.readyBlock;
 
-	while (true) {
-		if (solverVars.exiting) return { error: 'Exiting' };
-		if (solverVars.paused) { await new Promise((resolve) => setTimeout(resolve, 100)); continue; }
+        if (solverVars.exiting) return { error: 'Exiting' };
+        if (solverVars.paused) { await new Promise(r => setTimeout(r, 100)); continue; }
 
-		// IF PAUSED MORE THAN A MINUTE AGO, WE NEED TO WAIT AN UPDATE OF BLOCK CANDIDATE
-		// ON NEW CANDIDATE, PAUSE TIME IS RESET
-		while (solverVars.pausedAtTime && solverVars.pausedAtTime > Date.now() - 60000)
-			await new Promise((resolve) => setTimeout(resolve, 100));
+        while (solverVars.pausedAtTime && solverVars.pausedAtTime > Date.now() - 60_000)
+            await new Promise(r => setTimeout(r, 100));
 
-		if (solverVars.blockCandidate === null) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
-		if (solverVars.timeOffset === 0) { await new Promise((resolve) => setTimeout(resolve, 10)); continue; }
-		if (solverVars.testSolvingSpeedPenality) await new Promise((resolve) => setTimeout(resolve, solverVars.testSolvingSpeedPenality));
+        if (!solverVars.blockCandidate || solverVars.timeOffset === 0)
+            { await new Promise(r => setTimeout(r, 10)); continue; }
+        if (solverVars.testSolvingSpeedPenality)
+            await new Promise(r => setTimeout(r, solverVars.testSolvingSpeedPenality));
 
-		try {
-			const startTime = performance.now();
-			const { signatureHex, nonce, block } = prepareBlockCandidateBeforeSolving();
-			const blockHash = await solving.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
-			if (!blockHash) throw new Error('Invalid block hash');
+        // If we already have a preshot block pending, keep hashing without bet
+        const { signatureHex, nonce, block, candidateIndex } = prepareBlock(solverVars.readyBlock === null);
+
+        try {
+            const startTime = Date.now();
+            const blockHash = await solving.hashBlockSignature(HashFunctions.Argon2, signatureHex, nonce);
+            solverVars.hashingTime = Date.now() - startTime;
+
+            if (!blockHash) throw new Error('Invalid block hash');
+            if (candidateIndex !== solverVars.blockCandidate?.index) continue; // stale, discard
+
+            block.hash = blockHash.hex;
+            const { conform, finalDifficulty } = solving.verifyBlockHashConformToDifficulty(blockHash.bitsString, block);
+            hashRateCalculator.newHash(finalDifficulty);
+            if (!conform) continue;
 			
-			block.hash = blockHash.hex;
-			
-			const { conform, finalDifficulty } = solving.verifyBlockHashConformToDifficulty(blockHash.bitsString, block);
-			hashRateCalculatorV2.newHash(finalDifficulty);
-			if (!conform) continue;
-
-			const now = Date.now() + solverVars.timeOffset;
-			const blockReadyIn = Math.max(block.timestamp - now, 0);
-			await new Promise((resolve) => setTimeout(resolve, blockReadyIn));
-			return block;
-		} catch (/**@type {any}*/ error) {
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			return { error: error.stack };
-		}
-	}
-}
-function prepareBlockCandidateBeforeSolving() {
-	//let time = performance.now();
-	//console.log(`prepareNextBlock: ${performance.now() - time}ms`); time = performance.now();
-	/** @ts-ignore Candidate transmute to Finalized @type {BlockFinalized | null} */
-	const block = solverVars.blockCandidate;
-	if (block === null) throw new Error('No block candidate available');
-	if (!solverVars.sAddress) throw new Error('No reward address provided');
-
-	/** @ts-ignore Candidate transmute to Finalized @type {number} */
-	const powReward = block.powReward;
-	const headerNonce = solving.generateRandomNonce().Hex;
-	const coinbaseNonce = solving.generateRandomNonce().Hex;
-	block.nonce = headerNonce;
-
-	const now = Date.now() + solverVars.timeOffset;
-	block.timestamp = Math.max(block.posTimestamp + 1 + solverVars.bet, now);
-
-	const rewardTx = Transaction_Builder.createSolverReward(coinbaseNonce, solverVars.sAddress, powReward, solverVars.identities);
-	BlockUtils.setCoinbaseTransaction(block, rewardTx); // Will replace existing coinbase if any
-
-	const signatureHex = BlockUtils.getBlockSignature(block);
-	const nonce = `${headerNonce}${coinbaseNonce}`;
-	//console.log(`${ signatureHex}:${nonce}`);
-	//console.log(`getBlockSignature: ${performance.now() - time}ms`); time = performance.now();
-
-	return { signatureHex, nonce, block };
+            if (block.timestamp - now() <= 0) return block;
+            //solverVars.readyBlock = { ...block }; // clone to freeze state
+			//solverVars.readyBlock = { ...block, Txs: block.Txs.map(tx => ({ ...tx })) };
+			solverVars.readyBlock = { ...block, Txs: [...block.Txs] };
+			solverVars.readyBlock = JSON.parse(JSON.stringify(block)); // deep clone to freeze state
+            solverVars.readyBlockTimestamp = block.timestamp;
+        } catch (/** @type {any} */ err) {
+            await new Promise(r => setTimeout(r, 10));
+            return { error: err.stack };
+        }
+    }
 }
 
-const solverVars = {
-	exiting: false,
-	working: false,
-
-	/** @type {string | undefined} */
-	sAddress: undefined,
-	highestBlockHeight: 0,
-	bet: 0,
-	timeOffset: 0,
-	paused: false,
-	/** @type {BlockCandidate | null} */	blockCandidate: null,
-	/** @type {number | null} */			pausedAtTime: 0,
-	/** @type {Uint8Array[]} */				identities: [],
-
-	testSolvingSpeedPenality: 0 // TODO: set to 0 after testing
-};
-
-const hashRateCalculatorV2 = new HashrateCalculatorV2(parentPort);
 parentPort.on('message', async (task) => {
-	if (parentPort === null) throw new Error('No parent port in solver worker');
+    if (parentPort === null) throw new Error('No parent port');
 
-	const response = {};
+    const response = {};
     switch (task.type) {
-		case 'updateInfo':
-			solverVars.sAddress = task.sAddress;
-			solverVars.bet = task.bet;
-			solverVars.timeOffset = task.timeOffset;
-			solverVars.identities = task.identityEntries || [];
-			return;
-        case 'newCandidate':
-			solverVars.pausedAtTime = null;
+        case 'updateInfo':
+            solverVars.sAddress = task.sAddress;
+            solverVars.bet = task.bet;
+            solverVars.timeOffset = task.timeOffset;
+            solverVars.identities = task.identityEntries || [];
+            return;
+		case 'newCandidate':
+			if (solverVars.readyBlock?.index !== task.blockCandidate.index
+				|| solverVars.readyBlock?.prevHash !== task.blockCandidate.prevHash)
+				solverVars.readyBlock = null;
 			solverVars.blockCandidate = task.blockCandidate;
-			solverVars.highestBlockHeight = task.blockCandidate.index;
-			hashRateCalculatorV2.onNewCandidate(solving.getBlockFinalDifficulty(task.blockCandidate).finalDifficulty);
+			solverVars.pausedAtTime = null;
 			return;
-		case 'mineUntilValid':
-			if (solverVars.working) return;
-			
-			solverVars.working = true;
-			solverVars.sAddress = task.sAddress;
-			solverVars.bet = task.bet;
-			solverVars.timeOffset = task.timeOffset;
-			solverVars.identities = task.identityEntries || [];
+        case 'mineUntilValid':
+            if (solverVars.working) return;
+            solverVars.working = true;
+            solverVars.sAddress = task.sAddress;
+            solverVars.bet = task.bet;
+            solverVars.timeOffset = task.timeOffset;
+            solverVars.identities = task.identityEntries || [];
 
-			const finalizedBlock = await mineBlockUntilValid();
-			response.result = finalizedBlock;
-			break;
-		case 'pause':
-			solverVars.paused = true;
-			solverVars.pausedAtTime = Date.now();
-			parentPort.postMessage({ paused: true });
-			return;
-		case 'resume':
-			solverVars.paused = false;
-			parentPort.postMessage({ paused: false });
-			return;
-		case 'terminate':
-			solverVars.exiting = true;
-			parentPort.close(); // close the worker
-			break;
+            const finalizedBlock = await mineBlockUntilValid();
+            solverVars.readyBlock = null;
+            response.result = finalizedBlock;
+            break;
+        case 'pause':
+            solverVars.paused = true;
+            solverVars.pausedAtTime = Date.now();
+            parentPort.postMessage({ paused: true });
+            return;
+        case 'resume':
+            solverVars.paused = false;
+            solverVars.pausedAtTime = null;
+            parentPort.postMessage({ paused: false });
+            return;
+        case 'terminate':
+            solverVars.exiting = true;
+            parentPort.close();
+            break;
         default:
-			response.error = 'Invalid task type';
+            response.error = 'Invalid task type';
             break;
     }
 
-	if (solverVars.exiting) return;
-	
-	solverVars.working = false;
-	parentPort.postMessage(response);
+    if (solverVars.exiting) return;
+    solverVars.working = false;
+    parentPort.postMessage(response);
 });

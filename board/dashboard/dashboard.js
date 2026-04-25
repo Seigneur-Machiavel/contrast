@@ -1,49 +1,25 @@
 import { eHTML_STORE } from '../utils/board-helpers.js';
 import { serializer } from '../../utils/serializer.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
+import { ADDRESS } from '../../types/address.mjs';
 
 /**
+ * @typedef {import('../utils/connector-p2p.js').Connector} Connector
+ * @typedef {import('../utils/connector-node.js').ConnectorNode} ConnectorNode
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
- */
-
-const WS_SETTINGS = {
-    PROTOCOL: "ws:",
-    DOMAIN: "127.0.0.1",
-    PORT: 27261,
-}
-
-const ACTIONS = {
-    SETUP: 'setup',
-    HARD_RESET: 'hard_reset',
-    UPDATE_GIT: 'update_git',
-    REVALIDATE: 'revalidate',
-    RESET_WALLET: 'reset_wallet',
-    FORCE_RESTART: 'force_restart',
-    SET_SOLVER_ADDRESS: 'set_solver_address',
-    SET_VALIDATOR_ADDRESS: 'set_validator_address'
-};
+ * @typedef {import("../../types/transaction.mjs").Transaction} Transaction */
 
 const eHTML = new eHTML_STORE('cnd-', 'node-pubkey-input');
 export class Dashboard {
-	/** @type {WebSocket} */ ws;
-	wsInitInterval;
-	textEncoder = new TextEncoder();
-	textDecoder = new TextDecoder();
-	isWsAccessible = false;
-	isConnected = false;
-	hostPubkeyStr;
 	eHTML = eHTML;
-	sharedSecret;
-	myKeypair;
-	connector;
+	connectorP2P;
+	connectorNode;
+	lastValues = {}; // used to avoid unnecessary DOM updates when values haven't changed. Keys are the same as the "type" field of messages received from the NodeController, suffixed by "Data" if the message contains a "data" field (ex: "nodeInfoData" for a message { type: 'nodeInfo', data: {...} }).
 
-	/** @param {import('../connector.js').Connector} connector @param {string | null} [hostPubkeyStr] */
-	constructor(connector, hostPubkeyStr) {
-		this.connector = connector;
-		this.hostPubkeyStr = hostPubkeyStr;
-		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair();
-		this.#testIfWebSocketIsAccessible();
+	/** @param {Connector} connectorP2P @param {ConnectorNode} connectorNode */
+	constructor(connectorP2P, connectorNode) {
+		this.connectorP2P = connectorP2P;
+		this.connectorNode = connectorNode;
 		this.#initWhileDomReady();
 	}
 
@@ -54,55 +30,50 @@ export class Dashboard {
 	}
 	inputHandler(e) { if (e.target.dataset.action === 'setPubkeyFromInput') this.#setControllerPubkeyFromInput(); }
 	pasteHandler(e) { if (e.target.dataset.action === 'setPubkeyFromInput') this.#setControllerPubkeyFromInput(); }
-
-	// INTERNAL METHODS
-	#testIfWebSocketIsAccessible() {
-		this.ws = new WebSocket(`${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
-		this.ws.onopen = () => {
-			this.isWsAccessible = true;
-			this.ws.close();
-			this.ws = null;
-			console.log('NodeController WebSocket is accessible.');
+	focusInHandler(e) {
+		if (e.target.dataset.sAddress || e.target.dataset.vAddress) e.target.classList.add('editing');
+	}
+	focusOutHandler(e) {
+		if (e.target.classList.contains('editing') && (e.target.dataset.sAddress || e.target.dataset.vAddress)) {
+			e.target.classList.remove('editing');
+			const type = e.target.dataset.sAddress ? 'solver' : 'validator';
+			const address = e.target.textContent.trim();
+			if (ADDRESS.checkConformity(address)) this.sendEncryptedMessage('setAddress', { type, address });
+			else e.target.textContent = type === 'solver' ? e.target.dataset.sAddress : e.target.dataset.vAddress; // reset to previous value if not a valid address			
 		}
 	}
+
+	// INTERNAL METHODS
 	async #initWhileDomReady() {
 		if (!eHTML.isReady) console.log('Dashboard awaiting DOM elements...');
 		while (!eHTML.isReady) await new Promise(r => setTimeout(r, 200));
 		console.log('Dashboard DOM elements ready.');
+
+		//eHTML.get('establishing-connection-text').classList.add('hidden');
+		//if (!this.connectorP2P.hostPubkeyStr) eHTML.get('node-pubkey-input').classList.remove('hidden');
+
+		const vAddressSpan = eHTML.get('validatorRewardAddress');
+		vAddressSpan.addEventListener('focusin', (e) => this.focusInHandler(e));
+		vAddressSpan.addEventListener('focusout', (e) => this.focusOutHandler(e));
 		
-		// if not already set, try to load pubkey from storage if exists.
-		if (!this.hostPubkeyStr) this.hostPubkeyStr = await this.#pubkeyFromStorage();
-		this.wsInitInterval = setInterval(() => this.#initWebSocketIfNot(), 1000);
+		const sAddressSpan = eHTML.get('solverRewardAddress');
+		sAddressSpan.addEventListener('focusin', (e) => this.focusInHandler(e));
+		sAddressSpan.addEventListener('focusout', (e) => this.focusOutHandler(e));
+
+		setInterval(() => this.#connectionStateCheckLoop(), 1000);
+		this.connectorNode.onMessageCallbacks['dashboard'] = this.#handleDecryptedMessage;
 	}
-	#initWebSocketIfNot() {
-		if (this.ws) return;
-		// WebSocket will throw an error if the server is not up yet.
-		this.ws = new WebSocket(`${WS_SETTINGS.PROTOCOL}//${WS_SETTINGS.DOMAIN}:${WS_SETTINGS.PORT}`);
-		this.ws.binaryType = 'arraybuffer';
-		this.ws.onmessage = (message) => this.#handleMessage(message);
-		this.ws.onopen = () => this.#handleConnection();
-		this.ws.onclose = () => this.#handleClose();
-	}
-	/** @param {import('ws').WebSocket} wsConn */
-	#handleConnection = async (wsConn) => {
-		this.isWsAccessible = true;
-		eHTML.get('establishing-connection-text').classList.add('hidden');
+	#connectionStateCheckLoop() {
+		if (this.connectorNode.isConnected) return eHTML.get('dashboard-wrapper').classList.remove('connecting');
 		
-		if (!this.hostPubkeyStr) eHTML.get('node-pubkey-input').classList.remove('hidden');
-		else this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr), true);
-	}
-	/** @param {string} [reason] */
-	#handleClose = (reason) => {
-		this.ws = null;
-		this.sharedSecret = null;
-		this.isConnected = false;
-		this.myKeypair = this.connector.p2pNode.cryptoCodex.generateEphemeralX25519Keypair(); // Prepare new keypair for next connection
 		eHTML.get('dashboard-wrapper').classList.add('connecting');
-		eHTML.get('establishing-connection-text').classList.remove('hidden');
-		eHTML.get('node-pubkey-input').classList.add('hidden');
-		
-		if (reason) console.log(`[NodeController] WebSocket connection closed: ${reason}`);
-		else console.log('[NodeController] WebSocket connection closed.');
+		if (!this.connectorP2P.hostPubkeyStr) {
+			eHTML.get('node-pubkey-input').classList.remove('hidden');
+			eHTML.get('establishing-connection-text').classList.add('hidden');
+		} else {
+			eHTML.get('node-pubkey-input').classList.add('hidden');
+			eHTML.get('establishing-connection-text').classList.remove('hidden');
+		}
 	}
 	#setControllerPubkeyFromInput() {
 		try {
@@ -111,96 +82,77 @@ export class Dashboard {
 			if (pubkeyStr.length !== 64) return null; // expecting 32-byte public key in hex
 			else input.value = '';
 
-			this.hostPubkeyStr = pubkeyStr;
+			this.connectorNode.hostPubkeyStr = pubkeyStr;
 			if (chrome.storage) chrome.storage.local.set({ nodePubkey: pubkeyStr });
 
-			this.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.hostPubkeyStr), true);
+			this.connectorNode.buildSharedSecretFromPubkey(serializer.converter.hexToBytes(this.connectorNode.hostPubkeyStr), true);
 			console.log('Controller pubkey set from input and saved to storage.');
 		} catch (error) { console.error('Error getting public key from input:', error); }
 	}
-	async #pubkeyFromStorage() {
-		if (!chrome.storage) return null;
-		try {
-			/** @type {string} */
-			const r = await chrome.storage.local.get('nodePubkey');
-			if (!r?.nodePubkey || r.nodePubkey.length !== 64) return null; // expecting 32-byte public key in hex
-			return r.nodePubkey;
-		} catch (error) { console.error('Error getting public key from storage:', error); return null; }
-	}
-	/** @param {ArrayBuffer} message */
-	#handleMessage = (message) => {
-		try {
-			//console.log('[NodeController] Received message:', message);
-			const d = new Uint8Array(message.data);
-			if (d.length === 0) throw new Error('WRONG PUBKEY'); // error response from server
-			// UNSAFE MODE PUBKEY HANDLER
-			if (!this.sharedSecret && d.length === 32) return this.buildSharedSecretFromPubkey(d, true);
-			
-			const { type, data } = this.#parseEncryptedMessage(d) || {};
-			if (!type) return this.#handleClose('Unable to parse encrypted message.');
-
-			if (!this.isConnected) this.#setConnected();
-			this.#handleDecryptedMessage(type, data);
-		} catch (/**@type {any} */ error) { console.error(error.stack); }
-	}
-	#setConnected() {
-		this.isConnected = true;
-		//this.sendEncryptedMessage('getNodeHeight');
-		eHTML.get('dashboard-wrapper').classList.remove('connecting');
-		console.log('[NodeController] Key exchange completed - secure channel established');
-	}
-	/** @param {Uint8Array} encryptedData */
-	#parseEncryptedMessage = (encryptedData) => {
-		if (!this.sharedSecret) throw new Error('No shared secret established');
-		try {
-			const decrypted = this.connector.p2pNode.cryptoCodex.decryptData(encryptedData, this.sharedSecret);
-			const decodedStr = this.textDecoder.decode(decrypted);
-			return JSON.parse(decodedStr);
-		} catch (error) { return null; }
-	}
 	/** @param {string} type @param {any} data */
-	#handleDecryptedMessage(type, data) {
-		// NODE
-		if (type === 'currentHeight') return eHTML.get('nodeHeight').textContent = data;
-		if (type === 'stateUpdate') return eHTML.get('nodeState').textContent = data;
+	#handleDecryptedMessage = (type, data) => {
+		if (type === 'stateUpdate') return this.#handleStateUpdate(data);
+		if (type === 'myLastLegitimacy') return this.#handleMyLastLegitimacyUpdate(data);
+		if (type === 'nodeInfo') return this.#handleNodeInfoUpdate(data);
+	}
+	#handleStateUpdate(d) {
+		if (this.lastValues.nodeState !== d) eHTML.get('nodeState').textContent = d;
+		this.lastValues.nodeState = d;
+	}
+	#handleMyLastLegitimacyUpdate(d) {
+		if (this.lastValues.myLastLegitimacy !== d) eHTML.get('lastLegitimacy').textContent = d;
+		this.lastValues.myLastLegitimacy = d;
+	}
+	#handleNodeInfoUpdate(d) {
+		const lv = this.lastValues;
+		if (lv.currentHeight !== d.currentHeight) eHTML.get('nodeHeight').textContent = d.currentHeight;
+	
 		// VALIDATION
-		if (type === 'validationHeight') return eHTML.get('validationHeight').textContent = data;
-		if (type === 'networkPower') return eHTML.get('networkPower').textContent = data.toFixed(2);
-		if (type === 'solverLegitimacy') return eHTML.get('solverLegitimacy').textContent = data;
-		if (type === 'solverPower') return eHTML.get('solverPower').textContent = data.toFixed(2);
-		if (type === 'dailyRewardEstimation') return eHTML.get('dailyReward').textContent = CURRENCY.formatNumberAsCurrency(data, 2);
-		if (type === 'solverThreadCount') return eHTML.get('solverThreadCount').textContent = data.toString().toFixed(2);
-		// ADDRESSES
-		if (type === 'publicAddress') return eHTML.get('publicAddress').textContent = data;
-		if (type === 'solverRewardAddress') return eHTML.get('solverRewardAddress').textContent = data;
-		if (type === 'solverBalance') return eHTML.get('solverBalance').textContent = CURRENCY.formatNumberAsCurrency(data, 2);
-		if (type === 'validatorRewardAddress') return eHTML.get('validatorRewardAddress').textContent = data;
-		if (type === 'validatorBalance') return eHTML.get('validatorBalance').textContent = CURRENCY.formatNumberAsCurrency(data, 2);
-		// DETAILS
-		if (type === 'txInMempool') return eHTML.get('txInMempool').textContent = data;
-		if (type === 'nodePeerId') return eHTML.get('peerId').textContent = data;
-		if (type === 'neighborsCount') return eHTML.get('neighborsCount').textContent = data;
-		// console.log(`[Dashboard] Received unknown message of type "${type}":`, data);
-	}
+		if (lv.validationHeight !== d.validationHeight) eHTML.get('validationHeight').textContent = d.validationHeight;
+		if (lv.networkPower !== d.networkPower) eHTML.get('networkPower').textContent = d.networkPower.toFixed(2);
+		if (lv.solverLegitimacy !== d.solverLegitimacy) eHTML.get('solverLegitimacy').textContent = d.solverLegitimacy;
+		if (lv.solverPower !== d.solverPower) eHTML.get('solverPower').textContent = d.solverPower.toFixed(2);
+		if (lv.dailyRewardEstimation !== d.dailyRewardEstimation) eHTML.get('dailyReward').textContent = CURRENCY.formatNumberAsCurrency(d.dailyRewardEstimation, 2);
+		if (lv.solverThreadCount !== d.solverThreadCount) eHTML.get('solverThreadCount').textContent = d.solverThreadCount;
 
-	// PUBLIC METHODS
-	/** @param {Uint8Array} pubkey */
-	buildSharedSecretFromPubkey(pubkey, thenSendPubkey = false) {
-		const p = pubkey || (this.hostPubkeyStr === null ? null : serializer.converter.hexToBytes(this.hostPubkeyStr));
-		if (!p) return null;
-		try {
-			const sharedSecret = this.connector.p2pNode.cryptoCodex.computeX25519SharedSecret(this.myKeypair.myPriv, p);
-			this.sharedSecret = sharedSecret;
-			if (thenSendPubkey) this.ws.send(this.myKeypair.myPub); // Then send client pubkey to server to complete key exchange
-		} catch (error) { console.error('Error computing shared secret:', error); }
-	}
-	/** @param {string} type @param {any} data */
-	sendEncryptedMessage = (type, data) => {
-		console.log(`[Dashboard] Sending message of type "${type}" with data:`, data);
-		if (!this.sharedSecret || !this.isWsAccessible) return;
-		const str = JSON.stringify({ type, data });
-		const encoded = this.textEncoder.encode(str);
-		const encrypted = this.connector.p2pNode.cryptoCodex.encryptData(encoded, this.sharedSecret);
-		this.ws.send(encrypted);
+		// ADDRESSES
+		if (lv.publicAddress !== d.publicAddress) eHTML.get('publicAddress').textContent = d.publicAddress;
+		if (lv.solverBalance !== d.solverBalance) eHTML.get('solverBalance').textContent = CURRENCY.formatNumberAsCurrency(d.solverBalance || 0, 2);
+		if (lv.validatorBalance !== d.validatorBalance) eHTML.get('validatorBalance').textContent = CURRENCY.formatNumberAsCurrency(d.validatorBalance || 0, 2);
+		
+		if (!eHTML.get('solverRewardAddress').classList.contains('editing')) {
+			eHTML.get('solverRewardAddress').textContent = d.solverRewardAddress;
+			eHTML.get('solverRewardAddress').dataset.sAddress = d.solverRewardAddress;
+		}
+
+		if (!eHTML.get('validatorRewardAddress').classList.contains('editing')) {
+			eHTML.get('validatorRewardAddress').textContent = d.validatorRewardAddress;
+			eHTML.get('validatorRewardAddress').dataset.vAddress = d.validatorRewardAddress;
+		}
+		
+		// DETAILS
+		if (lv.txInMempool !== d.txInMempool) eHTML.get('txInMempool').textContent = d.txInMempool;
+		if (lv.nodePeerId !== d.nodePeerId) eHTML.get('peerId').textContent = d.nodePeerId;
+		if (lv.listenAddress !== d.listenAddress) eHTML.get('listenAddress').textContent = d.listenAddress;
+		if (lv.neighborsCount !== d.neighborsCount) eHTML.get('neighborsCount').textContent = d.neighborsCount;
+
+		// UPDTAES LAST VALUES
+		this.lastValues.currentHeight = d.currentHeight;
+
+		this.lastValues.validationHeight = d.validationHeight;
+		this.lastValues.networkPower = d.networkPower;
+		this.lastValues.solverLegitimacy = d.solverLegitimacy;
+		this.lastValues.solverPower = d.solverPower;
+		this.lastValues.dailyRewardEstimation = d.dailyRewardEstimation;
+		this.lastValues.solverThreadCount = d.solverThreadCount;
+
+		this.lastValues.publicAddress = d.publicAddress;
+		this.lastValues.solverBalance = d.solverBalance;
+		this.lastValues.validatorBalance = d.validatorBalance;
+
+		this.lastValues.txInMempool = d.txInMempool;
+		this.lastValues.nodePeerId = d.nodePeerId;
+		this.lastValues.listenAddress = d.listenAddress;
+		this.lastValues.neighborsCount = d.neighborsCount;
 	}
 }

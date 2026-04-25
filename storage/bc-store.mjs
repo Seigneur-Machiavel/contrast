@@ -7,9 +7,7 @@ import { UTXO } from '../types/transaction.mjs';
 import { BlockUtils } from '../node/src/block.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
 import { BlockFinalizedHeader } from '../types/block.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
-import { time } from 'console';
 
 /**
  * @typedef {import("hive-p2p").Converter} Converter

@@ -93,7 +93,7 @@ export class BlockValidation {
         await this.validateLegitimacy(node, block);
 
 		// VALIDATE BLOCK DIFFICULTY EQUAL TO EXPECTED
-        const { averageBlockTime, newDifficulty } = BlockUtils.calculateAverageBlockTimeAndDifficulty(node, true);
+        const newDifficulty = BlockUtils.calculateAdjustedDifficulty(node, true);
         if (block.difficulty !== newDifficulty) throw new Error(failureErrorMessages.invalidDifficulty(block.difficulty, newDifficulty));
         
 		// VALIDATE BLOCK POW HASH AGAINST DIFFICULTY
