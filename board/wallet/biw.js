@@ -31,7 +31,7 @@ export class BoardInternalWallet {
 	wallet = null;
 	eHTML = eHTML;
 	boardStorage;
-	connector;
+	connectorP2P;
 	historyItemsPerPage = 5;
 	accountThatNeedsRefresh = new Set();
 	// User preferences
@@ -49,9 +49,9 @@ export class BoardInternalWallet {
 
 	get activeAccount() { return this.wallet?.accounts[this.components.accounts.activeAccountIndex]; }
 
-	/** @param {import('../utils/connector-p2p.js').Connector} connector @param {import('../../utils/front-storage.mjs').FrontStorage} boardStorage */
-	constructor(connector, boardStorage) {
-		this.connector = connector;
+	/** @param {import('../utils/connector-p2p.js').ConnectorP2P} connectorP2P @param {import('../../utils/front-storage.mjs').FrontStorage} boardStorage */
+	constructor(connectorP2P, boardStorage) {
+		this.connectorP2P = connectorP2P;
 		this.boardStorage = boardStorage;
 		this.#initWhileDomReady();
 	}
@@ -95,7 +95,7 @@ export class BoardInternalWallet {
 		const start = Date.now();
 		for (const account of this.wallet.accounts) {
 			if (!this.accountThatNeedsRefresh.has(account.address)) continue;
-			const ledger = await this.connector.getAddressLedger(account.address);
+			const ledger = await this.connectorP2P.getAddressLedger(account.address);
 			if (!ledger || !ledger.ledgerUtxos) continue;
 
 			account.setBalanceAndUTXOs(ledger.balance, ledger.ledgerUtxos);
@@ -130,7 +130,7 @@ export class BoardInternalWallet {
 			throw new Error(`getAndDisplayTransactionsDetails: txIds length must be between 1 and ${this.historyItemsPerPage}`);
 		}
 
-		const txs = await this.connector.getTransactions(txIds); // Fetch txs and associated miniUtxos
+		const txs = await this.connectorP2P.getTransactions(txIds); // Fetch txs and associated miniUtxos
 		if (!txs) {
 			this.components.miniform.setHistoryMessage('Unable to fetch transactions');
 			this.components.miniform.updatePaginationButtonsState();
@@ -143,7 +143,7 @@ export class BoardInternalWallet {
 			const specialTxType = Transaction_Builder.isSolverOrValidatorTx(tx);
 			const inAmount = specialTxType ? 0
 				: tx.inputs.reduce((sum, input) => {
-					const utxo = this.connector.utxosByAnchors.get(input);
+					const utxo = this.connectorP2P.utxosByAnchors.get(input);
 					if (utxo?.address !== activeAccount.address) return sum; // only count inputs from the active account
 					return sum + (utxo ? utxo.amount : 0);
 				}, 0);
@@ -238,6 +238,16 @@ export class BoardInternalWallet {
 		if (this.wallet.accounts.length > 0) this.selectAccountLabel(this.wallet.accounts[0].address);
 		for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
 	}
+	/** Derive accounts from master seed.
+	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
+	async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1') {
+		if (!this.wallet) throw new Error('Wallet not initialized');
+		if (!this.boardStorage) throw new Error('Storage not available');
+		
+		const result = await this.wallet.deriveAccounts(nbOfAccounts, addressPrefix, mayoVariant, qsafeSigVersion, undefined, this.boardStorage);
+		this.components.accounts.updateLabels();
+		return result.derivedAccounts?.length === nbOfAccounts;
+	}
 	async disconnectedWallet(eraseWallet = false) {
 		if (eraseWallet) {
 			await this.boardStorage.remove('wallet_blob_hex');
@@ -271,13 +281,13 @@ export class BoardInternalWallet {
 		this.components.interpreter = new Interpreter();
 		await this.#loadUserPreferences();
 
-		this.connector.on('consensus_height_change', this.#onConsensusHeightChange);
+		this.connectorP2P.on('consensus_height_change', this.#onConsensusHeightChange);
     }
 	#onConsensusHeightChange = async (newHeight = 0) => {
 		if (!this.autoRefresh || !this.wallet?.accounts?.length) return;
 
 		// CHECK WHICH ACCOUNTS NEED REFRESH (because they are involved in the new finalized block)
-		const block = this.connector.blocks.finalized[this.connector.hash];
+		const block = this.connectorP2P.blocks.finalized[this.connectorP2P.hash];
 		for (const tx of block?.Txs || []) {
 			for (const output of tx.outputs)
 				for (const account of this.wallet.accounts)
@@ -532,7 +542,7 @@ export class BoardInternalWallet {
 		if (e.target.dataset.action !== 'biw-confirm') return;
 
 		const r = this.components.miniform.prepareTxAccordingToInputsAndUpdateFees();
-		if (typeof r === 'string') { this.textInfo(r); return; }
+		if (typeof r === 'string') { console.error(r); this.textInfo(r); return; }
 
 		// EVERYTHING IS OK, PROCEED WITH TRANSACTION CREATION AND BROADCAST
 		if (this.animations.sendBtn) this.animations.sendBtn.pause();
@@ -542,7 +552,7 @@ export class BoardInternalWallet {
 				const activeAccount = this.activeAccount;
 				if (!activeAccount) throw new Error('No active account selected');
 
-				this.connector.p2pNode.broadcast(r.serialized, { topic: 'transaction' });
+				this.connectorP2P.p2pNode.broadcast(r.serialized, { topic: 'transaction' });
 				this.textInfo('Transaction broadcasted');
 
 				for (const anchor of r.signedTx.inputs) this.activeAccount.markUTXOAsSpent(anchor);
@@ -550,7 +560,10 @@ export class BoardInternalWallet {
 				this.components.miniform.resetTransferForm();
 				this.animations.sendBtn = null;
 				console.log(`Broadcasted tx (${r.serialized.length} bytes):`, r.signedTx);
-			} catch (/** @type {any} */ error) { this.textInfo(error.message); }
+			} catch (/** @type {any} */ error) {
+				console.error('Error broadcasting transaction:', error);
+				this.textInfo(error.message);
+			}
 		};
 		
 		const sendBtn = /** @type {HTMLButtonElement} */ (eHTML.get('sendBtn'));

@@ -2,7 +2,7 @@
 /** @type {typeof import('hive-p2p')} */
 const HiveP2P = await import('../hive-p2p.min.js');
 import { NetworkVisualizer } from './visualizer/visualizer.js';
-import { Connector } from './utils/connector-p2p.js';
+import { ConnectorP2P } from './utils/connector-p2p.js';
 import { ConnectorNode } from './utils/connector-node.js';
 import { Translator } from './utils/translator.js';
 import { FrontStorage } from '../utils/front-storage.mjs';
@@ -42,7 +42,7 @@ const translator = new Translator(async (lang) => {
 });
 
 // INIT OTHER MANAGERS AND COMPONENTS
-const connectorP2P = new Connector(hiveNode);
+const connectorP2P = new ConnectorP2P(hiveNode);
 const connectorNode = new ConnectorNode(connectorP2P, WS_SETTINGS, hostPubkeyStr);
 const explorer = new Explorer(connectorP2P);
 const dashboard = new Dashboard(connectorP2P, connectorNode);
@@ -59,7 +59,7 @@ const windowsWrapElement = document.getElementById('board-windows-wrap');
 const settingsMenuElement = document.getElementById('board-settings-menu');
 const bottomButtonsBarElement = document.getElementById('board-apps-buttons-bar');
 const appsManager = new AppsManager(windowsWrapElement, bottomButtonsBarElement);
-const assistant = new Assistant(biw, translator, appsManager, isExtension);
+const assistant = new Assistant(biw, connectorNode, appsManager, isExtension, translator);
 if (true) { // WINDOW EXPOSURE FOR DEBUGGING
 	window.networkVisualizer = visualizer; // Expose for debugging
 	window.appsManager = appsManager;

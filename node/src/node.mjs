@@ -9,7 +9,7 @@ import { Blockchain } from './blockchain.mjs';
 import { ADDRESS } from "../../types/address.mjs";
 import { NodeController } from "./node-controller.mjs";
 import { Transaction_Builder } from "./transaction.mjs";
-import { BinaryReader, serializer } from "../../utils/serializer.mjs";
+import { BinaryReader, BinaryWriter, serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
@@ -98,7 +98,7 @@ export class ContrastNode {
 		p2pNode.gossip.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
 		p2pNode.messager.on('transactions_request', this.#onTransactionsRequest);
-		p2pNode.messager.on('blocks_timestamps_request', this.#onBlocksTimestampsRequest);
+		p2pNode.messager.on('blocks_headers_request', this.#onBlocksHeadersRequest);
 		p2pNode.messager.on('rounds_legitimacies_request', this.#onRoundsLegitimaciesRequest);
 	}
 
@@ -120,9 +120,16 @@ export class ContrastNode {
 	/** Starts the Contrast node operations @param {Wallet} [wallet] */
 	async start(wallet) {
 		this.logger.log(`Starting Contrast node...`, (m, c) => console.log(m, c)); // control the clock
-		if (wallet) this.associateWallet(wallet);
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
 		
+		// ASSOCIATE WALLET IF PROVIDED, AND SET SAVED REWARD ADDRESSES IF ANY
+		if (wallet) this.associateWallet(wallet);
+		const rewardAddresses = await this.mainStorage.loadJSON('rewardAddresses');
+		if (rewardAddresses && rewardAddresses.vAddress && rewardAddresses.vPubkeys)
+			await this.#setRewardAddress('validator', rewardAddresses.vAddress, rewardAddresses.vPubkeys, false);
+		if (rewardAddresses && rewardAddresses.sAddress && rewardAddresses.sPubkeys)
+			await this.#setRewardAddress('solver', rewardAddresses.sAddress, rewardAddresses.sPubkeys, false);
+
 		if (!this.p2p.started) { 		// START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
 			await this.p2p.start();
@@ -152,8 +159,8 @@ export class ContrastNode {
 	associateWallet(wallet) {
 		if (!wallet.accounts[0].pubKey || !wallet.accounts[1].pubKey) throw new Error('Wallet accounts must be initialized with pubKeys before associating with the node');
 		this.account = wallet.accounts[0];
-		this.#setRewardAddress('validator', wallet.accounts[0].address, [wallet.accounts[0].pubKey]);
-		this.#setRewardAddress('solver', wallet.accounts[1].address, [wallet.accounts[1].pubKey]);
+		this.#setRewardAddress('validator', wallet.accounts[0].address, [wallet.accounts[0].pubKey], false);
+		this.#setRewardAddress('solver', wallet.accounts[1].address, [wallet.accounts[1].pubKey], false);
 	}
 	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} [pubKeysHex] */
 	handleAddressUpdate(type, address, pubKeysHex) {
@@ -162,7 +169,7 @@ export class ContrastNode {
 		this.#setRewardAddress(type, address, pks);
 	}
 	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} pubKeysHex */
-	async #setRewardAddress(type, address, pubKeysHex) {
+	async #setRewardAddress(type, address, pubKeysHex, save = true) {
 		if (!ADDRESS.checkConformity(address)) return this.logger.log(`Failed to set ${type} reward address to ${address}: invalid address`, (m, c) => console.warn(m, c));
 		if (type === 'solver') {
 			this.rewardsInfo.sAddress = address;
@@ -173,6 +180,7 @@ export class ContrastNode {
 			this.rewardsInfo.vPubkeys = pubKeysHex;
 			this.rewardsInfo.vBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
 		}
+		if (save) this.mainStorage.saveJSON('rewardAddresses', { vAddress: this.rewardsInfo.vAddress, vPubkeys: this.rewardsInfo.vPubkeys, sAddress: this.rewardsInfo.sAddress, sPubkeys: this.rewardsInfo.sPubkeys });
 	}
 	async createAndShareMyBlockCandidate() {
 		try {
@@ -305,16 +313,22 @@ export class ContrastNode {
 		} catch (/** @type {any} */ error) { this.logger.log(`-onTransactionsRequest- Error processing transactions request from ${senderId}: ${error.stack}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */
-	#onBlocksTimestampsRequest = async (msg) => {
+	#onBlocksHeadersRequest = async (msg) => {
 		const { senderId, data } = msg;
-		if (!(data instanceof Uint8Array)) return; // not the expected data type
+		if (!(data instanceof Uint8Array)) return;
 		try {
-			const request = serializer.deserialize.blocksTimestampsRequest(data);
-			const t = this.blockchain.blockStorage.getBlocksTimestamps(request.fromHeight, request.toHeight);
-			if (!t) throw new Error(`No timestamps found between heights ${request.fromHeight} and ${request.toHeight}`);
-			const s = serializer.serialize.blocksTimestampsResponse(t.heights, t.timestamps);
-			this.p2p.messager.sendUnicast(senderId, s, 'blocks_timestamps');
-		} catch (/** @type {any} */ error) { this.logger.log(`-onBlocksTimestampsRequest- Error processing blocks timestamps request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+			const request = serializer.deserialize.blocksRangeRequest(data);
+			if (request.toHeight - request.fromHeight > 60) throw new Error(`Requested too many block headers at once (max 60, requested ${request.toHeight - request.fromHeight + 1})`);
+
+			const headers = this.blockchain.blockStorage.getSerializedBlocksHeaders(request.fromHeight, request.toHeight);
+			if (!headers) throw new Error(`No block headers found between heights ${request.fromHeight} and ${request.toHeight}`);
+			
+			const pointersSize = BinaryWriter.calculatePointersSize(headers.length);
+			const w = new BinaryWriter(pointersSize + headers.reduce((sum, h) => sum + h.length, 0));
+			w.writePointersAndDataChunks(headers);
+			const s = w.getBytesOrThrow();
+			this.p2p.messager.sendUnicast(senderId, s, 'blocks_headers');
+		} catch (/** @type {any} */ error) { this.logger.log(`-onBlocksHeadersRequest- Error processing blocks headers request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */
 	#onRoundsLegitimaciesRequest = async (msg) => {

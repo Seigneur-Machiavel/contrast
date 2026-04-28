@@ -4,8 +4,8 @@ import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
 import { QsafeHelper } from '../node/src/conCrypto.mjs';
-import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
+import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
 
 /** 
  * @typedef {import("../types/transaction.mjs").TxId} TxId

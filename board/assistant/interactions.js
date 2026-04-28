@@ -31,6 +31,18 @@ export class Interactor {
 			'中文（繁體）':	() => this.a.translator.setLanguage('zh-t')
 		});
 	}
+	/** @param {Function} [callbackOnDeny] */
+	offerToRunContrastNode = (callbackOnDeny = this.requestPrivateKey) => {
+		this.a.sendMessage(this.a.translator.RunContrastNodeOffer);
+
+		/** @type {Record<string, () => void>} */
+		const choices = {};
+		choices[this.a.translator.YesChoice] = () => { // TODO
+			this.a.sendMessage('Follow instuctions...');
+		};
+		choices[this.a.translator.NoChoice] = () => callbackOnDeny();
+		this.requestChoice(choices);
+	}
 	/** @param {import('./assistant').ChoicesActions} choices */
     async requestChoice(choices = { "Yes": () => console.log('Yes'), "No": () => console.log('No') }) {
         this.a.eHTML.input.type = 'text';
@@ -88,21 +100,11 @@ export class Interactor {
 		if (authInfo.hasWallet) {
 			const success = await this.a.biw.overwritePrivateKeyWithNewPassword('ContrastWallet', password);
 			this.a.sendMessage(success ? 'Password updated successfully' : 'Password update failed');
-			this.a.setActiveInput('text');
+			this.a.idleMenu();
 			return this.a.onResponse = null;
 		}
 		
-		this.requestChoice({
-			'Generate new wallet': async () => {
-				this.a.setActiveInput('idle');
-				await this.a.biw.savePrivateKey(password);
-				await this.a.biw.loadWalletFromStoredPrivateKey(password);
-				this.a.sendMessage('Wallet generated successfully');
-				this.a.setActiveInput('text');
-				return this.a.onResponse = null;
-			},
-			'Use existing wallet': () => this.a.requestPrivateKey()
-		});
+		this.requestPrivateKey(); // requestPrivate key or generate new wallet if no wallet found
 	}
 	#requestPasswordToChange = () => {
         this.a.sendMessage('Please enter your current password to change it');
@@ -127,8 +129,8 @@ export class Interactor {
 		this.a.idleMenu();
     }
 
-	// PRIVATE KEY EXTRACTION INTERACTIONS
-	async revealSeed() {
+	// PRIVATE KEY INTERACTIONS
+	revealSeed = async () => {
 		const authInfo = await this.a.biw.getAuthInfo();
 		if (!authInfo.hasWallet) return this.a.sendMessage(this.a.translator.NoWalletFoundCannotRevealSeed);
 		
@@ -156,9 +158,20 @@ export class Interactor {
 		this.a.sendMessage(this.a.translator.SelectSeedFormatChoice);
 		this.a.interactor.requestChoice(choices);
     }
+    requestPrivateKey = () => {
+		/** @type {Record<string, () => void>} */
+		const choices = {};
+		choices[this.a.translator.GenerateNewWalletChoice] = () => this.a.digestPrivateKey();
+		choices[this.a.translator.UseExistingWalletChoice] = () => {
+			this.a.sendMessage(this.a.translator.PleaseEnterPrivateKeyMessage, 'system');
+			this.a.setActiveInput('text', this.a.translator.YourPrivateKeyPlaceholder, true);
+			this.a.onResponse = this.a.verifyPrivateKey;
+		};
+		this.a.interactor.requestChoice(choices);
+    }
 
 	// RESET INTERACTIONS
-	reset() {
+	reset = () => {
 	    this.a.sendMessage(this.a.translator.SelectWhatYouWantToResetCarefully);
 
 		/** @type {Record<string, () => void>} */

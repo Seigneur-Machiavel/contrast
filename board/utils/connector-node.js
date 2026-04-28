@@ -6,7 +6,7 @@ import { serializer } from '../../utils/serializer.mjs';
  * @property {string} DOMAIN - The domain to connect to (e.g., "127.0.0.1").
  * @property {number} PORT - The port number to connect to (e.g., 27261).
  * 
- * @typedef {import('../utils/connector-p2p.js').Connector} Connector */
+ * @typedef {import('../utils/connector-p2p.js').ConnectorP2P} ConnectorP2P */
 
 export class ConnectorNode {
 	textEncoder = new TextEncoder();
@@ -24,7 +24,7 @@ export class ConnectorNode {
 	sharedSecret;
 	myKeypair;
 
-	/** @param {Connector} connectorP2P @param {WS_SETTINGS} WS_SETTINGS @param {string | null} [hostPubkeyStr] */
+	/** @param {ConnectorP2P} connectorP2P @param {WS_SETTINGS} WS_SETTINGS @param {string | null} [hostPubkeyStr] */
 	constructor(connectorP2P, WS_SETTINGS, hostPubkeyStr = null) {
 		this.connectorP2P = connectorP2P;
 		this.WS_SETTINGS = WS_SETTINGS;

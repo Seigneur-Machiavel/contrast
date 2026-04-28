@@ -192,27 +192,6 @@ export class BlockchainStorage {
 
 		return utxos;
 	}
-	/** @param {number} [fromHeight] @param {number} [toHeight] */
-	getBlocksTimestamps(fromHeight = this.lastBlockIndex - 1, toHeight = this.lastBlockIndex) {
-		if (fromHeight < 0 || toHeight > this.lastBlockIndex || fromHeight > toHeight) return null;
-		if (toHeight - fromHeight > 120) return null; // limit to 120 blocks at a time
-
-		const offsets = this.#getOffsetsOfRangeOfBlocksData(fromHeight, toHeight);
-		if (!offsets) return null;
-
-		/** @type {number[]} */	const heights = [];
-		/** @type {number[]} */	const timestamps = [];
-		for (let h = fromHeight; h <= toHeight; h++) {
-			const offset = offsets[h];
-			const timestampOffset = offset.start + serializer.dataPositions.timestampInFinalizedBlock;
-			const blockchainHandler = this.#getBlockchainHandler(h);
-			const timestampBuffer = blockchainHandler.read(timestampOffset, SIZES.timestamp.bytes);
-			const timestamp = this.converter.bytes6ToNumber(timestampBuffer);
-			heights.push(h);
-			timestamps.push(timestamp);
-		}
-		return { heights, timestamps };
-	}
 	getSerializedBlocksHeaders(fromHeight = this.lastBlockIndex - 1, toHeight = this.lastBlockIndex) {
 		if (fromHeight < 0 || toHeight > this.lastBlockIndex || fromHeight > toHeight) return null;
 		if (toHeight - fromHeight > 120) return null; // limit to 120 blocks at a time
@@ -221,7 +200,7 @@ export class BlockchainStorage {
 		if (!offsets) return null;
 
 		/** @type {Uint8Array[]} */ const headers = [];
-		for (let h = fromHeight; h <= toHeight; h++) 
+		for (let h = fromHeight; h <= toHeight; h++)
 			headers.push(this.#getBlockchainHandler(h).read(offsets[h].start, SIZES.blockFinalizedHeader.bytes));
 		return headers;
 	}

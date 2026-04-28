@@ -137,6 +137,7 @@ const assistant_DEPRECATED = {
 		fr: 'Toutes les données ont été supprimées avec succès.',
 	},
 
+
 	// CHOICES
 	YesChoice: {
 		en: 'Yes',
@@ -398,6 +399,8 @@ export class Translator {
 	get WalletDeletedSuccessfully() { return assistant.WalletDeletedSuccessfully[this.lang] || assistant.WalletDeletedSuccessfully.en; }
 	get AreYouSureYouWantToDeleteAllData() { return assistant.AreYouSureYouWantToDeleteAllData[this.lang] || assistant.AreYouSureYouWantToDeleteAllData.en; }
 	get AllDataDeletedSuccessfully() { return assistant.AllDataDeletedSuccessfully[this.lang] || assistant.AllDataDeletedSuccessfully.en; }
+	get RunContrastNodeOffer() { return assistant.RunContrastNodeOffer[this.lang] || assistant.RunContrastNodeOffer.en; }
+	
 	// ASSISTANT CHOICES
 	get YesChoice() { return assistant.YesChoice[this.lang] || assistant.YesChoice.en; }
 	get NoChoice() { return assistant.NoChoice[this.lang] || assistant.NoChoice.en; }
@@ -408,6 +411,11 @@ export class Translator {
 	get SelectSeedFormatChoice() { return assistant.SelectSeedFormatChoice[this.lang] || assistant.SelectSeedFormatChoice.en; }
 	get HexadecimalChoice() { return assistant.HexadecimalChoice[this.lang] || assistant.HexadecimalChoice.en; }
 	get WordListChoice() { return assistant.WordListChoice[this.lang] || assistant.WordListChoice.en; }
+	
+	get GenerateNewWalletChoice() { return assistant.GenerateNewWalletChoice[this.lang] || assistant.GenerateNewWalletChoice.en; }
+	get UseExistingWalletChoice() { return assistant.UseExistingWalletChoice[this.lang] || assistant.UseExistingWalletChoice.en; }
+	get PleaseEnterPrivateKeyMessage() { return assistant.PleaseEnterPrivateKeyMessage[this.lang] || assistant.PleaseEnterPrivateKeyMessage.en; }
+	get YourPrivateKeyPlaceholder() { return assistant.YourPrivateKeyPlaceholder[this.lang] || assistant.YourPrivateKeyPlaceholder.en; }
 
 	// EXPLORER
 	get ConsensusNotRobustMessage() { return explorer.ConsensusNotRobustMessage[this.lang] || explorer.ConsensusNotRobustMessage.en; }

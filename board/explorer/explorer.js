@@ -1,14 +1,13 @@
 // @ts-check
 
-//import { IS_VALID } from '../../types/validation.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { ModalComponent } from './modal-component.js';
 import { serializer } from '../../utils/serializer.mjs';
 import { eHTML_STORE } from '../utils/board-helpers.js';
 import { BlockchainComponent } from './blockchain-component.js';
-import { BlocksTimesChartComponent, RoundLegitimaciesChartComponent } from './charts-component.js';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
+import { BlocksTimesChartComponent, RoundLegitimaciesChartComponent } from './charts-component.js';
 
 const eHTML = new eHTML_STORE('cbe-', 'maxSupply');
 export class Navigator {
@@ -51,12 +50,12 @@ export class Explorer {
 	bc = new BlockchainComponent();
 	modal = new ModalComponent();
 	navigator = new Navigator();
-	connector;
+	connectorP2P;
 
-	/** @param {import('../utils/connector-p2p.js').Connector} connector */
-	constructor(connector) {
-		this.connector = connector;
-		this.connector.on('connection_established', () => setTimeout(this.getAndDisplayBlocksTimegaps, 2000));
+	/** @param {import('../utils/connector-p2p.js').ConnectorP2P} connectorP2P */
+	constructor(connectorP2P) {
+		this.connectorP2P = connectorP2P;
+		this.connectorP2P.on('connection_established', () => setTimeout(this.getAndDisplayBlocksTimegaps, 2000));
 		this.#initWhileDomReady();
 	}
 
@@ -74,11 +73,11 @@ export class Explorer {
 		
 		supply.textContent = CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.maxSupply);
 		targetTime.textContent = `${BLOCKCHAIN_SETTINGS.targetBlockTime / 1000}s`;
-		this.connector.on('consensus_height_change', this.#onConsensusHeightChange);
+		this.connectorP2P.on('consensus_height_change', this.#onConsensusHeightChange);
 	}
 	consensusChangeAntiStuckTimestamp = 0;
 	#onConsensusHeightChange = async (newHeight = 0) => {
-		const block = this.connector.blocks.finalized[this.connector.hash];
+		const block = this.connectorP2P.blocks.finalized[this.connectorP2P.hash];
 		if (!block) return;
 		
 		const t = performance.now();
@@ -89,7 +88,7 @@ export class Explorer {
 		console.log(`%cEXPLORER: New consensus ${newHeight}`, 'color: lightgreen; font-weight: bold');
 		const consensusMsgElement = eHTML.get('blockExplorerWaitingConsensusMessage');
 		if (!consensusMsgElement) throw new Error('Explorer: consensusMsgElement not found');
-		if (!this.connector.isConsensusRobust) consensusMsgElement.classList.add('show');
+		if (!this.connectorP2P.isConsensusRobust) consensusMsgElement.classList.add('show');
 		else consensusMsgElement.classList.remove('show');
 		
 		const percent = ((block.supply + block.coinBase) / BLOCKCHAIN_SETTINGS.maxSupply * 100).toFixed(2);
@@ -103,7 +102,7 @@ export class Explorer {
 		eHTML.get('lastBlocktime').textContent = `${readableLocalDate} (${agoText})`;
 
 		// UPDATE BLOCKCHAIN COMPONENT
-		const weight = this.connector.blockWeightByHash[block.hash] || 0;
+		const weight = this.connectorP2P.blockWeightByHash[block.hash] || 0;
 		if (!this.bc.appendBlockIfCorresponding(block, weight))
 			this.bc.reset('unable to append block'); // FAILED => START FRESH
 		
@@ -128,18 +127,18 @@ export class Explorer {
 			const firstBlock = this.bc.firstFilledBlock;
 			if (!firstBlock?.prevHash) break;
 
-			let prevBlock = this.connector.blocks.finalized[firstBlock.prevHash];
+			let prevBlock = this.connectorP2P.blocks.finalized[firstBlock.prevHash];
 			if (!prevBlock) {
 				const index = firstBlock.index ? firstBlock.index - 1 : -1;
 				if (index < 0) break;
 
 				if (this.consensusChangeAntiStuckTimestamp !== instanceTimestamp) return; // Another instance of the fnc is running with a more recent consensus change
-				const retrived = await this.connector.getMissingBlock(index);
+				const retrived = await this.connectorP2P.getMissingBlock(index);
 				if (!retrived) break;
-				prevBlock = this.connector.blocks.finalized[firstBlock.prevHash];
+				prevBlock = this.connectorP2P.blocks.finalized[firstBlock.prevHash];
 			}
 
-			const weight = this.connector.blockWeightByHash[prevBlock.hash] || 0;
+			const weight = this.connectorP2P.blockWeightByHash[prevBlock.hash] || 0;
 			if (!this.bc.setPreviousBlockIfCorresponding(prevBlock, weight)) break;
 		}
 	}
@@ -284,7 +283,7 @@ export class Explorer {
 		// IF ADDRESS IS SPECIFIED => FILL THE MODAL WITH ADDRESS DATA
         if (address) {
 			if (!ADDRESS.checkConformity(address)) throw new Error('navigateUntilTarget => error: invalid address format');
-			const ledger = await this.connector.getAddressLedger(address);
+			const ledger = await this.connectorP2P.getAddressLedger(address);
 			if (!ledger) throw new Error('navigateUntilTarget => error: ledger not found for address ' + address);
 			this.modal.fillContentWithLedger(address, ledger);
 			return;
@@ -292,10 +291,10 @@ export class Explorer {
         
 		// FILL THE MODAL WITH BLOCK DATA
         if (blockIndex === null) return;
-		const blockData = await this.connector.getBlockRelatedToCurrentConsensus(blockIndex);
+		const blockData = await this.connectorP2P.getBlockRelatedToCurrentConsensus(blockIndex);
 		if (!blockData) { console.info('navigateUntilTarget => error: blockData not found'); return; }
 
-        if (!correspondToLastBlock) this.modal.fillContentWithBlock(blockData, this.connector.blockWeightByHash[blockData.hash] || 0);
+        if (!correspondToLastBlock) this.modal.fillContentWithBlock(blockData, this.connectorP2P.blockWeightByHash[blockData.hash] || 0);
 		if (txIndex == null) return;
 
 		const tx = blockData.Txs[txIndex];
@@ -303,17 +302,16 @@ export class Explorer {
 
 		setTimeout(() => this.modal.displayTransactionDetails(tx, txIndex, outputIndex), modalContentCreated ? 1000 : Math.round(220 + (blockData.Txs.length * .2)));
     }
-	getAndDisplayBlocksTimegaps = async (fromHeight = 0, toHeight = this.connector.height) => {
+	getAndDisplayBlocksTimegaps = async (fromHeight = 0, toHeight = this.connectorP2P.height) => {
 		this.blocksTimesChart.reset();
-		const f = Math.max(0, toHeight - 60);
-		const tg = await this.connector.getBlocksTimestamps(fromHeight, toHeight);
-		if (!tg) throw new Error('Explorer: getAndDisplayBlocksTimegaps => Unable to get blocks timestamps gaps');
-		//console.log('Explorer: Retrieved blocks timestamps gaps:', tg);
-		for (let i = 0; i < tg.heights.length; i++)
-			this.blocksTimesChart.appendBlockTimeIfCorresponding(tg.heights[i], tg.timestamps[i], i === tg.heights.length - 1);
+		const headers = await this.connectorP2P.getBlocksHeaders(fromHeight, toHeight);
+		if (!headers) throw new Error('Explorer: getAndDisplayBlocksTimegaps => Unable to get blocks headers');
+
+		for (const header of headers)
+			this.blocksTimesChart.appendBlockTimeIfCorresponding(header.index, header.timestamp, header.index === headers[headers.length - 1].index);
 	}
 	async getAndDisplayRoundLegitimacies() {
-		const rl = await this.connector.getRoundsLegitimacies();
+		const rl = await this.connectorP2P.getRoundsLegitimacies();
 		//if (!rl) throw new Error('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
 		if (!rl) console.warn('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
 		if (!rl || rl.length === 0) return; // no data
@@ -321,6 +319,6 @@ export class Explorer {
 		this.roundLegitimaciesChart.render(rl);
 		
 		const legHeightElement = eHTML.get('legHeight');
-		if (legHeightElement) legHeightElement.textContent = this.connector.height.toString();
+		if (legHeightElement) legHeightElement.textContent = this.connectorP2P.height.toString();
 	}
 }

@@ -61,8 +61,8 @@ const tryStaking = async (block) => {
 	// PUSH TRANSACTION
 	//console.log(`Pushing staking transaction spending: ${signedTx.inputs.join(', ')}`);
 	const serialized = serializer.serialize.transaction(signedTx);
-	//console.log(`txBytes: ${serialized.length} | data.length: ${signedTx.data?.length || 0}`);
 	clientNode.p2p.broadcast(serialized, { topic: 'transaction' });
+	//console.log(`txBytes: ${serialized.length} | data.length: ${signedTx.data?.length || 0}`);
 	//console.log('Transaction broadcasted.');
 }
 

@@ -5,10 +5,12 @@ if (false) { // For better completion
 
 import { Interactor } from './interactions.js';
 import { CommandInterpreter } from './commands.js';
+import { IS_VALID } from '../../types/validation.mjs';
 
 /**
- * @typedef {import('../utils/apps-manager.js').AppsManager} AppsManager
  * @typedef {import('../wallet/biw.js').BoardInternalWallet} BoardInternalWallet
+ * @typedef {import('../utils/connector-node.js').ConnectorNode} ConnectorNode
+ * @typedef {import('../utils/apps-manager.js').AppsManager} AppsManager
  * @typedef {import('../utils/translator.js').Translator} Translator */
 
 /**
@@ -35,6 +37,7 @@ export class Assistant {
     activeInput = 'idle';
 	idPrefix = 'board'
 	commandInterpreter;
+	connectorNode;
 	appsManager;
 	isExtension;
 	translator;
@@ -58,12 +61,13 @@ export class Assistant {
 	/** @type {NodeJS.Timeout | null} */	nextActiveInputTimeout = null;
     /** @type {Function | null} */			onResponse = null;
 
-	/** @param {BoardInternalWallet} biw @param {Translator} translator @param {AppsManager} appsManager @param {boolean} isExtension */
-    constructor(biw, translator, appsManager, isExtension) {
+	/** @param {BoardInternalWallet} biw @param {ConnectorNode} connectorNode @param {AppsManager} appsManager @param {boolean} isExtension @param {Translator} translator */
+    constructor(biw, connectorNode, appsManager, isExtension, translator) {
 		this.biw = biw;
-		this.translator = translator;
+		this.connectorNode = connectorNode;
 		this.appsManager = appsManager;
 		this.isExtension = isExtension;
+		this.translator = translator;
 		this.interactor = new Interactor(this);
 		this.commandInterpreter = new CommandInterpreter(this);
 		this.init();
@@ -93,11 +97,11 @@ export class Assistant {
 	async welcome(displaySetupMessage = false) {
 		while (!this.isReady) await new Promise(resolve => setTimeout(resolve, 200)); // Wait until the assistant is ready
 		console.log('-- Assistant displaying welcome message --');
-		await new Promise(resolve => setTimeout(resolve, 600));
+		await new Promise(resolve => setTimeout(resolve, 800));
 		this.sendMessage(this.translator.Welcome);
-		await new Promise(resolve => setTimeout(resolve, 1000));
+		await new Promise(resolve => setTimeout(resolve, 1200));
 		this.sendMessage(this.translator.JoinDiscord);
-		await new Promise(resolve => setTimeout(resolve, 600));
+		await new Promise(resolve => setTimeout(resolve, 800));
 		if (!displaySetupMessage) return this.idleMenu();
 
 		this.sendMessage(this.translator.SetupProcess);
@@ -172,52 +176,23 @@ export class Assistant {
         deleteBtn.addEventListener('click', () => messageDiv.remove());
         messageDiv.appendChild(deleteBtn);
     }
-
-    requestPrivateKey() {
-		this.interactor.requestChoice({
-			'Generate new wallet': async () => {
-				this.setActiveInput('idle');
-				await this.biw.savePrivateKey(); // Generate and save a new private key with default password
-				await this.biw.loadWalletFromStoredPrivateKey();
-				if (!this.biw.wallet) throw new Error('Failed to load wallet after generating private key');
-				if (!(await this.biw.wallet.deriveAccounts(2))?.derivedAccounts) throw new Error('Failed to derive accounts from the generated private key');
-				
-				const [ vAccount, sAccount ] = this.biw.wallet.accounts;
-				//this.setRewardAddress('validator', vAccount.address, [vAccount.pubKey]);
-				//this.#setRewardAddress('solver', sAccount.address, [sAccount.pubKey]);
-		
-				this.interactor.requestNewPassword();
-			},
-			'Use existing wallet': () => {
-				this.sendMessage('Please enter your private key (48 characters hexadecimal or 24 words list)');
-				this.setActiveInput('text', 'Your private key...', true);
-				this.onResponse = this.#verifyPrivateKey;
-			}
-		});
-    }
 	/** @param {string} pk */
-    async #verifyPrivateKey(pk) {
+    verifyPrivateKey = async (pk) => {
         if (typeof pk !== 'string') return this.sendMessage('Invalid private key. (must be a string)');
 
-		const isWordsList = pk.split(' ').length > 1;
-        const privKeyHex = isWordsList ? this.#digestWordsListStr(pk) : pk;
+		const wordsList = pk.split(' ');
+		const isWordsList = wordsList.length > 1;
+        const privKeyHex = isWordsList ? this.#digestWordsListStr(wordsList) : pk;
 		if (!privKeyHex) return this.sendMessage('Invalid private key');
 
         // hex only, 48 characters
-        const isValidPrivHex = privKeyHex.length === 48 && this.#isHexadecimal(privKeyHex);
-        if (!isValidPrivHex) return this.sendMessage('Invalid private key. (retry)');
-        
-		this.setActiveInput('idle');
-        await this.biw.savePrivateKey(undefined, privKeyHex);
-        await this.biw.loadWalletFromStoredPrivateKey();
-		this.interactor.requestNewPassword();
+        const isValidPrivHex = privKeyHex.length === 48 && IS_VALID.HEX(privKeyHex) !== false;
+		if (isValidPrivHex) await this.digestPrivateKey(privKeyHex);
+        else this.sendMessage('Invalid private key. (retry)');
     }
-	/** @return {null | string} */
-    #digestWordsListStr(wordsList = 'toto toto ...') {
-        const split = wordsList.split(' ');
+	#digestWordsListStr(wordsList = ['toto', 'toto', '...']) {
         const words = [];
-        //console.log('split:', split);
-		for (const part of split) { // clean each part to keep only the word, in case user enter "1. word" or "1) word" for better readability
+		for (const part of wordsList) { // clean each part to keep only the word, in case user enter "1. word" or "1) word" for better readability
 			const cleaned = part.trim().toLowerCase().replace(/^\d+[.)]\s*/, ''); // strip leading "1." or "1)"
 			if (cleaned.length > 0) words.push(cleaned);
 		}
@@ -232,19 +207,31 @@ export class Assistant {
 		}
 		return null;
     }
-	/** @param {string} str */
-    #isHexadecimal(str) {
-        const regex = /^[0-9a-fA-F]+$/;
-        if (str && str.length % 2 === 0 && regex.test(str)) { return true; }
-        return false;
-    }
+	/** @param {string} [privateKeyHex] */
+	digestPrivateKey = async (privateKeyHex) => {
+		this.setActiveInput('idle');
+		await this.biw.savePrivateKey(undefined, privateKeyHex); // Generate and save a new private key with default password
+		await this.biw.loadWalletFromStoredPrivateKey();
+		if (!this.biw.wallet) throw new Error('Failed to load wallet after generating private key');
+		if (!(await this.biw.deriveAccounts(2))) throw new Error('Failed to derive accounts');
+		
+		this.interactor.requestNewPassword();
+		if (!this.connectorNode.isConnected) return;
+
+		// SETUP ADDRESSES IN CONTROLLER -> Rewards of local node will go to the generated wallet.
+		const [ vAccount, sAccount ] = this.biw.wallet.accounts;
+		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'validator', address: vAccount.address, pubKeysHex: [vAccount.pubKey] });
+		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'solver', address: sAccount.address, pubKeysHex: [sAccount.pubKey] });
+	}
 
 	/** Based on authInfo => RequestPrivateKey or RequestPasswordToUnlock or load wallet. */
 	async start() {
 		this.setActiveInput('idle');
 		const authInfo = await this.biw.getAuthInfo();
 		console.log('authInfo:', authInfo);
-		if (!authInfo.hasWallet) return this.requestPrivateKey();
+		if (!authInfo.hasWallet) 
+			if (!this.connectorNode.isWsAccessible) return this.interactor.offerToRunContrastNode();
+			else return this.interactor.requestPrivateKey();
 		if (authInfo.hasPassword) return this.requestPasswordToUnlock();
 		await this.biw.loadWalletFromStoredPrivateKey();
 		this.sendMessage(this.translator.WalletUnlocked);

@@ -1,10 +1,10 @@
 // @ts-check
 import { ADDRESS } from "../../types/address.mjs";
 import { CURRENCY } from "../../utils/currency.mjs";
-import { serializer } from "../../utils/serializer.mjs";
 //import { TransactionDiagram } from './tx-diagram.js'; // PROTOTYPE, TO BE IMPLEMENTED LATER
-import { Transaction_Builder } from "../../node/src/transaction.mjs";
+import { serializer } from "../../utils/serializer.mjs";
 import { createSpacedTextElement } from "../utils/board-helpers.js";
+import { Transaction_Builder } from "../../node/src/transaction.mjs";
 
 /**
  * @typedef {import('../../types/transaction.mjs').Transaction} Transaction
@@ -134,6 +134,7 @@ export class MiniformComponent {
 	}
 	/** @returns {{ serialized: Uint8Array, signedTx: Transaction } | string }} */
 	prepareTxAccordingToInputsAndUpdateFees() {
+		if (!this.biw.activeAccount) return 'No active account';
 		this.eHTML.transfer.txFee.innerText = CURRENCY.formatNumberAsCurrency(0);
 		this.eHTML.transfer.totalSpent.innerText = CURRENCY.formatNumberAsCurrency(0);
 
@@ -145,7 +146,13 @@ export class MiniformComponent {
 		const recipientAddress = recipient || senderAccount.address;
 		if (!ADDRESS.checkConformity(recipientAddress)) return 'Invalid address';
 		
+		const accountLinkedToRecipient = this.biw.wallet?.accounts.find(a => a.address === recipientAddress);
+		console.log('Account linked to recipient:', accountLinkedToRecipient);
 		try {
+			//const dataEncoded = action === 'Stake'
+			//	? 
+			//	: typeof dataStr === 'string' ? serializer.converter.textEncoder.encode(dataStr) : undefined
+
 			const { tx, finalFee, totalConsumed } = action === 'Stake' // PREPARE TX ON CLICK
 				? Transaction_Builder.createStakingVss(senderAccount, amount, dataStr)
 				: Transaction_Builder.createTransaction(senderAccount,
@@ -201,8 +208,8 @@ export class MiniformComponent {
 	addTransactionToHistory(txId, tx, inAmount, specialTxType) {
 		//console.log('Adding transaction to history:', txId, tx, inAmount);
 		const height = parseInt(txId.split(':')[0]);
-		const approxTimestamp = this.biw.connector.getBlockConfirmationTimestampApproximation(height);
-		const receivedAmount = tx.outputs.reduce((sum, output) => sum + (output.address === this.biw.activeAccount.address ? output.amount : 0), 0);
+		const approxTimestamp = this.biw.connectorP2P.getBlockConfirmationTimestampApproximation(height);
+		const receivedAmount = tx.outputs.reduce((sum, output) => sum + (output.address === this.biw.activeAccount?.address ? output.amount : 0), 0);
 		const sentAmount = inAmount;
 		const balanceChange = receivedAmount - sentAmount;
 		const isPositive = balanceChange >= 0;

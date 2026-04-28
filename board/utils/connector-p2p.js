@@ -1,21 +1,21 @@
 // @ts-check
 import { Sync } from '../../node/src/sync.mjs';
-import { serializer } from '../../utils/serializer.mjs';
+import { serializer, BinaryReader } from '../../utils/serializer.mjs';
 import { PendingRequest } from '../../utils/networking.mjs';
+import { BlockFinalized, BlockFinalizedHeader } from '../../types/block.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
  * @typedef {import("../../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
  * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger
- * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/transaction.mjs").TxId} TxId
  */
 
-export class Connector {
+export class ConnectorP2P {
 	/** @type {PendingRequest | null} */		pendingLedgerRequest = null;
-	/** @type {PendingRequest | null} */		pendingTimestampsRequest = null;
+	/** @type {PendingRequest | null} */		pendingBlocksHeadersRequest = null;
 	/** @type {PendingRequest | null} */		pendingTransactionsRequest = null;
 	/** @type {PendingRequest | null} */		pendingRoundsLegitimaciesRequest = null;
 	/** @type {Record<string, Function[]>} */	listeners = {};
@@ -51,7 +51,7 @@ export class Connector {
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 		p2pNode.messager.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
-		p2pNode.messager.on('blocks_timestamps', this.#onBlocksTimestamps);
+		p2pNode.messager.on('blocks_headers', this.#onBlocksHeaders);
 		p2pNode.messager.on('rounds_legitimacies', this.#onRoundsLegitimacies);
 		this.#consensusChangeDetectionLoop();
 	}
@@ -140,21 +140,31 @@ export class Connector {
 
 		return txs;
 	}
-	/** Max number of blocks: 120 @param {number} [fromHeight] default: 0 @param {number} [toHeight] default: this.height */
-	async getBlocksTimestamps(fromHeight = 0, toHeight = this.height, timeout = 3000) {
+	/** Max number of blocks: 60 @param {number} [fromHeight] default: 0 @param {number} [toHeight] default: this.height */
+	async getBlocksHeaders(fromHeight = 0, toHeight = this.height, timeout = 3000) {
 		const t = Math.min(toHeight, this.height);
-		const min = Math.max(0, t - 119);
+		const min = Math.max(0, t - 59);
 		const f = Math.max(min, Math.min(fromHeight, t));
 		if (f > t) return null; // invalid range
-
 		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
-			this.pendingTimestampsRequest = new PendingRequest(peerId, 'blocks_timestamps', timeout);
-			const s = serializer.serialize.blocksTimestampsRequest(f, t);
-			this.p2pNode.messager.sendUnicast(peerId, s, 'blocks_timestamps_request');
+			this.pendingBlocksHeadersRequest = new PendingRequest(peerId, 'blocks_headers', timeout);
+			const s = serializer.serialize.blocksRangeRequest(f, t);
+			this.p2pNode.messager.sendUnicast(peerId, s, 'blocks_headers_request');
 			try {
-				const response = await this.pendingTimestampsRequest.promise;
-				if (response) return serializer.deserialize.blocksTimestampsResponse(response);
+				const response = await this.pendingBlocksHeadersRequest.promise;
+				if (!response) throw new Error('No response received');
+
+				const r1 = new BinaryReader(response);
+				const serializedHeaders = r1.readPointersAndExtractDataChunks();
+				/** @type {BlockFinalizedHeader[]} */ const headers = [];
+				for (const headerBuffer of serializedHeaders) {
+					const r2 = new BinaryReader(headerBuffer);
+					const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = serializer.deserialize.blockHeader(r2, 'finalized');
+					if (!timestamp || !hash || !nonce) throw new Error(`Corrupted block header`);
+					headers.push(new BlockFinalizedHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce));
+				}
+				return headers;
 			} catch (error) {}
 		}
 	}
@@ -236,11 +246,11 @@ export class Connector {
 		this.pendingTransactionsRequest = null;
 	}
 	/** @param {DirectMessage} msg */
-	#onBlocksTimestamps = (msg) => {
+	#onBlocksHeaders = (msg) => {
 		const { senderId, data } = msg;
-		if (this.pendingTimestampsRequest?.peerId !== senderId) return; // not the expected sender
-		this.pendingTimestampsRequest.complete(data);
-		this.pendingTimestampsRequest = null;
+		if (this.pendingBlocksHeadersRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingBlocksHeadersRequest.complete(data);
+		this.pendingBlocksHeadersRequest = null;
 	}
 	/** @param {DirectMessage} msg */
 	#onRoundsLegitimacies = (msg) => {

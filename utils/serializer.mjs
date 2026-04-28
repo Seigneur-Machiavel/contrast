@@ -331,7 +331,7 @@ export const serializer = {
             return w.getBytes();
         },
 		/** @param {number} fromHeight @param {number} toHeight */
-		blocksTimestampsRequest(fromHeight, toHeight) {
+		blocksRangeRequest(fromHeight, toHeight) {
 			const w = new BinaryWriter(4 * 2);
 			w.writeBytes(converter.numberTo4Bytes(fromHeight));
 			w.writeBytes(converter.numberTo4Bytes(toHeight));
@@ -639,12 +639,12 @@ export const serializer = {
             return { privateKey, validatorRewardAddress, solverAddress, solverThreads };
         },
 		/** @param {Uint8Array} serializedRequest */
-		blocksTimestampsRequest(serializedRequest) {
+		blocksRangeRequest(serializedRequest) {
 			const r = new BinaryReader(serializedRequest);
 			const fromHeight = converter.bytes4ToNumber(r.read(4));
 			const toHeight = converter.bytes4ToNumber(r.read(4));
 			if (r.isReadingComplete) return { fromHeight, toHeight };
-			else throw new Error(`BlocksTimestampsRequest is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
+			else throw new Error(`BlocksRangeRequest is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {Uint8Array} serializedResponse */
 		blocksTimestampsResponse(serializedResponse) {

@@ -4,19 +4,19 @@ import { CURRENCY } from '../../utils/currency.mjs';
 import { ADDRESS } from '../../types/address.mjs';
 
 /**
- * @typedef {import('../utils/connector-p2p.js').Connector} Connector
+ * @typedef {import('../utils/connector-p2p.js').ConnectorP2P} ConnectorP2P
  * @typedef {import('../utils/connector-node.js').ConnectorNode} ConnectorNode
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction */
 
 const eHTML = new eHTML_STORE('cnd-', 'node-pubkey-input');
 export class Dashboard {
-	eHTML = eHTML;
 	connectorP2P;
 	connectorNode;
+	eHTML = eHTML;
 	lastValues = {}; // used to avoid unnecessary DOM updates when values haven't changed. Keys are the same as the "type" field of messages received from the NodeController, suffixed by "Data" if the message contains a "data" field (ex: "nodeInfoData" for a message { type: 'nodeInfo', data: {...} }).
 
-	/** @param {Connector} connectorP2P @param {ConnectorNode} connectorNode */
+	/** @param {ConnectorP2P} connectorP2P @param {ConnectorNode} connectorNode */
 	constructor(connectorP2P, connectorNode) {
 		this.connectorP2P = connectorP2P;
 		this.connectorNode = connectorNode;
