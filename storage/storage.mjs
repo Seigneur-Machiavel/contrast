@@ -69,9 +69,13 @@ class StorageRoot {
 /** The main Storage */
 export class ContrastStorage extends StorageRoot {
 	miniLogger = new MiniLogger('storage');
+	/** @type {string} */ version; // version of the node, used for some versionned data handling in the storage. Ex: '0.6.12' (from package.json version)
 
 	/** @param {string|null} masterHex - master hex string to generate local identifier */
-	constructor(masterHex = null) { super(masterHex); }
+	constructor(masterHex = null) {
+		super(masterHex);
+		this.version = this.loadJSON('package', true).version; // ex: '0.6.12'
+	}
 
 	/** @param {string} fileName @param {Uint8Array} serializedData @param {string} [directoryPath] */
 	saveBinary(fileName, serializedData, directoryPath, skipMkdir = false) {

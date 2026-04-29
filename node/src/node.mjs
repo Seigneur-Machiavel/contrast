@@ -61,7 +61,7 @@ export class ContrastNode {
 	/** @type {{ vAddress: string | undefined, vPubkeys: string[] | undefined, vBalance: number, sAddress: string | undefined, sPubkeys: string[] | undefined, sBalance: number }} */
 	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, vBalance: 0, sAddress: undefined, sPubkeys: undefined, sBalance: 0 };
 
-	mainStorage; blockchain;
+	mainStorage; version; blockchain;
 	taskQueue; memPool; p2p;
 	solver; sync;
 	verb;
@@ -84,6 +84,7 @@ export class ContrastNode {
 	constructor(p2pNode, blockchain, verb = 2, controllerPort, serverChachaSeedHex, unsafeServePubKey) {
 		this.blockchain = blockchain;
 		this.mainStorage = blockchain.storage;
+		this.version = this.mainStorage.version;
 		this.memPool = new MemPool(this.blockchain);
 		this.taskQueue = new TaskQueue();
 		this.verb = verb;

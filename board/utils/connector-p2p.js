@@ -161,7 +161,7 @@ export class ConnectorP2P {
 				for (const headerBuffer of serializedHeaders) {
 					const r2 = new BinaryReader(headerBuffer);
 					const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce } = serializer.deserialize.blockHeader(r2, 'finalized');
-					if (!timestamp || !hash || !nonce) throw new Error(`Corrupted block header`);
+					if (!posTimestamp || !timestamp || !hash || !nonce) throw new Error(`Corrupted block header`);
 					headers.push(new BlockFinalizedHeader(index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp, timestamp, hash, nonce));
 				}
 				return headers;

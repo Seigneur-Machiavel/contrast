@@ -8,8 +8,8 @@
   "license": "ISC",
   "dependencies": {
     "@pinkparrot/qsafe-sig": "^0.0.10",
-    "adm-zip": "^0.5.16",
-    "hive-p2p": "^1.0.108"
+    "hive-p2p": "^1.0.108",
+    "adm-zip": "^0.5.16"
   },
   "devDependencies": {
     "archiver": "^7.0.1",

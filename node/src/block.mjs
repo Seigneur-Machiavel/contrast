@@ -1,8 +1,7 @@
 // @ts-check
 import { BLOCKCHAIN_SETTINGS, SOLVING } from '../../config/blockchain-settings.mjs';
-import { BlockFinalizedHeader, BlockFinalized,
-	BlockCandidateHeader, BlockCandidate } from '../../types/block.mjs';
-import { conditionnals, solving } from '../../utils/conditionals.mjs';
+import { BlockFinalizedHeader, BlockFinalized, BlockCandidate } from '../../types/block.mjs';
+import { solving } from '../../utils/conditionals.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';

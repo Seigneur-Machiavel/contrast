@@ -47,32 +47,16 @@ export const solving = {
 		const firstBlock = periodBlocks[0];
 		const lastBLock = periodBlocks[periodBlocks.length - 1];
 		const averageBlockTimeMS = solving.calculateAverageBlockTime(lastBLock, firstBlock);
-		//const averageBlockTimeMS = blockTimes.reduce((a, b) => a + b, 0) / blockTimes.length;
 		const timeDeviation = 1 - (averageBlockTimeMS / targetBlockTime);
-
 		const avgFinalDifficulty = finalDifficulties.reduce((a, b) => a + b, 0) / finalDifficulties.length;
 		const avgDifficulty = difficulties.reduce((a, b) => a + b, 0) / difficulties.length;
 		const diffDeviation = Math.round(avgFinalDifficulty - avgDifficulty);
-
 		const diffAdjustment = Math.floor(timeDeviation * 100 / SOLVING.thresholdPerDiffIncrement);
 		const diffDevAdjustment = Math.floor(diffDeviation / SOLVING.thresholdPerDiffIncrement);
 		const sum = diffAdjustment + diffDevAdjustment;
 		const capedDiffIncrement = Math.min(Math.abs(sum), SOLVING.maxDiffIncrementPerAdjustment);
 		const diffIncrement = sum > 0 ? capedDiffIncrement : -capedDiffIncrement;
         const newDifficulty = Math.max(lastBLock.difficulty + diffIncrement, 1);
-		
-		/*const deviation = 1 - (averageBlockTimeMS / targetBlockTime);
-        const deviationPercentage = deviation * 100; // over zero = too fast / under zero = too slow
-
-        if (logs) {
-            logger.log(`BlockIndex: ${blockIndex} | Average block time: ${Math.round(averageBlockTimeMS)}ms (target: ${targetBlockTime}ms)`, (m, c) => console.info(m, c));
-            logger.log(`Deviation: ${deviation.toFixed(4)} | Deviation percentage: ${deviationPercentage.toFixed(2)}%`, (m, c) => console.info(m, c));
-        }
-
-        const diffAdjustment = Math.floor(Math.abs(deviationPercentage) / SOLVING.thresholdPerDiffIncrement);
-        const capedDiffIncrement = Math.min(diffAdjustment, SOLVING.maxDiffIncrementPerAdjustment);
-        const diffIncrement = deviation > 0 ? capedDiffIncrement : -capedDiffIncrement;
-        const newDifficulty = Math.max(difficulty + diffIncrement, 1); // cap at 1 minimum*/
 
         if (logs) {
             const state = diffIncrement === 0 ? 'maintained' : diffIncrement > 0 ? 'increased' : 'decreased';
