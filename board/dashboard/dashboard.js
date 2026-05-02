@@ -131,6 +131,7 @@ export class Dashboard {
 		}
 		
 		// DETAILS
+		if (lv.clientVersion !== d.clientVersion) eHTML.get('clientVersion').textContent = `v${d.clientVersion}`;
 		if (lv.txInMempool !== d.txInMempool) eHTML.get('txInMempool').textContent = d.txInMempool;
 		if (lv.nodePeerId !== d.nodePeerId) eHTML.get('peerId').textContent = d.nodePeerId;
 		if (lv.listenAddress !== d.listenAddress) eHTML.get('listenAddress').textContent = d.listenAddress;
@@ -150,6 +151,7 @@ export class Dashboard {
 		this.lastValues.solverBalance = d.solverBalance;
 		this.lastValues.validatorBalance = d.validatorBalance;
 
+		this.lastValues.clientVersion = d.clientVersion;
 		this.lastValues.txInMempool = d.txInMempool;
 		this.lastValues.nodePeerId = d.nodePeerId;
 		this.lastValues.listenAddress = d.listenAddress;

@@ -163,7 +163,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		const { sAddress, sPubkeys } = this.node.rewardsInfo;
 		if (!sAddress || !sPubkeys) throw new Error('Solver address or pubkey is missing in rewards info');
 		
-		const r = this.node.blockchain.identityStore.resolveIdentity(sAddress, sPubkeys);
+		const r = this.node.blockchain.identityStore.verify(sAddress, sPubkeys);
 		if (r === 'MISMATCH') throw new Error('Solver reward address known but pubkey(s) mismatch in identity store');
 		if (r === 'MATCH') return { sAddress, identityEntries: undefined };
 		

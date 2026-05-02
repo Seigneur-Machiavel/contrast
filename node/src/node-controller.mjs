@@ -54,6 +54,7 @@ export class NodeController {
 			validatorBalance: this.node.rewardsInfo.vBalance,
 			
 			//hiveVersion: this.node.p2p.,
+			clientVersion: this.node.version,
 			txInMempool: this.node.memPool.organizer.byAnchor.size,
 			neighborsCount: this.node.p2p.peerStore.neighborsList.length,
 			nodePeerId: this.node.p2p.id,

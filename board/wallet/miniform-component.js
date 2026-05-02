@@ -161,7 +161,6 @@ export class MiniformComponent {
 					dataStr ? serializer.converter.textEncoder.encode(dataStr) : undefined
 				);
 			
-				
 			const signedTx = senderAccount.signTransaction(tx);
 			const serialized = serializer.serialize.transaction(signedTx);
 

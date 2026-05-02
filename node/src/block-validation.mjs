@@ -129,15 +129,8 @@ export class BlockValidation {
         if (!validatorTx) throw new Error('Validator transaction not found');
 
 		const [address, hint, signature] = validatorTx.witnesses[0];
-		const identity = node.blockchain.identityStore.getIdentity(address);
-		if (!identity) throw new Error(`Identity not found for address: ${address}`);
-		
-		for (const pk of identity.pubKeysHex) {
-			if (hint !== hybridKeyHint(pk)) continue; // compare hint.
-			const legitimacy = await node.blockchain.vss.getPubkeyLegitimacy(pk, block.prevHash);
-			if (legitimacy === block.legitimacy) return true; // legitimacy validated
-		}
-
+		const legitimacy = await node.blockchain.vss.getAddressLegitimacy(address, block.prevHash);
+		if (legitimacy === block.legitimacy) return true; // legitimacy validated
 		throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - no matching pubkey with expected legitimacy found for validator address ${address}`);
     }
 

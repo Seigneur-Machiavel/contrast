@@ -98,6 +98,7 @@ export class ContrastNode {
 		p2pNode.gossip.on('transaction', this.#onTransaction);
 		p2pNode.gossip.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
+		//p2pNode.messager.on('verify_identity_request', this.#onVerifyIdentityRequest);
 		p2pNode.messager.on('transactions_request', this.#onTransactionsRequest);
 		p2pNode.messager.on('blocks_headers_request', this.#onBlocksHeadersRequest);
 		p2pNode.messager.on('rounds_legitimacies_request', this.#onRoundsLegitimaciesRequest);
@@ -291,6 +292,14 @@ export class ContrastNode {
 			this.p2p.messager.sendUnicast(senderId, ledger, 'address_ledger');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onAddressLedgerRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
+	/** @param {DirectMessage} msg */
+	/*#onVerifyIdentityRequest = async (msg) => {
+		const { senderId, data } = msg;
+		try {
+			if (!(data instanceof Uint8Array)) throw new Error('Invalid verify identity request data type');
+			const request = serializer.deserialize.identityEntry(data);
+			if (!request.address || !request.pubKeysHex) throw new Error('Invalid verify identity request format');
+			if (!ADDRESS.checkConformity(request.address)) throw new Error('Invalid address format in verify identity request');*/
 	/** @param {DirectMessage} msg */
 	#onTransactionsRequest = async (msg) => {
 		const { senderId, data } = msg;

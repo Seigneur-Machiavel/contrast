@@ -78,20 +78,20 @@ export class Transaction_Builder {
 	/** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount - the account who is staking the VSS
 	 * @param {number} qty The quanity of stakes to create
-	 * @param {string[]} [authorizedPubkeys] - the pubkeys of the validators authorized to sign for this stake (default: the senderAccount pubkey)
-     * @param {boolean} useOnlyNecessaryUtxos - if true, the transaction will use only the necessary UTXOs to reach the amount */
-    static createStakingVss(senderAccount, qty, authorizedPubkeys, useOnlyNecessaryUtxos = true) {
-		if (typeof qty !== 'number' || qty <= 0) throw new Error('Invalid quantity to stake');
-		if (!authorizedPubkeys && senderAccount.pubKey) authorizedPubkeys = [senderAccount.pubKey];
-		if (!Array.isArray(authorizedPubkeys) || authorizedPubkeys.some(pubkey => typeof pubkey !== 'string')) throw new Error('Invalid authorized validator pubkeys');
-
+	 * @param {string[]} [authorizedAddresses] - the addresses of the validators authorized to sign for this stake (default: the senderAccount address) 
+	 * @param {Uint8Array[] | undefined} [identities] - optional identities associated with the stake */
+    static createStakingVss(senderAccount, qty, authorizedAddresses, identities = []) {
 		const senderAddress = senderAccount.address;
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
 		const availableUTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
         if (availableUTXOs.length === 0) throw new Error('No UTXO to spend');
+		if (typeof qty !== 'number' || qty <= 0) throw new Error('Invalid quantity to stake');
+		if (!authorizedAddresses && senderAccount.address) authorizedAddresses = [senderAddress];
+		if (!Array.isArray(authorizedAddresses) || authorizedAddresses.some(address => ADDRESS.checkConformity(address) === false)) throw new Error('Invalid authorized validator addresses');
 
         this.checkMalformedAnchorsInUtxosArray(availableUTXOs);
         this.checkDuplicateAnchorsInUtxosArray(availableUTXOs);
+
 		const transfers = [];
 		for (let i = 0; i < qty; i++) transfers.push({ recipientAddress: senderAddress, amount: BLOCKCHAIN_SETTINGS.stakeAmount });
         const { outputs, totalSpent: totalStake } = Transaction_Builder.buildOutputsFrom(transfers, 'sigOrSlash');
@@ -106,13 +106,10 @@ export class Transaction_Builder {
 		if (change) outputs.push(new TxOutput(change, 'sig', senderAddress));
 
 		// SET THE AUTHORIZED VALIDATOR PUBKEY IN TX DATA
-        const tx = Transaction.fromUTXOs(utxos, outputs);
-		const pointersSize = BinaryWriter.calculatePointersSize(authorizedPubkeys.length);
-		const pubKeys = authorizedPubkeys.map(pk => serializer.converter.hexToBytes(pk));
-		const pubkeysSize = pubKeys.reduce((sum, pk) => sum + pk.length, 0);
-		const w = new BinaryWriter(pointersSize + pubkeysSize);
-		w.writePointersAndDataChunks(pubKeys);
-		tx.data = w.getBytes();
+        const tx = Transaction.fromUTXOs(utxos, outputs, identities);
+		const w = new BinaryWriter(authorizedAddresses.length * SIZES.address.bytes);
+		for (const address of authorizedAddresses) w.writeBytes(ADDRESS.B58_TO_BYTES(address));
+		tx.data = w.getBytesOrThrow();
 		return { tx, finalFee: fee, totalConsumed: totalStake + fee };
     }
 	/** @param {UTXO[]} utxos @param {number} amount */

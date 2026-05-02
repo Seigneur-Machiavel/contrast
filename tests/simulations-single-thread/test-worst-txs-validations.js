@@ -72,7 +72,7 @@ const onBlockConfirmed = async (block) => {
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const identityCountBefore = identityEntries.length;
-			const r = identityStore.resolveIdentity(a, [pk]);
+			const r = identityStore.verify(a, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
 			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(a, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 

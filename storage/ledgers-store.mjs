@@ -57,7 +57,6 @@ class AddressChanges {
 	/** @param {'in' | 'out'} direction @param {TxId} txId @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
 	add(direction, txId, height, txIndex, vout, amount, rule) {
 		const serializedUtxo = serializer.serialize.ledgerUtxo(height, txIndex, vout, amount, rule);
-		//const txId = `${height}:${txIndex}`;
 		if (!this.historyTxIds.has(txId)) this.historyTxIds.add(txId);
 		
 		if (direction === 'out') {

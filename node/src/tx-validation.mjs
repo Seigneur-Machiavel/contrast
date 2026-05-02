@@ -128,19 +128,16 @@ export class TxValidation {
         return fee;
     }
 
-    /** ==> Third validation, low computation cost. - control the right to create outputs using the rule
-     * @param {Transaction} transaction */
-    static controlTransactionOutputsRulesConditions(transaction) { //TODO: NOT SURE IF WE CONSERVE THIS
-        return;
-		/*for (let i = 0; i < transaction.outputs.length; i++) {
-            const inRule = transaction.inputs[i] ? transaction.inputs[i].rule : undefined;
-            const inAmount = transaction.inputs[i] ? transaction.inputs[i].amount : undefined;
-            const inAddress = transaction.inputs[i] ? transaction.inputs[i].address : undefined;
-            const outRule = transaction.outputs[i] ? transaction.outputs[i].rule : undefined;
-            const outAmount = transaction.outputs[i] ? transaction.outputs[i].amount : undefined;
-            const outAddress = transaction.outputs[i] ? transaction.outputs[i].address : undefined;
-        }*/
-    } // NOT SURE IF WE CONSERVE THIS
+    /** ==> Third validation, low computation cost. - control the right to create outputs using the rule @param {Transaction} tx */
+    static controlTransactionOutputsRulesConditions(tx) { //TODO: NOT SURE IF WE CONSERVE THIS
+        const outRules = new Set();
+		for (const output of tx.outputs)
+			if (!outRules.has(output.rule)) outRules.add(output.rule);
+		
+		if (outRules.has('sigOrSlash'))
+			if (!tx.data) throw new Error('Transactions creating sigOrSlash outputs must have data field with the authorized validators addresses');
+			else if (tx.data.length % SIZES.address.bytes !== 0) throw new Error('Invalid data field for sigOrSlash output, must be a multiple of address size');
+    }
 
 	/** ==> Fourth validation, low disk access cost. - control the discovery of new identities
 	 * - Store the discovered identity in involvedIdentities map for loop optimization (avoid re-fetching in store)
@@ -148,6 +145,7 @@ export class TxValidation {
 	static controlIdentitiesReservation(node, tx, involvedIdentities = new IdentitiesCache()) {
 		for (const entry of tx.identities) {
 			const parsed = serializer.deserialize.identityEntry(entry);
+			if (!parsed.threshold) throw new Error(`Identity entry for address ${parsed.address} must have a threshold of at least 1`);
 			this.#discoveryEntryCheck(parsed.address, parsed.pubKeysHex, parsed.threshold);
 			
 			const identity = involvedIdentities.get(parsed.address) || node.blockchain.identityStore.getIdentity(parsed.address);

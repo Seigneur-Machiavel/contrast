@@ -52,13 +52,13 @@ export class BlockUtils {
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 		/** @type {Uint8Array[]} */
 		const identityEntries = [];
-		const vr = identityStore.resolveIdentity(account.address, [account.pubKey]);
+		const vr = identityStore.verify(account.address, [account.pubKey]);
 		if (vr === 'MISMATCH') throw new Error('Validator address known but pubkey(s) mismatch in identity store');
 		if (vr === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(account.address, [account.pubKey]));
 
 		// IF NOT USING THE SAME ADDRESS TO RECEIVE REWARD AND VALIDATE...
 		if (account.address !== rewardAddress) { // ...THEN ALSO CREATE IDENTITY IF NEEDED
-			const rr = identityStore.resolveIdentity(rewardAddress, rewardPubkeys);
+			const rr = identityStore.verify(rewardAddress, rewardPubkeys);
 			if (rr === 'MISMATCH') throw new Error('Reward address known but pubkey(s) mismatch in identity store');
 			if (rr === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(rewardAddress, rewardPubkeys));
 		}
@@ -147,18 +147,13 @@ export class BlockUtils {
 		// CHOOSE TO RETURN NULL IF NOT ELIGIBLE TO MINE
 		const prevHash = blockchain.lastBlock.hash;
 		const solverBestIndex = solver.bestCandidateIndex !== -1 ? solver.bestCandidateIndex : null;
-		const myLegitimacy = await blockchain.vss.getPubkeyLegitimacy(account.pubKey, prevHash);
+		const myLegitimacy = await blockchain.vss.getAddressLegitimacy(account.address, prevHash);
 		node.info.lastLegitimacy = myLegitimacy;
 
 		if (solverBestIndex !== null)
 			if (solverBestIndex > blockchain.lastBlock.index + 1) return false; // TOO FAR AHEAD, WAIT FOR OTHER BLOCKS TO CATCH UP
 			else if (solverBestIndex < blockchain.lastBlock.index) return false;// ALREADY BEHIND, WAIT FOR OTHER BLOCKS TO CATCH UP
 		if (myLegitimacy > BLOCKCHAIN_SETTINGS.validatorsPerRound) return false;// TOO LOW LEGITIMACY, DON'T WASTE RESOURCES
-
-		/* DEPRECATED: USELESS
-		const olderBlockHeight = Math.max(0, blockchain.lastBlock.index - SOLVING.blocksBeforeAdjustment);
-        const olderBlock = node.blockchain.getBlock(olderBlockHeight);
-		node.info.averageBlockTime = solving.calculateAverageBlockTime(blockchain.lastBlock, olderBlock);*/
 		
 		const newDifficulty = BlockUtils.calculateAdjustedDifficulty(node, true);
 		const coinBaseReward = solving.calculateNextCoinbaseReward(blockchain.lastBlock);

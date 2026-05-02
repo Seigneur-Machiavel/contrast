@@ -312,10 +312,8 @@ export class Explorer {
 	}
 	async getAndDisplayRoundLegitimacies() {
 		const rl = await this.connectorP2P.getRoundsLegitimacies();
-		//if (!rl) throw new Error('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
 		if (!rl) console.warn('Explorer: getAndDisplayRoundLegitimacies => Unable to get rounds legitimacies');
 		if (!rl || rl.length === 0) return; // no data
-		//console.log('Explorer: Retrieved rounds legitimacies:', rl);
 		this.roundLegitimaciesChart.render(rl);
 		
 		const legHeightElement = eHTML.get('legHeight');

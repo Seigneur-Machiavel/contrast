@@ -84,22 +84,4 @@ export class VssStorage {
 		this.vssHandler = new BinaryHandler(path.join(this.storage.PATH.STORAGE, 'vss.bin'));
 		this.logger.log('VssStorage reset complete', (m, c) => console.info(m, c));
 	}
-
-	// INTERNAL METHODS
-	/** @param {TxAnchor} anchor */
-	#anchorToBytes(anchor) { // DEPRECATED - Use serializer.serialize.anchor instead
-		const { height, txIndex, vout } = serializer.parseAnchor(anchor);
-		const b = new Uint8Array(ENTRY_BYTES);
-		b.set(serializer.converter.numberTo4Bytes(height), 0);
-		b.set(serializer.nonZeroUint16.encode(txIndex), 4);
-		b.set(serializer.nonZeroUint16.encode(vout), 6);
-		return b;
-	}
-	/** @param {Uint8Array} bytes */
-	#bytesToAnchor(bytes) { // DEPRECATED - Use serializer.deserialize.anchor instead
-		const height = serializer.converter.bytes4ToNumber(bytes.slice(0, 4));
-		const txIndex = serializer.nonZeroUint16.decode(bytes.slice(4, 6));
-		const vout = serializer.nonZeroUint16.decode(bytes.slice(6, 8));
-		return `${height}:${txIndex}:${vout}`;
-	}
 }

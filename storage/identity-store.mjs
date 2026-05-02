@@ -63,22 +63,28 @@ export class IdentityStore {
 		if (!identities) throw new Error(`IdentityStore.get: no data found for transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
 
 		for (const entry of identities)
-			if (ADDRESS.bytesToB58(entry.subarray(0, ADDRESS.CRITERIA.TOTAL_BYTES)) === address)
-				return serializer.deserialize.identityEntry(entry); // MATCH
+			if (ADDRESS.bytesToB58(entry.subarray(0, ADDRESS.CRITERIA.TOTAL_BYTES)) === address) {
+				const { address: parsedAddress, pubKeysHex, threshold } = serializer.deserialize.identityEntry(entry);
+				if (!threshold) throw new Error(`Identity entry for address ${parsedAddress} must have a threshold of at least 1`);
+				return { address: parsedAddress, pubKeysHex, threshold }; // MATCH
+			}
 		
 		throw new Error(`IdentityStore.get: no identity entry found for address ${address} in transaction at ${blockIndex}:${txIndex} - unable to resolve identity`);
 	}
-	/** Lookup at the store to resolve identity, helper to know if we needs to include reservation data in transaction.
+	/** Lookup at the store to verify identity.
 	 * - 'UNKNOWN' if the address is not known in the store (no pointer, no entry)
+	 * - 'KNOWN' if the address is known but no pubkeys provided to verify
 	 * - 'MISMATCH' if the address is known but the pubkey(s) do not match the entry
 	 * - 'MATCH' if the address is known and the pubkey(s) match the entry
-	 * @param {string} address @param {string[]} pubKeysHex */
-	resolveIdentity(address, pubKeysHex) {
+	 * @param {string} address @param {string[]} [pubKeysHex] - optional array of pubkeys to verify against the stored identity @param {number} [threshold] - optional threshold to verify against the stored identity (only relevant for multi-sig addresses) */
+	verify(address, pubKeysHex, threshold) {
 		const parsedEntry = this.getIdentity(address);
 		if (!parsedEntry) return 'UNKNOWN';
+		if (!pubKeysHex?.length) return 'KNOWN'; // early return if no pubkeys provided
 
 		if (parsedEntry.pubKeysHex.length !== pubKeysHex.length) return 'MISMATCH';
 		for (const pk of parsedEntry.pubKeysHex) if (!pubKeysHex.includes(pk)) return 'MISMATCH';
+		if (threshold !== undefined && parsedEntry.threshold !== threshold) return 'MISMATCH';
 		return 'MATCH';
 	}
 	/** Create the new identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */

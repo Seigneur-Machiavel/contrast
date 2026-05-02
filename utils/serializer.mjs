@@ -178,14 +178,14 @@ export const serializer = {
 			}
 			return w.getBytesOrThrow(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-		/** @param {ADDRESS} address @param {number} threshold @param {string[]} pubKeysHex */
+		/** @param {ADDRESS} address @param {number | undefined} threshold 'undefined' will set '0' and return 'undefined' on deserialization @param {string[]} pubKeysHex */
 		identityEntry(address, threshold, pubKeysHex) {
 			const pks = pubKeysHex.map(hybridKeyHex => converter.hexToBytes(hybridKeyHex));
 			const pointersSize = BinaryWriter.calculatePointersSize(pks.length);
 			const totalPksSize = pks.reduce((sum, pk) => sum + pk.length, 0);
 			const w = new BinaryWriter(address.bytes.length + 1 + pointersSize + totalPksSize);
 			w.writeBytes(address.bytes);    	// 5b
-			w.writeByte(threshold);		  		// 1b
+			w.writeByte(threshold || 0);		// 1b
 			w.writePointersAndDataChunks(pks);  // unspecified.
 			return w.getBytesOrThrow(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
@@ -347,17 +347,14 @@ export const serializer = {
 			}
 			return w.getBytes();
 		},
-		/** @param {Array<{address: string, pubkeys: Set<string>}>} roundsLegitimacies */
+		/** @param {Array<{address: string, authorizedAddresses: Set<string>}>} roundsLegitimacies */
 		roundsLegitimaciesResponse(roundsLegitimacies) {
 			let entries = [];
 			for (const entry of roundsLegitimacies) {
-				let pubKeysBytes = [];
-				for (const pubkey of entry.pubkeys) pubKeysBytes.push(converter.hexToBytes(pubkey));
-				
-				const pointersSize = BinaryWriter.calculatePointersSize(pubKeysBytes.length);
-				const w = new BinaryWriter(SIZES.address.bytes + pointersSize + pubKeysBytes.reduce((sum, bytes) => sum + bytes.length, 0));
+				const authorizedAddressesSize = entry.authorizedAddresses.size * SIZES.address.bytes;
+				const w = new BinaryWriter(SIZES.address.bytes + authorizedAddressesSize);
 				w.writeBytes(ADDRESS.B58_TO_BYTES(entry.address));
-				w.writePointersAndDataChunks(pubKeysBytes);
+				for (const address of entry.authorizedAddresses) w.writeBytes(ADDRESS.B58_TO_BYTES(address));
 				entries.push(w.getBytesOrThrow(`Round legitimacy entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`));
 			}
 
@@ -504,7 +501,7 @@ export const serializer = {
 		identityEntry(txData) {
 			const r = new BinaryReader(txData);
 			const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
-			const threshold = r.read(1)[0];
+			const threshold = r.read(1)[0] || undefined;
 			const pubKeysHex = [];
 			const pks = r.readPointersAndExtractDataChunks();
 			for (const pk of pks) pubKeysHex.push(converter.bytesToHex(pk));
@@ -666,10 +663,11 @@ export const serializer = {
 			for (const entry of entries) {
 				const entryReader = new BinaryReader(entry);
 				const address = ADDRESS.BYTES_TO_B58(entryReader.read(SIZES.address.bytes));
-				const pubKeys = new Set();
-				const pubKeysBytes = entryReader.readPointersAndExtractDataChunks();
-				for (const pubKeyBytes of pubKeysBytes) pubKeys.add(converter.bytesToHex(pubKeyBytes));
-				roundsLegitimacies.push({ address, pubKeys });
+				const authorizedAddresses = new Set();
+				if (entryReader.view.length % SIZES.address.bytes !== 0) throw new Error('Serialized rounds legitimacy entry is invalid: remaining bytes after reading address should be a multiple of address size');
+				while (!entryReader.isReadingComplete)
+					authorizedAddresses.add(ADDRESS.BYTES_TO_B58(entryReader.read(SIZES.address.bytes)));
+				roundsLegitimacies.push({ address, authorizedAddresses });
 			}
 			return roundsLegitimacies;
 		},

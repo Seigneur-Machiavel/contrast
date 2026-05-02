@@ -20,6 +20,8 @@ export const SIZES = {
 	hint: { bytes: 5, str: 10 },
 	/** Address, represented as a string of 7 characters or 5 bytes | ex: C123456 */
 	address: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES, str: ADDRESS.CRITERIA.TOTAL_LENGTH },
+	/** Stamp, represented as 7 bytes, containing: height(4) + txIndex(2) + identityIndex(1) */
+	stamp: { bytes: 7, str: null },
 
 	// TRANSACTION
 	/** Transaction header, represented as 12 bytes, containing: version(2) + witnessesCount(2) + identitiesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2) */

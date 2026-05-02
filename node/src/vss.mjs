@@ -1,8 +1,9 @@
 // @ts-check
+import { ADDRESS } from '../../types/address.mjs';
 import { HashFunctions } from "./conCrypto.mjs";
 import { VssStorage } from "../../storage/vss-store.mjs";
 import { BLOCKCHAIN_SETTINGS } from "../../config/blockchain-settings.mjs";
-import { serializer, BinaryReader } from "../../utils/serializer.mjs";
+import { SIZES, serializer, BinaryReader } from "../../utils/serializer.mjs";
 
 /**
  * @typedef {import('./blockchain.mjs').Blockchain} Blockchain
@@ -10,22 +11,23 @@ import { serializer, BinaryReader } from "../../utils/serializer.mjs";
  * @typedef {import('../../storage/storage.mjs').ContrastStorage} ContrastStorage */
 
 class RoundLegitimacies {
+	/** @type {string[]} */				owners = [];
 	/** @type {Array<Set<string>>} */	legitimacies = [];
 
-	/** @param {Set<string>} pubkeys */
-	addPubkeys(pubkeys) {
-		this.legitimacies.push(pubkeys);
+	/** @param {Set<string>} addresses */
+	addAddresses(addresses) {
+		this.legitimacies.push(addresses);
 	}
-	/** Returns best legitimacy of pubkey for the round, if not found: return undefined @param {string} pubkey */
-	getPubkeyBestLegitimacy(pubkey) {
+	/** Returns best legitimacy of address for the round, if not found: return undefined @param {string} address */
+	getAddressLegitimacy(address) {
 		for (let i = 0; i < this.legitimacies.length; i++)
-			if (this.legitimacies[i].has(pubkey)) return i;
+			if (this.legitimacies[i].has(address)) return i;
 	}
 }
 
 /** Validator Selection Spectrum (VSS) */
 export class Vss {
-	/** @type {Map<string, {legitimacies: RoundLegitimacies, owners: string[]}>} BlockHash: RoundLegitimacies */
+	/** @type {Map<string, RoundLegitimacies>} BlockHash: RoundLegitimacies */
 	blockLegitimaciesByAddress = new Map();
 	maxCacheLength = 100;
 	vssStorage;
@@ -44,11 +46,10 @@ export class Vss {
 		const upperBound = this.vssStorage.stakesCount * BLOCKCHAIN_SETTINGS.stakeAmount;
 		const newUpperBound = upperBound + (newStakeAnchors.length * BLOCKCHAIN_SETTINGS.stakeAmount);
 		if (newUpperBound > BLOCKCHAIN_SETTINGS.maxSupply / 2) throw new Error(`VSS stake limit exceeded in block #${block.index}`);
+		if (this.vssStorage.hasStakes(newStakeAnchors)) throw new Error(`VSS stake already exists in block #${block.index}`);
 		if (mode !== 'persist') return;
 
-		for (const anchor of newStakeAnchors)
-			if (this.vssStorage.hasStakes([anchor])) continue; // Guard against double-add (e.g. re-sync or fork switch) | verify if check cost is acceptable.
-			else this.vssStorage.addStake(anchor);
+		for (const anchor of newStakeAnchors) this.vssStorage.addStake(anchor);
 	}
 	/** @param {BlockFinalized} block */
 	revertBlockStakes(block) {
@@ -60,26 +61,22 @@ export class Vss {
 		const newStakeAnchors = this.#extractBlockStakes(block);
 		return this.vssStorage.hasStakes(newStakeAnchors);
 	}
-	/** Returns best legitimacy of pubkey for the round, if not found: return last index + 1 (= array length) @param {string} pubkey @param {string} prevHash */
-	async getPubkeyLegitimacy(pubkey, prevHash) {
+	/** Returns best legitimacy of pubkey for the round, if not found: return last index + 1 (= array length) @param {string} address @param {string} prevHash */
+	async getAddressLegitimacy(address, prevHash) {
 		const round = await this.#calculateRound(prevHash);
-		const bestLeg = round.legitimacies.getPubkeyBestLegitimacy(pubkey);
-		return bestLeg !== undefined ? bestLeg : round.legitimacies.legitimacies.length;
+		const bestLeg = round.getAddressLegitimacy(address);
+		return bestLeg !== undefined ? bestLeg : round.legitimacies.length;
 	}
 	/** Return the worse legitimacy (highest number) for the round, if no stakes: return 0 @param {string} prevHash */
 	async getWorseLegitimacy(prevHash) {
 		const round = await this.#calculateRound(prevHash);
-		return round.legitimacies.legitimacies.length;
+		return round.legitimacies.length;
 	}
 	/** @param {string} blockHash */
 	getRoundForExplorerIfExists(blockHash) {
 		const round = this.blockLegitimaciesByAddress.get(blockHash);
 		if (!round) return null;
-
-		//** @type {Array<{address: string, pubkeys: Set<string>}>} */ const result = [];
-		//for (let i = 0; i < round.legitimacies.legitimacies.length; i++)
-		//	result.push({ address: round.owners[i], pubkeys: round.legitimacies.legitimacies[i] });
-		return round.owners.map((owner, index) => ({ address: owner, pubkeys: round.legitimacies.legitimacies[index] }));
+		else return round.owners.map((owner, index) => ({ address: owner, authorizedAddresses: round.legitimacies[index] }));
 	}
 	reset() {
 		this.vssStorage.reset();
@@ -87,7 +84,6 @@ export class Vss {
 	}
 
 	// INTERNAL METHODS
-	
 	/** @param {BlockFinalized} block */
 	#extractBlockStakes(block) {
 		const newStakeAnchors = [];
@@ -100,6 +96,45 @@ export class Vss {
 			}
 		
 		return newStakeAnchors;
+	}
+	/** @param {string} blockHash @param {number} [maxTry] */
+	async #calculateRound(blockHash, maxTry = 100) {
+		const existing = this.blockLegitimaciesByAddress.get(blockHash);
+		if (existing) return existing; // already calculated
+
+		const legitimacies = new RoundLegitimacies();
+		const maxRange = this.vssStorage.stakesCount;
+		if (maxRange < BLOCKCHAIN_SETTINGS.validatorsPerRound) { // not enough stakes => empty round
+			this.blockLegitimaciesByAddress.set(blockHash, legitimacies);
+			return legitimacies;
+		}
+
+		let leg = 0;
+		for (let i = 0; i < maxTry; i++) {
+			// SHA512 mod maxRange: bias exists but negligible (2^512 >> maxRange)
+			const hash = HashFunctions.SHA512(`${i}${blockHash}`).hashHex;
+			const winningNumber = Number(BigInt('0x' + hash) % BigInt(maxRange));
+			const roundAuth = this.#getStakeAuthorizations(winningNumber);
+			if (!roundAuth?.authorizedAddresses || roundAuth.authorizedAddresses.size === 0) {
+				console.warn(`[VSS] No authorized addresses for winning number: ${winningNumber}`);
+				continue;
+			}
+
+			legitimacies.addAddresses(roundAuth.authorizedAddresses);
+			legitimacies.owners.push(roundAuth.owner);
+			leg++;
+
+			if (leg >= this.vssStorage.stakesCount) break; // all stakes selected
+			if (leg >= BLOCKCHAIN_SETTINGS.validatorsPerRound) break; // round is full
+		}
+
+		// maxTry safety triggered: should never happen in normal operation
+		if (leg < BLOCKCHAIN_SETTINGS.validatorsPerRound && maxRange >= BLOCKCHAIN_SETTINGS.validatorsPerRound)
+			console.warn(`[VSS] Round incomplete: only ${leg}/${BLOCKCHAIN_SETTINGS.validatorsPerRound} validators selected after ${maxTry} iterations (blockHash: ${blockHash})`);
+
+		this.blockLegitimaciesByAddress.set(blockHash, legitimacies);
+		this.#pruneCache();
+		return legitimacies;
 	}
 	/** @param {number} index */
 	#getStakeAuthorizations(index) {
@@ -115,55 +150,16 @@ export class Vss {
 
 		try {
 			/** @type {Set<string>} */
-			const authorizedPubkeys = new Set();
+			const authorizedAddresses = new Set();
 			const r = new BinaryReader(data);
-			const pubKeys = r.readPointersAndExtractDataChunks();
-			for (const pkBytes of pubKeys) authorizedPubkeys.add(serializer.converter.bytesToHex(pkBytes));
-			return { authorizedPubkeys, owner: utxo.address };
+			for (let i = 0; i < data.length; i += SIZES.address.bytes)
+				authorizedAddresses.add(ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes)));
+			if (!r.isReadingComplete) throw new Error(`Failed to read all authorized addresses for anchor: ${anchor}`);
+			return { authorizedAddresses, owner: utxo.address };
 		} catch (error) {
 			console.error(`Failed to extract pubkeys for anchor: ${anchor} | error: ${error}`);
 			throw new Error(`Failed to extract pubkeys for anchor: ${anchor}`);
 		}
-	}
-	/** @param {string} blockHash @param {number} [maxTry] */
-	async #calculateRound(blockHash, maxTry = 100) {
-		const existing = this.blockLegitimaciesByAddress.get(blockHash);
-		if (existing) return existing; // already calculated
-
-		/** @type {string[]} */ const owners = [];
-		const legitimacies = new RoundLegitimacies();
-		const maxRange = this.vssStorage.stakesCount;
-		if (maxRange < BLOCKCHAIN_SETTINGS.validatorsPerRound) { // not enough stakes => empty round
-			this.blockLegitimaciesByAddress.set(blockHash, { legitimacies, owners });
-			return { legitimacies, owners };
-		}
-
-		let leg = 0;
-		for (let i = 0; i < maxTry; i++) {
-			const hash = HashFunctions.SHA512(`${i}${blockHash}`).hashHex;
-			// SHA512 mod maxRange: bias exists but negligible (2^512 >> maxRange)
-			const winningNumber = Number(BigInt('0x' + hash) % BigInt(maxRange));
-			const roundAuth = this.#getStakeAuthorizations(winningNumber);
-			if (!roundAuth?.authorizedPubkeys || roundAuth.authorizedPubkeys.size === 0) {
-				console.warn(`[VSS] No authorized pubkeys for winning number: ${winningNumber}`);
-				continue;
-			}
-
-			legitimacies.addPubkeys(roundAuth.authorizedPubkeys);
-			owners.push(roundAuth.owner);
-			leg++;
-
-			if (leg >= this.vssStorage.stakesCount) break; // all stakes selected
-			if (leg >= BLOCKCHAIN_SETTINGS.validatorsPerRound) break; // round is full
-		}
-
-		// maxTry safety triggered: should never happen in normal operation
-		if (leg < BLOCKCHAIN_SETTINGS.validatorsPerRound && maxRange >= BLOCKCHAIN_SETTINGS.validatorsPerRound)
-			console.warn(`[VSS] Round incomplete: only ${leg}/${BLOCKCHAIN_SETTINGS.validatorsPerRound} validators selected after ${maxTry} iterations (blockHash: ${blockHash})`);
-
-		this.blockLegitimaciesByAddress.set(blockHash, { legitimacies, owners });
-		this.#pruneCache();
-		return { legitimacies, owners };
 	}
 	#pruneCache() {
 		const toRemove = this.blockLegitimaciesByAddress.size - this.maxCacheLength;

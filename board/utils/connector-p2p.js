@@ -4,6 +4,7 @@ import { serializer, BinaryReader } from '../../utils/serializer.mjs';
 import { PendingRequest } from '../../utils/networking.mjs';
 import { BlockFinalized, BlockFinalizedHeader } from '../../types/block.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
+import { ADDRESS } from '../../types/address.mjs';
 
 /**
  * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
@@ -108,6 +109,23 @@ export class ConnectorP2P {
 			this.p2pNode.messager.sendUnicast(peerId, address, 'address_ledger_request');
 			try {
 				/** @type {AddressLedger} */
+				const response = await this.pendingLedgerRequest.promise;
+				return response;
+			} catch (error) {}
+		}
+	}
+	/** Verify if an address is known in the network and optionally check if the provided pubkeys and threshold match those of the identity entry stored in the ledger for that address.
+	 * @param {string} address @param {string[]} [pubKeysHex] - Optional, if provided will check that the pubkeys match those of the identity entry in the ledger. If not provided, it will just return 'KNOWN' if an entry exists for the address, or 'UNKNOWN' if it doesn't.
+	 * @param {number} [threshold] Optional, if provided will check that the threshold matches that of the identity entry in the ledger. If not provided, it will not check the threshold and consider it a match regardless of its value. */
+	async verifyIdentity(address, pubKeysHex = [], threshold, timeout = 3000) {
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
+		for (const peerId of peersToAsk) {
+			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
+			const a = ADDRESS.fromString(address);
+			const s = serializer.serialize.identityEntry(a, threshold, pubKeysHex);
+			this.p2pNode.messager.sendUnicast(peerId, s, 'verify_identity_request');
+			try {
+				/** @type {'UNKNOWN' | 'KNOWN' | 'MISMATCH' | 'MATCH'} */
 				const response = await this.pendingLedgerRequest.promise;
 				return response;
 			} catch (error) {}
