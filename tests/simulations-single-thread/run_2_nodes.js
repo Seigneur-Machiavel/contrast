@@ -25,8 +25,8 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 const bootstrapSeed = '0000000000000000000000000000000000000000000000000000000000000000';
 const bootstrapStorage = new ContrastStorage(bootstrapSeed);
 if (clearOnStart) bootstrapStorage.clear(); // start fresh
-const bootstrapWallet = new Wallet(bootstrapSeed);
-await bootstrapWallet.deriveAccounts(2, 'C', bootstrapStorage);
+const bootstrapWallet = new Wallet(bootstrapSeed, bootstrapStorage);
+await bootstrapWallet.deriveAccounts(2);
 
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
 // @ts-ignore
@@ -46,8 +46,8 @@ const clientSeeds = [
 async function createClientNode(seed = 'toto') {
 	const clientStorage = new ContrastStorage(seed);
 	if (clearOnStart) clientStorage.clear(); // start fresh
-	const clientWallet = new Wallet(seed);
-	await clientWallet.deriveAccounts(2, 'C', clientStorage);
+	const clientWallet = new Wallet(seed, clientStorage);
+	await clientWallet.deriveAccounts(2);
 
 	const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
 	const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps, controllerPort: false });
@@ -70,12 +70,14 @@ const onBlockConfirmed = async (block) => {
 
 	// TEST: create transaction
 	const a = bootstrapWallet.accounts[0];
-	const receipient = bootstrapWallet.accounts[1].address;
+	const recipient = bootstrapWallet.accounts[1].address;
+	if (!a.address || !recipient) return; // account not ready
+
 	const ledger = await bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
 	if (!ledger.ledgerUtxos) return;
 
 	a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);
-	const tx = (await Transaction_Builder.createAndSignTransaction(a, 10, receipient))?.signedTx;
+	const tx = (await Transaction_Builder.createAndSignTransaction(a, 10, recipient))?.signedTx;
 	if (!tx) return; // failed to create tx
 
 	// TEST: push transaction

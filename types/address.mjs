@@ -1,23 +1,42 @@
 // @ts-check
-import { xxHash32, Converter } from '../node/src/conCrypto.mjs';
+import { Converter } from '../node/src/conCrypto.mjs';
 const converter = new Converter();
 
-/** @type {Record<string, {name: string, description: string, multiSig: boolean} | undefined>} */
+/** @type {Record<string, {description: string, threshold: number}>} */
 const LEXICON = {
-	C: { name: 'Contrast Original Standard', description: 'The first batch of Contrast addresses', multiSig: false },
-	//M: { name: 'Contrast Original MultiSig', description: 'Multi-signature Contrast addresses', multiSig: true },
+	C: { description: 'Standard Contrast addresses', threshold: 1 },
+	M1: { description: 'Multisig Contrast addresses', threshold: 1 },
+	M2: { description: 'Multisig Contrast addresses', threshold: 2 },
+	M3: { description: 'Multisig Contrast addresses', threshold: 3 },
+	M4: { description: 'Multisig Contrast addresses', threshold: 4 },
+	M5: { description: 'Multisig Contrast addresses', threshold: 5 },
+	M6: { description: 'Multisig Contrast addresses', threshold: 6 },
+	M7: { description: 'Multisig Contrast addresses', threshold: 7 },
+	M8: { description: 'Multisig Contrast addresses', threshold: 8 },
+	M9: { description: 'Multisig Contrast addresses', threshold: 9 },
+	Ma: { description: 'Multisig Contrast addresses', threshold: 10 },
+	// CAUTION: ONLY APPEND NEW PREFIXES, DO NOT MODIFY OR DELETE EXISTING ONES (to avoid breaking changes)
 }
+const PREFIXES_LIST = Object.keys(LEXICON);
+/** { C: 0, M1: 1, M2: 2, ... } @type {Record<string, number>} */
+const PREFIX_CODES = {};
+for (let i = 0; i < PREFIXES_LIST.length; i++) PREFIX_CODES[PREFIXES_LIST[i]] = i;
+
 const CRITERIA = { // WORK IN PROGRESS
 	/** Number of bytes of the address (without the first character prefix) */
 	B58_BYTES: 4,
 	/** Total number of bytes of the address including the prefix */
 	TOTAL_BYTES: 5,
-	/** Length of the address in Base58 characters (without the first character prefix) */
-	B58_LENGTH: 6,
+	/** Length of the address in Base58 characters (without the first character prefix)
+	 * - 1 char prefix => 6 next characters (e.g. C + 123456)
+	 * - 2 chars prefix => 5 next characters (e.g. M1 + 5 chars) */
+	B58_LENGTH: { suffix1: 6, suffix2: 5 },
 	/** Length of the address in Base58 characters including the prefix */
 	TOTAL_LENGTH: 7,
-	/** Max numerical representation of the address */
-	MAX_NUM_VALUE: 4_294_967_295 // 2^32-1
+	/** Max numerical representation of the address
+	 * - - 1 char prefix => 6 chars Base58 => 4 bytes => max value = 2^32-1 = 4,294,967,295
+	 * - - 2 chars prefix => 5 chars Base58 => 4 bytes => max value = max encoded 5 chars Base58 = 656,356,768 */
+	MAX_NUM_VALUE: { suffix1: 0xFFFFFFFF, suffix2: 656356768 },
 };
 
 class ConverterCache {
@@ -34,14 +53,13 @@ class ConverterCache {
 }
 
 export class ADDRESS {
-	static AUTHORIZED_PREFIXES = new Set(Object.keys(LEXICON));
+	static #AUTHORIZED_PREFIXES = new Set(PREFIXES_LIST);
 	static LEXICON = LEXICON;
 	static CRITERIA = CRITERIA;
-	static SAMPLE = 'C123456';
-	get isMultiSig() { return ADDRESS.LEXICON[this.prefix]?.multiSig || false; }
+	get isMultiSig() { return this.prefix.startsWith('M'); }
 	STRING = 'C123456'; 	// THE FULL ADDRESS STRING, 			length = 7
-	B58 = '123456';			// THE BASE58 PART WITHOUT THE PREFIX, 	length = 6
-	prefix = 'C';			// THE PREFIX CHARACTER
+	B58 = '123456';			// THE BASE58 PART WITHOUT THE PREFIX, 	length = 6/5
+	prefix = 'C';			// THE PREFIX CHARACTERS				length = 1/2
 	uint32 = 0;				// THE NUMERICAL REPRESENTATION OF THE ADDRESS
 	bytes; 					// THE ADDRESS AS BYTES (1 byte prefix + 4 bytes number)
 
@@ -67,14 +85,18 @@ export class ADDRESS {
 		ADDRESS.#b58ToUint32Cache.set(str, result);
 		return result;
 	}
-	static #uint32ToB58Cache = new ConverterCache();
-	static uint32ToB58(num = 0) {
+	static #uint32ToB58Caches = { suffix1: new ConverterCache(), suffix2: new ConverterCache() };
+	static uint32ToB58(num = 0, prefixLength = 1) {
 		/** @type {string | undefined} */
-		const cached = ADDRESS.#uint32ToB58Cache.get(num);
+		const cached =  prefixLength === 1
+			? ADDRESS.#uint32ToB58Caches.suffix1.get(num)
+			: ADDRESS.#uint32ToB58Caches.suffix2.get(num);
 		if (cached !== undefined) return cached;
 
-		const result = Converter.uint32ToB58(num, CRITERIA.B58_LENGTH);
-		ADDRESS.#uint32ToB58Cache.set(num, result);
+		const b58Length = prefixLength === 1 ? CRITERIA.B58_LENGTH.suffix1 : CRITERIA.B58_LENGTH.suffix2;
+		const result = Converter.uint32ToB58(num, b58Length);
+		if (prefixLength === 1) ADDRESS.#uint32ToB58Caches.suffix1.set(num, result);
+						   else ADDRESS.#uint32ToB58Caches.suffix2.set(num, result);
 		return result;
 	}
 	static #bytesToB58Cache = new ConverterCache();
@@ -96,56 +118,55 @@ export class ADDRESS {
 		if (typeof addressBase58 !== 'string') throw new Error('Address must be a string');
 		if (addressBase58.length !== CRITERIA.TOTAL_LENGTH) throw new Error(`Address must be ${CRITERIA.TOTAL_LENGTH} characters long`);
 		
-		const firstChar = addressBase58.substring(0, 1);
-		if (!ADDRESS.AUTHORIZED_PREFIXES.has(firstChar)) throw new Error(`Address must start with one of the following prefixes: ${[...ADDRESS.AUTHORIZED_PREFIXES].join(', ')}`);
+		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
+		if (!ADDRESS.#AUTHORIZED_PREFIXES.has(prefix)) throw new Error(`Address must start with one of the following prefixes: ${[...ADDRESS.#AUTHORIZED_PREFIXES].join(', ')}`);
 		
-		const lastPartBase58 = addressBase58.substring(1);
 		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
-		return new ADDRESS(firstChar, lastPartBase58, uint32);
-	}
-	/** @param {string} pubKeyHex */
-	static deriveB58(pubKeyHex) {
-		const uint32 = xxHash32(converter.hexToBytes(pubKeyHex));
-		return ADDRESS.uint32ToB58(uint32);
+		return new ADDRESS(prefix, lastPartBase58, uint32);
 	}
 
-	// VALIDATORS
+	// HELPERS
+	/** Get the prefix for a multisig address based on its threshold @param {number} threshold */
+	static getPrefixForMultisig(threshold) {
+		if (threshold < 1 || threshold > 10) throw new Error('Multisig threshold must be between 1 and 10');
+		return 'M' + threshold;
+	}
+	/** All multisig addresses start with 'M', followed by a number indicating the threshold @param {string} addressBase58 */
+	static isMultiSigAddress(addressBase58) {
+		return addressBase58.startsWith('M');
+	}
+	/** @param {string} addressBase58 */
+	static splitAddress(addressBase58) {
+		const firstChar = addressBase58.substring(0, 1);
+		const prefix = firstChar === 'M' ? addressBase58.substring(0, 2) : firstChar; // Handle multisig prefix (M1, M2, ...)
+		const lastPartBase58 = addressBase58.substring(prefix.length);
+		return { prefix, lastPartBase58 };
+	}
 	/** Check if the address conforms to the criteria @param {string} addressBase58 - Address to validate */
 	static checkConformity(addressBase58) {
 		if (typeof addressBase58 !== 'string') return false;
 		if (addressBase58.length !== CRITERIA.TOTAL_LENGTH) return false;
 
 		// CONTROL FIRST CHAR EXISTS IN LEXICON
-		const firstChar = addressBase58.substring(0, 1);
-		if (!ADDRESS.AUTHORIZED_PREFIXES.has(firstChar)) return false;
+		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
+		if (!ADDRESS.#AUTHORIZED_PREFIXES.has(prefix)) return false;
 		
 		/// CONTROL NUMERICAL VALUE OF THE ADDRESS IS UNDER MAX VALUE
-		const val = ADDRESS.b58ToUint32(addressBase58.substring(1));
-		return (val <= CRITERIA.MAX_NUM_VALUE);
+		const val = ADDRESS.b58ToUint32(lastPartBase58);
+		const maxVal = prefix.length === 1 ? CRITERIA.MAX_NUM_VALUE.suffix1 : CRITERIA.MAX_NUM_VALUE.suffix2;
+		return val <= maxVal;
 	}
-	/** Perform security check of the address by deriving it from the public key
-	 * @param {string} addressBase58 - Address to validate @param {string} pubKeyHex - Public key to derive the address from */
-	static isDerivedFrom(addressBase58, pubKeyHex) {
-		const val = ADDRESS.b58ToUint32(addressBase58.substring(1));
-		const uint32 = xxHash32(converter.hexToBytes(pubKeyHex));
-		return val === uint32;
-	}
-
-	// HELPERS
 	/** @param {string} addressBase58 */
 	static B58_TO_BYTES(addressBase58) {
 		const bytes = new Uint8Array(5);
-		const uint32 = ADDRESS.b58ToUint32(addressBase58.substring(1));
-		bytes.set(converter.stringToBytes(addressBase58.substring(0, 1)), 0);
+		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
+		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
+		bytes.set([PREFIX_CODES[prefix]], 0);
 		bytes.set(converter.numberTo4Bytes(uint32), 1);
 		return bytes;
 	}
 	/** @param {Uint8Array} bytes length: 5, first byte is prefix */
 	static BYTES_TO_B58(bytes) {
-		//const prefix = converter.bytesToString(bytes.slice(0, 1));
-		//const uint32 = converter.bytes4ToNumber(bytes.slice(1, 5));
-		//return prefix + ADDRESS.uint32ToB58(uint32);
-
 		const uint32 = (bytes[4] << 24 | bytes[3] << 16 | bytes[2] << 8 | bytes[1]) >>> 0; // LE
 		const key = bytes[0] * 0x100000000 + uint32; // unique per prefix+uint32
 
@@ -153,25 +174,10 @@ export class ADDRESS {
 		const cached = ADDRESS.#bytesToB58Cache.get(key);
 		if (cached !== undefined) return cached;
 
-		const prefix = converter.bytesToString(bytes.slice(0, 1));
-		const B58 = ADDRESS.uint32ToB58(uint32);
+		const prefix = PREFIXES_LIST[bytes[0]];
+		const B58 = ADDRESS.uint32ToB58(uint32, prefix.length);
 		const result = prefix + B58;
 		ADDRESS.#bytesToB58Cache.set(key, result);
 		return result;
-	}
-	/** Format an address with a separator for better readability, ex: C123456 -> C1-23456
-	* @param {string} addressBase58 - Address to format @param {string} separator - Separator to use (default: '-') */
-	static formatAddress(addressBase58, separator = ('-')) {
-		if (typeof addressBase58 !== 'string') return false;
-		if (typeof separator !== 'string') return false;
-
-		const prefix = addressBase58.substring(0, 2);
-		const rest = addressBase58.substring(2);
-		return prefix + separator + rest;
-	}
-	/** @param {string} addressBase58 */
-	static isMultiSigAddress(addressBase58) {
-		const prefix = addressBase58.substring(0, 1);
-		return ADDRESS.LEXICON[prefix]?.multiSig || false;
 	}
 }

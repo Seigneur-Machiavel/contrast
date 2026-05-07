@@ -18,7 +18,7 @@ class StorageRoot {
 	constructor(masterHex = null) {
 		this.rootFolder = path.dirname(path.dirname(url.fileURLToPath(import.meta.url)));
 		this.localIdentifier = masterHex ? HashFunctions.SHA512(masterHex).hashHex.substring(0, 8) : null;
-		console.log(`Storage localIdentifier: ${this.localIdentifier}`);
+		if (masterHex) console.log(`Storage localIdentifier: ${this.localIdentifier}`);
 
 		const rootFolderName = path.basename(this.rootFolder);
 		this.SUFFIX = ['contrast', 'contrast-mainnet'].includes(rootFolderName)

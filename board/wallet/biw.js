@@ -34,6 +34,7 @@ export class BoardInternalWallet {
 	connectorP2P;
 	historyItemsPerPage = 5;
 	accountThatNeedsRefresh = new Set();
+	accountThatNeedsIdentityRecord = new Set();
 	// User preferences
 	balanceDecimals = 2;
 	autoRefresh = true;
@@ -95,6 +96,8 @@ export class BoardInternalWallet {
 		const start = Date.now();
 		for (const account of this.wallet.accounts) {
 			if (!this.accountThatNeedsRefresh.has(account.address)) continue;
+			if (!account.address) throw new Error('Account address not set');
+
 			const ledger = await this.connectorP2P.getAddressLedger(account.address);
 			if (!ledger || !ledger.ledgerUtxos) continue;
 
@@ -231,27 +234,29 @@ export class BoardInternalWallet {
 		const privateKey = await frontCrypto.decipher(blob, password);
 		const privateKeyHex = serializer.converter.bytesToHex(privateKey);
 
-        this.wallet = new Wallet(privateKeyHex);
-        await this.wallet.loadAccountsFromStorage(undefined, this.boardStorage);
+        this.wallet = new Wallet(privateKeyHex, undefined, this.boardStorage);
+        await this.wallet.init();
 		this.components.accounts.updateLabels();
 		await this.refreshAccounts();
-		if (this.wallet.accounts.length > 0) this.selectAccountLabel(this.wallet.accounts[0].address);
+		
+		if (this.wallet.accounts.length > 0 && this.wallet.accounts[0].address)
+			this.selectAccountLabel(this.wallet.accounts[0].address);
+		
 		for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
 	}
 	/** Derive accounts from master seed.
-	 * @param {number} [nbOfAccounts] - default: 1 @param {string} [addressPrefix] - default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
-	async deriveAccounts(nbOfAccounts = 1, addressPrefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1') {
+	 * @param {number} [nbOfAccounts] - default: 1 @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
+	async deriveAccounts(nbOfAccounts = 1, mayoVariant = 'mayo1', qsafeSigVersion = '1') {
 		if (!this.wallet) throw new Error('Wallet not initialized');
 		if (!this.boardStorage) throw new Error('Storage not available');
 		
-		const result = await this.wallet.deriveAccounts(nbOfAccounts, addressPrefix, mayoVariant, qsafeSigVersion, undefined, this.boardStorage);
+		await this.wallet.deriveAccounts(nbOfAccounts, mayoVariant, qsafeSigVersion);
 		this.components.accounts.updateLabels();
-		return result.derivedAccounts?.length === nbOfAccounts;
 	}
 	async disconnectedWallet(eraseWallet = false) {
 		if (eraseWallet) {
 			await this.boardStorage.remove('wallet_blob_hex');
-			await this.wallet?.removeAccountsFromStorage(undefined, this.boardStorage);
+			await this.wallet?.removeAccountsFromStorage();
 			this.authInfo = { hasWallet: false, hasPassword: false };
 		}
 		await this.wallet?.destroy();
@@ -330,7 +335,7 @@ export class BoardInternalWallet {
 			easing: 'easeInOutQuad'
 		});
 
-		await this.wallet.deriveOneAccount('C', undefined, undefined, undefined, this.boardStorage);
+		await this.wallet.deriveAccount();
 		await new Promise(r => setTimeout(r, 800)); // wait a bit to show the animation
 		eHTML.get('buttonBarTransfer')?.classList.remove('disabled'); // ensure transfer button is enabled
 		this.components.accounts.updateLabels();

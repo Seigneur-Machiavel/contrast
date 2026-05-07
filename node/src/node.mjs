@@ -58,7 +58,8 @@ export class ContrastNode {
 
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, state: 'idle' };
-	/** @type {{ vAddress: string | undefined, vPubkeys: string[] | undefined, vBalance: number, sAddress: string | undefined, sPubkeys: string[] | undefined, sBalance: number }} */
+	/** When address is assigned, the associated pubkey shouldn't been set as tx identity.
+	 * @type {{ vAddress: string | null | undefined, vPubkeys: string[] | undefined, vBalance: number, sAddress: string | null | undefined, sPubkeys: string[] | undefined, sBalance: number }} */
 	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, vBalance: 0, sAddress: undefined, sPubkeys: undefined, sBalance: 0 };
 
 	mainStorage; version; blockchain;
@@ -170,17 +171,16 @@ export class ContrastNode {
 		if (!pks) return this.logger.log(`Failed to update ${type} address to ${address}: no pubkeys found for this address`, (m, c) => console.warn(m, c));
 		this.#setRewardAddress(type, address, pks);
 	}
-	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} pubKeysHex */
+	/** @param {'solver' | 'validator'} type @param {string | null} address @param {string[]} pubKeysHex */
 	async #setRewardAddress(type, address, pubKeysHex, save = true) {
-		if (!ADDRESS.checkConformity(address)) return this.logger.log(`Failed to set ${type} reward address to ${address}: invalid address`, (m, c) => console.warn(m, c));
 		if (type === 'solver') {
 			this.rewardsInfo.sAddress = address;
 			this.rewardsInfo.sPubkeys = pubKeysHex;
-			this.rewardsInfo.sBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
+			if (address) this.rewardsInfo.sBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
 		} else {
 			this.rewardsInfo.vAddress = address;
 			this.rewardsInfo.vPubkeys = pubKeysHex;
-			this.rewardsInfo.vBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
+			if (address)this.rewardsInfo.vBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
 		}
 		if (save) this.mainStorage.saveJSON('rewardAddresses', { vAddress: this.rewardsInfo.vAddress, vPubkeys: this.rewardsInfo.vPubkeys, sAddress: this.rewardsInfo.sAddress, sPubkeys: this.rewardsInfo.sPubkeys });
 	}

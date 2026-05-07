@@ -145,15 +145,18 @@ export class TxValidation {
 	static controlIdentitiesReservation(node, tx, involvedIdentities = new IdentitiesCache()) {
 		for (const entry of tx.identities) {
 			const parsed = serializer.deserialize.identityEntry(entry);
-			if (!parsed.threshold) throw new Error(`Identity entry for address ${parsed.address} must have a threshold of at least 1`);
-			this.#discoveryEntryCheck(parsed.address, parsed.pubKeysHex, parsed.threshold);
+			if (!parsed.threshold) throw new Error(`Identity entry must have a threshold of at least 1`);
 			
-			const identity = involvedIdentities.get(parsed.address) || node.blockchain.identityStore.getIdentity(parsed.address);
-			if (!identity) involvedIdentities.set(parsed.address, parsed.pubKeysHex, parsed.threshold); // cache the discovered identity for next iterations
+			const output = tx.outputs[parsed.vout];
+			if (!output) throw new Error(`Invalid identity entry, no corresponding output found for vout: ${parsed.vout}`);
+			//this.#discoveryEntryCheck(address, parsed.pubKeysHex, parsed.threshold);
+			
+			const identity = involvedIdentities.get(address) || node.blockchain.identityStore.getIdentity(address);
+			if (!identity) involvedIdentities.set(address, parsed.pubKeysHex, parsed.threshold); // cache the discovered identity for next iterations
 			else { // IDENTITY FOUND IN CACHE OR STORE -> CHECK CONSISTENCY
-				if (identity.threshold !== parsed.threshold) throw new Error(`Identity reservation conflict for address ${parsed.address} has threshold mismatch with cached identity in loop`);
-				if (identity.pubKeysHex.length !== parsed.pubKeysHex.length) throw new Error(`Identity reservation conflict for address ${parsed.address} has pubKey length mismatch with cached identity in loop`);
-				for (const pk of parsed.pubKeysHex) if (!identity.pubKeysHex.includes(pk)) throw new Error(`Identity reservation conflict for address ${parsed.address} has pubKey mismatch with cached identity in loop`);
+				if (identity.threshold !== parsed.threshold) throw new Error(`Identity reservation conflict for address ${address} has threshold mismatch with cached identity in loop`);
+				if (identity.pubKeysHex.length !== parsed.pubKeysHex.length) throw new Error(`Identity reservation conflict for address ${address} has pubKey length mismatch with cached identity in loop`);
+				for (const pk of parsed.pubKeysHex) if (!identity.pubKeysHex.includes(pk)) throw new Error(`Identity reservation conflict for address ${address} has pubKey mismatch with cached identity in loop`);
 			}
 		}
 	}

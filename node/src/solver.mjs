@@ -104,9 +104,15 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 	async tick() {
 		if (this.terminated || !this.canProceedSolving) return;
 
-		const { sAddress, identityEntries } = this.#getAddressAndDataForRewardTx();
 		const blockCandidate = this.bestCandidate;
-		if (!sAddress || !blockCandidate) return;
+		if (!blockCandidate) return;
+
+		const validatorAddress = blockCandidate.Txs[0].inputs[0].split(':')[0];
+		const validatorRewardAddress = blockCandidate.Txs[0].outputs[0].address;
+		if (!validatorAddress || !validatorRewardAddress) throw new Error('Invalid block candidate: missing validator address or reward address');
+
+		const { sAddress, identityEntries } = this.#getAddressAndDataForRewardTx(validatorAddress, validatorRewardAddress);
+		if (!sAddress) throw new Error('Unable to get solver reward address for mining'); 
 		if (blockCandidate.index !== this.bestCandidateIndex) {
 			if (this.node.verb > 2) this.logger.log(`[SOLVER] Block candidate is not the highest block candidate: #${blockCandidate.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
 			return;
@@ -158,17 +164,34 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
     }
 
 	// INTERNAL METHODS
-	#getAddressAndDataForRewardTx() {
+	/** @param {string} validatorAddress @param {string} validatorRewardAddress */
+	#getAddressAndDataForRewardTx(validatorAddress, validatorRewardAddress) {
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 		const { sAddress, sPubkeys } = this.node.rewardsInfo;
-		if (!sAddress || !sPubkeys) throw new Error('Solver address or pubkey is missing in rewards info');
+		const { identityStore } = this.node.blockchain;
 		
-		const r = this.node.blockchain.identityStore.verify(sAddress, sPubkeys);
+		if (!sAddress && !sPubkeys) throw new Error('Both solver reward address and pubkeys are missing, unable to proceed');
+		
+		// IF NO SOLVER REWARD ADDRESS, CREATE ONE FOR THE SOLVER REWARD IDENTITY (vout:0)
+		let nextAddressIndex = 0; // Index of address to use for the solver reward identity (vout:0)
+		const nextAddresses = identityStore.nextAddressesToCreate('C', 3);
+		const addressesToCheck = validatorAddress === validatorRewardAddress ? [validatorAddress] : [validatorAddress, validatorRewardAddress];
+		for (const a of addressesToCheck)
+			for (const nextAddress of nextAddresses)
+				if (nextAddress.STRING === a) nextAddressIndex++;
+
+		const solverAddress = sAddress ? sAddress : nextAddresses[nextAddressIndex]?.STRING;
+		if (!solverAddress) throw new Error('Unable to determine solver reward address for mining');
+
+		const r = identityStore.verify(solverAddress, sPubkeys);
 		if (r === 'MISMATCH') throw new Error('Solver reward address known but pubkey(s) mismatch in identity store');
-		if (r === 'MATCH') return { sAddress, identityEntries: undefined };
+		if (r === 'MATCH') return { sAddress: solverAddress, identityEntries: undefined };
 		
-		if (sPubkeys.length === 0 || sPubkeys.length > 1) throw new Error(`Invalid number of pubkeys for solver reward address: ${sPubkeys.length} (should be 1)`);
-		return { sAddress, identityEntries: [this.node.blockchain.identityStore.buildEntry(sAddress, sPubkeys)] };
+		// 'UNKNOWN' => create the identity entries for the solver reward address.
+		if (!sPubkeys) throw new Error('Solver reward address unknown but no pubkey provided, unable to create identity for mining reward');
+		if (sPubkeys.length !== 1) throw new Error('Solver reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
+		
+		return { sAddress: solverAddress, identityEntries: [identityStore.buildEntry(0, sPubkeys)] };
 	}
     #prepareBets(nbOfBets = 32) {
         if (!this.useBetTimestamp) { this.bets = []; return }

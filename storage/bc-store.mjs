@@ -6,7 +6,8 @@ import HiveP2P from "hive-p2p";
 import { UTXO } from '../types/transaction.mjs';
 import { BlockUtils } from '../node/src/block.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
-import { BlockFinalizedHeader } from '../types/block.mjs';
+import { BLOCK, BlockFinalizedHeader } from '../types/block.mjs';
+import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
 
 /**
@@ -29,7 +30,7 @@ export class BlockchainStorage {
 	storage;
 	get logger() { return this.storage.miniLogger; }
 	converter = new HiveP2P.Converter();
-	batchSize = 131_072; // BLOCKCHAIN_SETTINGS.halvingInterval; // number of blocks per binary file
+	batchSize = BLOCKCHAIN_SETTINGS.halvingInterval; // number of blocks per binary file
 	lastBlockIndex = -1;
 	/** Blockchain parts handler (blockchain-X.bin) Key: block file index @type {Object<number, BinaryHandler>} */
 	bcHandlers = {};
@@ -123,19 +124,17 @@ export class BlockchainStorage {
 		return extracted?.txs[txIndex] || null;
 	}
 	/** @param {number} height @param {number} txIndex */
-	getTransactionIdentities(height, txIndex) {
+	getTransactionReaderWithCursors(height, txIndex) {
 		const { blockBytes } = this.getBlockBytes(height, false) || {};
 		if (!blockBytes) return null;
 
 		const serializedTx = this.#extractTransactionsBytesFromBlockBytes(blockBytes, [txIndex])?.[txIndex];
 		if (!serializedTx) return null;
 
-		const r = new BinaryReader(serializedTx);
+		const reader = new BinaryReader(serializedTx);
 		const mode = specialMode[txIndex] ? specialMode[txIndex] : 'tx';
-		const { cursors, sizes } = this.#interpretTransactionSegment(r, mode);
-		r.cursor = cursors.identities;
-
-		return r.readPointersAndExtractDataChunks();
+		const { cursors, sizes } = this.#interpretTransactionSegment(reader, mode);
+		return { reader, cursors, sizes };
 	}
 	/** @param {number} height @param {number} txIndex */
 	getTransactionData(height, txIndex) {

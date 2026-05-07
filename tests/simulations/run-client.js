@@ -6,7 +6,7 @@ const workerData 	= JSON.parse(process.env.NODE_WORKER_DATA || '{}');
 const seed      	= workerData.seed;
 const isStaker  	= workerData.isStaker || false;
 const isSpammer 	= workerData.isSpammer || false;
-const nbReceipients = workerData.nbReceipients || 0;	// Number of receipient addresses in multi output transaction
+const nbReceipients = workerData.nbReceipients || 0;	// Number of recipient addresses in multi output transaction
 const nbOfSenders 	= workerData.nbOfSenders || 0; 	// Number of single output transactions to send (should be higher than nbReceipients)
 const clearOnStart 	= workerData.clearOnStart;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect to
@@ -27,8 +27,8 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 const clientStorage = new ContrastStorage(seed);
 if (clearOnStart) clientStorage.clear(); // start fresh
-const clientWallet = new Wallet(seed);
-await clientWallet.deriveAccounts(2 + Math.max(nbReceipients, nbOfSenders), 'C', undefined, undefined, clientStorage); // derive all accounts we will need for the test (main account + senders + receipients)
+const clientWallet = new Wallet(seed, clientStorage);
+await clientWallet.deriveAccounts(2 + Math.max(nbReceipients, nbOfSenders)); // derive all accounts we will need for the test (main account + senders + recipients)
 
 const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
 const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps, controllerPort: false });
@@ -44,8 +44,9 @@ const tryStaking = async (block) => {
 	if (!clientNode.sync.isSynced.sameHeight) return; // only stake when synced to avoid staking on old blocks on every new peer connection
 
 	// UPDATE ACCOUNT BALANCE & UTXOS
-	const r = clientNode.account.address;
-	const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(r);
+	if (!clientNode.account.address) return; // account not ready
+	const recipient = clientNode.account.address;
+	const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(recipient);
 	if (!ledger.ledgerUtxos) return; // no UTXO
 	
 	clientNode.account.setBalanceAndUTXOs(clientNode.account.balance, ledger.ledgerUtxos);
@@ -71,7 +72,7 @@ let spamHeight = -1;
 const trySpamming = async (block) => {
     if (block.index === spamHeight) return;
     spamHeight = block.index;
-    if (!clientNode.account) return; // account not ready
+    if (!clientNode.account || !clientNode.account.address) return; // account not ready
 	if (!clientNode.sync.isSynced.sameHeight) return; // only spam when synced to avoid spamming old blocks on every new peer connection
 
 	const { address } = clientNode.account;
@@ -83,24 +84,27 @@ const trySpamming = async (block) => {
 		const identityStore = clientNode.blockchain.identityStore;
 		const identityEntries = []; 
 		const transfers = [];
+		let voutIndex = 0;
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
 			const pk = clientWallet.accounts[i].pubKey;
-			if (!pk) throw new Error('Pubkey not found for receipient account');
+			if (!a) throw new Error('Address not found for recipient account');
+			if (!pk) throw new Error('Pubkey not found for recipient account');
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const identityCountBefore = identityEntries.length;
 			const r = identityStore.verify(a, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(a, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
+			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(voutIndex, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
 
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
-				transfers.push(new Transfer(clientWallet.accounts[i].address, 1_000));
+				transfers.push(new Transfer(a, 1_000));
 				Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
+				voutIndex++;
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
-				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this receipient, we need to remove it as well
+				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this recipient, we need to remove it as well
 				break; // stop adding outputs if failed (most likely because of size limit)
 			}
 		}
@@ -117,15 +121,19 @@ const trySpamming = async (block) => {
     // ODD BLOCKS: flood single-output txs
 	if (block.index % 2 === 0) return; // only on odd blocks
 
-	const receipient = clientWallet.accounts[0].address; // send back to main account
+	const recipient = clientWallet.accounts[0].address; // send back to main account
+	if (!recipient) return; // account not ready
+	
 	let txs = [];
 	for (let i = 2; i < nbOfSenders; i++) {
 		const sender = clientWallet.accounts[i];
+		if (!sender?.address) continue; // account not ready
+
 		const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(sender.address);
 		if (!ledger?.ledgerUtxos) continue;
 		sender.setBalanceAndUTXOs(sender.balance, ledger.ledgerUtxos);
 
-		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1))?.signedTx;
+		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', recipient, 1))?.signedTx;
 		if (signedTx2) txs.push(signedTx2);
 	}
 

@@ -14,17 +14,16 @@ import { HashFunctions, AsymetricFunctions, QsafeSigner } from './conCrypto.mjs'
 export class Account {
 	#qsafeMasterHex; 	// qsafe-sig master key in hex
 	#qsafeMaster; 		// qsafe-sig master key in bytes
-	#mayoVariant;		// The Mayo variant to use for signature generation.
-	#qsafeSigVersion;	// qsafe-sig version as string, e.g., '1'
-	prefix;				// e.g., 'C'
+	mayoVariant;		// The Mayo variant to use for signature generation.
+	qsafeSigVersion;	// qsafe-sig version as string, e.g., '1'
 	/** @type {Uint8Array | undefined} qsafe-sig */
 	hybridKey;
 	/** @type {string | undefined} qsafe-sig hybrid public key. */
 	hybridKeyHex;
 	/** @type {QsafeSigner | undefined} qsafe-sig signer instance */
 	signer;
-	/** @type {string | undefined} base58 encoded address e.g., '123456' */
-	b58;
+	/** @type {string | null} assigned by consensus on identity validation */
+	address = null;
 
 	/** @type {TxId[]} */					historyIds = [];
 	/** @type {LedgerUtxo[]} */				ledgerUtxos = [];
@@ -33,37 +32,40 @@ export class Account {
 	/** @type {number} */					totalReceived = 0;
 	/** @type {number} */					spendableBalance = 0;
 
-	/** @param {string} qsafeMasterHex @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {string} [prefix] default: 'C' */
-	constructor(qsafeMasterHex, mayoVariant = 'mayo1', qsafeSigVersion = '1', prefix = 'C') {
+	/** @param {string} qsafeMasterHex @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {string | null} [address] */
+	constructor(qsafeMasterHex, mayoVariant = 'mayo1', qsafeSigVersion = '1', address = null) {
 		this.#qsafeMasterHex = qsafeMasterHex;
-		this.#mayoVariant = mayoVariant;
-		this.#qsafeSigVersion = qsafeSigVersion;
+		this.mayoVariant = mayoVariant;
+		this.qsafeSigVersion = qsafeSigVersion;
 		this.#qsafeMaster = serializer.converter.hexToBytes(qsafeMasterHex);
-		this.prefix = prefix;
+		this.address = address;
 	}
 
-	get address() { return `${this.prefix}${this.b58}`; }
 	get nbHistory() { return this.historyIds.length; }
 	get pubKey() { return this.hybridKeyHex; }
+	get accountInfo() {
+		const { address, mayoVariant, qsafeSigVersion } = this;
+		return { address, mayoVariant, qsafeSigVersion, pubkey: this.hybridKeyHex };
+	}
 
-	/** Factory method to create and initialize an Account instance. @param {string} qsafeMasterHex @param {string} [prefix] default: 'C' @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
-	static async initializedAccount(qsafeMasterHex, prefix = 'C', mayoVariant = 'mayo1', qsafeSigVersion = '1') {
-		const account = new Account(qsafeMasterHex, mayoVariant, qsafeSigVersion, prefix);
+	/** Factory method to create and initialize an Account instance. @param {string} qsafeMasterHex @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {string | null} [address] */
+	static async initializedAccount(qsafeMasterHex, mayoVariant = 'mayo1', qsafeSigVersion = '1', address = null) {
+		const account = new Account(qsafeMasterHex, mayoVariant, qsafeSigVersion, address);
 		await account.init();
 		return account;
 	}
 
 	async init() {
-		this.signer = await QsafeSigner.create(this.#mayoVariant, this.#qsafeSigVersion);
+		this.signer = await QsafeSigner.create(this.mayoVariant, this.qsafeSigVersion);
 		const { hybridKey } = this.signer.loadMasterKey(this.#qsafeMaster.slice(0, 32));
 		this.hybridKey = hybridKey;
 		this.hybridKeyHex = serializer.converter.bytesToHex(hybridKey);
-		this.b58 = ADDRESS.deriveB58(this.hybridKeyHex);
-		if (!ADDRESS.checkConformity(`${this.prefix}${this.b58}`)) throw new Error('Derived address does not conform to expected format');
 	}
 
-	/** @param {Transaction} transaction */
-	async signTransaction(transaction) {
+	/** @param {Transaction} transaction @param {string} [tempAddress] */
+	async signTransaction(transaction, tempAddress) {
+		const address = tempAddress || this.address;
+		if (!address) throw new Error('Account not initialized with address and no temporary address provided for signing');
 		if (!this.signer) throw new Error('Account not initialized with signer');
 		if (!this.hybridKeyHex) throw new Error('Account not initialized with hybridKeyHex');
 		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
@@ -71,7 +73,7 @@ export class Account {
 		const hashBytes = Transaction_Builder.getTransactionSignable(transaction).hashBytes;
 		const hybridSig = this.signer.sign(hashBytes);
 		const hybridSigHex = serializer.converter.bytesToHex(hybridSig);
-		transaction.witnesses.push([this.address, hybridKeyHint(this.hybridKeyHex), hybridSigHex]);
+		transaction.witnesses.push([address, hybridKeyHint(this.hybridKeyHex), hybridSigHex]);
 		return transaction;
 	}
 	/** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */
@@ -99,6 +101,7 @@ export class Account {
 	/** Return a list of UTXOs that are filtered based on the provided criteria. (excludeRules or includesRules, not both)
 	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sigOrSlash'] @param {string[]} [includesRules] ex: ['sigOrSlash'] */
 	filteredUtxos(maxHeight = Infinity, excludeRules = [], includesRules = []) {
+		if (!this.address) return [];
 		if (excludeRules.length > 0 && includesRules.length > 0) throw new Error('Cannot use both excludeRules and includesRules at the same time');
 		
 		const rulesCodesToExclude = excludeRules.map(r => UTXO_RULES_GLOSSARY[r]?.code).filter(c => c !== undefined);

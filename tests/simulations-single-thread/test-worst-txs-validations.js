@@ -27,7 +27,7 @@ const clearOnStart = false; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY
 const mayoVariant = args.includes('--mayo2') ? 'mayo2' : 'mayo1'; // MAYO VARIANT TO USE FOR TESTING (AFFECTS SIGNATURE SIZE, AND THEREFORE MAX NUMBER OF OUTPUTS IN MULTI OUTPUT TRANSACTION)
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
-const nbReceipients = nor || 2000;	// Number of receipient addresses in multi output transaction (The max tested is 7140 outputs)
+const nbReceipients = nor || 2000;	// Number of recipient addresses in multi output transaction (The max tested is 7140 outputs)
 const nbOfSenders = nos || 660; 	// Number of single output transactions to send (should be higher than nbReceipients)
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
@@ -37,8 +37,8 @@ const seed = '0000000000000000000000000000000000000000000000000000000000000011';
 const storage = new ContrastStorage(seed);
 if (clearOnStart) storage.clear(); // start fresh
 
-const wallet = new Wallet(seed);
-await wallet.deriveAccounts(2 + nbReceipients, 'C', mayoVariant, '1', storage); // derive all accounts we will need for the test (main account + senders + receipients)
+const wallet = new Wallet(seed, storage);
+await wallet.deriveAccounts(2 + nbReceipients, mayoVariant); // derive all accounts we will need for the test (main account + senders + recipients)
 
 const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect to
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed);
@@ -57,6 +57,8 @@ const onBlockConfirmed = async (block) => {
 	// TEST: SEND TRANSACTION WITH MULTI OUTPUTS
 	if (block.index % 2 === 1) { // ONLY ON ODD BLOCKS
 		const account = wallet.accounts[1]; // Solver account as sender
+		if (!account.address) return; // account not ready
+
 		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(account.address);
 		if (!ledger || !ledger.ledgerUtxos) throw new Error('Ledger or ledgerUtxos not found for the account');
 		if (ledger.totalReceived - ledger.totalSent !== ledger.balance) throw new Error('Inconsistent balance calculation!');
@@ -65,24 +67,26 @@ const onBlockConfirmed = async (block) => {
 
 		const identityEntries = [];
 		const transfers = [];
+		let voutIndex = 0;
 		for (let i = 2; i < 2 + nbReceipients; i++) {
-			const a = wallet.accounts[i].address;
+			const recipient = wallet.accounts[i].address;
 			const pk = wallet.accounts[i].pubKey;
-			if (!pk) throw new Error('Pubkey not found for receipient account');
+			if (!recipient || !pk) continue; // account not ready
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const identityCountBefore = identityEntries.length;
-			const r = identityStore.verify(a, [pk]);
+			const r = identityStore.verify(recipient, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(a, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
+			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(voutIndex, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
-				transfers.push(new Transfer(wallet.accounts[i].address, 1_000));
+				transfers.push(new Transfer(recipient, 1_000));
 				//Transaction_Builder.
 				Transaction_Builder.createTransaction(account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
+				voutIndex++;
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
-				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this receipient, we need to remove it as well
+				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this recipient, we need to remove it as well
 				break; // stop adding outputs if failed (most likely because of size limit)
 			}
 		}
@@ -105,10 +109,12 @@ const onBlockConfirmed = async (block) => {
 	let txs = [];
 	for (let i = 2; i < nbOfSenders + 2; i++) {
 		const sender = wallet.accounts[i];
+		const recipient = wallet.accounts[1].address; // send back to main account
+		if (!sender.address || !recipient) continue; // account not ready
+
 		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(sender.address);
 		if (ledger && ledger.ledgerUtxos) sender.ledgerUtxos = ledger.ledgerUtxos;
-		const receipient = wallet.accounts[1].address; // send back to main account
-		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', receipient, 1))?.signedTx;
+		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', recipient, 1))?.signedTx;
 		if (signedTx2) txs.push(signedTx2);
 	}
 

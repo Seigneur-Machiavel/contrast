@@ -213,8 +213,8 @@ export class Assistant {
 		await this.biw.savePrivateKey(undefined, privateKeyHex); // Generate and save a new private key with default password
 		await this.biw.loadWalletFromStoredPrivateKey();
 		if (!this.biw.wallet) throw new Error('Failed to load wallet after generating private key');
-		if (!(await this.biw.deriveAccounts(2))) throw new Error('Failed to derive accounts');
 		
+		await this.biw.deriveAccounts(2); // throw on error if failed to derive accounts
 		this.interactor.requestNewPassword();
 		if (!this.connectorNode.isConnected) return;
 

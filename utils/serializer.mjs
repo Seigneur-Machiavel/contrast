@@ -87,6 +87,14 @@ export const serializer = {
             const encoded = msgpack.encode(rawData);
             return encoded;
         },
+		/** @param {number} height @param {number} txIndex @param {number} identityIndex */
+		stamp(height, txIndex, identityIndex) {
+			const w = new BinaryWriter(SIZES.stamp.bytes);
+			w.writeBytes(converter.numberTo4Bytes(height));
+			w.writeBytes(serializer.converter.numberTo2Bytes(txIndex));
+			w.writeByte(identityIndex);
+			return w.getBytesOrThrow(`Stamp serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
+		},
         /** @param {TxAnchor} anchor ex: blockHeight:txIndex:vout */
         anchor(anchor) {
 			const w = new BinaryWriter(SIZES.anchor.bytes);
@@ -178,13 +186,13 @@ export const serializer = {
 			}
 			return w.getBytesOrThrow(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-		/** @param {ADDRESS} address @param {number | undefined} threshold 'undefined' will set '0' and return 'undefined' on deserialization @param {string[]} pubKeysHex */
-		identityEntry(address, threshold, pubKeysHex) {
+		/** @param {number} vout @param {number | undefined} threshold 'undefined' will set '0' and return 'undefined' on deserialization @param {string[]} pubKeysHex */
+		identityEntry(vout, threshold, pubKeysHex) {
 			const pks = pubKeysHex.map(hybridKeyHex => converter.hexToBytes(hybridKeyHex));
 			const pointersSize = BinaryWriter.calculatePointersSize(pks.length);
 			const totalPksSize = pks.reduce((sum, pk) => sum + pk.length, 0);
-			const w = new BinaryWriter(address.bytes.length + 1 + pointersSize + totalPksSize);
-			w.writeBytes(address.bytes);    	// 5b
+			const w = new BinaryWriter(2 + 1 + pointersSize + totalPksSize);
+			w.writeBytes(serializer.converter.numberTo2Bytes(vout)); // vout
 			w.writeByte(threshold || 0);		// 1b
 			w.writePointersAndDataChunks(pks);  // unspecified.
 			return w.getBytesOrThrow(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
@@ -406,6 +414,15 @@ export const serializer = {
         rawData(encodedData) { // DEPRECATED: not used.
             return msgpack.decode(encodedData);
         },
+		/** @param {Uint8Array} serializedStamp */
+		stamp(serializedStamp) {
+			const r = new BinaryReader(serializedStamp);
+			const blockHeight = converter.bytes4ToNumber(r.read(4));
+			const txIndex = converter.bytes2ToNumber(r.read(2));
+			const identityIndex = r.read(1)[0];
+			if (r.isReadingComplete) return { blockHeight, txIndex, identityIndex };
+			else throw new Error(`Stamp is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
+		},
         /** @param {Uint8Array} serializedAnchor */
         anchor(serializedAnchor) {
 			const r = new BinaryReader(serializedAnchor);
@@ -500,12 +517,13 @@ export const serializer = {
 		/** @param {Uint8Array} txData */
 		identityEntry(txData) {
 			const r = new BinaryReader(txData);
-			const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+			//const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+			const vout = converter.bytes2ToNumber(r.read(2));
 			const threshold = r.read(1)[0] || undefined;
 			const pubKeysHex = [];
 			const pks = r.readPointersAndExtractDataChunks();
 			for (const pk of pks) pubKeysHex.push(converter.bytesToHex(pk));
-			return { address, pubKeysHex, threshold };
+			return { vout, pubKeysHex, threshold };
 		},
 		/** @param {Uint8Array} serializedWitness */
 		witness(serializedWitness) {

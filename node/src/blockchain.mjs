@@ -221,9 +221,9 @@ export class Blockchain {
 		if (repeatedAnchorsCount > 0) throw new Error('Blockchain consistency check failed: repeated UTXO anchors found.');
 		if (!block || !involvedAnchors) throw new Error('Blockchain consistency check failed: unable to retrieve the last block or its involved anchors.');
 
-		const discovery = this.identityStore.digestBlock(block);
-		if (discovery.size === 0) this.logger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
-		else this.logger.log(`Blockchain identities check: ${discovery.size} new identities patch`, (m, c) => console.info(m, c));
+		const discoveryCount = this.identityStore.digestBlock(block);
+		if (discoveryCount === 0) this.logger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
+		else this.logger.log(`Blockchain identities check: ${discoveryCount} new identities patch`, (m, c) => console.info(m, c));
 		
 		// THIRD: ENSURE VSS CONSISTENCY
 		if (this.vss.hasBlockStakes(block)) this.logger.log('VSS consistency check: no change', (m, c) => console.info(m, c));
