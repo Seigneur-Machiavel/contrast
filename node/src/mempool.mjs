@@ -142,7 +142,7 @@ export class MemPool {
 
 		/** @type {Set<string>} */
 		const spentAnchors = new Set();
-		const identitiesCache = new IdentitiesCache();
+		const identitiesCache = new IdentitiesCache(node.blockchain.identityStore, 0);
 
 		const includeCurrentBatchIfValid = () => {
 			const involvedUTXOs = this.blockchain.getUtxos(batch.anchors, false) || {};

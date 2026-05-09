@@ -186,13 +186,12 @@ export const serializer = {
 			}
 			return w.getBytesOrThrow(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-		/** @param {number} vout @param {number | undefined} threshold 'undefined' will set '0' and return 'undefined' on deserialization @param {string[]} pubKeysHex */
-		identityEntry(vout, threshold, pubKeysHex) {
+		/** @param {number | undefined} threshold 'undefined' will set '0' and return 'undefined' on deserialization @param {string[]} pubKeysHex */
+		identityEntry(threshold, pubKeysHex) {
 			const pks = pubKeysHex.map(hybridKeyHex => converter.hexToBytes(hybridKeyHex));
 			const pointersSize = BinaryWriter.calculatePointersSize(pks.length);
 			const totalPksSize = pks.reduce((sum, pk) => sum + pk.length, 0);
-			const w = new BinaryWriter(2 + 1 + pointersSize + totalPksSize);
-			w.writeBytes(serializer.converter.numberTo2Bytes(vout)); // vout
+			const w = new BinaryWriter(1 + pointersSize + totalPksSize);
 			w.writeByte(threshold || 0);		// 1b
 			w.writePointersAndDataChunks(pks);  // unspecified.
 			return w.getBytesOrThrow(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
@@ -517,13 +516,11 @@ export const serializer = {
 		/** @param {Uint8Array} txData */
 		identityEntry(txData) {
 			const r = new BinaryReader(txData);
-			//const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
-			const vout = converter.bytes2ToNumber(r.read(2));
 			const threshold = r.read(1)[0] || undefined;
 			const pubKeysHex = [];
 			const pks = r.readPointersAndExtractDataChunks();
 			for (const pk of pks) pubKeysHex.push(converter.bytesToHex(pk));
-			return { vout, pubKeysHex, threshold };
+			return { pubKeysHex, threshold };
 		},
 		/** @param {Uint8Array} serializedWitness */
 		witness(serializedWitness) {

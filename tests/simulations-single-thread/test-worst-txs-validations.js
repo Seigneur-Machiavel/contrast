@@ -67,7 +67,6 @@ const onBlockConfirmed = async (block) => {
 
 		const identityEntries = [];
 		const transfers = [];
-		let voutIndex = 0;
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const recipient = wallet.accounts[i].address;
 			const pk = wallet.accounts[i].pubKey;
@@ -77,13 +76,12 @@ const onBlockConfirmed = async (block) => {
 			const identityCountBefore = identityEntries.length;
 			const r = identityStore.verify(recipient, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(voutIndex, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
+			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
 				transfers.push(new Transfer(recipient, 1_000));
 				//Transaction_Builder.
 				Transaction_Builder.createTransaction(account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
-				voutIndex++;
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
 				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this recipient, we need to remove it as well

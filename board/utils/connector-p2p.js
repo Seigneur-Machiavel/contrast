@@ -121,8 +121,7 @@ export class ConnectorP2P {
 		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
 			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
-			const a = ADDRESS.fromString(address);
-			const s = serializer.serialize.identityEntry(a, threshold, pubKeysHex);
+			const s = serializer.serialize.identityEntry(threshold, pubKeysHex);
 			this.p2pNode.messager.sendUnicast(peerId, s, 'verify_identity_request');
 			try {
 				/** @type {'UNKNOWN' | 'KNOWN' | 'MISMATCH' | 'MATCH'} */

@@ -47,7 +47,7 @@ export class NodeController {
 			dailyRewardEstimation: this.node.solver.estimatedDailyReward,
 			solverThreadCount: this.node.solver.nbOfWorkers,
 
-			publicAddress: this.node.account?.address,
+			publicAddress: this.node.wallet?.accounts[0]?.address,
 			solverRewardAddress: this.node.rewardsInfo.sAddress,
 			solverBalance: this.node.rewardsInfo.sBalance,
 			validatorRewardAddress: this.node.rewardsInfo.vAddress,

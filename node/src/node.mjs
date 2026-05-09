@@ -20,7 +20,6 @@ import { BLOCKCHAIN_SETTINGS, SOLVING } from "../../config/blockchain-settings.m
 * @typedef {import("../../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
 * 
 * @typedef {import("./wallet.mjs").Wallet} Wallet
-* @typedef {import("./account.mjs").Account} Account
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
 * 
 * @typedef {Object} NodeOptions
@@ -61,14 +60,13 @@ export class ContrastNode {
 	/** When address is assigned, the associated pubkey shouldn't been set as tx identity.
 	 * @type {{ vAddress: string | null | undefined, vPubkeys: string[] | undefined, vBalance: number, sAddress: string | null | undefined, sPubkeys: string[] | undefined, sBalance: number }} */
 	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, vBalance: 0, sAddress: undefined, sPubkeys: undefined, sBalance: 0 };
-
+	/** @type {Wallet | null} */
+	wallet = null;
 	mainStorage; version; blockchain;
 	taskQueue; memPool; p2p;
 	solver; sync;
 	verb;
 
-	/** @type {Account | undefined} */
-	account;
 	workers = {
 		nbOfValidationWorkers: 4,
 		/** @type {ValidationWorker[]} */		validations: [],
@@ -160,10 +158,9 @@ export class ContrastNode {
 
 	/** Associate a wallet with this node (for solver and validator functions) @param {Wallet} wallet */
 	associateWallet(wallet) {
-		if (!wallet.accounts[0].pubKey || !wallet.accounts[1].pubKey) throw new Error('Wallet accounts must be initialized with pubKeys before associating with the node');
-		this.account = wallet.accounts[0];
-		this.#setRewardAddress('validator', wallet.accounts[0].address, [wallet.accounts[0].pubKey], false);
-		this.#setRewardAddress('solver', wallet.accounts[1].address, [wallet.accounts[1].pubKey], false);
+		this.wallet = wallet;
+		this.#setRewardAddress('validator', wallet.accounts[0]?.address, [wallet.pubKey], false);
+		this.#setRewardAddress('solver', wallet.accounts[1]?.address, [wallet.pubKey], false);
 	}
 	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} [pubKeysHex] */
 	handleAddressUpdate(type, address, pubKeysHex) {
@@ -171,8 +168,10 @@ export class ContrastNode {
 		if (!pks) return this.logger.log(`Failed to update ${type} address to ${address}: no pubkeys found for this address`, (m, c) => console.warn(m, c));
 		this.#setRewardAddress(type, address, pks);
 	}
-	/** @param {'solver' | 'validator'} type @param {string | null} address @param {string[]} pubKeysHex */
+	/** @param {'solver' | 'validator'} type @param {string | null} address @param {string[]} [pubKeysHex] */
 	async #setRewardAddress(type, address, pubKeysHex, save = true) {
+		if (address && pubKeysHex) throw new Error(`Cannot set both address and pubkeys for ${type}`);
+		
 		if (type === 'solver') {
 			this.rewardsInfo.sAddress = address;
 			this.rewardsInfo.sPubkeys = pubKeysHex;

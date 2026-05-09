@@ -20,8 +20,7 @@ const startupStorage = new ContrastStorage(); 	// ACCESS TO "contrast-storage".
 const walletSeed = startupStorage.loadBinary('seed') || Wallet.generateRandomMasterHex().bytes; // GENERATE A RANDOM SEED IF NOT EXISTING FOR NEXT STEPS (NODE CREATION, STORAGE PATHS, ETC...).
 const walletSeedHex = serializer.converter.bytesToHex(walletSeed);
 const storage = new ContrastStorage(walletSeedHex); // ACCESS TO 'contrast-storage/{localIdentifier}'.
-const wallet = new Wallet(walletSeedHex, storage);
-await wallet.deriveAccounts(2);
+const wallet = await Wallet.initializedWallet(storage, undefined, walletSeedHex);
 
 // LOAD BOOTSTRAP URLS FROM "contrast/bootstraps.json" IF EXISTS, OTHERWISE USE DEFAULT
 const bootstraps = startupStorage.loadJSON('config/bootstraps', true) || ['ws://localhost:27260'];

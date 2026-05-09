@@ -13,12 +13,16 @@ import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized
  * @typedef {import("./bc-store.mjs").BlockchainStorage} BlockchainStorage */
 
+// Each wallet has 1 pubKey, who 9 adresses are attributed to.
+// 256^4b = 4 294 967 296 entries * 9 = 38 654 705 664 adresses.
+// 58^6 = 38 068 692 544 adresses => The real limit of adresses imposed by b58 encoding.
+// 4 294 967 296 * 7b = 30 064 771 072 bytes = ~30GB for the whole file in the worst case (all addresses created).
+
 const ENTRY_BYTES = SIZES.stamp.bytes; // blockIndex(4b):txIndex(2b):identityIndex(1b)> (total: 7b)
 
 /** Build identity entry, used to declare/record the pubkey(s) associated with an address in the identities filed of a transaction, to be retrieved later for identity resolution.
- * @param {number} vout (2b) @param {string[]} pubKeysHex @param {number} [threshold] (1b) number of required signatures for multi-sig */
-export function buildEntry(vout, pubKeysHex, threshold = 1) {
-	if (vout < 0 || vout > 65535) throw new Error(`buildEntry(): vout must be between 0 and 65535`);
+ * @param {string[]} pubKeysHex @param {number} [threshold] (1b) number of required signatures for multi-sig */
+export function buildEntry(pubKeysHex, threshold = 1) {
 	if (threshold < 1) throw new Error(`buildEntry(): threshold must be at least 1`);
 	if (pubKeysHex.length === 0) throw new Error(`buildEntry(): at least one pubkey is required`);
 	if (pubKeysHex.length > BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig) throw new Error(`buildEntry(): maximum number of pubkeys is ${BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig}`);
@@ -28,7 +32,7 @@ export function buildEntry(vout, pubKeysHex, threshold = 1) {
 		if (!QsafeHelper.checkFormat(serializer.converter.hexToBytes(pk)))
 			throw new Error(`buildEntry(): invalid pubkey ${serializer.converter.hexToBytes(pk)}`);
 
-	return serializer.serialize.identityEntry(vout, threshold, pubKeysHex); // throws if non conform
+	return serializer.serialize.identityEntry(threshold, pubKeysHex); // throws if non conform
 }
 
 export class IdentityStore {
@@ -45,16 +49,24 @@ export class IdentityStore {
 		this.basePath = blockchainStorage.storage.PATH.IDENTITIES;
 	}
 
-	/** Generate the next addresses to create based on the number of entries already in the file for the given prefix. */
-	nextAddressesToCreate(prefix = 'C', count = 1) {
+	/** Generate the next 9 addresseses to create based on the number of entries already in the file for the given prefix. */
+	nextRootAddressToCreate(prefix = 'C', count = 1) {
+		/** @type {string[]} */
+		const rootAddresses = [];
 		const handler = this.#getHandler(prefix);
-		const addresses = [];
-		for (let i = 0; i < count; i++) {
-			const newUint32 = (handler.size / ENTRY_BYTES) + i;
-			const b58String = ADDRESS.uint32ToB58(newUint32, prefix.length);
-			addresses.push(ADDRESS.fromString(`${prefix}${b58String}`));
-		}
-		return addresses;
+		const ADDRESSES_PER_ROOT = ADDRESS.CRITERIA.ADDRESSES_PER_ROOT;
+		let pointer = handler.size / ENTRY_BYTES; // Number of entries already in the file for this prefix
+		for (pointer; pointer < count * ADDRESSES_PER_ROOT; pointer += ADDRESSES_PER_ROOT)
+			rootAddresses.push(`${prefix}${ADDRESS.uint32ToB58(pointer, prefix.length)}`);
+
+		return rootAddresses;
+	}
+	/** Check if the address has an associated identity @param {string} address */
+	hasIdentity(address) {
+		const { prefix, rootUint32 } = ADDRESS.getAddressRoot(address);
+		const handler = this.#getHandler(prefix);
+		const offset = rootUint32 * ENTRY_BYTES;
+		return offset < handler.size; // if offset is out of range, it means no identity entry has been registered for this address
 	}
 	/** Return the pubkeys associated with an address @param {string} address */
 	getIdentity(address) {
@@ -78,7 +90,7 @@ export class IdentityStore {
 		const { pubKeysHex, threshold } = serializer.deserialize.identityEntry(identities[identityIndex]);
 		const { prefix } = ADDRESS.splitAddress(address);
 		if (ADDRESS.LEXICON[prefix]?.threshold !== threshold) throw new Error(`IdentityStore.get: threshold mismatch for address ${address} in transaction at ${blockIndex}:${txIndex} - expected ${ADDRESS.LEXICON[prefix]?.threshold} but got ${threshold}`);
-		return { address, pubKeysHex, threshold };
+		return { address, pubKeysHex, threshold, serializedEntry: identities[identityIndex] };
 	}
 	/** Lookup at the store to verify identity.
 	 * - 'UNKNOWN' if the address is not known in the store (no pointer, no entry)
@@ -148,9 +160,9 @@ export class IdentityStore {
 	}
 	/** Return the pointer for an address @param {string} address */
 	#getPointer(address) { // READ ENTRY
-		const a = ADDRESS.fromString(address);
-		const handler = this.#getHandler(a.prefix);
-		const offset = a.uint32 * ENTRY_BYTES;
+		const { prefix, rootUint32 } = ADDRESS.getAddressRoot(address);
+		const handler = this.#getHandler(prefix);
+		const offset = rootUint32 * ENTRY_BYTES;
 		if (offset >= handler.size) return null; // NO ENTRY FOR THIS ADDRESS
 
 		const entryBytes = handler.read(offset, ENTRY_BYTES);
@@ -162,13 +174,13 @@ export class IdentityStore {
 	/** Write the pointer, return the address @param {string} prefix @param {number} blockIndex @param {number} txIndex @param {number} identityIndex */
 	#register(prefix, blockIndex, txIndex, identityIndex) { // WRITE ENTRY
 		const handler = this.#getHandler(prefix);
-		const address = this.nextAddressesToCreate(prefix, 1)[0];
+		const rootAddress = this.nextRootAddressToCreate(prefix, 1)[0];
 		const entryBytes = serializer.serialize.stamp(blockIndex, txIndex, identityIndex); // throws if non conform
 		handler.cursor = handler.size; // APPEND TO THE END OF THE FILE
 		handler.write(entryBytes);
 
 		// RETURN THE NEW ADDRESS
-		return address;
+		return rootAddress;
 	}
 	/** Truncate the end of file for one entry @param {string} prefix */
 	#unregister(prefix) {

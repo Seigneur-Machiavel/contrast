@@ -178,21 +178,30 @@ export class BlockValidation {
 		if ((node.workers.validations || []).length === 0) throw new Error('No validation workers available');
 		
 		// PROCESS ALL TXs -EXCEPT SIGNATURE VERIFICATION
-		const identitiesCache = new IdentitiesCache(); // local cache: used to avoid re-fetching identities
+		const identityStore = node.blockchain.identityStore;
+		const involvedIDs = new IdentitiesCache(); // local cache: used to avoid re-fetching identities
         const validationStart = Date.now();
 		const signatureVerificationTasks = [];
 		for (let i = 0; i < block.Txs.length; i++) {
-            const tx = block.Txs[i];
+			let index = i;
+			if (i === 0) index = 1; // We needs to validate vatidator tx as first.
+			if (i === 1) index = 0; // We needs to validate coinbase tx as second.
+
+            const tx = block.Txs[index];
 			const specialTx = i < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
         	TxValidation.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
 			
+			let idenditiesToConfirmByAddress;
 			const fee = specialTx ? 0 : TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
 			TxValidation.controlTransactionOutputsRulesConditions(tx);
-			TxValidation.controlIdentitiesReservation(node, tx, identitiesCache);
-			TxValidation.extractOutputsIdentities(node, tx, identitiesCache);
+			if (!specialTx) {
+				TxValidation.controlOutputsHasIdentities(node, tx);
+				TxValidation.controlIdentitiesReservation(node, tx, involvedIDs);
+				idenditiesToConfirmByAddress = TxValidation.extractRegularTxIdentities(identityStore, involvedUTXOs, tx, undefined, involvedIDs);
+			} else idenditiesToConfirmByAddress = TxValidation.extractSpecialTxIdentities(identityStore, tx);
+
 			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
 
-			const idenditiesToConfirmByAddress = TxValidation.extractInputsIdentities(node, involvedUTXOs, tx, identitiesCache);
 			const qsafeVerifyTasks = TxValidation.controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress);
 			signatureVerificationTasks.push(...qsafeVerifyTasks);
 		}

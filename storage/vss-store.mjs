@@ -37,9 +37,12 @@ export class VssStorage {
 	/** @param {TxAnchor[]} anchors */
 	hasStakes(anchors) {
 		const vssBytes = this.vssHandler.read(0, this.vssHandler.size);
+		const counts = { found: 0, missing: 0 };
 		for (const anchor of anchors)
-			if (vssBytes.indexOf(serializer.serialize.anchor(anchor)) === -1) return false;
-		return true;
+			if (vssBytes.indexOf(serializer.serialize.anchor(anchor)) === -1) counts.missing++;
+			else counts.found++;
+
+		return { allFound: counts.found === anchors.length, allMissing: counts.missing === anchors.length };
 	}
 	/** @param {TxAnchor[]} anchors */
 	removeStakes(anchors) {

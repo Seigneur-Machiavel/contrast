@@ -23,6 +23,9 @@ const PREFIX_CODES = {};
 for (let i = 0; i < PREFIXES_LIST.length; i++) PREFIX_CODES[PREFIXES_LIST[i]] = i;
 
 const CRITERIA = { // WORK IN PROGRESS
+	/** Number of addresses generated per uint32 pointer in the identity file
+	 * e.g. root: C111111 => handle C111111 to C111119 */
+	ADDRESSES_PER_ROOT: 9,
 	/** Number of bytes of the address (without the first character prefix) */
 	B58_BYTES: 4,
 	/** Total number of bytes of the address including the prefix */
@@ -34,7 +37,7 @@ const CRITERIA = { // WORK IN PROGRESS
 	/** Length of the address in Base58 characters including the prefix */
 	TOTAL_LENGTH: 7,
 	/** Max numerical representation of the address
-	 * - - 1 char prefix => 6 chars Base58 => 4 bytes => max value = 2^32-1 = 4,294,967,295
+	 * - - 1 char prefix => 6 chars Base58 => 4 bytes => max value = 2^32-1 = 4,294,967,295 (TODO: HARD LIMIT based on b58 => 38 068 692 544 / 9)
 	 * - - 2 chars prefix => 5 chars Base58 => 4 bytes => max value = max encoded 5 chars Base58 = 656,356,768 */
 	MAX_NUM_VALUE: { suffix1: 0xFFFFFFFF, suffix2: 656356768 },
 };
@@ -113,8 +116,8 @@ export class ADDRESS {
 	}
 
 	// BUILDERS
-	/** @param {string} addressBase58 */
-	static fromString(addressBase58) {
+	//** @param {string} addressBase58 */
+	/*static fromString(addressBase58) {
 		if (typeof addressBase58 !== 'string') throw new Error('Address must be a string');
 		if (addressBase58.length !== CRITERIA.TOTAL_LENGTH) throw new Error(`Address must be ${CRITERIA.TOTAL_LENGTH} characters long`);
 		
@@ -123,7 +126,7 @@ export class ADDRESS {
 		
 		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
 		return new ADDRESS(prefix, lastPartBase58, uint32);
-	}
+	}*/
 
 	// HELPERS
 	/** Get the prefix for a multisig address based on its threshold @param {number} threshold */
@@ -142,6 +145,28 @@ export class ADDRESS {
 		const lastPartBase58 = addressBase58.substring(prefix.length);
 		return { prefix, lastPartBase58 };
 	}
+	/** @param {string} addressBase58 */
+	static getAddressRoot(addressBase58) {
+		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
+		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
+		const remainder = uint32 % CRITERIA.ADDRESSES_PER_ROOT;
+		const rootUint32 = uint32 - remainder;
+		const rootB58 = ADDRESS.uint32ToB58(rootUint32, prefix.length);
+		return { prefix, rootB58, rootUint32 };
+	}
+	/** Returns all addresses associated with root address (e.g. C111111 => C111111, C111112, ..., C111119) @param {string} rootAddressBase58 */
+	static getAddressesFromRoot(rootAddressBase58) {
+		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(rootAddressBase58);
+		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
+		if (uint32 % CRITERIA.ADDRESSES_PER_ROOT !== 0) throw new Error('Address is not a root address');
+
+		const addresses = [rootAddressBase58];
+		for (let i = 1; i < CRITERIA.ADDRESSES_PER_ROOT; i++)
+			addresses.push(`${prefix}${ADDRESS.uint32ToB58(uint32 + i, prefix.length)}`);
+
+		return addresses;
+	}
+
 	/** Check if the address conforms to the criteria @param {string} addressBase58 - Address to validate */
 	static checkConformity(addressBase58) {
 		if (typeof addressBase58 !== 'string') return false;

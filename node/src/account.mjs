@@ -1,29 +1,12 @@
 // @ts-check
-import { ADDRESS } from '../../types/address.mjs';
-import { hybridKeyHint } from '../../utils/common.mjs';
-import { serializer } from '../../utils/serializer.mjs';
-import { Transaction_Builder } from './transaction.mjs';
 import { UTXO_RULES_GLOSSARY, UTXO } from '../../types/transaction.mjs';
-import { HashFunctions, AsymetricFunctions, QsafeSigner } from './conCrypto.mjs';
 
 /**
-* @typedef {import("../../types/transaction.mjs").Transaction} Transaction
 * @typedef {import("../../types/transaction.mjs").TxId} TxId
 * @typedef {import("../../types/transaction.mjs").LedgerUtxo} LedgerUtxo */
 
 export class Account {
-	#qsafeMasterHex; 	// qsafe-sig master key in hex
-	#qsafeMaster; 		// qsafe-sig master key in bytes
-	mayoVariant;		// The Mayo variant to use for signature generation.
-	qsafeSigVersion;	// qsafe-sig version as string, e.g., '1'
-	/** @type {Uint8Array | undefined} qsafe-sig */
-	hybridKey;
-	/** @type {string | undefined} qsafe-sig hybrid public key. */
-	hybridKeyHex;
-	/** @type {QsafeSigner | undefined} qsafe-sig signer instance */
-	signer;
-	/** @type {string | null} assigned by consensus on identity validation */
-	address = null;
+	address;
 
 	/** @type {TxId[]} */					historyIds = [];
 	/** @type {LedgerUtxo[]} */				ledgerUtxos = [];
@@ -31,51 +14,11 @@ export class Account {
 	/** @type {number} */					totalSent = 0;
 	/** @type {number} */					totalReceived = 0;
 	/** @type {number} */					spendableBalance = 0;
-
-	/** @param {string} qsafeMasterHex @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {string | null} [address] */
-	constructor(qsafeMasterHex, mayoVariant = 'mayo1', qsafeSigVersion = '1', address = null) {
-		this.#qsafeMasterHex = qsafeMasterHex;
-		this.mayoVariant = mayoVariant;
-		this.qsafeSigVersion = qsafeSigVersion;
-		this.#qsafeMaster = serializer.converter.hexToBytes(qsafeMasterHex);
-		this.address = address;
-	}
-
 	get nbHistory() { return this.historyIds.length; }
-	get pubKey() { return this.hybridKeyHex; }
-	get accountInfo() {
-		const { address, mayoVariant, qsafeSigVersion } = this;
-		return { address, mayoVariant, qsafeSigVersion, pubkey: this.hybridKeyHex };
-	}
 
-	/** Factory method to create and initialize an Account instance. @param {string} qsafeMasterHex @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' @param {string | null} [address] */
-	static async initializedAccount(qsafeMasterHex, mayoVariant = 'mayo1', qsafeSigVersion = '1', address = null) {
-		const account = new Account(qsafeMasterHex, mayoVariant, qsafeSigVersion, address);
-		await account.init();
-		return account;
-	}
+	/** @param {string | null} [address] */
+	constructor(address = null) { this.address = address; }
 
-	async init() {
-		this.signer = await QsafeSigner.create(this.mayoVariant, this.qsafeSigVersion);
-		const { hybridKey } = this.signer.loadMasterKey(this.#qsafeMaster.slice(0, 32));
-		this.hybridKey = hybridKey;
-		this.hybridKeyHex = serializer.converter.bytesToHex(hybridKey);
-	}
-
-	/** @param {Transaction} transaction @param {string} [tempAddress] */
-	async signTransaction(transaction, tempAddress) {
-		const address = tempAddress || this.address;
-		if (!address) throw new Error('Account not initialized with address and no temporary address provided for signing');
-		if (!this.signer) throw new Error('Account not initialized with signer');
-		if (!this.hybridKeyHex) throw new Error('Account not initialized with hybridKeyHex');
-		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
-
-		const hashBytes = Transaction_Builder.getTransactionSignable(transaction).hashBytes;
-		const hybridSig = this.signer.sign(hashBytes);
-		const hybridSigHex = serializer.converter.bytesToHex(hybridSig);
-		transaction.witnesses.push([address, hybridKeyHint(this.hybridKeyHex), hybridSigHex]);
-		return transaction;
-	}
 	/** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */
 	setBalanceAndUTXOs(balance, ledgerUtxos) {
 		if (typeof balance !== 'number') throw new Error('Invalid balance');

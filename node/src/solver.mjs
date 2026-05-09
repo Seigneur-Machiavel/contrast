@@ -1,4 +1,5 @@
 // @ts-check
+import { ADDRESS } from '../../types/address.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { solving } from '../../utils/conditionals.mjs';
 import { hybridKeyHint } from '../../utils/common.mjs';
@@ -56,7 +57,7 @@ export class Solver {
 		
 		const hint = block.Txs[0].witnesses[0][1];
 		const validatorAddress = block.Txs[0].outputs[0].address;
-        const isMyBlock = this.node.account?.pubKey ? hint === hybridKeyHint(this.node.account.pubKey) : false;
+        const isMyBlock = this.node.wallet?.pubKey ? hint === hybridKeyHint(this.node.wallet.pubKey) : false;
         const posReward = block.Txs[0].outputs[0].amount;
         const powReward = block.powReward;
         if (!posReward || !powReward) throw new Error(`Invalid candidate (#${block.index} | v:${validatorAddress}) | posReward = ${posReward} | powReward = ${powReward}`);
@@ -174,13 +175,19 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		
 		// IF NO SOLVER REWARD ADDRESS, CREATE ONE FOR THE SOLVER REWARD IDENTITY (vout:0)
 		let nextAddressIndex = 0; // Index of address to use for the solver reward identity (vout:0)
-		const nextAddresses = identityStore.nextAddressesToCreate('C', 3);
+		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 3);
 		const addressesToCheck = validatorAddress === validatorRewardAddress ? [validatorAddress] : [validatorAddress, validatorRewardAddress];
-		for (const a of addressesToCheck)
-			for (const nextAddress of nextAddresses)
-				if (nextAddress.STRING === a) nextAddressIndex++;
+		for (const a of addressesToCheck) {
+			const { prefix: p1, rootB58: str1 } = ADDRESS.getAddressRoot(a);
+			for (const rootAddress of nextRootAddresses) {
+				const { prefix: p2, lastPartBase58: str2 } = ADDRESS.splitAddress(rootAddress);
+				if (p1 !== p2) continue; // different prefix, cannot be the same root address
+				if (str2 !== str1) continue; // different root address, skip
+				nextAddressIndex++; // this root address is already used by the validator identities, so we need to use the next one for the solver reward identity
+			}
+		}
 
-		const solverAddress = sAddress ? sAddress : nextAddresses[nextAddressIndex]?.STRING;
+		const solverAddress = sAddress ? sAddress : nextRootAddresses[nextAddressIndex];
 		if (!solverAddress) throw new Error('Unable to determine solver reward address for mining');
 
 		const r = identityStore.verify(solverAddress, sPubkeys);
@@ -191,7 +198,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		if (!sPubkeys) throw new Error('Solver reward address unknown but no pubkey provided, unable to create identity for mining reward');
 		if (sPubkeys.length !== 1) throw new Error('Solver reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
 		
-		return { sAddress: solverAddress, identityEntries: [identityStore.buildEntry(0, sPubkeys)] };
+		return { sAddress: solverAddress, identityEntries: [identityStore.buildEntry(sPubkeys)] };
 	}
     #prepareBets(nbOfBets = 32) {
         if (!this.useBetTimestamp) { this.bets = []; return }

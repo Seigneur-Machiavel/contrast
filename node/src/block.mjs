@@ -40,55 +40,44 @@ export class BlockUtils {
 	/** Adds POS reward transaction to the block candidate and signs it
 	 * @param {ContrastNode} node @param {BlockCandidate} block */
 	static async signBlockCandidate(node, block) {
-		const { blockchain, rewardsInfo, account } = node;
+		const { blockchain, rewardsInfo, wallet } = node;
 		const { identityStore } = blockchain;
 		const { vAddress, vPubkeys } = rewardsInfo;
-		if (vAddress === undefined || vPubkeys === undefined) throw new Error('Node reward addresses/pubkey not set');
-		if (!vAddress && !vPubkeys) throw new Error('Node reward addresses/pubkey or account not set');
-		if (!account || (!account.pubKey && !account.address)) throw new Error('Node account not set');
+		if (!vAddress && !vPubkeys) throw new Error('Node reward addresses/pubkey not set');
+		if (!wallet?.pubKey) throw new Error('Node wallet not set');
 
 		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
 		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
 		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
 
-		// VERIFY VALIDATOR IDENTITY CORRESPONDANCE
-		// => IF NOT IDENTIFY => CREATE IDENTITY => vout:65535 -> special case for validator input link.
+		// VERIFY VALIDATOR IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
+		// PRE-GENERATE 2 ADDRESSES IN CASE BOTH VALIDATOR AND REWARD ADDRESS NEED TO BE CREATED
 		/** @type {Uint8Array[]} */
 		const identityEntries = [];
-
-		// PRE-GENERATE 2 ADDRESSES IN CASE BOTH VALIDATOR AND REWARD ADDRESS NEED TO BE CREATED
-		const nextAddresses = identityStore.nextAddressesToCreate('C', 2);
-		const validatorAddress = account.address ? account.address : nextAddresses[0].STRING; // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
-		const validatorPubkeys = account.pubKey ? [account.pubKey] : undefined;
-		const status1 = identityStore.verify(validatorAddress, validatorPubkeys);
+		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 2);
+		const useExistingRootAccount = !!wallet.accounts[0]?.address;
+		const validatorAddress = wallet.accounts[0]?.address ? wallet.accounts[0].address : nextRootAddresses[0]; // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
+		const status1 = identityStore.verify(validatorAddress, [wallet.pubKey]);
 		if (status1 === 'MISMATCH') throw new Error('Validator address known but pubkey(s) mismatch in identity store');
-		if (status1 === 'UNKNOWN')
-			if (!validatorPubkeys) throw new Error('Validator address unknown and no pubkey provided, cannot create identity for block signing');
-			else if (validatorPubkeys.length !== 1) throw new Error('Validator address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
-			else identityEntries.push(identityStore.buildEntry(65535, validatorPubkeys)); // 65535 => point to vin
+		if (status1 === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([wallet.pubKey]));
 
-		let rewardAddress = vAddress;
-		if (!rewardAddress) // IF NO REWARD ADDRESS, CREATE ONE FOR THE REWARD IDENTITY (vout:0)
-			// IF THE FIRST GENERATED ADDRESS WAS USED FOR THE VALIDATOR IDENTITY, USE THE SECOND ONE FOR THE REWARD IDENTITY
-			if (validatorAddress === nextAddresses[0].STRING) rewardAddress = nextAddresses[1].STRING;
-			else rewardAddress = nextAddresses[0].STRING; // OTHERWISE USE THE FIRST GENERATED ADDRESS
-			
-		// IF NOT USING THE SAME ADDRESS TO RECEIVE REWARD AND VALIDATE...
-		if (validatorAddress !== vAddress) { // ...THEN ALSO CREATE REWARD IDENTITY IF NEEDED
-			const rewardPubkeys = vPubkeys.length > 0 ? vPubkeys : undefined;
+		const pubKeyMatch = vPubkeys?.length === 1 && vPubkeys[0] === wallet.pubKey;
+		const rewardAddress = vAddress || (pubKeyMatch ? validatorAddress : nextRootAddresses[1]);
+		if (rewardAddress === nextRootAddresses[1]) { // CREATE REWARD IDENTITY IF NEEDED
+			const rewardPubkeys = vPubkeys?.length || 0 > 0 ? vPubkeys : undefined;
 			const status2 = identityStore.verify(rewardAddress, rewardPubkeys);
 			if (status2 === 'MISMATCH') throw new Error('Reward address known but pubkey(s) mismatch in identity store');
 			if (status2 === 'UNKNOWN')
 				if (!rewardPubkeys) throw new Error('Reward address unknown but no pubkey provided, cannot create identity for block signing');
 				else if (rewardPubkeys.length !== 1) throw new Error('Reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
-				else identityEntries.push(identityStore.buildEntry(0, rewardPubkeys));
+				else identityEntries.push(identityStore.buildEntry(rewardPubkeys));
 		}
 
 		// CALCULATE REWARD => CREATE & SIGN VALIDATOR REWARD TX => ADD IT TO BLOCK CANDIDATE
 		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
 		const validatorFeeTx = Transaction_Builder.createValidatorReward(posReward, block, validatorAddress, rewardAddress, identityEntries);
 		// USE ACCOUNT.ADDRESS or TEMPORARY ADDRESS TO SIGN THE TX.
-		const signedValidatorFeeTx = await account.signTransaction(validatorFeeTx, validatorAddress);
+		const signedValidatorFeeTx = await wallet.signTransaction(validatorFeeTx, useExistingRootAccount ? 0 : validatorAddress);
 		block.Txs.unshift(signedValidatorFeeTx);
 		block.powReward = powReward; // Reward for the solver
 	}
@@ -159,9 +148,9 @@ export class BlockUtils {
 	/** Aggregates transactions from mempool, creates a new block candidate (Genesis block if no lastBlock)
 	 * @param {ContrastNode} node @param {number} [blockReward] @param {number} [initDiff] */
 	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = SOLVING.initialDifficulty) {
-		const { blockchain, memPool, account, solver, time } = node;
+		const { blockchain, memPool, wallet, solver, time } = node;
 		if (typeof time !== 'number') throw new Error('Invalid node time');
-		if (!account || (!account.pubKey && !account.address)) throw new Error('Node account not set');
+		if (!wallet?.pubKey) throw new Error('Node wallet not set');
 
 		const posTimestamp = blockchain.lastBlock?.timestamp ? blockchain.lastBlock.timestamp + 1 : time;
 		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '00'.repeat(SIZES.hash.bytes), [], posTimestamp);
@@ -169,7 +158,7 @@ export class BlockUtils {
 		// CHOOSE TO RETURN NULL IF NOT ELIGIBLE TO MINE
 		const prevHash = blockchain.lastBlock.hash;
 		const solverBestIndex = solver.bestCandidateIndex !== -1 ? solver.bestCandidateIndex : null;
-		const validatorAddress = account.address || 'CZZZZZZ'; // IF NO ACCOUNT ADDRESS, USE A PLACEHOLDER THAT WILL NOT BE FOUND IN THE IDENTITY STORE
+		const validatorAddress = wallet.accounts[0]?.address || 'CZZZZZZ'; // IF NO ACCOUNT ADDRESS, USE A PLACEHOLDER THAT WILL NOT BE FOUND IN THE IDENTITY STORE
 		const myLegitimacy = await blockchain.vss.getAddressLegitimacy(validatorAddress, prevHash);
 		node.info.lastLegitimacy = myLegitimacy;
 

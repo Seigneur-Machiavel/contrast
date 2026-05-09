@@ -27,9 +27,8 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 
 const clientStorage = new ContrastStorage(seed);
 if (clearOnStart) clientStorage.clear(); // start fresh
-const clientWallet = new Wallet(seed, clientStorage);
-await clientWallet.deriveAccounts(2 + Math.max(nbReceipients, nbOfSenders)); // derive all accounts we will need for the test (main account + senders + recipients)
 
+const clientWallet = await Wallet.initializedWallet(clientStorage, undefined, seed);
 const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
 const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps, controllerPort: false });
 await clientNode.start(clientWallet);
@@ -84,7 +83,6 @@ const trySpamming = async (block) => {
 		const identityStore = clientNode.blockchain.identityStore;
 		const identityEntries = []; 
 		const transfers = [];
-		let voutIndex = 0;
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
 			const pk = clientWallet.accounts[i].pubKey;
@@ -95,13 +93,11 @@ const trySpamming = async (block) => {
 			const identityCountBefore = identityEntries.length;
 			const r = identityStore.verify(a, [pk]);
 			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(voutIndex, [pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
-
+			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
 				transfers.push(new Transfer(a, 1_000));
 				Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
-				voutIndex++;
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
 				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this recipient, we need to remove it as well

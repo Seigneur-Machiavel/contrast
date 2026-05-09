@@ -46,7 +46,7 @@ export class Vss {
 		const upperBound = this.vssStorage.stakesCount * BLOCKCHAIN_SETTINGS.stakeAmount;
 		const newUpperBound = upperBound + (newStakeAnchors.length * BLOCKCHAIN_SETTINGS.stakeAmount);
 		if (newUpperBound > BLOCKCHAIN_SETTINGS.maxSupply / 2) throw new Error(`VSS stake limit exceeded in block #${block.index}`);
-		if (this.vssStorage.hasStakes(newStakeAnchors)) throw new Error(`VSS stake already exists in block #${block.index}`);
+		if (!this.vssStorage.hasStakes(newStakeAnchors).allMissing) throw new Error(`VSS stake already exists in block #${block.index}`);
 		if (mode !== 'persist') return;
 
 		for (const anchor of newStakeAnchors) this.vssStorage.addStake(anchor);

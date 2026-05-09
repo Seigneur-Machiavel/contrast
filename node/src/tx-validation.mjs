@@ -29,10 +29,11 @@ import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
  * @typedef {import("../../types/transaction.mjs").TxOutput} TxOutput
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger
+ * @typedef {import("../../storage/identity-store.mjs").IdentityStore} IdentityStore
  * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
 
 export class IdentitiesCache {
-	/** @type {Map<string, Identity>} */
+	/** key: addres, value: Identity @type {Map<string, Identity>} */
 	identities = new Map();
 
 	/** @param {string} address @param {string[]} pubKeysHex @param {number} threshold */
@@ -46,6 +47,24 @@ export class IdentitiesCache {
 
 	/** @param {string} address */
 	get(address) { return this.identities.get(address); }
+}
+/** Cache of the tx identity entries in a block to detect collision */
+export class EntriesCache {
+	/** @type {Uint8Array[]} */
+	#cache = [];
+
+	/** @param {Uint8Array} serializedEntry */
+	set(serializedEntry) {
+		this.#cache.push(serializedEntry);
+	}
+	/** @param {Uint8Array} serializedEntry */
+	has(serializedEntry) {
+		for (const s of this.#cache) {
+			if (s.length !== serializedEntry.length) continue;
+			if (s.every((byte, index) => byte === serializedEntry[index])) return true;
+		}
+		return false;
+	}
 }
 
 const miniLogger = new MiniLogger('validation');
@@ -65,7 +84,9 @@ export class TxValidation {
 
 		if (specialTx && transaction.inputs.length !== 1) throw new Error(`Invalid coinbase transaction: ${transaction.inputs.length} inputs`);
         if (specialTx && transaction.outputs.length !== 1) throw new Error(`Invalid coinbase transaction: ${transaction.outputs.length} outputs`);
-        if (transaction.inputs.length === 0) throw new Error('Invalid transaction: no inputs');
+        if (specialTx === 'validator' && transaction.identities.length > 2) throw new Error(`Invalid validator transaction: more than 2 identity entry`);
+		if (specialTx === 'solver' && transaction.identities.length > 1) throw new Error(`Invalid coinbase transaction: more than 1 identity entry`);
+		if (transaction.inputs.length === 0) throw new Error('Invalid transaction: no inputs');
         if (transaction.outputs.length === 0) throw new Error('Invalid transaction: no outputs');
 		if (transaction.data && !(transaction.data instanceof Uint8Array)) throw new Error('Invalid transaction data');
         
@@ -138,82 +159,113 @@ export class TxValidation {
 			if (!tx.data) throw new Error('Transactions creating sigOrSlash outputs must have data field with the authorized validators addresses');
 			else if (tx.data.length % SIZES.address.bytes !== 0) throw new Error('Invalid data field for sigOrSlash output, must be a multiple of address size');
     }
+	
+	/** ===> Fifth validation. Control that outputs's addresses has identity in the disk (known identity).
+	 * - Not for specialTx! @param {ContrastNode} node @param {Transaction} tx */
+	static controlOutputsHasIdentities(node, tx) {
+		for (const output of tx.outputs)
+			if (!node.blockchain.identityStore.hasIdentity(output.address))
+				throw new Error(`Output address ${output.address} has no associated identity, it must be reserved before being used in a transaction`);
+	}
 
-	/** ==> Fourth validation, low disk access cost. - control the discovery of new identities
-	 * - Store the discovered identity in involvedIdentities map for loop optimization (avoid re-fetching in store)
-	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} [involvedIdentities] */
-	static controlIdentitiesReservation(node, tx, involvedIdentities = new IdentitiesCache()) {
+	/** ==> Sixth validation, low disk access cost. Control the discovery of new identities
+	 * - Not for specialTx!
+	 * - Store the discovered identity in involvedIDs map for loop optimization (avoid re-fetching in store)
+	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} involvedIDs */
+	static controlIdentitiesReservation(node, tx, involvedIDs, entriesCache = new EntriesCache()) {
 		for (const entry of tx.identities) {
+			if (entriesCache.has(entry)) throw new Error('Identity reservation collision detected!');
+			//if (involvedIDs.hasEntry(entry)) continue; // Already discovered in this loop, no need to check again
+
 			const parsed = serializer.deserialize.identityEntry(entry);
 			if (!parsed.threshold) throw new Error(`Identity entry must have a threshold of at least 1`);
+			if (parsed.threshold > BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig) throw new Error(`Identity entry cannot have a threshold higher than ${BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig}`);
+			if (parsed.pubKeysHex.length === 0) throw new Error(`Identity entry must have at least one pubKey in data field`);
+			if (parsed.pubKeysHex.length > BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig) throw new Error(`Identity entry cannot have more than ${BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig} pubKeys in data field`);
 			
-			const output = tx.outputs[parsed.vout];
-			if (!output) throw new Error(`Invalid identity entry, no corresponding output found for vout: ${parsed.vout}`);
-			//this.#discoveryEntryCheck(address, parsed.pubKeysHex, parsed.threshold);
-			
-			const identity = involvedIdentities.get(address) || node.blockchain.identityStore.getIdentity(address);
-			if (!identity) involvedIdentities.set(address, parsed.pubKeysHex, parsed.threshold); // cache the discovered identity for next iterations
-			else { // IDENTITY FOUND IN CACHE OR STORE -> CHECK CONSISTENCY
-				if (identity.threshold !== parsed.threshold) throw new Error(`Identity reservation conflict for address ${address} has threshold mismatch with cached identity in loop`);
-				if (identity.pubKeysHex.length !== parsed.pubKeysHex.length) throw new Error(`Identity reservation conflict for address ${address} has pubKey length mismatch with cached identity in loop`);
-				for (const pk of parsed.pubKeysHex) if (!identity.pubKeysHex.includes(pk)) throw new Error(`Identity reservation conflict for address ${address} has pubKey mismatch with cached identity in loop`);
+			// TODO: check if identity already exist : ledgerStore.hasLedger(pubKeyHash) -> CAN'T REDECLARE IDENTITY!!!
+			entriesCache.set(entry);
+		}
+	}
+
+	/** ==> Seventh validation, low computation cost. - control the validity of specialTx self reservation
+	 * @param {IdentityStore} identityStore @param {Transaction} tx @param {Record<string, Identity>} [idenditiesToConfirmByAddress] Key: Address, Value: Identity */
+	static extractSpecialTxIdentities(identityStore, tx, idenditiesToConfirmByAddress = {}, entriesCache = new EntriesCache()) {
+		let identityEntryIndex = 0;
+		const nextIdentityEntry = () => tx.identities[identityEntryIndex++];
+		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 3);
+
+		/** @param {string} address */
+		const handleAddressEntry = (address) => {
+			if (identityStore.hasIdentity(address)) {
+				const identity = identityStore.getIdentity(address);
+				if (!identity) throw new Error(`Identity ${address} does not exist in the store`);
+				return idenditiesToConfirmByAddress[address] = identity;
 			}
+			if (!nextRootAddresses.includes(address)) throw new Error(`Transaction address ${address} is not the expected next root address for identity reservation`);
+			
+			const entry = nextIdentityEntry();
+			if (!entry)
+				if (idenditiesToConfirmByAddress[address]) return;
+				else throw new Error('Missing identity entry for reserved address: ' + address);
+			if (entriesCache.has(entry)) throw new Error('Identity reservation collision detected!');
+			
+			const { pubKeysHex, threshold } = serializer.deserialize.identityEntry(entry);
+			if (pubKeysHex.length !== 1) throw new Error('Invalid identity entry for solver transaction, must contain exactly 1 pubKey');
+			if (threshold !== 1) throw new Error('Invalid identity entry for solver transaction, threshold must be 1');
+			
+			// TODO: check if identity already exist : ledgerStore.hasLedger(pubKeyHash) -> CAN'T REDECLARE IDENTITY!!!
+			entriesCache.set(entry); // cache it to make collision check.
+			idenditiesToConfirmByAddress[address] = { address, pubKeysHex, threshold }; // cache the reserved identity for later confirmation in the signature verification step
 		}
-	}
-	/** @param {string} address @param {string[]} pubKeysHex @param {number} threshold */
-	static #discoveryEntryCheck(address, pubKeysHex, threshold) {
-		const isMultiSig = ADDRESS.isMultiSigAddress(address);
-		if (!isMultiSig && pubKeysHex.length !== 1) throw new Error(`Single-Sig address ${address} reservation must have exactly 1 pubKey in data field`);
-		if (isMultiSig)
-			if (threshold < 1) throw new Error(`Multi-Sig address ${address} reservation must have a threshold of at least 1`);
-			else if (pubKeysHex.length < 2) throw new Error(`Multi-Sig address ${address} reservation must have at least 2 pubKeys in data field`);
-			else if (pubKeysHex.length < threshold) throw new Error(`Multi-Sig address ${address} reservation must have at least as many pubKeys in data field as the threshold`);
-	}
-
-	/** Fifth validation. - control that outputs's addresses has identity in the cache or disk (reservation or known identity).
-	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} involvedIdentities */
-	static extractOutputsIdentities(node, tx, involvedIdentities) {
-		for (const output of tx.outputs) {
-			if (involvedIdentities.has(output.address)) continue; // Already discovered in this loop, no need to check again
 		
-			const identity = node.blockchain.identityStore.getIdentity(output.address);
-			if (!identity) throw new Error(`Output with unknown address ${output.address} must have a reservation entry (reservation or known idendity)`);
-			else involvedIdentities.set(output.address, identity.pubKeysHex, identity.threshold);
+		// SOLVER CHECK
+		if (tx.inputs[0].length === SIZES.nonce.str) {
+			handleAddressEntry(tx.outputs[0].address);
+			if (nextIdentityEntry()) throw new Error('Ghost identity entry found in solver transaction');
+			return idenditiesToConfirmByAddress;
 		}
-	}
 
-    /** ==> Sixth validation, low disk access cost. ~0.1ms per address.
-	 * - SOLVER'S TX CAN'T SPEND UTXOS => NO OWNERSHIP TO CONTROL
-	 * - VALIDATOR'S TX HAS TO BE CONTROLLED
+		// VALIDATOR CHECK
+		if (tx.inputs[0].length === SIZES.validatorInput.str) {
+			handleAddressEntry(tx.inputs[0].split(":")[0]);
+			handleAddressEntry(tx.outputs[0].address);
+			if (nextIdentityEntry()) throw new Error('Ghost identity entry found in validator transaction');
+			return idenditiesToConfirmByAddress;
+		}
+
+		throw new Error('Invalid special transaction input format');
+	}
+    /** ==> Seventh validation, low disk access cost. ~0.1ms per address.
+	 * - Not for specialTx!
 	 * - Control the inputAddresses/witnessesPubKeys correspondence
 	 * - Control the derivation of addresses<>pubKeys
 	 * - Throw if any problem found
-	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} tx */
-    static extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities = new IdentitiesCache()) {
+	 * @param {IdentityStore} identityStore @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} tx
+	 * @param {Record<string, Identity>} [idenditiesToConfirmByAddress] Key: Address, Value: Identity */
+    static extractRegularTxIdentities(identityStore, involvedUTXOs, tx, idenditiesToConfirmByAddress = {}, involvedIDs = new IdentitiesCache()) {
 		// SET THE ADDRESSES TO CONTROL.
 		// EXTRACT MISSING IDENTITIES FROM DISK (WHEN NOT ALREADY IN CACHE)
 		/** @type {Set<string>} - Local to this function */
 		const involvedAddresses = new Set();
 		for (const input of tx.inputs) {
-			const isValidatorInput = input.length === SIZES.validatorInput.str;
-			const addressToVerify = isValidatorInput ? input.split(":")[0] : involvedUTXOs[input]?.address; // address is either in the validator input or in the UTXO
+			const addressToVerify = involvedUTXOs[input]?.address;
 			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${input}`);
-			
+
 			if (involvedAddresses.has(addressToVerify)) continue; // already in loop, no need to add again
 			else involvedAddresses.add(addressToVerify);
 			
-			if (involvedIdentities.has(addressToVerify)) continue; // already in cache, no need to fetch or check again
+			if (involvedIDs.has(addressToVerify)) continue; // already in cache, no need to fetch or check again
 
-			const identity = node.blockchain.identityStore.getIdentity(addressToVerify);
+			const identity = identityStore.getIdentity(addressToVerify);
 			if (!identity) throw new Error(`Unable to find pubKey for address: ${addressToVerify}`);
-			involvedIdentities.set(addressToVerify, identity.pubKeysHex, identity.threshold); // cache for next iterations
+			involvedIDs.set(addressToVerify, identity.pubKeysHex, identity.threshold); // cache for next iterations
 		}
 
 		// EXTRACT ADDRESSES<>PUBKEYS CORRESPONDENCE
 		/** Local for each tx, Key: Address, Value: Identity @type {Record<string, Identity>} */
-		const idenditiesToConfirmByAddress = {};
 		for (const address of involvedAddresses) {
-			const identity = involvedIdentities.get(address);
+			const identity = involvedIDs.get(address);
 			if (!identity) throw new Error(`Identity not found in cache for address ${address}, this should not happen as we fetched all identities for involved addresses in the previous step`);
 			else idenditiesToConfirmByAddress[address] = identity;
 		}
@@ -221,7 +273,7 @@ export class TxValidation {
 		return idenditiesToConfirmByAddress; // to verify for the next step (associated witness confirmation)
 	}
 	
-	/** ==> Seventh validation, low computation cost. - control the presence of witnesses associated to the input addresses and pubKeys
+	/** ==> Eighth validation, low computation cost. - control the presence of witnesses associated to the input addresses and pubKeys
 	 * - Control that all the addresses associated to the pubKeys in witnesses are effectively confirmed by witnesses
 	 * - Throw if any problem found
 	 * @param {Transaction} tx @param {Record<string, Identity>} [idenditiesToConfirmByAddress] Key: Address, Value: Identity */
@@ -257,7 +309,7 @@ export class TxValidation {
 		return qsafeVerifyTasks; // to verify for the next step (signature verification)
 	}
 
-	/** ==> Eighth validation, medium computation cost. ~8ms/task @param {qsafeVerifyTask[]} [qsafeVerifyTasks] */
+	/** ==> Ninth validation, medium computation cost. ~8ms/task @param {qsafeVerifyTask[]} [qsafeVerifyTasks] */
     static async controlAllWitnessesSignatures(qsafeVerifyTasks = []) {
 		for (const task of qsafeVerifyTasks) // will throw an error if the signature is invalid
 			await AsymetricFunctions.qsafeVerify(task.signable, task.signature, task.hybridKey);
@@ -265,16 +317,23 @@ export class TxValidation {
 
     /** ==> Sequentially call the set of validations (DON'T give a specialTx to this function)
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
-     * @param {Transaction} tx @param {'solver' | 'validator'} [specialTx] */
-    static async transactionValidation(node, involvedUTXOs, tx, specialTx, involvedIdentities = new IdentitiesCache()) {
+     * @param {Transaction} tx @param {'solver' | 'validator'} [specialTx]
+	 * @param {IdentitiesCache} [involvedIDs] */
+    static async transactionValidation(node, involvedUTXOs, tx, specialTx, involvedIDs = new IdentitiesCache()) {
+		const identityStore = node.blockchain.identityStore;
         this.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
-        const fee = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, tx);
+       
+		let idenditiesToConfirmByAddress;
+		const fee = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, tx);
 		this.controlTransactionOutputsRulesConditions(tx);
-		this.controlIdentitiesReservation(node, tx, involvedIdentities);
-		this.extractOutputsIdentities(node, tx, involvedIdentities);
-		if (specialTx === 'solver') return { fee, success: true }; // solver's txs don't have to respect ownership rules, so we skip signature verification
+		if (!specialTx) {
+			this.controlOutputsHasIdentities(node, tx);
+			this.controlIdentitiesReservation(node, tx, involvedIDs);
+			idenditiesToConfirmByAddress = this.extractRegularTxIdentities(identityStore, involvedUTXOs, tx, undefined, involvedIDs);
+		} else idenditiesToConfirmByAddress = this.extractSpecialTxIdentities(identityStore, tx);
 		
-		const idenditiesToConfirmByAddress = this.extractInputsIdentities(node, involvedUTXOs, tx, involvedIdentities);
+		if (specialTx === 'solver') return { fee, success: true }; // solver's txs don't have to respect ownership rules, so we skip signature verification
+
 		const qsafeVerifyTasks = this.controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress);
 		await this.controlAllWitnessesSignatures(qsafeVerifyTasks);
 		return { fee, success: true };

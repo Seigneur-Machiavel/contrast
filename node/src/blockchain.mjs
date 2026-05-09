@@ -226,7 +226,7 @@ export class Blockchain {
 		else this.logger.log(`Blockchain identities check: ${discoveryCount} new identities patch`, (m, c) => console.info(m, c));
 		
 		// THIRD: ENSURE VSS CONSISTENCY
-		if (this.vss.hasBlockStakes(block)) this.logger.log('VSS consistency check: no change', (m, c) => console.info(m, c));
+		if (this.vss.hasBlockStakes(block).allFound) this.logger.log('VSS consistency check: no change', (m, c) => console.info(m, c));
 		else {
 			this.vss.revertBlockStakes(block); // ensure no stakes from block
 			this.vss.digestBlockStakes(block, 'persist'); // re-add stakes from block
