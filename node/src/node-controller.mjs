@@ -42,16 +42,14 @@ export class NodeController {
 			currentHeight: this.node.blockchain.currentHeight,
 			validationHeight: this.node.solver.bestCandidateIndex,
 			networkPower: this.node.solver.networkPower,
-			solverPower: this.node.solver.hashRateStats.effective,
+			solverPower: this.node.solver.hashRate,
 			solverLegitimacy: this.node.solver.bestCandidateLegitimacy,
 			dailyRewardEstimation: this.node.solver.estimatedDailyReward,
 			solverThreadCount: this.node.solver.nbOfWorkers,
 
 			publicAddress: this.node.wallet?.accounts[0]?.address,
 			solverRewardAddress: this.node.rewardsInfo.sAddress,
-			solverBalance: this.node.rewardsInfo.sBalance,
 			validatorRewardAddress: this.node.rewardsInfo.vAddress,
-			validatorBalance: this.node.rewardsInfo.vBalance,
 			
 			//hiveVersion: this.node.p2p.,
 			clientVersion: this.node.version,

@@ -2,7 +2,6 @@
 import { ADDRESS } from '../../types/address.mjs';
 import { CURRENCY } from '../../utils/currency.mjs';
 import { solving } from '../../utils/conditionals.mjs';
-import { hybridKeyHint } from '../../utils/common.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { SolverWorker } from '../workers/solver-worker-wrapper.mjs';
@@ -10,6 +9,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
+ * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
  * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
@@ -29,13 +29,13 @@ export class Solver {
 	/** @type {number[]} */								bets = [];
 	/** @type {{min: number, max: number}} will bet between 70% and 95% of the expected blockTime */
 	betRange = { min: .7, max: .95 };
-	powBroadcastState = { foundHeight: -1, sentTryCount: 0, maxTryCount: 1 };
+	maxBroadcastTry = 1;
+	powBroadcastState = { foundHeight: -1, sentTryCount: 0 };
 	canProceedSolving = true;
 	hashPeriodStart = 0;
 	networkPower = 0;
 	hashCount = 0;
-	/** @type {{raw: number, effective: number}} */
-	hashRateStats = { raw: 0, effective: 0 }; // V2
+	hashRate = 0;
 
     /** @param {ContrastNode} node */
     constructor(node) { this.node = node; }
@@ -45,19 +45,17 @@ export class Solver {
 
 	// API METHODS
 	get estimatedDailyReward() {
-		if (!this.hashRateStats.effective || !this.networkPower || !this.bestCandidate) return 0;
+		if (!this.hashRate || !this.networkPower || !this.bestCandidate) return 0;
 		const expectedBlocksPerDay = 24 * 3600 / ( BLOCKCHAIN_SETTINGS.targetBlockTime * .001 );
 		const expectedRewardPerBlock = this.bestCandidate.coinBase / 2; // 50/50 between pow and pos reward
-		const myPowerShare = Math.min(1, this.hashRateStats.effective / this.networkPower);
+		const myPowerShare = Math.min(1, this.hashRate / this.networkPower);
 		return Math.round(myPowerShare * expectedBlocksPerDay * expectedRewardPerBlock);
 	}
     /** @param {BlockCandidate} block */
     updateBestCandidate(block) {
 		if (!block) throw new Error('Candidate is null or undefined');
 		
-		const hint = block.Txs[0].witnesses[0][1];
 		const validatorAddress = block.Txs[0].outputs[0].address;
-        const isMyBlock = this.node.wallet?.pubKey ? hint === hybridKeyHint(this.node.wallet.pubKey) : false;
         const posReward = block.Txs[0].outputs[0].amount;
         const powReward = block.powReward;
         if (!posReward || !powReward) throw new Error(`Invalid candidate (#${block.index} | v:${validatorAddress}) | posReward = ${posReward} | powReward = ${powReward}`);
@@ -81,9 +79,6 @@ export class Solver {
             // if everything is the same, then check the powReward to decide
             if (reasonChange === 'none' && powReward > (this.bestCandidate?.powReward || 0))
                 reasonChange = ` (higher powReward: ${powReward} > ${this.bestCandidate?.powReward || 0})`;
-            
-            // preserve the current best candidate, but update considered as true to encourage re-bradcasting
-            if (reasonChange === 'none') return true;
         }
 
         // preserve the current best candidate, but update considered as true to encourage re-bradcasting
@@ -91,13 +86,18 @@ export class Solver {
 
         if (this.node.verb > 2) this.logger.log(`[SOLVER] Best block candidate changed${reasonChange}:
 from #${this.bestCandidate ? this.bestCandidate.index : null} (leg: ${this.bestCandidate ? this.bestCandidate.legitimacy : null})
-to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`, (m, c) => console.info(m, c));
+to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
         
         // if block is different than the highest block index, then reset the addressOfCandidatesBroadcasted
         if (block.index !== this.bestCandidateIndex) this.addressOfCandidatesBroadcasted = [];
         this.bestCandidate = block;
         
-        this.#prepareBets();
+		// UPDATE BETS
+        const { min, max } = this.betRange;
+		const nbOfBets = this.useBetTimestamp ? 32 : 0;
+        this.bets = [];
+        for (let i = 0; i < nbOfBets; i++) this.bets.push(solving.betPowTime(min, max));
+		
         return true;
     }
 	decreaseThreads() { if (this.nbOfWorkers > this.minNbOfWorkers) this.nbOfWorkers--; }
@@ -108,11 +108,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		const blockCandidate = this.bestCandidate;
 		if (!blockCandidate) return;
 
-		const validatorAddress = blockCandidate.Txs[0].inputs[0].split(':')[0];
-		const validatorRewardAddress = blockCandidate.Txs[0].outputs[0].address;
-		if (!validatorAddress || !validatorRewardAddress) throw new Error('Invalid block candidate: missing validator address or reward address');
-
-		const { sAddress, identityEntries } = this.#getAddressAndDataForRewardTx(validatorAddress, validatorRewardAddress);
+		const { sAddress, identityEntries } = this.#resolveIdentityOfRewardTx(blockCandidate.Txs[0]);
 		if (!sAddress) throw new Error('Unable to get solver reward address for mining'); 
 		if (blockCandidate.index !== this.bestCandidateIndex) {
 			if (this.node.verb > 2) this.logger.log(`[SOLVER] Block candidate is not the highest block candidate: #${blockCandidate.index} < #${this.bestCandidateIndex}`, (m, c) => console.info(m, c));
@@ -122,7 +118,9 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		this.#togglePausedWorkers();
 		await this.#terminateUnusedWorkers();
 		const readyWorkers = await this.#createMissingWorkers(sAddress, identityEntries);
-		this.hashRateStats = this.#computeHashRateStats();
+
+		this.hashrate = 0;
+		for (const worker of this.workers) this.hashrate += worker.hashRate;
 		
 		const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
 		for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
@@ -130,7 +128,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		timings.workersUpdate = Date.now();
 		for (let i = 0; i < readyWorkers; i++) {
 			if (!this.node.time) return;
-			const blockBet = this.bets?.[i] || 0;
+			const blockBet = this.bets[i] || 0;
 			const timeOffset = Date.now() - this.node.time;
 			this.workers[i].updateInfo(sAddress, blockBet, timeOffset, identityEntries);
 		}
@@ -165,24 +163,44 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
     }
 
 	// INTERNAL METHODS
-	/** @param {string} validatorAddress @param {string} validatorRewardAddress */
-	#getAddressAndDataForRewardTx(validatorAddress, validatorRewardAddress) {
+	/** @param {Transaction} validatorTx*/
+	#resolveIdentityOfRewardTx(validatorTx) {
+		const validatorAddress = validatorTx.inputs[0].split(':')[0];
+		const validatorRewardAddress = validatorTx.outputs[0].address;
+		const validatorAddressesEqual = validatorAddress === validatorRewardAddress;
+		const lastValidatorIdentityEntry = validatorTx.identities[1] || validatorTx.identities[0];
+		if (!validatorAddress || !validatorRewardAddress) throw new Error('Invalid block candidate: missing validator address or reward address');
+
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 		const { sAddress, sPubkeys } = this.node.rewardsInfo;
 		const { identityStore } = this.node.blockchain;
-		
 		if (!sAddress && !sPubkeys) throw new Error('Both solver reward address and pubkeys are missing, unable to proceed');
 		
 		// IF NO SOLVER REWARD ADDRESS, CREATE ONE FOR THE SOLVER REWARD IDENTITY (vout:0)
 		let nextAddressIndex = 0; // Index of address to use for the solver reward identity (vout:0)
 		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 3);
-		const addressesToCheck = validatorAddress === validatorRewardAddress ? [validatorAddress] : [validatorAddress, validatorRewardAddress];
+		const addressesToCheck = validatorAddressesEqual ? [validatorAddress] : [validatorAddress, validatorRewardAddress];
+
+		// SELF ADDRESS CREATION BY VALIDATOR => CHECK IF PUBKEY MATCH => 
+		if (sPubkeys && validatorAddressesEqual) {
+			const { pubKeysHex } = lastValidatorIdentityEntry
+				? serializer.deserialize.identityEntry(lastValidatorIdentityEntry)
+				: identityStore.getIdentity(validatorAddress) || {};
+
+			// VALIDATOR PK === SOLVER PK => PICKUP NEXT RELATED ADDRESS
+			if (pubKeysHex?.[0] === sPubkeys[0]) {
+				const addresses = ADDRESS.getAddressesFromWalletId(validatorAddress);
+				return { sAddress: addresses[1], identityEntries: undefined };
+			}
+		}
+		
 		for (const a of addressesToCheck) {
-			const { prefix: p1, rootB58: str1 } = ADDRESS.getAddressRoot(a);
-			for (const rootAddress of nextRootAddresses) {
-				const { prefix: p2, lastPartBase58: str2 } = ADDRESS.splitAddress(rootAddress);
+			const { prefix: p1, rootSuffix: str1 } = ADDRESS.getAddressRoot(a);
+			for (const walletId of nextRootAddresses) {
+				const { prefix: p2, suffix: str2 } = ADDRESS.splitAddress(walletId);
 				if (p1 !== p2) continue; // different prefix, cannot be the same root address
 				if (str2 !== str1) continue; // different root address, skip
+				
 				nextAddressIndex++; // this root address is already used by the validator identities, so we need to use the next one for the solver reward identity
 			}
 		}
@@ -190,33 +208,15 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		const solverAddress = sAddress ? sAddress : nextRootAddresses[nextAddressIndex];
 		if (!solverAddress) throw new Error('Unable to determine solver reward address for mining');
 
-		const r = identityStore.verify(solverAddress, sPubkeys);
-		if (r === 'MISMATCH') throw new Error('Solver reward address known but pubkey(s) mismatch in identity store');
-		if (r === 'MATCH') return { sAddress: solverAddress, identityEntries: undefined };
+		const identityStatus = identityStore.verify(solverAddress, sPubkeys);
+		if (identityStatus === 'MISMATCH') throw new Error('Solver reward address known but pubkey(s) mismatch in identity store');
+		if (identityStatus === 'MATCH') return { sAddress: solverAddress, identityEntries: undefined };
 		
 		// 'UNKNOWN' => create the identity entries for the solver reward address.
 		if (!sPubkeys) throw new Error('Solver reward address unknown but no pubkey provided, unable to create identity for mining reward');
 		if (sPubkeys.length !== 1) throw new Error('Solver reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
 		
 		return { sAddress: solverAddress, identityEntries: [identityStore.buildEntry(sPubkeys)] };
-	}
-    #prepareBets(nbOfBets = 32) {
-        if (!this.useBetTimestamp) { this.bets = []; return }
-
-        const { min, max } = this.betRange;
-        const bets = [];
-        for (let i = 0; i < nbOfBets; i++) bets.push(solving.betPowTime(min, max));
-
-        this.bets = bets;
-    }
-	#computeHashRateStats() {
-		let raw = 0, effective = 0;
-		for (const worker of this.workers) {
-			raw += worker.hashRate;
-			effective += worker.hashRate;
-			//effective += worker.hashRate * Math.min(worker.difficulty / Math.max(worker.finalDifficulty, 1), 1);
-		}
-		return { raw, effective };
 	}
     /** @param {BlockFinalized} block */
     async #broadcastFinalizedBlock(block) {
@@ -235,7 +235,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 
         // Avoid sending the same block multiple times
         const isNewHeight = block.index > this.powBroadcastState.foundHeight;
-        const maxTryReached = this.powBroadcastState.sentTryCount >= this.powBroadcastState.maxTryCount;
+        const maxTryReached = this.powBroadcastState.sentTryCount >= this.maxBroadcastTry;
         if (maxTryReached && !isNewHeight) {
 			if (this.node.verb > 1) this.logger.log(`[SOLVER] Max try reached for block (Height: ${block.index})`, (m, c) => console.warn(m, c));
 			return;
@@ -248,9 +248,9 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 		// Ensure the block timestamp is not in the future
 		const t = this.node.time || Date.now();
 		if (block.timestamp > t + 990) await new Promise((resolve) => setTimeout(resolve, block.timestamp - (t + 990)));
-        if (this.node.verb > 2) this.logger.log(`[SOLVER] SENDING: Block finalized, validator: ${validatorAddress} | solver: ${solverAddress}
+        if (this.node.verb > 2) this.logger.log(`[SOLVER] -POW- #${block.index} | V:${validatorAddress} | M:${solverAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}
+			SENDING: Block finalized, validator: ${validatorAddress} | solver: ${solverAddress}
 			(Height: ${block.index}) | Diff = ${block.difficulty} | coinBase = ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));
-			if (this.node.verb > 2) this.logger.log(`[SOLVER] -POW- #${block.index} | V:${validatorAddress} | M:${solverAddress} | ${block.difficulty} | ${CURRENCY.formatNumberAsCurrency(block.coinBase)}`, (m, c) => console.info(m, c));        
 		
 		// THEN SHARE THE FINALIZED BLOCK
 		const serialized = serializer.serialize.block(block, 'finalized');
@@ -270,7 +270,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
 
         for (let i = 0; i < missingWorkers; i++) {
             const workerIndex = readyWorkers + i;
-            const blockBet = this.bets?.[workerIndex] || 0;
+            const blockBet = this.bets[workerIndex] || 0;
 			const timeOffset = Date.now() - this.node.time;
             this.workers.push(new SolverWorker(sAddress, blockBet, timeOffset, identityEntries));
             readyWorkers++;
@@ -279,7 +279,7 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
         await new Promise((resolve) => setTimeout(resolve, 1000)); // let time to start workers
         return readyWorkers;
     }
-    async #togglePausedWorkers() {
+    #togglePausedWorkers() {
         for (let i = this.nbOfWorkers; i < this.workers.length; i++)
             if (this.workers[i]?.paused === false) this.workers[i].pause();
         
@@ -288,8 +288,8 @@ to #${block.index} (leg: ${block.legitimacy})${isMyBlock ? ' (my block)' : ''}`,
     }
     async #terminateUnusedWorkers() {
 		if (this.workers.length <= this.nbOfWorkers) return;
-        for (let i = this.nbOfWorkers; i < this.workers.length; i++)
-			await this.workers[i].terminateAsync();
+
+		await Promise.all(this.workers.map(w => w.terminateAsync()))
         this.workers = this.workers.slice(0, this.nbOfWorkers);
     }
 }

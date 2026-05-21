@@ -1,7 +1,7 @@
 import { newWorker } from './unified-worker-initializer.mjs';
 
 /** 
- * @typedef {import('../src/tx-validation.mjs').qsafeVerifyTask} qsafeVerifyTask
+ * @typedef {import('../src/tx-validation.mjs').QsafeVerifyTask} QsafeVerifyTask
  * @typedef {import('../../types/transaction.mjs').Transaction} Transaction */
 
 // CLASSES SIMPLIFYING USAGE OF THE WORKERS
@@ -12,7 +12,7 @@ export class ValidationWorker {
 
     constructor (id = 0) { this.id = id; }
 	
-	/** @param {qsafeVerifyTask[]} batch */
+	/** @param {QsafeVerifyTask[]} batch */
 	signatureValidation(batch) {
 		this.state = 'working';
 

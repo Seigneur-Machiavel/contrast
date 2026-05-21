@@ -1,11 +1,11 @@
 // @ts-check
 import { BlockUtils } from './block.mjs';
+import { TxValidation } from './tx-validation.mjs';
 import { solving } from '../../utils/conditionals.mjs';
-import { hybridKeyHint } from '../../utils/common.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { SIZES } from '../../utils/serializer-schema.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { IdentitiesCache, TxValidation } from './tx-validation.mjs';
+import { EntriesCache, IdentitiesCache, QsafeVerifyTask } from '../../types/identity.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 
 /**
@@ -13,8 +13,7 @@ import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
- * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
- * @typedef {import('../src/tx-validation.mjs').qsafeVerifyTask} qsafeVerifyTask */
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
 
 const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {
@@ -38,7 +37,7 @@ class WorkerDispatcher {
 	/** @param {ValidationWorker[]} workers */
 	constructor(workers) { this.workers = workers; }
 
-	/** @param {qsafeVerifyTask[]} batch */
+	/** @param {QsafeVerifyTask[]} batch */
 	#assignJobToWorker(batch) {
 		const w = this.workers[this.workerIndex];
 		if (!w) throw new Error('Worker index overflow');
@@ -47,8 +46,10 @@ class WorkerDispatcher {
 		this.workerIndex++;
 	}
 
-	/** @param {qsafeVerifyTask[]} tasks */
+	/** @param {QsafeVerifyTask[]} tasks */
 	async dispatchJobAndWaitResult(tasks) {
+		if (tasks.length === 0) return true;
+
 		let batch = [];
         const batchSize = Math.ceil(tasks.length / this.workers.length);
 		for (const task of tasks) {
@@ -128,7 +129,7 @@ export class BlockValidation {
         const validatorTx = mode === 'candidate' ? txs[0] : txs[1];
         if (!validatorTx) throw new Error('Validator transaction not found');
 
-		const [address, hint, signature] = validatorTx.witnesses[0];
+		const [address, signature] = validatorTx.witnesses[0];
 		const legitimacy = await node.blockchain.vss.getAddressLegitimacy(address, block.prevHash);
 		if (legitimacy === block.legitimacy) return true; // legitimacy validated
 		throw new Error(`Invalid #${block.index} legitimacy: ${block.legitimacy} - no matching pubkey with expected legitimacy found for validator address ${address}`);
@@ -178,32 +179,30 @@ export class BlockValidation {
 		if ((node.workers.validations || []).length === 0) throw new Error('No validation workers available');
 		
 		// PROCESS ALL TXs -EXCEPT SIGNATURE VERIFICATION
-		const identityStore = node.blockchain.identityStore;
-		const involvedIDs = new IdentitiesCache(); // local cache: used to avoid re-fetching identities
-        const validationStart = Date.now();
+        const identitiesCache = new IdentitiesCache(); // local cache: used to avoid re-fetching identities
+		const entriesCache = new EntriesCache();
+		const validationStart = Date.now();
 		const signatureVerificationTasks = [];
 		for (let i = 0; i < block.Txs.length; i++) {
 			let index = i;
 			if (i === 0) index = 1; // We needs to validate vatidator tx as first.
 			if (i === 1) index = 0; // We needs to validate coinbase tx as second.
-
-            const tx = block.Txs[index];
-			const specialTx = i < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
-        	TxValidation.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
 			
-			let idenditiesToConfirmByAddress;
-			const fee = specialTx ? 0 : TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
+            const tx = block.Txs[index];
+			const specialTx = index < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
+        	const fee = TxValidation.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
 			TxValidation.controlTransactionOutputsRulesConditions(tx);
 			if (!specialTx) {
 				TxValidation.controlOutputsHasIdentities(node, tx);
-				TxValidation.controlIdentitiesReservation(node, tx, involvedIDs);
-				idenditiesToConfirmByAddress = TxValidation.extractRegularTxIdentities(identityStore, involvedUTXOs, tx, undefined, involvedIDs);
-			} else idenditiesToConfirmByAddress = TxValidation.extractSpecialTxIdentities(identityStore, tx);
+				TxValidation.controlIdentitiesReservation(node, tx, entriesCache);
+				TxValidation.extractRegularTxIdentities(node, involvedUTXOs, tx, identitiesCache);
+			} else TxValidation.extractSpecialTxIdentities(node, tx, identitiesCache, entriesCache);
 
 			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
 
-			const qsafeVerifyTasks = TxValidation.controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress);
-			signatureVerificationTasks.push(...qsafeVerifyTasks);
+			const qsafeVerifyTask = TxValidation.controlAddressesHasAssociatedWitnesses(tx, identitiesCache);
+			for (const address in qsafeVerifyTask)
+				signatureVerificationTasks.push(qsafeVerifyTask[address]);
 		}
 
 		// SIGNATURE VERIFICATION (MULTI-THREADING)

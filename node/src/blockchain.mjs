@@ -9,6 +9,7 @@ import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { BlockchainStorage } from '../../storage/bc-store.mjs';
 import { IdentityStore } from "../../storage/identity-store.mjs";
 import { LedgersStorage } from '../../storage/ledgers-store.mjs';
+import { OwnershipStorage } from '../../storage/ownership-store.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
@@ -30,6 +31,7 @@ export class Blockchain {
 	blockStorage;
 	identityStore;
 	ledgersStorage;
+	ownershipStorage;
 	simulateFailureRate = 0; // for testing purposes (0 === no failure, 1 === always fail)
 
 	/** @param {import('../../storage/storage.mjs').ContrastStorage} [storage] - ContrastStorage instance for node data persistence. */
@@ -38,6 +40,7 @@ export class Blockchain {
 		this.storage = storage;
 		this.blockStorage = new BlockchainStorage(storage);
 		this.identityStore = new IdentityStore(this.blockStorage);
+		this.ownershipStorage = new OwnershipStorage(storage);
 		this.ledgersStorage = new LedgersStorage(storage);
 		this.vss = new Vss(this, storage);
 	}
@@ -63,12 +66,10 @@ export class Blockchain {
 		if (this.currentHeight > 10 && Math.random() < this.simulateFailureRate)
 			return console.log(`%c[DEBUG] Simulated failure of digestFinalizedBlock #${this.currentHeight}`, 'color: orange;');
 		
-		// let blockIndex = null;
 		try {
 			// VALIDATE BLOCK
 			if (serializedBlock.length > BLOCKCHAIN_SETTINGS.maxBlockSize) throw new Error('Block size exceeds the maximum limit');
 			block = serializer.deserialize.blockFinalized(serializedBlock);
-			// blockIndex = block.index;
 			node.updateState(`${statePrefix}block-validation #${block.index}`);
 			const validationResult = await BlockValidation.validateBlockProposal(node, block, serializedBlock);
 			const { hashConfInfo, involvedAnchors, involvedUTXOs } = validationResult;
@@ -79,10 +80,7 @@ export class Blockchain {
 			node.updateState(`${statePrefix}applying finalized block #${block.index}`);
 			this.#addBlock(block, involvedAnchors, involvedUTXOs);
 			
-			// APPLY LEDGERS CHANGES (ASYNC)
-			//await this.ledgersStorage.digestBlock(block, involvedUTXOs, 'APPLY');
-			this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY'); // prefer sync
-			this.ledgersStorage.cache.clear();
+			// APPLY LEDGERS CHANGES
 			node.memPool.removeFinalizedBlocksTransactions(block);
 			
 			const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
@@ -111,10 +109,6 @@ export class Blockchain {
 			const headers = this.blockStorage.getBlocksHeaders(block.index - 12, block.index);
 			if (headers) node.solver.networkPower = solving.estimateGlobalHashrate(headers);
 		}
-		if (node.controller?.sharedSecret && node.rewardsInfo.sAddress)
-			node.rewardsInfo.sBalance = (await this.ledgersStorage.getAddressLedger(node.rewardsInfo.sAddress))?.balance || 0;
-		if (node.controller?.sharedSecret && node.rewardsInfo.vAddress)
-			node.rewardsInfo.vBalance = (await this.ledgersStorage.getAddressLedger(node.rewardsInfo.vAddress))?.balance || 0;
 
 		// CREATE AND SHARE NEW CANDIDATE AFTER A SHORT DELAY
 		if (broadcastNewCandidate && !isSync) {
@@ -134,8 +128,11 @@ export class Blockchain {
 		this.blockStorage.store(block, involvedAnchors);
 		// CRASH DURING SAVING OPERATION (TEST PURPOSES)
 		//if (block.index === 5) throw new Error('Test error on block 5 saving');
-		this.identityStore.digestBlock(block);
+		this.identityStore.digestBlock(block, this.ownershipStorage);
+		this.ledgersStorage.digestBlock(block, involvedUTXOs, 'APPLY');
 		this.vss.digestBlockStakes(block, 'persist');
+		this.ledgersStorage.cache.clear();
+		this.ownershipStorage.cache.clear();
 
 		this.lastBlock = block;
 		//this.logger.log(`Block added: #${block.index}, hash=${block.hash.slice(0, 20)}...`, (m, c) => console.info(m, c));
@@ -168,13 +165,13 @@ export class Blockchain {
 			if (resetOnFailure) return this.reset('Blockchain.undoBlock: unable to retrieve involved UTXOs.');
 			else throw new Error('Blockchain.undoBlock: unable to retrieve all involved UTXOs for the last block.');
 
-		// await this.ledgersStorage.revertBlock(block, involvedUTXOs, 'REVERT');
-		this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'REVERT'); // prefer sync
 		this.vss.revertBlockStakes(block);
-		this.identityStore.revertBlock(block);
+		this.ledgersStorage.digestBlock(block, involvedUTXOs, 'REVERT');
+		this.identityStore.revertBlock(block, this.ownershipStorage);
 		this.blockStorage.unstore(involvedAnchors);
 		
 		this.ledgersStorage.cache.clear();
+		this.ownershipStorage.cache.clear();
 		this.logger.log(`Block undone: #${block.index}, hash=${block.hash.slice(0, 8)}..., currentHeight=#${this.currentHeight}`, (m, c) => console.info(m, c));
 		if (this.currentHeight === -1) this.reset('Blockchain.undoBlock: no more blocks after undo.');
 		else this.lastBlock = this.getBlock() || null;
@@ -221,7 +218,7 @@ export class Blockchain {
 		if (repeatedAnchorsCount > 0) throw new Error('Blockchain consistency check failed: repeated UTXO anchors found.');
 		if (!block || !involvedAnchors) throw new Error('Blockchain consistency check failed: unable to retrieve the last block or its involved anchors.');
 
-		const discoveryCount = this.identityStore.digestBlock(block);
+		const discoveryCount = this.identityStore.digestBlock(block, this.ownershipStorage, false);
 		if (discoveryCount === 0) this.logger.log('Blockchain identities check: no change', (m, c) => console.info(m, c));
 		else this.logger.log(`Blockchain identities check: ${discoveryCount} new identities patch`, (m, c) => console.info(m, c));
 		
@@ -237,8 +234,7 @@ export class Blockchain {
 		const involvedUTXOs = this.getUtxos(involvedAnchors, false);
 		if (!involvedUTXOs) throw new Error('Blockchain consistency check failed: unable to retrieve all involved UTXOs for the last block.');
 		
-		//const applyCount = await this.ledgersStorage.digestBlock(block, involvedUTXOs, 'APPLY, true);
-		const applyCount = this.ledgersStorage.digestBlockSync(block, involvedUTXOs, 'APPLY', true); // prefer sync
+		const applyCount = this.ledgersStorage.digestBlock(block, involvedUTXOs, 'APPLY', true);
 		if (applyCount === 0) this.logger.log('Blockchain ledgers check: no change', (m, c) => console.info(m, c));
 		else this.logger.log(`Blockchain ledgers check: ${applyCount} ledgers patched`, (m, c) => console.info(m, c));
 		this.ledgersStorage.cache.clear();

@@ -27,19 +27,19 @@ const CRITERIA = { // WORK IN PROGRESS
 	 * e.g. root: C111111 => handle C111111 to C111119 */
 	ADDRESSES_PER_ROOT: 9,
 	/** Number of bytes of the address (without the first character prefix) */
-	B58_BYTES: 4,
+	SUFFIX_BYTES: 4,
 	/** Total number of bytes of the address including the prefix */
-	TOTAL_BYTES: 5,
+	BYTES_LENGTH: 5,
 	/** Length of the address in Base58 characters (without the first character prefix)
 	 * - 1 char prefix => 6 next characters (e.g. C + 123456)
 	 * - 2 chars prefix => 5 next characters (e.g. M1 + 5 chars) */
-	B58_LENGTH: { suffix1: 6, suffix2: 5 },
+	SUFFIX_LENGTH: { p1: 6, p2: 5 },
 	/** Length of the address in Base58 characters including the prefix */
-	TOTAL_LENGTH: 7,
+	STRING_LENGTH: 7,
 	/** Max numerical representation of the address
 	 * - - 1 char prefix => 6 chars Base58 => 4 bytes => max value = 2^32-1 = 4,294,967,295 (TODO: HARD LIMIT based on b58 => 38 068 692 544 / 9)
 	 * - - 2 chars prefix => 5 chars Base58 => 4 bytes => max value = max encoded 5 chars Base58 = 656,356,768 */
-	MAX_NUM_VALUE: { suffix1: 0xFFFFFFFF, suffix2: 656356768 },
+	MAX_NUM_VALUE: { p1: 0xFFFFFFFF, p2: 656356768 },
 };
 
 class ConverterCache {
@@ -59,110 +59,106 @@ export class ADDRESS {
 	static #AUTHORIZED_PREFIXES = new Set(PREFIXES_LIST);
 	static LEXICON = LEXICON;
 	static CRITERIA = CRITERIA;
-	get isMultiSig() { return this.prefix.startsWith('M'); }
-	STRING = 'C123456'; 	// THE FULL ADDRESS STRING, 			length = 7
-	B58 = '123456';			// THE BASE58 PART WITHOUT THE PREFIX, 	length = 6/5
-	prefix = 'C';			// THE PREFIX CHARACTERS				length = 1/2
-	uint32 = 0;				// THE NUMERICAL REPRESENTATION OF THE ADDRESS
-	bytes; 					// THE ADDRESS AS BYTES (1 byte prefix + 4 bytes number)
-
-	/** @param {string} prefix @param {string} B58 @param {number} uint32 */
-	constructor(prefix, B58, uint32) {
-		this.B58 = B58;
-		this.prefix = prefix;
-		this.uint32 = uint32;
-		this.STRING = prefix + B58;
-		this.bytes = new Uint8Array(5);
-		this.bytes.set(converter.stringToBytes(prefix), 0);
-		this.bytes.set(converter.numberTo4Bytes(uint32), 1);
-	}
 
 	// CACHES
-	static #b58ToUint32Cache = new ConverterCache();
-	static b58ToUint32(str = '123456') {
+	static #suffixToUint32Cache = new ConverterCache();
+	static suffixToUint32(str = '123456') {
 		/** @type {number | undefined} */
-		const cached = ADDRESS.#b58ToUint32Cache.get(str);
+		const cached = ADDRESS.#suffixToUint32Cache.get(str);
 		if (cached !== undefined) return cached;
 		
 		const result = Converter.b58ToUint32(str);
-		ADDRESS.#b58ToUint32Cache.set(str, result);
+		ADDRESS.#suffixToUint32Cache.set(str, result);
 		return result;
 	}
-	static #uint32ToB58Caches = { suffix1: new ConverterCache(), suffix2: new ConverterCache() };
-	static uint32ToB58(num = 0, prefixLength = 1) {
+	static #uint32ToSuffixCaches = { p1: new ConverterCache(), p2: new ConverterCache() };
+	static uint32ToSuffix(num = 0, prefixLength = 1) {
 		/** @type {string | undefined} */
 		const cached =  prefixLength === 1
-			? ADDRESS.#uint32ToB58Caches.suffix1.get(num)
-			: ADDRESS.#uint32ToB58Caches.suffix2.get(num);
+			? ADDRESS.#uint32ToSuffixCaches.p1.get(num)
+			: ADDRESS.#uint32ToSuffixCaches.p2.get(num);
 		if (cached !== undefined) return cached;
 
-		const b58Length = prefixLength === 1 ? CRITERIA.B58_LENGTH.suffix1 : CRITERIA.B58_LENGTH.suffix2;
+		const b58Length = prefixLength === 1 ? CRITERIA.SUFFIX_LENGTH.p1 : CRITERIA.SUFFIX_LENGTH.p2;
 		const result = Converter.uint32ToB58(num, b58Length);
-		if (prefixLength === 1) ADDRESS.#uint32ToB58Caches.suffix1.set(num, result);
-						   else ADDRESS.#uint32ToB58Caches.suffix2.set(num, result);
+		if (prefixLength === 1) ADDRESS.#uint32ToSuffixCaches.p1.set(num, result);
+						   else ADDRESS.#uint32ToSuffixCaches.p2.set(num, result);
 		return result;
 	}
-	static #bytesToB58Cache = new ConverterCache();
-	/** @param {Uint8Array} bytes length: 5, first byte is prefix */
-	static bytesToB58(bytes) {
-		const key = converter.bytesToHex(bytes);
-		/** @type {string | undefined} */
-		const cached = ADDRESS.#bytesToB58Cache.get(key);
-		if (cached !== undefined) return cached;
-
-		const result = ADDRESS.BYTES_TO_B58(bytes);
-		ADDRESS.#bytesToB58Cache.set(key, result);
-		return result;
-	}
-
-	// BUILDERS
-	//** @param {string} addressBase58 */
-	/*static fromString(addressBase58) {
-		if (typeof addressBase58 !== 'string') throw new Error('Address must be a string');
-		if (addressBase58.length !== CRITERIA.TOTAL_LENGTH) throw new Error(`Address must be ${CRITERIA.TOTAL_LENGTH} characters long`);
-		
-		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
-		if (!ADDRESS.#AUTHORIZED_PREFIXES.has(prefix)) throw new Error(`Address must start with one of the following prefixes: ${[...ADDRESS.#AUTHORIZED_PREFIXES].join(', ')}`);
-		
-		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
-		return new ADDRESS(prefix, lastPartBase58, uint32);
-	}*/
 
 	// HELPERS
+	static #addressToBytesCache = new ConverterCache();
+	/** @param {string} addressBase58 */
+	static addressToBytes(addressBase58) {
+		/** @type {Uint8Array | undefined} */
+		const cached = ADDRESS.#addressToBytesCache.get(addressBase58);
+		if (cached !== undefined) return cached;
+
+		const bytes = new Uint8Array(5);
+		const { prefix, suffix } = ADDRESS.splitAddress(addressBase58);
+		const uint32 = ADDRESS.suffixToUint32(suffix);
+		bytes.set([PREFIX_CODES[prefix]], 0);
+		bytes.set(converter.numberTo4Bytes(uint32), 1);
+		ADDRESS.#addressToBytesCache.set(addressBase58, bytes);
+		return bytes;
+	}
+
+	static #bytesToAddressCache = new ConverterCache();
+	/** @param {Uint8Array} bytes length: 5, first byte is prefix */
+	static bytesToAddress(bytes) {
+		if (bytes.length !== CRITERIA.BYTES_LENGTH) throw new Error('Invalid bytes length!');
+
+		const uint32 = (bytes[4] << 24 | bytes[3] << 16 | bytes[2] << 8 | bytes[1]) >>> 0; // LE
+		const key = bytes[0] * 0x100000000 + uint32; // unique per prefix+uint32
+
+		/** @type {string | undefined} */
+		const cached = ADDRESS.#bytesToAddressCache.get(key);
+		if (cached !== undefined) return cached;
+
+		const prefix = PREFIXES_LIST[bytes[0]];
+		const suffix = ADDRESS.uint32ToSuffix(uint32, prefix.length);
+		const result = prefix + suffix;
+		ADDRESS.#bytesToAddressCache.set(key, result);
+		return result;
+	}
+
 	/** Get the prefix for a multisig address based on its threshold @param {number} threshold */
 	static getPrefixForMultisig(threshold) {
 		if (threshold < 1 || threshold > 10) throw new Error('Multisig threshold must be between 1 and 10');
 		return 'M' + threshold;
 	}
+
 	/** All multisig addresses start with 'M', followed by a number indicating the threshold @param {string} addressBase58 */
 	static isMultiSigAddress(addressBase58) {
 		return addressBase58.startsWith('M');
 	}
+
 	/** @param {string} addressBase58 */
 	static splitAddress(addressBase58) {
-		const firstChar = addressBase58.substring(0, 1);
-		const prefix = firstChar === 'M' ? addressBase58.substring(0, 2) : firstChar; // Handle multisig prefix (M1, M2, ...)
-		const lastPartBase58 = addressBase58.substring(prefix.length);
-		return { prefix, lastPartBase58 };
+		const prefix = addressBase58[0] === 'M' ? addressBase58.slice(0, 2) : addressBase58[0]; // Handle multisig prefix (M1, M2, ...)
+		const suffix = addressBase58.slice(prefix.length);
+		return { prefix, suffix };
 	}
-	/** @param {string} addressBase58 */
+	
+	/** - rootUint32 is a memory pointer @param {string} addressBase58 */
 	static getAddressRoot(addressBase58) {
-		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
-		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
+		const { prefix, suffix } = ADDRESS.splitAddress(addressBase58);
+		const uint32 = ADDRESS.suffixToUint32(suffix);
 		const remainder = uint32 % CRITERIA.ADDRESSES_PER_ROOT;
 		const rootUint32 = uint32 - remainder;
-		const rootB58 = ADDRESS.uint32ToB58(rootUint32, prefix.length);
-		return { prefix, rootB58, rootUint32 };
+		const rootSuffix = ADDRESS.uint32ToSuffix(rootUint32, prefix.length);
+		return { prefix, rootSuffix, rootUint32, walletId: `${prefix}${rootSuffix}` };
 	}
-	/** Returns all addresses associated with root address (e.g. C111111 => C111111, C111112, ..., C111119) @param {string} rootAddressBase58 */
-	static getAddressesFromRoot(rootAddressBase58) {
-		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(rootAddressBase58);
-		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
+
+	/** Returns all addresses associated with walletId (e.g. C111111 => C111111, C111112, ..., C111119) @param {string} walletId */
+	static getAddressesFromWalletId(walletId) {
+		const { prefix, suffix } = ADDRESS.splitAddress(walletId);
+		const uint32 = ADDRESS.suffixToUint32(suffix);
 		if (uint32 % CRITERIA.ADDRESSES_PER_ROOT !== 0) throw new Error('Address is not a root address');
 
-		const addresses = [rootAddressBase58];
+		const addresses = [walletId];
 		for (let i = 1; i < CRITERIA.ADDRESSES_PER_ROOT; i++)
-			addresses.push(`${prefix}${ADDRESS.uint32ToB58(uint32 + i, prefix.length)}`);
+			addresses.push(`${prefix}${ADDRESS.uint32ToSuffix(uint32 + i, prefix.length)}`);
 
 		return addresses;
 	}
@@ -170,39 +166,15 @@ export class ADDRESS {
 	/** Check if the address conforms to the criteria @param {string} addressBase58 - Address to validate */
 	static checkConformity(addressBase58) {
 		if (typeof addressBase58 !== 'string') return false;
-		if (addressBase58.length !== CRITERIA.TOTAL_LENGTH) return false;
+		if (addressBase58.length !== CRITERIA.STRING_LENGTH) return false;
 
 		// CONTROL FIRST CHAR EXISTS IN LEXICON
-		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
+		const { prefix, suffix } = ADDRESS.splitAddress(addressBase58);
 		if (!ADDRESS.#AUTHORIZED_PREFIXES.has(prefix)) return false;
 		
 		/// CONTROL NUMERICAL VALUE OF THE ADDRESS IS UNDER MAX VALUE
-		const val = ADDRESS.b58ToUint32(lastPartBase58);
-		const maxVal = prefix.length === 1 ? CRITERIA.MAX_NUM_VALUE.suffix1 : CRITERIA.MAX_NUM_VALUE.suffix2;
+		const val = ADDRESS.suffixToUint32(suffix);
+		const maxVal = prefix.length === 1 ? CRITERIA.MAX_NUM_VALUE.p1 : CRITERIA.MAX_NUM_VALUE.p2;
 		return val <= maxVal;
-	}
-	/** @param {string} addressBase58 */
-	static B58_TO_BYTES(addressBase58) {
-		const bytes = new Uint8Array(5);
-		const { prefix, lastPartBase58 } = ADDRESS.splitAddress(addressBase58);
-		const uint32 = ADDRESS.b58ToUint32(lastPartBase58);
-		bytes.set([PREFIX_CODES[prefix]], 0);
-		bytes.set(converter.numberTo4Bytes(uint32), 1);
-		return bytes;
-	}
-	/** @param {Uint8Array} bytes length: 5, first byte is prefix */
-	static BYTES_TO_B58(bytes) {
-		const uint32 = (bytes[4] << 24 | bytes[3] << 16 | bytes[2] << 8 | bytes[1]) >>> 0; // LE
-		const key = bytes[0] * 0x100000000 + uint32; // unique per prefix+uint32
-
-		/** @type {string | undefined} */
-		const cached = ADDRESS.#bytesToB58Cache.get(key);
-		if (cached !== undefined) return cached;
-
-		const prefix = PREFIXES_LIST[bytes[0]];
-		const B58 = ADDRESS.uint32ToB58(uint32, prefix.length);
-		const result = prefix + B58;
-		ADDRESS.#bytesToB58Cache.set(key, result);
-		return result;
 	}
 }

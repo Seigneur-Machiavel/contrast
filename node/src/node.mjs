@@ -58,8 +58,8 @@ export class ContrastNode {
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, state: 'idle' };
 	/** When address is assigned, the associated pubkey shouldn't been set as tx identity.
-	 * @type {{ vAddress: string | null | undefined, vPubkeys: string[] | undefined, vBalance: number, sAddress: string | null | undefined, sPubkeys: string[] | undefined, sBalance: number }} */
-	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, vBalance: 0, sAddress: undefined, sPubkeys: undefined, sBalance: 0 };
+	 * @type {{ vAddress: string | null | undefined, vPubkeys: string[] | undefined, sAddress: string | null | undefined, sPubkeys: string[] | undefined }} */
+	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, sAddress: undefined, sPubkeys: undefined };
 	/** @type {Wallet | null} */
 	wallet = null;
 	mainStorage; version; blockchain;
@@ -97,6 +97,7 @@ export class ContrastNode {
 		p2pNode.gossip.on('transaction', this.#onTransaction);
 		p2pNode.gossip.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
+		p2pNode.messager.on('wallet_ledgers_request', this.#onWalletLedgersRequest);
 		//p2pNode.messager.on('verify_identity_request', this.#onVerifyIdentityRequest);
 		p2pNode.messager.on('transactions_request', this.#onTransactionsRequest);
 		p2pNode.messager.on('blocks_headers_request', this.#onBlocksHeadersRequest);
@@ -123,13 +124,18 @@ export class ContrastNode {
 		this.logger.log(`Starting Contrast node...`, (m, c) => console.log(m, c)); // control the clock
 		for (let i = 0; i < this.workers.nbOfValidationWorkers; i++) this.workers.validations.push(new ValidationWorker(i));
 		
+		if (wallet) {
+			this.wallet = wallet;
+			this.#setRewardInfo('validator', null, [wallet.hybridKeyHex], false);
+			this.#setRewardInfo('solver', null, [wallet.hybridKeyHex], false);
+		}
+
 		// ASSOCIATE WALLET IF PROVIDED, AND SET SAVED REWARD ADDRESSES IF ANY
-		if (wallet) this.associateWallet(wallet);
-		const rewardAddresses = await this.mainStorage.loadJSON('rewardAddresses');
+		const rewardAddresses = this.mainStorage.loadJSON('rewardAddresses');
 		if (rewardAddresses && rewardAddresses.vAddress && rewardAddresses.vPubkeys)
-			await this.#setRewardAddress('validator', rewardAddresses.vAddress, rewardAddresses.vPubkeys, false);
+			this.#setRewardInfo('validator', rewardAddresses.vAddress, rewardAddresses.vPubkeys, false);
 		if (rewardAddresses && rewardAddresses.sAddress && rewardAddresses.sPubkeys)
-			await this.#setRewardAddress('solver', rewardAddresses.sAddress, rewardAddresses.sPubkeys, false);
+			this.#setRewardInfo('solver', rewardAddresses.sAddress, rewardAddresses.sPubkeys, false);
 
 		if (!this.p2p.started) { 		// START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
@@ -156,31 +162,19 @@ export class ContrastNode {
 		await this.start();
 	}
 
-	/** Associate a wallet with this node (for solver and validator functions) @param {Wallet} wallet */
-	associateWallet(wallet) {
-		this.wallet = wallet;
-		this.#setRewardAddress('validator', wallet.accounts[0]?.address, [wallet.pubKey], false);
-		this.#setRewardAddress('solver', wallet.accounts[1]?.address, [wallet.pubKey], false);
-	}
 	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} [pubKeysHex] */
 	handleAddressUpdate(type, address, pubKeysHex) {
-		const pks = pubKeysHex || this.blockchain.identityStore.getIdentity(address)?.pubKeysHex;
-		if (!pks) return this.logger.log(`Failed to update ${type} address to ${address}: no pubkeys found for this address`, (m, c) => console.warn(m, c));
-		this.#setRewardAddress(type, address, pks);
+		//const pks = pubKeysHex || this.blockchain.identityStore.getIdentity(address)?.pubKeysHex;
+		//if (!pks) return this.logger.log(`Failed to update ${type} address to ${address}: no pubkeys found for this address`, (m, c) => console.warn(m, c));
+		this.#setRewardInfo(type, address, pubKeysHex);
 	}
 	/** @param {'solver' | 'validator'} type @param {string | null} address @param {string[]} [pubKeysHex] */
-	async #setRewardAddress(type, address, pubKeysHex, save = true) {
+	#setRewardInfo(type, address, pubKeysHex, save = true) {
 		if (address && pubKeysHex) throw new Error(`Cannot set both address and pubkeys for ${type}`);
 		
-		if (type === 'solver') {
-			this.rewardsInfo.sAddress = address;
-			this.rewardsInfo.sPubkeys = pubKeysHex;
-			if (address) this.rewardsInfo.sBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
-		} else {
-			this.rewardsInfo.vAddress = address;
-			this.rewardsInfo.vPubkeys = pubKeysHex;
-			if (address)this.rewardsInfo.vBalance = (await this.blockchain.ledgersStorage.getAddressLedger(address))?.balance || 0;
-		}
+		this.rewardsInfo[type === 'solver' ? 'sAddress' : 'vAddress'] = address;
+		this.rewardsInfo[type === 'solver' ? 'sPubkeys' : 'vPubkeys'] = pubKeysHex;
+
 		if (save) this.mainStorage.saveJSON('rewardAddresses', { vAddress: this.rewardsInfo.vAddress, vPubkeys: this.rewardsInfo.vPubkeys, sAddress: this.rewardsInfo.sAddress, sPubkeys: this.rewardsInfo.sPubkeys });
 	}
 	async createAndShareMyBlockCandidate() {
@@ -283,13 +277,22 @@ export class ContrastNode {
 			if (typeof address !== 'string') throw new Error('Invalid address data type');
 			if (!ADDRESS.checkConformity(address)) throw new Error('Invalid address format');
 			
-			const ledger = await this.blockchain.ledgersStorage.getAddressLedger(address);
+			const ledger = this.blockchain.ledgersStorage.getAddressLedger(address);
 			if (!ledger) throw new Error('Ledger not found for address: ' + address);
-			// CLEAR REDUNDANT DATA & SEND RESPONSE
-			delete ledger.historyBytes;
-			delete ledger.utxosBuffer;
-			this.p2p.messager.sendUnicast(senderId, ledger, 'address_ledger');
+			this.p2p.messager.sendUnicast(senderId, ledger.writer.getBytes(), 'address_ledger');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onAddressLedgerRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	}
+	/** @param {DirectMessage} msg */
+	#onWalletLedgersRequest = async (msg) => {
+		const { senderId, data: walletId } = msg;
+		try {
+			if (typeof walletId !== 'string') throw new Error('Invalid address data type');
+			if (!ADDRESS.checkConformity(walletId)) throw new Error('Invalid address format');
+			
+			const ledgers = this.blockchain.ledgersStorage.getSerializedBatch(walletId);
+			if (!ledgers) throw new Error('Ledgers not found for wallet: ' + walletId);
+			this.p2p.messager.sendUnicast(senderId, ledgers, 'address_ledger');
+		} catch (/** @type {any} */ error) { this.logger.log(`-onWalletLedgersRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */
 	/*#onVerifyIdentityRequest = async (msg) => {

@@ -220,8 +220,8 @@ export class Assistant {
 
 		// SETUP ADDRESSES IN CONTROLLER -> Rewards of local node will go to the generated wallet.
 		const [ vAccount, sAccount ] = this.biw.wallet.accounts;
-		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'validator', address: vAccount.address, pubKeysHex: [vAccount.pubKey] });
-		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'solver', address: sAccount.address, pubKeysHex: [sAccount.pubKey] });
+		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'validator', address: vAccount.address, pubKeysHex: vAccount.pubKeysHex });
+		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'solver', address: sAccount.address, pubKeysHex: sAccount.pubKeysHex });
 	}
 
 	/** Based on authInfo => RequestPrivateKey or RequestPasswordToUnlock or load wallet. */

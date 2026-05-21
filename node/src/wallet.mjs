@@ -1,6 +1,5 @@
 // @ts-check
 import { Account } from './account.mjs';
-import { hybridKeyHint } from '../../utils/common.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
@@ -34,7 +33,7 @@ export class Wallet {
 	frontStorage;
 	converter = serializer.converter;
     miniLogger = new MiniLogger('wallet');
-	get pubKey() { return this.hybridKeyHex; }
+	get walletId() { return this.accounts[0]?.address }
 	get walletIdentifier() { return HashFunctions.SHA512(this.#masterHex).hashHex.substring(0, 8); }
 	get balance() { return this.accounts.reduce((sum, account) => sum + account.balance, 0); }
 	get stakedBalance() { return this.accounts.reduce((sum, account) => sum + account.filteredBalance(Infinity, [], ['sigOrSlash']), 0); }
@@ -81,23 +80,24 @@ export class Wallet {
 		this.hybridKeyHex = serializer.converter.bytesToHex(hybridKey);
 
 		// TRY TO LOAD ROOT ADDRESS FROM STORAGE
-		const key = `rootAddress-${this.walletIdentifier}`;
+		const key = `walletId-${this.walletIdentifier}`;
 		
 		/** @type {string | null} */ // @ts-ignore
-		const rootAddress = this.contrastStorage ? this.contrastStorage.loadJSON(key) : await this.frontStorage.load(key);
-		if (!rootAddress) return;
+		const walletId = this.contrastStorage ? this.contrastStorage.loadJSON(key) : await this.frontStorage.load(key);
+		if (!walletId) return;
 
 		// LOAD ACCOUNTS
-		this.assignRootAddress(rootAddress, false);
+		this.assignRootAddress(walletId, false);
 	}
-	/** @param {string} rootAddress - The root address to assign to the wallet (e.g., C111111) */
-	assignRootAddress(rootAddress, saveToStorage = true) {
+	/** @param {string} walletId - The root address to assign to the wallet (e.g., C111111) @param {boolean} [saveToStorage] default: true */
+	assignRootAddress(walletId, saveToStorage = true) {
+		if (walletId === this.walletId) return;
 		if (this.accounts.length > 0) throw new Error('Root address already assigned');
-		const addresses = ADDRESS.getAddressesFromRoot(rootAddress);
-		for (const address of addresses) this.accounts.push(new Account(address));
+		const addresses = ADDRESS.getAddressesFromWalletId(walletId);
+		for (const address of addresses) this.accounts.push(new Account(this, address));
 		if (saveToStorage) this.#saveRootAddressToStorage();
 	}
-	/** @param {Transaction} transaction @param {number | string} [accountIndexOrtempAddress] 0 = rootAddress */
+	/** @param {Transaction} transaction @param {number | string} [accountIndexOrtempAddress] 0 = walletId */
 	async signTransaction(transaction, accountIndexOrtempAddress = 0) {
 		const address = typeof accountIndexOrtempAddress === 'number'
 			? this.accounts[accountIndexOrtempAddress]?.address
@@ -111,17 +111,17 @@ export class Wallet {
 		const hashBytes = Transaction_Builder.getTransactionSignable(transaction).hashBytes;
 		const hybridSig = this.#signer.sign(hashBytes);
 		const hybridSigHex = serializer.converter.bytesToHex(hybridSig);
-		transaction.witnesses.push([address, hybridKeyHint(this.hybridKeyHex), hybridSigHex]);
+		transaction.witnesses.push([address, hybridSigHex]);
 		return transaction;
 	}
 	async #saveRootAddressToStorage() {
-		const key = `rootAddress-${this.walletIdentifier}`;
+		const key = `walletId-${this.walletIdentifier}`;
 		if (!this.accounts[0]?.address) throw new Error('No accounts available to save root address');
 		if (this.contrastStorage) this.contrastStorage.saveJSON(key, this.accounts[0]?.address);
 		else if (this.frontStorage) await this.frontStorage.save(key, this.accounts[0]?.address);
 	}
 	async removeAccountsFromStorage() {
-		const key = `rootAddress-${this.walletIdentifier}`;
+		const key = `walletId-${this.walletIdentifier}`;
 		if (this.contrastStorage) this.contrastStorage.deleteFile(`${key}.json`);
 		else if (this.frontStorage) await this.frontStorage.remove(key);
 	}

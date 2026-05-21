@@ -2,6 +2,7 @@
 import { Sync } from '../../node/src/sync.mjs';
 import { serializer, BinaryReader } from '../../utils/serializer.mjs';
 import { PendingRequest } from '../../utils/networking.mjs';
+import { Ledger } from '../../types/ledger.mjs';
 import { BlockFinalized, BlockFinalizedHeader } from '../../types/block.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 import { ADDRESS } from '../../types/address.mjs';
@@ -9,13 +10,12 @@ import { ADDRESS } from '../../types/address.mjs';
 /**
  * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
  * @typedef {import("../../node_modules/hive-p2p/core/gossip.mjs").GossipMessage} GossipMessage
- * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
- * @typedef {import("../../types/transaction.mjs").TxId} TxId
- */
+ * @typedef {import("../../types/transaction.mjs").TxId} TxId */
 
 export class ConnectorP2P {
 	/** @type {PendingRequest | null} */		pendingLedgerRequest = null;
+	/** @type {PendingRequest | null} */		pendingWalletRequest = null;
 	/** @type {PendingRequest | null} */		pendingBlocksHeadersRequest = null;
 	/** @type {PendingRequest | null} */		pendingTransactionsRequest = null;
 	/** @type {PendingRequest | null} */		pendingRoundsLegitimaciesRequest = null;
@@ -52,6 +52,7 @@ export class ConnectorP2P {
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
 		p2pNode.messager.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
+		p2pNode.messager.on('wallet_ledgers', this.#onWalletLedgers);
 		p2pNode.messager.on('blocks_headers', this.#onBlocksHeaders);
 		p2pNode.messager.on('rounds_legitimacies', this.#onRoundsLegitimacies);
 		this.#consensusChangeDetectionLoop();
@@ -108,8 +109,21 @@ export class ConnectorP2P {
 			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
 			this.p2pNode.messager.sendUnicast(peerId, address, 'address_ledger_request');
 			try {
-				/** @type {AddressLedger} */
+				/** @type {Ledger} */
 				const response = await this.pendingLedgerRequest.promise;
+				return response;
+			} catch (error) {}
+		}
+	}
+	/** @param {string} address */
+	async getWalletLedgers(address, timeout = 3000) {
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
+		for (const peerId of peersToAsk) {
+			this.pendingWalletRequest = new PendingRequest(peerId, 'wallet_ledgers', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, address, 'wallet_ledgers_request');
+			try {
+				/** @type {Ledger[]} */
+				const response = await this.pendingWalletRequest.promise;
 				return response;
 			} catch (error) {}
 		}
@@ -252,8 +266,21 @@ export class ConnectorP2P {
 	#onAddressLedger = (msg) => {
 		const { senderId, data } = msg;
 		if (this.pendingLedgerRequest?.peerId !== senderId) return; // not the expected sender
-		this.pendingLedgerRequest.complete(data);
+		if (data instanceof Uint8Array) this.pendingLedgerRequest.complete(new Ledger(data));
+		else console.error("data isn't instanceof Uint8Array!");
 		this.pendingLedgerRequest = null;
+	}
+	/** @param {DirectMessage} msg */
+	#onWalletLedgers = (msg) => {
+		const { senderId, data } = msg;
+		if (this.pendingWalletRequest?.peerId !== senderId) return; // not the expected sender
+		const ledgers = [];
+		if (data instanceof Uint8Array) {
+			const serializedLedgers = new BinaryReader(data).readPointersAndExtractDataChunks();
+			for (const sl of serializedLedgers) ledgers.push(new Ledger(sl));
+		}
+		this.pendingWalletRequest.complete(ledgers);
+		this.pendingWalletRequest = null;
 	}
 	/** @param {DirectMessage} msg */
 	#onTransactions = (msg) => {

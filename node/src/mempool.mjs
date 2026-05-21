@@ -1,8 +1,9 @@
 // @ts-check
 import { HashFunctions } from './conCrypto.mjs';
+import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { serializer } from '../../utils/serializer.mjs';
-import { IdentitiesCache, TxValidation } from './tx-validation.mjs';
+import { EntriesCache, IdentitiesCache } from '../../types/identity.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 
 /**
@@ -142,19 +143,22 @@ export class MemPool {
 
 		/** @type {Set<string>} */
 		const spentAnchors = new Set();
-		const identitiesCache = new IdentitiesCache(node.blockchain.identityStore, 0);
-
+		const identitiesCache = new IdentitiesCache();
+		const entriesCache = new EntriesCache();
+		
 		const includeCurrentBatchIfValid = () => {
 			const involvedUTXOs = this.blockchain.getUtxos(batch.anchors, false) || {};
 			for (const oTx of batch.oTxs) {
 				// skip transaction if one of its inputs is already spent by another tx in the batch
 				if (oTx.tx.inputs.some(input => spentAnchors.has(input))) continue;
-
+			
 				try {
 					TxValidation.isConformTransaction(involvedUTXOs, oTx.tx);
-					TxValidation.controlIdentitiesReservation(node, oTx.tx, identitiesCache);
-					TxValidation.extractOutputsIdentities(node, oTx.tx, identitiesCache);
+					TxValidation.controlIdentitiesReservation(node, oTx.tx, entriesCache);
+					TxValidation.extractRegularTxIdentities(node, involvedUTXOs, oTx.tx, identitiesCache);
 				} catch (error) { invalidTransactions.push(oTx); continue; }
+
+				// No needs for "controlAddressesHasAssociatedWitnesses()" -> 	already done while tx enter in memPool.
 				
 				// ADD THE TRANSACTION TO RESULT
 				for (const input of oTx.tx.inputs) spentAnchors.add(input);

@@ -1,145 +1,135 @@
 // @ts-check
 import fs from 'fs';
 import path from 'path';
+import { Ledger } from '../types/ledger.mjs';
+import { ADDRESS } from '../types/address.mjs';
 import { UTXO } from '../types/transaction.mjs';
-import { Converter } from '../node/src/conCrypto.mjs';
 import { serializer, BinaryReader, BinaryWriter } from '../utils/serializer.mjs';
 
 /**
  * @typedef {import("../types/transaction.mjs").LedgerUtxo} LedgerUtxo
  * @typedef {import("../types/transaction.mjs").TxId} TxId
  * @typedef {import("../types/transaction.mjs").VoutId} VoutId
- * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized 
- * 
- * @typedef {Object} RawLedger
- * @property {number} balance
- * @property {number} totalSent
- * @property {number} totalReceived
- * @property {number} nbUtxos
- * @property {number} nbHistory
- * @property {Buffer} utxosBuffer
- * @property {Uint8Array} historyBytes */
+ * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
-/*{ // SAMPLE LEDGER BINARY FORMAT
-  balance				(6b)
-  totalSent				(6b)
-  totalReceived			(6b)
-  nbUtxos				(4b)
-  nbHistory				(4b)
-  utxos					(15b x nb)
-  history-TxIds 		(6b x nb)
-}*/
+class WalletChanges {
+	/** key: address @type {Record<string, SlotChanges>} */
+	slotChanges = {};
+	addresses;
 
-export class AddressLedger {
-	/** 
-	 * @param {number} balance @param {number} totalSent @param {number} totalReceived @param {number} nbUtxos @param {number} nbHistory
-	 * @param {LedgerUtxo[]} [ledgerUtxos] @param {TxId[]} [history] @param {Buffer} [utxosBuffer] @param {Uint8Array} [historyBytes] */
-	constructor(balance, totalSent, totalReceived, nbUtxos, nbHistory, ledgerUtxos, history, utxosBuffer, historyBytes) {
-		this.balance = balance;
-		this.totalSent = totalSent;
-		this.totalReceived = totalReceived;
-		this.nbUtxos = nbUtxos;
-		this.nbHistory = nbHistory;
-		this.ledgerUtxos = ledgerUtxos;
-		this.history = history;
-		this.utxosBuffer = utxosBuffer;
-		this.historyBytes = historyBytes;
+	/** @param {string} walletId */
+	constructor(walletId) {
+		this.addresses = ADDRESS.getAddressesFromWalletId(walletId);
+		for (const address of this.addresses) this.slotChanges[address] = new SlotChanges();
+	}
+
+	/** @param {string} address @param {'in' | 'out'} direction @param {TxId} txId @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
+	add(address, direction, txId, height, txIndex, vout, amount, rule) {
+		const serializedUtxo = serializer.serialize.ledgerUtxo(height, txIndex, vout, amount, rule);
+		if (!this.slotChanges[address].historyTxIds.has(txId))
+			this.slotChanges[address].historyTxIds.add(txId);
+		
+		if (direction === 'out') {
+			this.slotChanges[address].totalOutAmount += amount;
+			this.slotChanges[address].out.push(serializedUtxo);
+		} else {
+			this.slotChanges[address].totalInAmount += amount;
+			this.slotChanges[address].in.push(serializedUtxo);
+		}
 	}
 }
-
-class AddressChanges {
+export class SlotChanges {
 	/** Incoming UTXOs entries @type {Uint8Array[]} */ 			in = [];
 	/** Outgoing UTXOs entries @type {Uint8Array[]} */ 			out = [];
 	/** Incoming total amount @type {number} */ 				totalInAmount = 0;
 	/** Outgoing total amount @type {number} */ 				totalOutAmount = 0;
 	/** History txIds @type {Set<TxId>} */						historyTxIds = new Set();
+}
+class LedgersCache { // clear on new block & undo block
+	/** Cache of serialized LedgersBatches by walletId @type {Map<string, Uint8Array | null>} */
+	serializedBatches = new Map();
+	/** Cache of serialized Ledgers by walletId @type {Map<string, Uint8Array[]>} */
+	serializedLedgers = new Map();
+	/** Cache of Ledgers by walletId @type {Map<string, Ledger[]>} */
+	ledgers = new Map();
 
-	/** @param {'in' | 'out'} direction @param {TxId} txId @param {number} height @param {number} txIndex @param {number} vout @param {number} amount @param {string} rule */
-	add(direction, txId, height, txIndex, vout, amount, rule) {
-		const serializedUtxo = serializer.serialize.ledgerUtxo(height, txIndex, vout, amount, rule);
-		if (!this.historyTxIds.has(txId)) this.historyTxIds.add(txId);
-		
-		if (direction === 'out') {
-			this.totalOutAmount += amount;
-			this.out.push(serializedUtxo);
-		} else {
-			this.totalInAmount += amount;
-			this.in.push(serializedUtxo);
-		}
+	clear() {
+		this.serializedBatches.clear();
+		this.serializedLedgers.clear();
+		this.ledgers.clear();
 	}
 }
 
+const EMPTY_LEDGER_SIZE = 6 + 6 + 6 + 4 + 4;
+const ADDRESS_PER_ROOT = ADDRESS.CRITERIA.ADDRESSES_PER_ROOT;
 export class LedgersStorage {
-	/** @type {Map<string, Uint8Array>} */
-	cache = new Map(); // clear on new block & undo block
+	cache = new LedgersCache();
+
 	storage;
 	get logger() { return this.storage.miniLogger; }
-	converter = new Converter();
 
 	/** @param {import('./storage.mjs').ContrastStorage} storage */
 	constructor(storage) { this.storage = storage; }
 
-	// API METHODS - SORRY FOR SYNC+ASYNC METHODS, TOO MUCH OF CODE, I HAVEN'T DECIDED YET */
+	// API METHODS
 	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {'APPLY' | 'REVERT'} mode @param {boolean} [safeMode] If enabled: check the history before writing, default: false */
-	digestBlockSync(block, involvedUTXOs, mode, safeMode = false) {
-		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
+	digestBlock(block, involvedUTXOs, mode, safeMode = false) {
+		const changesByWallet = this.#extractChangesByWallet(block, involvedUTXOs);
 		let count = 0;
-		for (const address in changesByAddress) {
-			const rawLedger = this.#readAddressLedgerSync(address);
-			const result = mode === 'APPLY'
-				? this.#applyAddressChanges(address, rawLedger, changesByAddress[address], safeMode)
-				: this.#reverseAddressChanges(address, rawLedger, changesByAddress[address], safeMode, true);
-			if (!result) continue;
+		for (const walletId in changesByWallet) {
+
+			// BUILD UPDATED LEDGERS
+			/** @type {Record<string, Uint8Array>} */
+			const serializedUpdatedLedgersByAddress = {};
+			const { isNewLedger, serializedLedgers } = this.#getSerializedLedgers(walletId);
+			const changes = changesByWallet[walletId];
+			for (const address in changes.slotChanges) {
+				const slotChanges = changes.slotChanges[address];
+				const ledger = this.getAddressLedger(address, changes.addresses);
+				const result = mode === 'APPLY'
+					? ledger.applySlotChanges(slotChanges, safeMode)
+					: ledger.reverseSlotChanges(slotChanges, safeMode);
+
+				if (!result) continue;
+				serializedUpdatedLedgersByAddress[address] = result;
+			}
 			
-			const isExistingLedger = rawLedger.nbHistory !== 0; 
-			const dirPath = this.#pathOfAddressLedgerDir(address);
-			this.storage.saveBinary(address, result, dirPath, isExistingLedger);
+			// MERGE UPDATED LEDGERS
+			let isEmpty = true;
+			const serializedUpdatedLedgers = [];
+			const addresses = ADDRESS.getAddressesFromWalletId(walletId);
+			for (let i = 0; i < addresses.length; i++) {
+				const sl = serializedUpdatedLedgersByAddress[addresses[i]] || serializedLedgers[i];
+				serializedUpdatedLedgers.push(sl);
+				if (sl.length > EMPTY_LEDGER_SIZE) isEmpty = false;
+			}
+
+			// SAVE FILE OR DELETE IF EMPTY
+			if (!isEmpty) this.#serializeAndSaveLedgersAsBatch(walletId, serializedUpdatedLedgers, isNewLedger);
+			else if (!isNewLedger) fs.rmSync(path.join(this.#pathOfAddressLedgerDir(walletId), `${walletId}.bin`), { force: true });
 			count++;
 		}
 
 		return count;
 	}
-	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {'APPLY' | 'REVERT'} mode @param {boolean} [safeMode] If enabled: check the history before writing, default: false */
-	async digestBlock(block, involvedUTXOs, mode, safeMode = false) {
-		const changesByAddress = this.#extractChangesByAddress(block, involvedUTXOs);
-		const ledgersByAddress = await this.#getAddressesLedgers(changesByAddress);
-		
-		// Phase 1: prepare bytes
-		/** @type {Object<string, Uint8Array>} */
-		const results = {};
-		for (const address in changesByAddress) {
-			const rawLedger = ledgersByAddress[address];
-			const result = mode === 'APPLY'
-				? this.#applyAddressChanges(address, rawLedger, changesByAddress[address], safeMode)
-				: this.#reverseAddressChanges(address, rawLedger, changesByAddress[address], safeMode, true);
-			if (!result) continue;
+	/** Try cache first -> then storage @param {string} walletId */
+	getSerializedBatch(walletId) {
+		const dirPath = this.#pathOfAddressLedgerDir(walletId);
+		let serializedBatch = this.cache.serializedBatches.get(walletId);
+		if (serializedBatch === undefined) 
+			serializedBatch = this.storage.loadBinary(walletId, dirPath, false);
 
-			results[address] = result;
-		}
-
-		// Phase 2: parallel writes
-		const promises = [];
-		for (const address in results) {
-			const isExistingLedger = ledgersByAddress[address].nbHistory !== 0;
-			const dirPath = this.#pathOfAddressLedgerDir(address);
-			promises.push(this.storage.saveBinaryAtomicAsync(address, results[address], dirPath, isExistingLedger));
-		}
-
-		// Phase 3: sequential atomic commits
-		const writeResults = await Promise.all(promises);
-		let applyCount = 0;
-		for (const r of writeResults)
-			if (!r) continue;
-			else { applyCount += this.storage.commitAtomic(r.tempFilePath, r.finalFilePath) ? 1 : 0; };
-
-		return applyCount;
+		this.cache.serializedBatches.set(walletId, serializedBatch);
+		return serializedBatch;
 	}
-	/** @param {string} address @param {boolean} [deserializeUtxosAndHistory] Default: true */
-	async getAddressLedger(address, deserializeUtxosAndHistory = true) {
-		const l = await this.#readAddressLedger(address);
-		const ledgerUtxos = deserializeUtxosAndHistory ? serializer.deserialize.ledgerUtxosArray(l.utxosBuffer) : undefined;
-		const history = 	deserializeUtxosAndHistory ? serializer.deserialize.txsIdsArray(l.historyBytes) : undefined;
-		return new AddressLedger(l.balance, l.totalSent, l.totalReceived, l.nbUtxos, l.nbHistory, ledgerUtxos, history, l.utxosBuffer, l.historyBytes);
+	/** @param {string} address @param {string[]} [walletAddresses] addresses linked to walletId if known */
+	getAddressLedger(address, walletAddresses) {
+		const walletId = ADDRESS.getAddressRoot(address).walletId;
+		const addressIndex = (walletAddresses || ADDRESS.getAddressesFromWalletId(walletId)).indexOf(address);
+		if (addressIndex === -1) throw new Error(`Address ${address} not found in addresses ${ADDRESS.getAddressesFromWalletId(walletId)}`);
+		
+		return this.cache.ledgers.get(walletId)?.[addressIndex]
+			|| new Ledger(this.#getSerializedLedgers(walletId).serializedLedgers[addressIndex]);
 	}
 	reset() {
 		if (fs.existsSync(this.storage.PATH.LEDGERS)) fs.rmSync(this.storage.PATH.LEDGERS, { recursive: true });
@@ -147,174 +137,63 @@ export class LedgersStorage {
 	}
 
 	// INTERNAL METHODS
-	/** @param {string} address @param {RawLedger} rawLedger @param {AddressChanges} changes @param {boolean} [safeMode] If enabled: check the history before writing, default: false */
-	#applyAddressChanges(address, rawLedger, changes, safeMode = false) {
-		// PREPARE HISTORY TO ADD & CONTROL FOR SAFE MODE
-		const newHistoryBytes = serializer.serialize.txsIdsArray(changes.historyTxIds);
-		if (safeMode) { // CHECK IF ALREADY UPDATED => NO WRITE
-			if (rawLedger.historyBytes.length >= newHistoryBytes.length) return null;
-			const existingHistoryEnd = rawLedger.historyBytes.subarray(rawLedger.historyBytes.length - newHistoryBytes.length);
-			if (Buffer.from(existingHistoryEnd).compare(Buffer.from(newHistoryBytes)) === 0) return null;
-		}
-
-		// PREPARE NEW LEDGER VALUES
-		const newNbUtxos = rawLedger.nbUtxos + changes.in.length - changes.out.length;
-		const newNbHistory = rawLedger.nbHistory + changes.historyTxIds.size;
-		rawLedger.balance += (changes.totalInAmount - changes.totalOutAmount);
-		rawLedger.totalSent += changes.totalOutAmount;
-		rawLedger.totalReceived += changes.totalInAmount;
-
-		const w = new BinaryWriter(6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
-		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.balance));
-		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.totalSent));
-		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.totalReceived));
-		w.writeBytes(this.converter.numberTo4Bytes(newNbUtxos));
-		w.writeBytes(this.converter.numberTo4Bytes(newNbHistory));
-		
-		// WRITE KEPT UTXOS
-		const indexesToSkip = this.#extractIndexesOfMatches(rawLedger.utxosBuffer, changes.out);
-		for (let i = 0; i < rawLedger.nbUtxos * 15; i += 15)
-			if (!indexesToSkip.has(i)) w.writeBytes(rawLedger.utxosBuffer.subarray(i, i + 15));
-
-		// WRITE NEW UTXOS
-		for (const entryBytes of changes.in) w.writeBytes(entryBytes);
-
-		// WRITE HISTORY TXIDS
-		w.writeBytes(rawLedger.historyBytes);
-		w.writeBytes(newHistoryBytes);
-
-		// IF EVERYTHING OK => RETURN BYTES TO SAVE
-		return w.getBytesOrThrow(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
-	}
-	/** @param {string} address @param {RawLedger} rawLedger @param {AddressChanges} changes @param {boolean} [safeMode] If enabled: check the history before writing, default: false @param {boolean} [cleanupEmpty] delete the ledger file if empty, default: true */
-	#reverseAddressChanges(address, rawLedger, changes, safeMode = false, cleanupEmpty = true) {
-		// PREPARE HISTORY TO ADD & CONTROL FOR SAFE MODE
-		const newHistoryBytes = serializer.serialize.txsIdsArray(changes.historyTxIds);
-		if (safeMode) { // CHECK IF END HISTORY DOESN'T MATCH => NO WRITE (unable to undo)
-			if (rawLedger.historyBytes.length < newHistoryBytes.length) return null;
-			const existingHistoryEnd = rawLedger.historyBytes.subarray(rawLedger.historyBytes.length - newHistoryBytes.length);
-			if (Buffer.from(existingHistoryEnd).compare(Buffer.from(newHistoryBytes)) !== 0) return null;
-		}
-
-		// PREPARE NEW LEDGER VALUES
-		const newNbUtxos = rawLedger.nbUtxos - changes.in.length + changes.out.length;
-		const newNbHistory = rawLedger.nbHistory - changes.historyTxIds.size;
-		rawLedger.balance -= (changes.totalInAmount - changes.totalOutAmount);
-		rawLedger.totalSent -= changes.totalOutAmount;
-		rawLedger.totalReceived -= changes.totalInAmount;
-
-		// IF EMPTY & CLEANUP ACTIVE => DELETE FILE AND RETURN
-		const dirPath = this.#pathOfAddressLedgerDir(address);
-		const isEmpty = (newNbUtxos === 0 && newNbHistory === 0 && rawLedger.balance === 0);
-		if (isEmpty && cleanupEmpty) {
-			fs.rmSync(path.join(dirPath, `${address}.bin`), { force: true });
-			return null;
-		}
-		
-		const w = new BinaryWriter(6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
-		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.balance));
-		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.totalSent));
-		w.writeBytes(this.converter.numberTo6Bytes(rawLedger.totalReceived));
-		w.writeBytes(this.converter.numberTo4Bytes(newNbUtxos));
-		w.writeBytes(this.converter.numberTo4Bytes(newNbHistory));
-		
-		// WRITE KEPT UTXOS
-		const indexesToSkip = this.#extractIndexesOfMatches(rawLedger.utxosBuffer, changes.in);
-		for (let i = 0; i < rawLedger.nbUtxos * 15; i += 15)
-			if (!indexesToSkip.has(i)) w.writeBytes(rawLedger.utxosBuffer.subarray(i, i + 15));
-
-		// WRITE NEW UTXOS
-		for (const entryBytes of changes.out) w.writeBytes(entryBytes);
-
-		// WRITE HISTORY TXIDS
-		w.writeBytes(rawLedger.historyBytes.subarray(0, rawLedger.historyBytes.length - newHistoryBytes.length));
-
-		// IF EVERYTHING OK => RETURN BYTES TO SAVE
-		return w.getBytesOrThrow(`Ledger for address ${address} writing incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
-	}
 	/** @param {string} address Base58 string address */
-	#pathOfAddressLedgerDir(address) {
+	#pathOfAddressLedgerDir(address) { // 58 * 58 = 3364 folders per folder
 		return path.join(this.storage.PATH.LEDGERS, address.slice(0, 2), address.slice(2, 4));
     }
 	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs */
-	#extractChangesByAddress(block, involvedUTXOs) {
-		/** @type {Object<string, AddressChanges>} */
-		const r = {}; // RESULT
+	#extractChangesByWallet(block, involvedUTXOs) {
+		/** key: walletId @type {Record<string, WalletChanges>} */
+		const changes = {};
 		for (let i = 2; i < block.Txs.length; i++)
 			for (const input of block.Txs[i].inputs) {
 				const utxo = involvedUTXOs[input];
 				if (!utxo) throw new Error(`UTXO with anchor ${input} not found in involvedUTXOs while extracting changes for block ${block.index}`);
 				
-				if (!r[utxo.address]) r[utxo.address] = new AddressChanges();
+				const { address, amount, rule } = utxo;
+				const walletId = ADDRESS.getAddressRoot(address).walletId;
+				if (changes[walletId]) changes[walletId] = new WalletChanges(walletId);
+
 				const txId = `${block.index}:${i}`;
 				const { height, txIndex, vout } = serializer.parseAnchor(input);
-				r[utxo.address].add('out', txId, height, txIndex, vout, utxo.amount, utxo.rule);
+				changes[walletId].add(address, 'out', txId, height, txIndex, vout, amount, rule);
 			}
 
 		for (let i = 0; i < block.Txs.length; i++)
 			for (let voutIndex = 0; voutIndex < block.Txs[i].outputs.length; voutIndex++) {
 				const { address, amount, rule } = block.Txs[i].outputs[voutIndex];
-				if (!r[address]) r[address] = new AddressChanges();
+				const walletId = ADDRESS.getAddressRoot(address).walletId;
+				if (!changes[walletId]) changes[walletId] = new WalletChanges(walletId);
 
 				const txId = `${block.index}:${i}`;
-				r[address].add('in', txId, block.index, i, voutIndex, amount, rule);
+				changes[walletId].add(address, 'in', txId, block.index, i, voutIndex, amount, rule);
 			}
 		
-		return r;
+		return changes;
 	}
-	/** @param {string} address */
-	#readAddressLedgerSync(address) {
-		const dirPath = this.#pathOfAddressLedgerDir(address);
-		const r = new BinaryReader(this.cache.get(address)		// Try cache first
-			|| this.storage.loadBinary(address, dirPath, false) // Then storage
-			|| new Uint8Array(6 + 6 + 6 + 4 + 4)); 				// Else empty ledger
-		return this.#deserializeAddressLedger(r, address);
-	}
-	/** @param {string} address */
-	async #readAddressLedger(address) {
-		const dirPath = this.#pathOfAddressLedgerDir(address);
-		const r = new BinaryReader(this.cache.get(address)					// Try cache first
-			|| await this.storage.loadBinaryAsync(address, dirPath, false) 	// Then storage
-			|| new Uint8Array(6 + 6 + 6 + 4 + 4)); 							// Else empty ledger
-		return this.#deserializeAddressLedger(r, address);
-	}
-	/** @param {BinaryReader} r @param {string} address */
-	#deserializeAddressLedger(r, address) {
-		const balance = 	this.converter.bytes6ToNumber(r.read(6));
-		const totalSent = 	this.converter.bytes6ToNumber(r.read(6));
-		const totalReceived = this.converter.bytes6ToNumber(r.read(6));
-		const nbUtxos = 	this.converter.bytes4ToNumber(r.read(4));
-		const nbHistory = 	this.converter.bytes4ToNumber(r.read(4)); // don't update before reading history
-		const utxosBuffer = Buffer.from(r.read(nbUtxos * 15));
-		const historyBytes= r.read(nbHistory * 6);
-		if (!r.isReadingComplete) throw new Error(`Ledger for address ${address} reading incomplete: read ${r.cursor} of ${r.view.length} bytes`);
-		this.cache.set(address, r.view); // CACHE THE RAW BYTES
-		return { balance, totalSent, totalReceived, nbUtxos, nbHistory, utxosBuffer, historyBytes };
-	}
-	/** @param {Object<string, AddressChanges>} changesByAddress */
-	async #getAddressesLedgers(changesByAddress) {
-		const promises = [];
-		for (const address in changesByAddress)
-			promises.push(this.#readAddressLedger(address)); // READ AND CACHE ALL LEDGERS BEFORE WRITING
-		
-		/** @type {Object<string, RawLedger>} */
-		const ledgersByAddress = {};
-		const results = await Promise.all(promises);
+	/** Retreive or create ledgers associated to walletId @param {string} walletId */
+	#getSerializedLedgers(walletId) {
+		const serializedBatch = this.getSerializedBatch(walletId);
+		const serializedLedgers = this.cache.serializedLedgers.get(walletId) || (serializedBatch
+			? new BinaryReader(serializedBatch).readPointersAndExtractDataChunks('pointer32')
+			: []) // init or extract
 
-		let i = 0;
-		for (const address in changesByAddress) ledgersByAddress[address] = results[i++];
-		return ledgersByAddress;
+		const isNewLedger = serializedBatch === null;
+		if (isNewLedger) // fill empty batch
+			for (let i = 0; i < ADDRESS_PER_ROOT; i++)
+				serializedLedgers.push(new Uint8Array(EMPTY_LEDGER_SIZE));
+		
+		this.cache.serializedLedgers.set(walletId, serializedLedgers);
+		return { isNewLedger, serializedLedgers };
 	}
-	/** @param {Buffer} buffer @param {Uint8Array[]} entriesToSkip */
-	#extractIndexesOfMatches(buffer, entriesToSkip) {
-		/** @type {Set<number>} */
-		const indexes = new Set();
-		for (const entryBytes of entriesToSkip) {
-			const idx = buffer.indexOf(entryBytes);
-			if (idx === -1) throw new Error(`UTXO entry not found: ${Buffer.from(entryBytes).toString('hex')}`);
-			if (idx % 15 !== 0) throw new Error(`UTXO found at invalid offset: ${idx}`);
-			indexes.add(idx);
-		}
-		return indexes;
+	/** @param {string} walletId @param {Uint8Array[]} serializedLedgers */
+	#serializeAndSaveLedgersAsBatch(walletId, serializedLedgers, isNewLedger = true) {
+		const pointersSize = BinaryWriter.calculatePointersSize(serializedLedgers.length, 'pointer32');
+		const totalSize = serializedLedgers.reduce((sum, b) => sum + b.length, 0);
+		const w = new BinaryWriter(pointersSize + totalSize);
+		w.writePointersAndDataChunks(serializedLedgers, 'pointer32');
+
+		const dirPath = this.#pathOfAddressLedgerDir(walletId);
+		this.storage.saveBinary(walletId, w.getBytesOrThrow(), dirPath, !isNewLedger);
 	}
 }

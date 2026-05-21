@@ -49,7 +49,6 @@ const FILES = [
 	{ in: 'utils/cypher.mjs' },
 	{ in: 'utils/front-storage.mjs' },
 	{ in: 'utils/networking.mjs' },
-	{ in: 'utils/progress-logger.mjs' },
 	{ in: 'utils/serializer-schema.mjs' },
 	{ in: 'utils/serializer.mjs' },
 ];

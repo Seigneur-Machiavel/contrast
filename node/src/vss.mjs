@@ -153,7 +153,7 @@ export class Vss {
 			const authorizedAddresses = new Set();
 			const r = new BinaryReader(data);
 			for (let i = 0; i < data.length; i += SIZES.address.bytes)
-				authorizedAddresses.add(ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes)));
+				authorizedAddresses.add(ADDRESS.bytesToAddress(r.read(SIZES.address.bytes)));
 			if (!r.isReadingComplete) throw new Error(`Failed to read all authorized addresses for anchor: ${anchor}`);
 			return { authorizedAddresses, owner: utxo.address };
 		} catch (error) {

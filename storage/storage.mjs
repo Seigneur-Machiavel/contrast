@@ -32,6 +32,7 @@ class StorageRoot {
 			STORAGE: basePath,
 			TRASH: path.join(basePath, 'trash'),
 			LEDGERS: path.join(basePath, 'ledgers'),
+			OWNERSHIPS: path.join(basePath, 'ownerships'),
 			BLOCKCHAIN: path.join(basePath, 'blockchain'),
 			IDENTITIES: path.join(basePath, 'identities')
 		};
@@ -46,6 +47,7 @@ class StorageRoot {
 		const dirPaths = [
 			this.PATH.TRASH,
 			this.PATH.LEDGERS,
+			this.PATH.OWNERSHIPS,
 			this.PATH.BLOCKCHAIN,
 			this.PATH.IDENTITIES
 		];

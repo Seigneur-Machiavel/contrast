@@ -2,74 +2,29 @@
 // Lot of performance optimization has been done in this file,
 // The code is not the most readable but it's the fastest possible
 import { ADDRESS } from '../../types/address.mjs';
+import { AsymetricFunctions } from './conCrypto.mjs';
 import { IS_VALID } from '../../types/validation.mjs';
-import { hybridKeyHint } from '../../utils/common.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { conditionnals } from '../../utils/conditionals.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { serializer, SIZES } from '../../utils/serializer.mjs';
 import { OutputCreationValidator } from './tx-rule-checkers.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
-import { AsymetricFunctions } from './conCrypto.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
+import { Identity, EntriesCache, IdentitiesCache, QsafeVerifyTask } from '../../types/identity.mjs';
 
 /**
- * @typedef {Object} Identity
- * @property {string} address
- * @property {string[]} pubKeysHex
- * @property {number} threshold
- * 
- * @typedef {Object} qsafeVerifyTask
- * @property {string | Uint8Array} signable
- * @property {string | Uint8Array} signature
- * @property {string | Uint8Array} hybridKey
- * 
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").TxOutput} TxOutput
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
- * @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger
  * @typedef {import("../../storage/identity-store.mjs").IdentityStore} IdentityStore
  * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
 
-export class IdentitiesCache {
-	/** key: addres, value: Identity @type {Map<string, Identity>} */
-	identities = new Map();
-
-	/** @param {string} address @param {string[]} pubKeysHex @param {number} threshold */
-	set(address, pubKeysHex, threshold) {
-		if (this.identities.has(address)) throw new Error(`Identity for address ${address} already exists in cache`);
-		this.identities.set(address, { address, pubKeysHex, threshold });
-	}
-
-	/** @param {string} address */
-	has(address) { return this.identities.has(address); }
-
-	/** @param {string} address */
-	get(address) { return this.identities.get(address); }
-}
-/** Cache of the tx identity entries in a block to detect collision */
-export class EntriesCache {
-	/** @type {Uint8Array[]} */
-	#cache = [];
-
-	/** @param {Uint8Array} serializedEntry */
-	set(serializedEntry) {
-		this.#cache.push(serializedEntry);
-	}
-	/** @param {Uint8Array} serializedEntry */
-	has(serializedEntry) {
-		for (const s of this.#cache) {
-			if (s.length !== serializedEntry.length) continue;
-			if (s.every((byte, index) => byte === serializedEntry[index])) return true;
-		}
-		return false;
-	}
-}
-
 const miniLogger = new MiniLogger('validation');
 export class TxValidation {
-    /** ==> First validation, low computation cost. - control format of : amount, address, rule, version, TxID, UTXOs spendable
+    /** ==> First validation, low computation cost.
+	 * - control format of : amount, address, rule, version, TxID, UTXOs spendable
+	 * - return the fee amount
      * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {'solver' | 'validator'} [specialTx] */
     static isConformTransaction(involvedUTXOs, transaction, specialTx) {
         if (!transaction) throw new Error(`missing transaction: ${transaction}`);
@@ -112,6 +67,8 @@ export class TxValidation {
             if (utxo.spent) throw new Error(`Invalid transaction: UTXO already spent: ${input}`);
             if (utxo.rule === 'sigOrSlash') throw new Error(`Invalid transaction: sigOrSlash UTXO cannot be spend: ${input}`);
 		}
+
+		return remainingAmount;
     }
     /** @param {TxOutput} txOutput */
     static isConformOutput(txOutput) {
@@ -170,12 +127,10 @@ export class TxValidation {
 
 	/** ==> Sixth validation, low disk access cost. Control the discovery of new identities
 	 * - Not for specialTx!
-	 * - Store the discovered identity in involvedIDs map for loop optimization (avoid re-fetching in store)
-	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} involvedIDs */
-	static controlIdentitiesReservation(node, tx, involvedIDs, entriesCache = new EntriesCache()) {
+	 * @param {ContrastNode} node @param {Transaction} tx @param {EntriesCache} entriesCache */
+	static controlIdentitiesReservation(node, tx, entriesCache) {
 		for (const entry of tx.identities) {
 			if (entriesCache.has(entry)) throw new Error('Identity reservation collision detected!');
-			//if (involvedIDs.hasEntry(entry)) continue; // Already discovered in this loop, no need to check again
 
 			const parsed = serializer.deserialize.identityEntry(entry);
 			if (!parsed.threshold) throw new Error(`Identity entry must have a threshold of at least 1`);
@@ -183,31 +138,35 @@ export class TxValidation {
 			if (parsed.pubKeysHex.length === 0) throw new Error(`Identity entry must have at least one pubKey in data field`);
 			if (parsed.pubKeysHex.length > BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig) throw new Error(`Identity entry cannot have more than ${BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig} pubKeys in data field`);
 			
-			// TODO: check if identity already exist : ledgerStore.hasLedger(pubKeyHash) -> CAN'T REDECLARE IDENTITY!!!
+			const isWalletOwner = node.blockchain.ownershipStorage.getOwnedRootAddress(parsed.pubKeysHex);
+			if (parsed.pubKeysHex.length !== 1) throw new Error("MULTISIG ISN'T IMPLEMENTED YET");
+			if (isWalletOwner) throw new Error("pubKey already own a wallet, can't declare a new one");
 			entriesCache.set(entry);
 		}
 	}
 
 	/** ==> Seventh validation, low computation cost. - control the validity of specialTx self reservation
-	 * @param {IdentityStore} identityStore @param {Transaction} tx @param {Record<string, Identity>} [idenditiesToConfirmByAddress] Key: Address, Value: Identity */
-	static extractSpecialTxIdentities(identityStore, tx, idenditiesToConfirmByAddress = {}, entriesCache = new EntriesCache()) {
+	 * @param {ContrastNode} node @param {Transaction} tx @param {IdentitiesCache} identitiesCache @param {EntriesCache} entriesCache */
+	static extractSpecialTxIdentities(node, tx, identitiesCache, entriesCache) {
 		let identityEntryIndex = 0;
+		const { identityStore } = node.blockchain;
 		const nextIdentityEntry = () => tx.identities[identityEntryIndex++];
 		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 3);
 
-		/** @param {string} address */
-		const handleAddressEntry = (address) => {
-			if (identityStore.hasIdentity(address)) {
-				const identity = identityStore.getIdentity(address);
-				if (!identity) throw new Error(`Identity ${address} does not exist in the store`);
-				return idenditiesToConfirmByAddress[address] = identity;
+		/** @param {string} walletId */
+		const handleAddressEntry = (walletId) => {
+			if (identityStore.hasIdentity(walletId)) {
+				if (identitiesCache.get(walletId)) return; // already in cache -> just return
+				const id = identityStore.getIdentity(walletId);
+				if (!id) throw new Error(`Identity ${walletId} does not exist in the store`);
+				return identitiesCache.set(walletId, id.pubKeysHex, id.threshold); // set in cache and return
 			}
-			if (!nextRootAddresses.includes(address)) throw new Error(`Transaction address ${address} is not the expected next root address for identity reservation`);
+			if (!nextRootAddresses.includes(walletId)) throw new Error(`Transaction address ${walletId} is not the expected next root address for identity reservation`);
 			
 			const entry = nextIdentityEntry();
 			if (!entry)
-				if (idenditiesToConfirmByAddress[address]) return;
-				else throw new Error('Missing identity entry for reserved address: ' + address);
+				if (identitiesCache.get(walletId)) return;
+				else throw new Error('Missing identity entry for reserved address: ' + walletId);
 			if (entriesCache.has(entry)) throw new Error('Identity reservation collision detected!');
 			
 			const { pubKeysHex, threshold } = serializer.deserialize.identityEntry(entry);
@@ -215,23 +174,29 @@ export class TxValidation {
 			if (threshold !== 1) throw new Error('Invalid identity entry for solver transaction, threshold must be 1');
 			
 			// TODO: check if identity already exist : ledgerStore.hasLedger(pubKeyHash) -> CAN'T REDECLARE IDENTITY!!!
+			const isWalletOwner = node.blockchain.ownershipStorage.getOwnedRootAddress(pubKeysHex);
+			if (isWalletOwner) throw new Error("pubKey already own a wallet, can't declare a new one");
 			entriesCache.set(entry); // cache it to make collision check.
-			idenditiesToConfirmByAddress[address] = { address, pubKeysHex, threshold }; // cache the reserved identity for later confirmation in the signature verification step
+			identitiesCache.set(walletId, pubKeysHex, threshold, true); // set as self declared
 		}
 		
 		// SOLVER CHECK
 		if (tx.inputs[0].length === SIZES.nonce.str) {
-			handleAddressEntry(tx.outputs[0].address);
+			const rewardWalletId = ADDRESS.getAddressRoot(tx.outputs[0].address).walletId;
+			handleAddressEntry(rewardWalletId);
 			if (nextIdentityEntry()) throw new Error('Ghost identity entry found in solver transaction');
-			return idenditiesToConfirmByAddress;
+			return;
 		}
 
 		// VALIDATOR CHECK
 		if (tx.inputs[0].length === SIZES.validatorInput.str) {
-			handleAddressEntry(tx.inputs[0].split(":")[0]);
-			handleAddressEntry(tx.outputs[0].address);
+			const validatorWalletId = ADDRESS.getAddressRoot(tx.inputs[0].split(":")[0]).walletId;
+    		const rewardWalletId = ADDRESS.getAddressRoot(tx.outputs[0].address).walletId;
+			handleAddressEntry(validatorWalletId);
+			handleAddressEntry(rewardWalletId);
+			identitiesCache.requiredWitnesses.add(validatorWalletId); // validator must sign
 			if (nextIdentityEntry()) throw new Error('Ghost identity entry found in validator transaction');
-			return idenditiesToConfirmByAddress;
+			return;
 		}
 
 		throw new Error('Invalid special transaction input format');
@@ -241,101 +206,113 @@ export class TxValidation {
 	 * - Control the inputAddresses/witnessesPubKeys correspondence
 	 * - Control the derivation of addresses<>pubKeys
 	 * - Throw if any problem found
-	 * @param {IdentityStore} identityStore @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} tx
-	 * @param {Record<string, Identity>} [idenditiesToConfirmByAddress] Key: Address, Value: Identity */
-    static extractRegularTxIdentities(identityStore, involvedUTXOs, tx, idenditiesToConfirmByAddress = {}, involvedIDs = new IdentitiesCache()) {
+	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
+	 * @param {Transaction} tx @param {IdentitiesCache} identitiesCache */
+    static extractRegularTxIdentities(node, involvedUTXOs, tx, identitiesCache) {
 		// SET THE ADDRESSES TO CONTROL.
 		// EXTRACT MISSING IDENTITIES FROM DISK (WHEN NOT ALREADY IN CACHE)
 		/** @type {Set<string>} - Local to this function */
-		const involvedAddresses = new Set();
+		const involvedWalletId = new Set();
+		const { identityStore } = node.blockchain;
 		for (const input of tx.inputs) {
 			const addressToVerify = involvedUTXOs[input]?.address;
 			if (!addressToVerify) throw new Error(`Unable to find address to verify for input: ${input}`);
 
-			if (involvedAddresses.has(addressToVerify)) continue; // already in loop, no need to add again
-			else involvedAddresses.add(addressToVerify);
+			const walletId = ADDRESS.getAddressRoot(addressToVerify).walletId;
+			if (involvedWalletId.has(walletId)) continue; // already in loop, no need to add again
+			else involvedWalletId.add(walletId);
 			
-			if (involvedIDs.has(addressToVerify)) continue; // already in cache, no need to fetch or check again
+			const cachedId = identitiesCache.get(walletId);
+			if (cachedId) { // IF ALREADY IN CACHE, NO NEED TO FETCH/CHECK AGAIN
+				if (!identitiesCache.requiredWitnesses.has(walletId)) throw new Error('requiredWitnesses should includes walletId!!');
+				if (cachedId.selfDeclared) throw new Error('Unable to spend UTXO from a self declared ID');
+				continue; // CORRECT
+			}
 
-			const identity = identityStore.getIdentity(addressToVerify);
-			if (!identity) throw new Error(`Unable to find pubKey for address: ${addressToVerify}`);
-			involvedIDs.set(addressToVerify, identity.pubKeysHex, identity.threshold); // cache for next iterations
+			const identity = identityStore.getIdentity(walletId);
+			if (!identity) throw new Error(`Unable to find pubKey for walletId: ${walletId}`);
+			if (identity.pubKeysHex.length !== 1) throw new Error("MULTISIG ISN'T IMPLEMENTED YET");
+			identitiesCache.set(walletId, identity.pubKeysHex, identity.threshold); // cache for next iterations
+			identitiesCache.requiredWitnesses.add(walletId);
 		}
-
-		// EXTRACT ADDRESSES<>PUBKEYS CORRESPONDENCE
-		/** Local for each tx, Key: Address, Value: Identity @type {Record<string, Identity>} */
-		for (const address of involvedAddresses) {
-			const identity = involvedIDs.get(address);
-			if (!identity) throw new Error(`Identity not found in cache for address ${address}, this should not happen as we fetched all identities for involved addresses in the previous step`);
-			else idenditiesToConfirmByAddress[address] = identity;
-		}
-
-		return idenditiesToConfirmByAddress; // to verify for the next step (associated witness confirmation)
 	}
 	
 	/** ==> Eighth validation, low computation cost. - control the presence of witnesses associated to the input addresses and pubKeys
 	 * - Control that all the addresses associated to the pubKeys in witnesses are effectively confirmed by witnesses
 	 * - Throw if any problem found
-	 * @param {Transaction} tx @param {Record<string, Identity>} [idenditiesToConfirmByAddress] Key: Address, Value: Identity */
-	static controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress = {}) {
-		/** witnessesCountPerAddress
-		 * - Key: Address, Value: Number of associated witnesses found in the transaction for this address
-		 * @type {Record<string, number>} */
-		const WCPA = {};
-		/** Key: PubKey, Value: Signature @type {Set<string>} */
-		const seenPubKeys = new Set();
-		const qsafeVerifyTasks = [];
+	 * @param {Transaction} tx @param {IdentitiesCache} identitiesCache */
+	static controlAddressesHasAssociatedWitnesses(tx, identitiesCache) {
+		/** key: walletId @type {Record<string, Set<string>>} */
+		const signatures = {};
 		const signable = Transaction_Builder.getTransactionSignable(tx).hashBytes;
 		for (const w of tx.witnesses) {
-			const [address, hint, signature] = w;
-			if (!idenditiesToConfirmByAddress[address]) throw new Error(`Witness address ${address} not found in identities to confirm, this should not happen as we fetched all identities for involved addresses in the previous step`);
-			if (seenPubKeys.has(hint)) throw new Error('Duplicate pubKey hint in witnesses');
-			else seenPubKeys.add(hint);
+			const [address, signature] = w;
+			const walletId = ADDRESS.getAddressRoot(address).walletId;
+			const id = identitiesCache.get(walletId);
+			if (!id) throw new Error(`Witness ${walletId} not found in identities to confirm, this should not happen as we fetched all identities for involved addresses in the previous step`);
 			
-			// COUNT THE NUMBER OF WITNESSES PER ADDRESS, AND PREPARE THE QSAGE VERIFY TASKS
-			WCPA[address] ??= 0; // init counter for this address if not already
-			for (const pk of idenditiesToConfirmByAddress[address].pubKeysHex) {
-				if (hint !== hybridKeyHint(pk)) continue; // compare hint.
-				qsafeVerifyTasks.push({ signable, signature, hybridKey: pk });
-				WCPA[address]++;
-			}
+			if (!signatures[walletId]) signatures[walletId] = new Set();
+			if (signatures[walletId].has(signature)) throw new Error('Signature duplicate!!');
+			signatures[walletId].add(signature);
 		}
 
-		// CHECK IF ALL THRESHOLD ARE MET FOR ALL ADDRESSES, AND IF ALL ADDRESSES HAVE THEIR WITNESSES
-		for (const address in idenditiesToConfirmByAddress)
-			if ((WCPA[address] || 0) < idenditiesToConfirmByAddress[address].threshold)
-				throw new Error(`Not enough witnesses for address ${address}`);
+		// CHECK IF ALL THRESHOLD ARE MET
+		/** key: walletId @type {Record<string, QsafeVerifyTask>} */
+		const qsafeVerifyTasks = {};
+		for (const walletId in signatures) {
+			if (!identitiesCache.requiredWitnesses.has(walletId)) throw new Error("A set of signatures isn't corresponding to any required witness!!");
+			
+			const id = identitiesCache.get(walletId);
+			if (!id) throw new Error(`${walletId} not found in identities to confirm, this should not happen as we fetched all identities for involved addresses in the previous step`);
+			if (signatures[walletId].size < id.threshold) throw new Error(`Not enough witnesses for walletId: ${walletId}`);
 
+			qsafeVerifyTasks[walletId] = new QsafeVerifyTask(signable, id.pubKeysHex, signatures[walletId]);
+			identitiesCache.requiredWitnesses.delete(walletId);
+		}
+
+		// CHECK IF ALL REQUIRED WITNESSES ARE CONSUMMED
+		if (identitiesCache.requiredWitnesses.size !== 0) throw new Error('Missing signature in tx!! Aborting before signarture validation.');
 		return qsafeVerifyTasks; // to verify for the next step (signature verification)
 	}
 
-	/** ==> Ninth validation, medium computation cost. ~8ms/task @param {qsafeVerifyTask[]} [qsafeVerifyTasks] */
-    static async controlAllWitnessesSignatures(qsafeVerifyTasks = []) {
-		for (const task of qsafeVerifyTasks) // will throw an error if the signature is invalid
-			await AsymetricFunctions.qsafeVerify(task.signable, task.signature, task.hybridKey);
+	/** ==> Ninth validation, medium computation cost. ~8ms/task @param {QsafeVerifyTask} qsafeVerifyTask */
+    static async controlAllWitnessesSignatures(qsafeVerifyTask) {
+		const { signable, pubKeysHex, signatures } = qsafeVerifyTask;
+		const signaturesArray = Array.from(signatures);
+		for (const signature of signaturesArray) {
+			let correspondingPubKeyHasBeenRemoved = false;
+			for (let i = 0; i < pubKeysHex.length; i++) {
+				const pubKeyHex = pubKeysHex[i];
+				try { // will throw an error if the signature is invalid
+					await AsymetricFunctions.qsafeVerify(signable, signature, pubKeyHex);
+					pubKeysHex.splice(i, 1); // Consumed pubkeys are spliced out to avoid reuse across signatures (one pubkey = one signature)
+					correspondingPubKeyHasBeenRemoved = true;
+				} catch (error) {};
+			}
+
+			if (!correspondingPubKeyHasBeenRemoved) throw new Error('Unable to find corresponding pubKeyHex for signature!')
+		}
     }
 
     /** ==> Sequentially call the set of validations (DON'T give a specialTx to this function)
 	 * @param {ContrastNode} node @param {Object<string, UTXO>} involvedUTXOs
-     * @param {Transaction} tx @param {'solver' | 'validator'} [specialTx]
-	 * @param {IdentitiesCache} [involvedIDs] */
-    static async transactionValidation(node, involvedUTXOs, tx, specialTx, involvedIDs = new IdentitiesCache()) {
-		const identityStore = node.blockchain.identityStore;
-        this.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
-       
-		let idenditiesToConfirmByAddress;
-		const fee = specialTx ? 0 : this.calculateRemainingAmount(involvedUTXOs, tx);
+     * @param {Transaction} tx @param {'solver' | 'validator'} [specialTx] */
+    static async transactionValidation(node, involvedUTXOs, tx, specialTx) {
+        const fee = this.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
+		const identitiesCache = new IdentitiesCache();
+		const entriesCache = new EntriesCache();
 		this.controlTransactionOutputsRulesConditions(tx);
 		if (!specialTx) {
 			this.controlOutputsHasIdentities(node, tx);
-			this.controlIdentitiesReservation(node, tx, involvedIDs);
-			idenditiesToConfirmByAddress = this.extractRegularTxIdentities(identityStore, involvedUTXOs, tx, undefined, involvedIDs);
-		} else idenditiesToConfirmByAddress = this.extractSpecialTxIdentities(identityStore, tx);
+			this.controlIdentitiesReservation(node, tx, entriesCache);
+			this.extractRegularTxIdentities(node, involvedUTXOs, tx, identitiesCache);
+		} else this.extractSpecialTxIdentities(node, tx, identitiesCache, entriesCache);
 		
 		if (specialTx === 'solver') return { fee, success: true }; // solver's txs don't have to respect ownership rules, so we skip signature verification
 
-		const qsafeVerifyTasks = this.controlAddressesHasAssociatedWitnesses(tx, idenditiesToConfirmByAddress);
-		await this.controlAllWitnessesSignatures(qsafeVerifyTasks);
+		const qsafeVerifyTasks = this.controlAddressesHasAssociatedWitnesses(tx, identitiesCache);
+		for (const walletId in qsafeVerifyTasks) await this.controlAllWitnessesSignatures(qsafeVerifyTasks[walletId]);
+
 		return { fee, success: true };
     }
 }

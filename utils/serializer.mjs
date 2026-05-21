@@ -131,7 +131,7 @@ export const serializer = {
 			if (!rule) throw new Error(`Unknown UTXO rule: ${utxo.rule}`);
 
 			const w = new BinaryWriter(SIZES.miniUTXO.bytes);
-			w.writeBytes(ADDRESS.B58_TO_BYTES(utxo.address));
+			w.writeBytes(ADDRESS.addressToBytes(utxo.address));
 			w.writeBytes(converter.numberTo6Bytes(utxo.amount));
 			w.writeByte(rule.code);
 			return w.getBytesOrThrow(`miniUTXO serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
@@ -142,7 +142,7 @@ export const serializer = {
 			for (let i = 0; i < utxos.length; i++) {
 				const rule = UTXO_RULES_GLOSSARY[utxos[i].rule];
 				if (!rule) throw new Error(`Unknown UTXO rule: ${utxos[i].rule}`);
-				w.writeBytes(ADDRESS.B58_TO_BYTES(utxos[i].address));
+				w.writeBytes(ADDRESS.addressToBytes(utxos[i].address));
 				w.writeBytes(converter.numberTo6Bytes(utxos[i].amount));
 				w.writeByte(rule.code);
 			}
@@ -159,7 +159,7 @@ export const serializer = {
 				const rule = UTXO_RULES_GLOSSARY[utxo.rule];
 				if (!rule) throw new Error(`Unknown UTXO rule: ${utxo.rule}`);
 				w.writeBytes(this.anchor(anchor));
-				w.writeBytes(ADDRESS.B58_TO_BYTES(utxo.address));
+				w.writeBytes(ADDRESS.addressToBytes(utxo.address));
 				w.writeBytes(converter.numberTo6Bytes(utxo.amount));
 				w.writeByte(rule.code);
 			}
@@ -196,18 +196,17 @@ export const serializer = {
 			w.writePointersAndDataChunks(pks);  // unspecified.
 			return w.getBytesOrThrow(`Identity entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-		/** @param {Witness} witness 	ex: [address, hint, signature] */
+		/** @param {Witness} witness 	ex: [address, signature] */
 		witness(witness) {
-			if (witness.length !== 3) throw new Error(`Invalid witness: should be an array of 3 elements [address, hint, signature], got ${witness.length} elements`);
+			if (witness.length !== 2) throw new Error(`Invalid witness: should be an array of 3 elements [address, signature], got ${witness.length} elements`);
 
-			const signatureBytes = converter.hexToBytes(witness[2]);
-			const w = new BinaryWriter(SIZES.address.bytes + SIZES.hint.bytes + signatureBytes.length);
-			w.writeBytes(ADDRESS.B58_TO_BYTES(witness[0])); // address
-			w.writeBytes(converter.hexToBytes(witness[1])); // hint
+			const signatureBytes = converter.hexToBytes(witness[1]);
+			const w = new BinaryWriter(SIZES.address.bytes + signatureBytes.length);
+			w.writeBytes(ADDRESS.addressToBytes(witness[0])); // address
 			w.writeBytes(signatureBytes); // signature
 			return w.getBytesOrThrow(`Witness serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
-        /** @param {Witness[]} witnesses ex: [ [address, hint, signature], ...] */
+        /** @param {Witness[]} witnesses ex: [ [address, signature], ...] */
         witnessesArray(witnesses) {
 			const witnessesAsArrays = [];
 			for (const w of witnesses) witnessesAsArrays.push(this.witness(w));
@@ -258,7 +257,7 @@ export const serializer = {
 			else if (mode === 'validator') { // validator input: <address:hash>
 				const s = tx.inputs[0].split(':');
 				if (s.length !== 2) throw new Error(`Invalid validator input format: ${tx.inputs[0]}`);
-				w.writeBytes(ADDRESS.B58_TO_BYTES(s[0]));
+				w.writeBytes(ADDRESS.addressToBytes(s[0]));
 				w.writeBytes(converter.hexToBytes(s[1]));
 			}
 			w.writeBytes(this.miniUTXOsArray(tx.outputs));						// outputs
@@ -332,8 +331,8 @@ export const serializer = {
         nodeSetting(nodeSetting) {
 			const w = new BinaryWriter(32 + SIZES.address.bytes + SIZES.address.bytes + 1);
 			w.writeBytes(converter.hexToBytes(nodeSetting.privateKey));
-			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.validatorRewardAddress));
-			w.writeBytes(ADDRESS.B58_TO_BYTES(nodeSetting.solverAddress));
+			w.writeBytes(ADDRESS.addressToBytes(nodeSetting.validatorRewardAddress));
+			w.writeBytes(ADDRESS.addressToBytes(nodeSetting.solverAddress));
 			w.writeByte(nodeSetting.solverThreads);
             return w.getBytes();
         },
@@ -360,8 +359,8 @@ export const serializer = {
 			for (const entry of roundsLegitimacies) {
 				const authorizedAddressesSize = entry.authorizedAddresses.size * SIZES.address.bytes;
 				const w = new BinaryWriter(SIZES.address.bytes + authorizedAddressesSize);
-				w.writeBytes(ADDRESS.B58_TO_BYTES(entry.address));
-				for (const address of entry.authorizedAddresses) w.writeBytes(ADDRESS.B58_TO_BYTES(address));
+				w.writeBytes(ADDRESS.addressToBytes(entry.address));
+				for (const address of entry.authorizedAddresses) w.writeBytes(ADDRESS.addressToBytes(address));
 				entries.push(w.getBytesOrThrow(`Round legitimacy entry serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`));
 			}
 
@@ -464,7 +463,7 @@ export const serializer = {
 		/** Deserialize a miniUTXO: { address, amount, rule } @param {Uint8Array} serializedMiniUTXO */
         miniUTXO(serializedMiniUTXO) {
 			const r = new BinaryReader(serializedMiniUTXO);
-			const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+			const address = ADDRESS.bytesToAddress(r.read(SIZES.address.bytes));
 			const amount = converter.bytes6ToNumber(r.read(6));
 			const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
 			if (r.isReadingComplete) return { address, amount, rule };
@@ -475,7 +474,7 @@ export const serializer = {
 			const miniUTXOs = [];
 			const r = new BinaryReader(serializedMiniUTXOs);
 			for (let i = 0; i < serializedMiniUTXOs.length; i += SIZES.miniUTXO.bytes) {
-				const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+				const address = ADDRESS.bytesToAddress(r.read(SIZES.address.bytes));
 				const amount = converter.bytes6ToNumber(r.read(6));
 				const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
 				miniUTXOs.push({ address, amount, rule });
@@ -490,7 +489,7 @@ export const serializer = {
 			const r = new BinaryReader(serializedMiniUTXOsObj);
 			for (let i = 0; i < serializedMiniUTXOsObj.length; i += (SIZES.anchor.bytes + SIZES.miniUTXO.bytes)) {
 				const anchor = this.anchor(r.read(SIZES.anchor.bytes));
-				const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+				const address = ADDRESS.bytesToAddress(r.read(SIZES.address.bytes));
 				const amount = converter.bytes6ToNumber(r.read(6));
 				const rule = UTXO_RULESNAME_FROM_CODE[r.read(1)[0]];
 				miniUTXOsObj[anchor] = { address, amount, rule };
@@ -513,9 +512,9 @@ export const serializer = {
 			if (r.isReadingComplete) return txsIds;
 			else throw new Error(`TxsIds array is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
         },
-		/** @param {Uint8Array} txData */
-		identityEntry(txData) {
-			const r = new BinaryReader(txData);
+		/** @param {Uint8Array} identityEntry */
+		identityEntry(identityEntry) {
+			const r = new BinaryReader(identityEntry);
 			const threshold = r.read(1)[0] || undefined;
 			const pubKeysHex = [];
 			const pks = r.readPointersAndExtractDataChunks();
@@ -524,12 +523,11 @@ export const serializer = {
 		},
 		/** @param {Uint8Array} serializedWitness */
 		witness(serializedWitness) {
-			if (serializedWitness.length < SIZES.address.bytes + SIZES.hint.bytes) throw new Error('Serialized witness is too short to contain required fields');
+			if (serializedWitness.length < SIZES.address.bytes) throw new Error('Serialized witness is too short to contain required fields');
 			const r = new BinaryReader(serializedWitness);
-			const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
-			const hint = converter.bytesToHex(r.read(SIZES.hint.bytes));
+			const address = ADDRESS.bytesToAddress(r.read(SIZES.address.bytes));
 			const signature = converter.bytesToHex(r.read(r.view.length - r.cursor));
-			if (r.isReadingComplete) return [address, hint, signature];
+			if (r.isReadingComplete) return [address, signature];
 			else throw new Error(`Witness is not fully deserialized: read ${r.cursor} of ${r.view.length} bytes`);
 		},
 		/** @param {BinaryReader} r BinaryReader with cursor set at start of witnesses array */
@@ -561,7 +559,7 @@ export const serializer = {
 			const inputs = mode === 'tx' ? this.anchorsArray(r.read(nbOfInputs * SIZES.anchor.bytes)) : [];
 			if (mode === 'solver') inputs.push(converter.bytesToHex(r.read(4), 4)); // nonce
 			if (mode === 'validator') { // validator input format: <address:hash>
-				const address = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+				const address = ADDRESS.bytesToAddress(r.read(SIZES.address.bytes));
 				const posHash = converter.bytesToHex(r.read(SIZES.hash.bytes));
 				inputs.push(`${address}:${posHash}`);
 			}
@@ -645,8 +643,8 @@ export const serializer = {
         nodeSetting(serializedNodeSetting) {
 			const r = new BinaryReader(serializedNodeSetting);
 			const privateKey = converter.bytesToHex(r.read(32));
-			const validatorRewardAddress = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
-			const solverAddress = ADDRESS.BYTES_TO_B58(r.read(SIZES.address.bytes));
+			const validatorRewardAddress = ADDRESS.bytesToAddress(r.read(SIZES.address.bytes));
+			const solverAddress = ADDRESS.bytesToAddress(r.read(SIZES.address.bytes));
 			const solverThreads = r.read(1)[0];
             return { privateKey, validatorRewardAddress, solverAddress, solverThreads };
         },
@@ -677,11 +675,11 @@ export const serializer = {
 			const entries = r.readPointersAndExtractDataChunks();
 			for (const entry of entries) {
 				const entryReader = new BinaryReader(entry);
-				const address = ADDRESS.BYTES_TO_B58(entryReader.read(SIZES.address.bytes));
+				const address = ADDRESS.bytesToAddress(entryReader.read(SIZES.address.bytes));
 				const authorizedAddresses = new Set();
 				if (entryReader.view.length % SIZES.address.bytes !== 0) throw new Error('Serialized rounds legitimacy entry is invalid: remaining bytes after reading address should be a multiple of address size');
 				while (!entryReader.isReadingComplete)
-					authorizedAddresses.add(ADDRESS.BYTES_TO_B58(entryReader.read(SIZES.address.bytes)));
+					authorizedAddresses.add(ADDRESS.bytesToAddress(entryReader.read(SIZES.address.bytes)));
 				roundsLegitimacies.push({ address, authorizedAddresses });
 			}
 			return roundsLegitimacies;

@@ -20,10 +20,12 @@ export class BlockUtils {
 		for (const tx of block.Txs)
 			txsSignables.push(Transaction_Builder.getTransactionSignable(tx).hashHex);
 
-        let firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isSolverOrValidatorTx(block.Txs[0]) : undefined;
-        if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
-        firstTxIsCoinbase = block.Txs[0] ? Transaction_Builder.isSolverOrValidatorTx(block.Txs[0]) : undefined;
-        if (excludeCoinbaseAndPos && firstTxIsCoinbase) txsSignables.shift();
+		if (excludeCoinbaseAndPos) {
+			const firstTxIsSolver = block.Txs[0] ? Transaction_Builder.isSolverOrValidatorTx(block.Txs[0]) === 'solver' : undefined;
+			const secondTxIsValidator = block.Txs[1] ? Transaction_Builder.isSolverOrValidatorTx(block.Txs[1]) === 'validator' : undefined;
+			if (firstTxIsSolver) txsSignables.shift();
+			if (secondTxIsValidator) txsSignables.shift();
+		}
 
         const txsIDStr = txsSignables.join('');
         return HashFunctions.SHA512(txsIDStr);
@@ -31,24 +33,46 @@ export class BlockUtils {
 	/** @param {Object<string, UTXO>} involvedUTXOs @param {Transaction[]} Txs */
     static #calculateTxsTotalFees(involvedUTXOs, Txs) {
         let totalFees = 0;
-        for (const Tx of Txs)
-            if (Transaction_Builder.isSolverOrValidatorTx(Tx)) continue;
-            else totalFees += TxValidation.calculateRemainingAmount(involvedUTXOs, Tx);
+        for (const tx of Txs)
+            if (!Transaction_Builder.isSolverOrValidatorTx(tx))
+            	totalFees += TxValidation.calculateRemainingAmount(involvedUTXOs, tx);
 
         return totalFees;
     }
 	/** Adds POS reward transaction to the block candidate and signs it
 	 * @param {ContrastNode} node @param {BlockCandidate} block */
 	static async signBlockCandidate(node, block) {
-		const { blockchain, rewardsInfo, wallet } = node;
-		const { identityStore } = blockchain;
-		const { vAddress, vPubkeys } = rewardsInfo;
-		if (!vAddress && !vPubkeys) throw new Error('Node reward addresses/pubkey not set');
-		if (!wallet?.pubKey) throw new Error('Node wallet not set');
+		if (!node.wallet?.hybridKey) throw new Error('Node wallet not set');
 
 		const involvedAnchors = BlockUtils.extractInvolvedAnchors(block, 'blockCandidate').involvedAnchors;
-		const involvedUTXOs = blockchain.getUtxos(involvedAnchors, true);
+		const involvedUTXOs = node.blockchain.getUtxos(involvedAnchors, true);
 		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for block candidate');
+
+		const resolution = this.#resolveIdentitiesOfValidatorTx(node);
+		const { validatorAddress, rewardAddress, identityEntries, useExistingRootAccount } = resolution;
+
+		// CALCULATE REWARD => CREATE & SIGN VALIDATOR REWARD TX => ADD IT TO BLOCK CANDIDATE
+		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
+		const validatorFeeTx = Transaction_Builder.createValidatorReward(posReward, block, validatorAddress, rewardAddress, identityEntries);
+		// USE ACCOUNT.ADDRESS or TEMPORARY ADDRESS TO SIGN THE TX.
+		const signedValidatorFeeTx = await node.wallet.signTransaction(validatorFeeTx, useExistingRootAccount ? 0 : validatorAddress);
+		block.Txs.unshift(signedValidatorFeeTx);
+		block.powReward = powReward; // Reward for the solver
+	}
+	/** @param {ContrastNode} node */
+	static #resolveIdentitiesOfValidatorTx(node) {
+		const { blockchain, rewardsInfo, wallet } = node;
+		const { identityStore, ownershipStorage } = blockchain;
+		const { vAddress, vPubkeys } = rewardsInfo;
+		if (!vAddress && !vPubkeys) throw new Error('Node reward addresses/pubkey not set');
+		if (!wallet?.hybridKey) throw new Error('Node wallet not set');
+
+		const walletIds = { // SEARCH FOR WALLET RECORD ON THE BLOCKCHAIN
+			validator: ownershipStorage.getOwnedRootAddress([wallet.hybridKeyHex]),
+			reward: vPubkeys ? ownershipStorage.getOwnedRootAddress(vPubkeys) : null
+		}
+		
+		if (walletIds.validator) wallet.assignRootAddress(walletIds.validator);
 
 		// VERIFY VALIDATOR IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 		// PRE-GENERATE 2 ADDRESSES IN CASE BOTH VALIDATOR AND REWARD ADDRESS NEED TO BE CREATED
@@ -57,29 +81,24 @@ export class BlockUtils {
 		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 2);
 		const useExistingRootAccount = !!wallet.accounts[0]?.address;
 		const validatorAddress = wallet.accounts[0]?.address ? wallet.accounts[0].address : nextRootAddresses[0]; // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
-		const status1 = identityStore.verify(validatorAddress, [wallet.pubKey]);
+		const status1 = identityStore.verify(validatorAddress, [wallet.hybridKeyHex]);
 		if (status1 === 'MISMATCH') throw new Error('Validator address known but pubkey(s) mismatch in identity store');
-		if (status1 === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([wallet.pubKey]));
+		if (status1 === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([wallet.hybridKeyHex]));
 
-		const pubKeyMatch = vPubkeys?.length === 1 && vPubkeys[0] === wallet.pubKey;
+		const pubKeyMatch = vPubkeys?.length === 1 && vPubkeys[0] === wallet.hybridKeyHex;
 		const rewardAddress = vAddress || (pubKeyMatch ? validatorAddress : nextRootAddresses[1]);
 		if (rewardAddress === nextRootAddresses[1]) { // CREATE REWARD IDENTITY IF NEEDED
-			const rewardPubkeys = vPubkeys?.length || 0 > 0 ? vPubkeys : undefined;
+			const rewardPubkeys = (vPubkeys?.length || 0) > 0 ? vPubkeys : undefined;
 			const status2 = identityStore.verify(rewardAddress, rewardPubkeys);
 			if (status2 === 'MISMATCH') throw new Error('Reward address known but pubkey(s) mismatch in identity store');
-			if (status2 === 'UNKNOWN')
+			if (status2 === 'UNKNOWN') {
 				if (!rewardPubkeys) throw new Error('Reward address unknown but no pubkey provided, cannot create identity for block signing');
-				else if (rewardPubkeys.length !== 1) throw new Error('Reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
-				else identityEntries.push(identityStore.buildEntry(rewardPubkeys));
+				if (rewardPubkeys.length !== 1) throw new Error('Reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
+				identityEntries.push(identityStore.buildEntry(rewardPubkeys));
+			}
 		}
 
-		// CALCULATE REWARD => CREATE & SIGN VALIDATOR REWARD TX => ADD IT TO BLOCK CANDIDATE
-		const { powReward, posReward } = BlockUtils.calculateBlockReward(involvedUTXOs, block);
-		const validatorFeeTx = Transaction_Builder.createValidatorReward(posReward, block, validatorAddress, rewardAddress, identityEntries);
-		// USE ACCOUNT.ADDRESS or TEMPORARY ADDRESS TO SIGN THE TX.
-		const signedValidatorFeeTx = await wallet.signTransaction(validatorFeeTx, useExistingRootAccount ? 0 : validatorAddress);
-		block.Txs.unshift(signedValidatorFeeTx);
-		block.powReward = powReward; // Reward for the solver
+		return { validatorAddress, rewardAddress, identityEntries, useExistingRootAccount };
 	}
 
 	// PUBLIC STATIC METHODS
@@ -150,7 +169,7 @@ export class BlockUtils {
 	static async createBlockCandidate(node, blockReward = BLOCKCHAIN_SETTINGS.blockReward, initDiff = SOLVING.initialDifficulty) {
 		const { blockchain, memPool, wallet, solver, time } = node;
 		if (typeof time !== 'number') throw new Error('Invalid node time');
-		if (!wallet?.pubKey) throw new Error('Node wallet not set');
+		if (!wallet?.hybridKey) throw new Error('Node wallet not set');
 
 		const posTimestamp = blockchain.lastBlock?.timestamp ? blockchain.lastBlock.timestamp + 1 : time;
 		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '00'.repeat(SIZES.hash.bytes), [], posTimestamp);
@@ -170,6 +189,7 @@ export class BlockUtils {
 		const newDifficulty = BlockUtils.calculateAdjustedDifficulty(node, true);
 		const coinBaseReward = solving.calculateNextCoinbaseReward(blockchain.lastBlock);
 		const { txs, totalFee } = memPool.getMostLucrativeTransactionsBatch(node);
+		// totalFee => available for callers
 		return new BlockCandidate(blockchain.lastBlock.index + 1, blockchain.lastBlock.supply + blockchain.lastBlock.coinBase, coinBaseReward, newDifficulty, myLegitimacy, prevHash, txs, posTimestamp);
 	}
 	/** @param {BlockFinalized | BlockCandidate} block @param {'blockFinalized' | 'blockCandidate'} [mode] Default: 'blockFinalized' */

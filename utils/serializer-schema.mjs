@@ -16,10 +16,8 @@ export const SIZES = {
 	ed25519Signature: { bytes: 64, str: 128 }, // ed25519 signature size is 64 bytes, represented as 128 hex characters when in string format
 
 	// CRYPTO/IDENTITY
-	/** Hint, represented as 5 bytes or 10 hex characters, hybridKeyHex.split(3, 13) - the  first part of the ed25519 public key */
-	hint: { bytes: 5, str: 10 },
 	/** Address, represented as a string of 7 characters or 5 bytes  | ex: C123456 */
-	address: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES, str: ADDRESS.CRITERIA.TOTAL_LENGTH },
+	address: { bytes: ADDRESS.CRITERIA.BYTES_LENGTH, str: ADDRESS.CRITERIA.STRING_LENGTH },
 	/** Stamp, represented as 7 bytes, containing: height(4) + txIndex(2) + identityIndex(1) */
 	stamp: { bytes: 7, str: null },
 
@@ -33,10 +31,10 @@ export const SIZES = {
 	/** UTXO state, represented as 5 bytes, containing: txIndex(2) + vout(2) + state(1) */
 	utxoState: { bytes: 5, str: null },
 	/** Mini UTXO, represented as 12 bytes, containing: address(5) + amount(6) + rule(1) */
-	miniUTXO: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 6 + 1, str: null },
+	miniUTXO: { bytes: ADDRESS.CRITERIA.BYTES_LENGTH + 6 + 1, str: null },
 	/** Validator input, represented as 69 bytes, containing: validatorAddress(5) + hash(64)
 	 * - As string: <5 chars for address + : + 128 chars for hash in hex> */
-	validatorInput: { bytes: ADDRESS.CRITERIA.TOTAL_BYTES + 64, str: ADDRESS.CRITERIA.TOTAL_LENGTH + 1 + 128 },
+	validatorInput: { bytes: ADDRESS.CRITERIA.BYTES_LENGTH + 64, str: ADDRESS.CRITERIA.STRING_LENGTH + 1 + 128 },
 
 	// LEDGERS
 	/** Ledger UTXO, represented as 15 bytes, containing: height(4) + txIndex(2) + vout(2) + amount(6) + rule(1) */

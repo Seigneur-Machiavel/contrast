@@ -30,9 +30,8 @@ HiveP2P.mergeConfig(HiveP2P.CONFIG, HIVE_P2P_CONFIG);
 const bootstrapSeed = '0000000000000000000000000000000000000000000000000000000000000000';
 const bootstrapStorage = new ContrastStorage(bootstrapSeed);
 if (clearOnStart) bootstrapStorage.clear(); // start fresh
-const bootstrapWallet = new Wallet(bootstrapSeed, bootstrapStorage);
-await bootstrapWallet.deriveAccounts(2);
 
+const bootstrapWallet = await Wallet.initializedWallet(bootstrapStorage, undefined, bootstrapSeed);
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed); // @ts-ignore
 const bootstrapNode = await createContrastNode({
 	controllerPort: 27263,
@@ -56,9 +55,8 @@ const clientSeeds = [
 async function createClientNode(seed = 'toto') {
 	const clientStorage = new ContrastStorage(seed);
 	if (clearOnStart) clientStorage.clear(); // start fresh
-	const clientWallet = new Wallet(seed, clientStorage);
-	await clientWallet.deriveAccounts(2);
 
+	const clientWallet = await Wallet.initializedWallet(clientStorage, undefined, seed);
 	const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
 	const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps, controllerPort: false });
 	await clientNode.start(clientWallet);
@@ -86,7 +84,7 @@ const onBlockConfirmed = async (block) => {
 		const recipient = account.address;
 		if (!recipient) continue; // account not ready
 
-		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(recipient);
+		const ledger = node.blockchain.ledgersStorage.getAddressLedger(recipient);
 		if (!ledger.ledgerUtxos) continue; // no UTXO
 
 		//const sigUtxos = ledger.ledgerUtxos.filter(u => u.ruleCode === UTXO_RULES_GLOSSARY['sig'].code)

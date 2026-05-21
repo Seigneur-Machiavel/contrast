@@ -33,11 +33,17 @@ export class HashFunctions {
         return `${padding}${hashHex}`;
     };
 	/** @param {string | Uint8Array} message */
-	static SHA256(message) {
+	static SHA256(message, maxStrLen = 64) {
+		const maxBytesLen = maxStrLen / 2;
+		if (maxBytesLen % 2 !== 0) throw new Error('maxStrLen must be even');
+
 		const messageUint8 = typeof message === 'string' ? converter.stringToBytes(message) : message;
 		const hashBytes = sha256(messageUint8);
 		const hashHex = converter.bytesToHex(hashBytes);
-		return { hashBytes, hashHex };
+		return {
+			hashBytes: hashBytes.length > maxBytesLen ? hashBytes.slice(0, maxBytesLen) : hashBytes,
+			hashHex: hashHex.length > maxStrLen ? hashHex.slice(0, maxStrLen) : hashHex
+		};
 	}
 	/** @param {string | Uint8Array} message */
     static SHA512(message) {

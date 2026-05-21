@@ -90,8 +90,7 @@ async function mineBlockUntilValid() {
         while (solverVars.pausedAtTime && solverVars.pausedAtTime > Date.now() - 60_000)
             await new Promise(r => setTimeout(r, 100));
 
-        if (!solverVars.blockCandidate || solverVars.timeOffset === 0)
-            { await new Promise(r => setTimeout(r, 10)); continue; }
+        if (!solverVars.blockCandidate) { await new Promise(r => setTimeout(r, 10)); continue; }
         if (solverVars.testSolvingSpeedPenality)
             await new Promise(r => setTimeout(r, solverVars.testSolvingSpeedPenality));
 

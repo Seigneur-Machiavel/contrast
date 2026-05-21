@@ -39,23 +39,24 @@ let stakeHeight = -1;
 const tryStaking = async (block) => {
 	if (block.index === stakeHeight) return; // already processed
 	stakeHeight = block.index;
-	if (!clientNode.account) return; // account not ready
+
+	const senderAccount = clientNode.wallet?.accounts[0];
+	if (!senderAccount || !senderAccount.address) return; // account not ready
 	if (!clientNode.sync.isSynced.sameHeight) return; // only stake when synced to avoid staking on old blocks on every new peer connection
 
 	// UPDATE ACCOUNT BALANCE & UTXOS
-	if (!clientNode.account.address) return; // account not ready
-	const recipient = clientNode.account.address;
-	const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(recipient);
+	const recipient = senderAccount.address;
+	const ledger = clientNode.blockchain.ledgersStorage.getAddressLedger(recipient);
 	if (!ledger.ledgerUtxos) return; // no UTXO
 	
-	clientNode.account.setBalanceAndUTXOs(clientNode.account.balance, ledger.ledgerUtxos);
-	const sigUtxos = clientNode.account.filteredUtxos(undefined, undefined, ['sig']);
+	senderAccount.setBalanceAndUTXOs(senderAccount.balance, ledger.ledgerUtxos);
+	const sigUtxos = senderAccount.filteredUtxos(undefined, undefined, ['sig']);
 	const availableAmount = sigUtxos.reduce((a, b) => a + b.amount, 0);
 	if (availableAmount < 10_000_000 * 2) return; // not enough to stake
 	
 	// CREATE STAKING TRANSACTION
-	const { tx } = Transaction_Builder.createStakingVss(clientNode.account, 1);
-	const signedTx = await clientNode.account.signTransaction(tx);
+	const { tx } = Transaction_Builder.createStakingVss(senderAccount, 1);
+	const signedTx = await senderAccount.parentWallet.signTransaction(tx);
 	if (!signedTx) return; // failed to create tx
 
 	// PUSH TRANSACTION
@@ -71,33 +72,33 @@ let spamHeight = -1;
 const trySpamming = async (block) => {
     if (block.index === spamHeight) return;
     spamHeight = block.index;
-    if (!clientNode.account || !clientNode.account.address) return; // account not ready
+	const senderAccount = clientNode.wallet?.accounts[0];
+    if (!senderAccount || !senderAccount.address) return; // account not ready
 	if (!clientNode.sync.isSynced.sameHeight) return; // only spam when synced to avoid spamming old blocks on every new peer connection
-
-	const { address } = clientNode.account;
+	
     if (block.index % 2 === 0) { // EVEN BLOCKS: one multi-output tx
-        const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(address);
+        const ledger = clientNode.blockchain.ledgersStorage.getAddressLedger(senderAccount.address);
         if (!ledger?.ledgerUtxos) return;
-        clientNode.account.setBalanceAndUTXOs(clientNode.account.balance, ledger.ledgerUtxos);
-		
+        senderAccount.setBalanceAndUTXOs(senderAccount.balance, ledger.ledgerUtxos);
+
 		const identityStore = clientNode.blockchain.identityStore;
 		const identityEntries = []; 
 		const transfers = [];
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
-			const pk = clientWallet.accounts[i].pubKey;
+			const pks = clientWallet.accounts[i].pubKeysHex;
 			if (!a) throw new Error('Address not found for recipient account');
-			if (!pk) throw new Error('Pubkey not found for recipient account');
+			if (pks.length === 0) throw new Error('Pubkey not found for recipient account');
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const identityCountBefore = identityEntries.length;
-			const r = identityStore.verify(a, [pk]);
-			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
+			const identityStatus = identityStore.verify(a, pks);
+			if (identityStatus === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
+			if (identityStatus === 'UNKNOWN') identityEntries.push(identityStore.buildEntry(pks)); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
 				transfers.push(new Transfer(a, 1_000));
-				Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
+				Transaction_Builder.createTransaction(senderAccount, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
 				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this recipient, we need to remove it as well
@@ -105,8 +106,8 @@ const trySpamming = async (block) => {
 			}
 		}
 
-        const { tx } = Transaction_Builder.createTransaction(clientNode.account, transfers, 1, identityEntries);
-        const signedTx = await clientNode.account.signTransaction(tx);
+        const { tx } = Transaction_Builder.createTransaction(senderAccount, transfers, 1, identityEntries);
+        const signedTx = await senderAccount.parentWallet.signTransaction(tx);
         if (!signedTx) return;
 
 		const s = serializer.serialize.transaction(signedTx);
@@ -125,7 +126,8 @@ const trySpamming = async (block) => {
 		const sender = clientWallet.accounts[i];
 		if (!sender?.address) continue; // account not ready
 
-		const ledger = await clientNode.blockchain.ledgersStorage.getAddressLedger(sender.address);
+		const ledger = 
+		clientNode.blockchain.ledgersStorage.getAddressLedger(sender.address);
 		if (!ledger?.ledgerUtxos) continue;
 		sender.setBalanceAndUTXOs(sender.balance, ledger.ledgerUtxos);
 

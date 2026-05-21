@@ -37,9 +37,7 @@ const seed = '0000000000000000000000000000000000000000000000000000000000000011';
 const storage = new ContrastStorage(seed);
 if (clearOnStart) storage.clear(); // start fresh
 
-const wallet = new Wallet(seed, storage);
-await wallet.deriveAccounts(2 + nbReceipients, mayoVariant); // derive all accounts we will need for the test (main account + senders + recipients)
-
+const wallet = await Wallet.initializedWallet(storage, undefined, seed);
 const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect to
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed);
 // @ts-ignore
@@ -59,7 +57,7 @@ const onBlockConfirmed = async (block) => {
 		const account = wallet.accounts[1]; // Solver account as sender
 		if (!account.address) return; // account not ready
 
-		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(account.address);
+		const ledger = node.blockchain.ledgersStorage.getAddressLedger(account.address);
 		if (!ledger || !ledger.ledgerUtxos) throw new Error('Ledger or ledgerUtxos not found for the account');
 		if (ledger.totalReceived - ledger.totalSent !== ledger.balance) throw new Error('Inconsistent balance calculation!');
 
@@ -74,9 +72,9 @@ const onBlockConfirmed = async (block) => {
 			
 			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 			const identityCountBefore = identityEntries.length;
-			const r = identityStore.verify(recipient, [pk]);
-			if (r === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (r === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
+			const identityStatus = identityStore.verify(recipient, [pk]);
+			if (identityStatus === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
+			if (identityStatus === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
 
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
 				transfers.push(new Transfer(recipient, 1_000));

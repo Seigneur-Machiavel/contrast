@@ -49,8 +49,8 @@ export class Transaction_Builder {
     }
     /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
     static createTransaction(senderAccount, transfers, feePerByte = 1, identities = [], data, inMaxAmount = false) {
-        const { address, hybridKey } = senderAccount;
-		if (!address || !hybridKey) throw new Error('Sender account is not properly initialized');
+        const { address, pubKeys } = senderAccount;
+		if (!address || pubKeys.length === 0) throw new Error('Sender account is not properly initialized');
 
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
         const UTXOs = UTXO.fromLedgerUtxos(address, senderAccount.ledgerUtxos, ruleCodesToExclude);
@@ -63,8 +63,8 @@ export class Transaction_Builder {
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
 		
 		// SIMPLIFIED FEE ESTIMATION WITHOUT OPTIMIZATION (USE ALL UTXOs, IF EXCEEDS MAX SIZE THEN THROW)
-		const result = inMaxAmount ? Transaction_Builder.#countAllSpent(UTXOs, totalSpent, outputs.length, feePerByte, [hybridKey], identities, dataLength)
-			: Transaction_Builder.#addUtxoUntilAmount(UTXOs, totalSpent, outputs.length, feePerByte, [hybridKey], identities, dataLength);
+		const result = inMaxAmount ? Transaction_Builder.#countAllSpent(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataLength)
+			: Transaction_Builder.#addUtxoUntilAmount(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataLength);
 		
 		const { selectedUtxos, changeOutput, finalFee, weight } = result;
 		if (weight > BLOCKCHAIN_SETTINGS.maxTransactionSize) throw new Error(`Estimated transaction weight (${weight} bytes) exceeds maximum allowed (${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes)`);
@@ -81,6 +81,8 @@ export class Transaction_Builder {
 	 * @param {string[]} [authorizedAddresses] - the addresses of the validators authorized to sign for this stake (default: the senderAccount address) 
 	 * @param {Uint8Array[] | undefined} [identities] - optional identities associated with the stake */
     static createStakingVss(senderAccount, qty, authorizedAddresses, identities = []) {
+		if (!senderAccount.address) throw new Error('Address missing in senderAccount!');
+
 		const senderAddress = senderAccount.address;
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
 		const availableUTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
@@ -108,7 +110,7 @@ export class Transaction_Builder {
 		// SET THE AUTHORIZED VALIDATOR PUBKEY IN TX DATA
         const tx = Transaction.fromUTXOs(utxos, outputs, identities);
 		const w = new BinaryWriter(authorizedAddresses.length * SIZES.address.bytes);
-		for (const address of authorizedAddresses) w.writeBytes(ADDRESS.B58_TO_BYTES(address));
+		for (const address of authorizedAddresses) w.writeBytes(ADDRESS.addressToBytes(address));
 		tx.data = w.getBytesOrThrow();
 		return { tx, finalFee: fee, totalConsumed: totalStake + fee };
     }
@@ -165,7 +167,7 @@ export class Transaction_Builder {
 		for (const hybridKey of hybridKeys) {
 			const desc = QsafeHelper.parseHeader(hybridKey)?.desc;
 			if (!desc) throw new Error('Invalid public key format in hybridKeys');
-			witnessesSize += SIZES.address.bytes + SIZES.hint.bytes + SIZES.ed25519Signature.bytes + desc.sigSize;
+			witnessesSize += SIZES.address.bytes + SIZES.ed25519Signature.bytes + desc.sigSize;
 		}
 
 		const identitiesPointersSize = identities.length ? BinaryWriter.calculatePointersSize(identities.length) : 0;
@@ -176,11 +178,11 @@ export class Transaction_Builder {
 	}
 	/** @param {Account} account @param {number} feePerByte @param {Uint8Array[]} identities @param {Uint8Array} [data] */
 	static calculateMaxSendableAmount(account, feePerByte = 1, identities, data) {
-		const { address, hybridKey, ledgerUtxos } = account;
-		if (!hybridKey || ledgerUtxos.length === 0) throw new Error('No UTXO to spend');
+		const { address, pubKeys, ledgerUtxos } = account;
+		if (!address || pubKeys.length === 0 || ledgerUtxos.length === 0) throw new Error('No UTXO to spend');
 
 		const nbIn = ledgerUtxos.length;
-		const txSize = Transaction_Builder.#calculateTransactionSize(nbIn, 1, [hybridKey], identities, data?.length || 0); // estimate weight with 1 input and 1 output
+		const txSize = Transaction_Builder.#calculateTransactionSize(nbIn, 1, pubKeys, identities, data?.length || 0); // estimate weight with 1 input and 1 output
 		const estimatedFee = txSize * feePerByte;
 		const availableUTXOs = UTXO.fromLedgerUtxos(address, ledgerUtxos);
 		const totalAvailable = availableUTXOs.reduce((a, b) => a + b.amount, 0);
@@ -242,7 +244,7 @@ export class Transaction_Builder {
 			const amountToSend = !inMaxAmount ? amount : Transaction_Builder.calculateMaxSendableAmount(senderAccount, feePerByte, identities, data);
 			const transfer = { recipientAddress, amount: amountToSend };
 			const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte, identities, data, inMaxAmount);
-			await senderAccount.signTransaction(tx);
+			await senderAccount.parentWallet.signTransaction(tx);
 			return { signedTx: tx, finalFee, error: false };
         } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }
     }

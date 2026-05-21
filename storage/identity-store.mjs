@@ -1,11 +1,11 @@
 // @ts-check
-import fs, { read } from 'fs';
+import fs from 'fs';
 import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
+import { buildEntry } from '../types/identity.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
-import { QsafeHelper } from '../node/src/conCrypto.mjs';
-import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
-import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
+import { serializer, SIZES } from '../utils/serializer.mjs';
+import { OwnershipStorage } from './ownership-store.mjs';
 
 /** 
  * @typedef {import("../types/transaction.mjs").TxId} TxId
@@ -19,21 +19,6 @@ import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
 // 4 294 967 296 * 7b = 30 064 771 072 bytes = ~30GB for the whole file in the worst case (all addresses created).
 
 const ENTRY_BYTES = SIZES.stamp.bytes; // blockIndex(4b):txIndex(2b):identityIndex(1b)> (total: 7b)
-
-/** Build identity entry, used to declare/record the pubkey(s) associated with an address in the identities filed of a transaction, to be retrieved later for identity resolution.
- * @param {string[]} pubKeysHex @param {number} [threshold] (1b) number of required signatures for multi-sig */
-export function buildEntry(pubKeysHex, threshold = 1) {
-	if (threshold < 1) throw new Error(`buildEntry(): threshold must be at least 1`);
-	if (pubKeysHex.length === 0) throw new Error(`buildEntry(): at least one pubkey is required`);
-	if (pubKeysHex.length > BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig) throw new Error(`buildEntry(): maximum number of pubkeys is ${BLOCKCHAIN_SETTINGS.maxPubkeysPerMultiSig}`);
-	if (threshold > 255) throw new Error(`buildEntry(): threshold cannot be higher than 255`);
-	
-	for (const pk of pubKeysHex)
-		if (!QsafeHelper.checkFormat(serializer.converter.hexToBytes(pk)))
-			throw new Error(`buildEntry(): invalid pubkey ${serializer.converter.hexToBytes(pk)}`);
-
-	return serializer.serialize.identityEntry(threshold, pubKeysHex); // throws if non conform
-}
 
 export class IdentityStore {
 	buildEntry = buildEntry;
@@ -52,14 +37,15 @@ export class IdentityStore {
 	/** Generate the next 9 addresseses to create based on the number of entries already in the file for the given prefix. */
 	nextRootAddressToCreate(prefix = 'C', count = 1) {
 		/** @type {string[]} */
-		const rootAddresses = [];
+		const walletIds = [];
 		const handler = this.#getHandler(prefix);
 		const ADDRESSES_PER_ROOT = ADDRESS.CRITERIA.ADDRESSES_PER_ROOT;
-		let pointer = handler.size / ENTRY_BYTES; // Number of entries already in the file for this prefix
-		for (pointer; pointer < count * ADDRESSES_PER_ROOT; pointer += ADDRESSES_PER_ROOT)
-			rootAddresses.push(`${prefix}${ADDRESS.uint32ToB58(pointer, prefix.length)}`);
+		const start = handler.size / ENTRY_BYTES * ADDRESSES_PER_ROOT; // Number of entries already in the file for this prefix
+		const end = start + (count * ADDRESSES_PER_ROOT);
+		for (let i = start; i < end; i += ADDRESSES_PER_ROOT)
+			walletIds.push(`${prefix}${ADDRESS.uint32ToSuffix(i, prefix.length)}`);
 
-		return rootAddresses;
+		return walletIds;
 	}
 	/** Check if the address has an associated identity @param {string} address */
 	hasIdentity(address) {
@@ -108,38 +94,46 @@ export class IdentityStore {
 		if (threshold !== undefined && parsedEntry.threshold !== threshold) return 'MISMATCH';
 		return 'MATCH';
 	}
-	/** Create the new identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
-	digestBlock(block) {
+	/** Create the new identities entries for the addresses involved in the block (pointers)
+	 * @param {BlockFinalized} block @param {OwnershipStorage} ownershipStorage */
+	digestBlock(block, ownershipStorage, throwOnConflict = true) {
 		let discoveryCount = 0;
 		for (let txIndex = 0; txIndex < block.Txs.length; txIndex++) {
 			const tx = block.Txs[txIndex];
 			for (let entryIndex = 0; entryIndex < tx.identities.length; entryIndex++) {
-				discoveryCount++;
 				const { pubKeysHex, threshold } = serializer.deserialize.identityEntry(tx.identities[entryIndex]);
-				const isMultiSig = pubKeysHex.length > 1;
-				if (!isMultiSig) {
-					this.#register('C', block.index, txIndex, entryIndex);
-					continue;
-				}
-
-				if (!threshold) throw new Error(`IdentityStore: multi-sig entry without threshold in transaction at ${block.index}:${txIndex} - unable to extract discovery information`);
-				const prefix = ADDRESS.getPrefixForMultisig(threshold);
-				this.#register(prefix, block.index, txIndex, entryIndex);
+				if (!threshold) throw new Error(`IdentityStore: entry without threshold in transaction at ${block.index}:${txIndex} - unable to extract discovery information`);
+				
+				const isMultisig = pubKeysHex.length > 1;
+				if (isMultisig) throw new Error("MULTISIG ISN'T ENABLED YET!");
+				
+				const prefix = isMultisig ? ADDRESS.getPrefixForMultisig(threshold) : 'C';
+				if (ownershipStorage.getOwnedRootAddress(pubKeysHex))
+					if (throwOnConflict) throw new Error(`New identity declaration conflict!`);
+					else continue;
+				
+				const walletId = this.#register(prefix, block.index, txIndex, entryIndex);
+				ownershipStorage.saveOwnership(pubKeysHex, walletId);
+				discoveryCount++;
 			}
 		}
 
 		return discoveryCount;
 	}
-	/** Undo the identities entries for the addresses involved in the block (pointers) @param {BlockFinalized} block */
-	revertBlock(block) {
+	/** Undo the identities entries for the addresses involved in the block (pointers)
+	 * @param {BlockFinalized} block @param {OwnershipStorage} ownershipStorage */
+	revertBlock(block, ownershipStorage) {
 		for (let txIndex = 0; txIndex < block.Txs.length; txIndex++) {
 			const tx = block.Txs[txIndex];
 			for (let entryIndex = 0; entryIndex < tx.identities.length; entryIndex++) {
 				const { pubKeysHex, threshold } = serializer.deserialize.identityEntry(tx.identities[entryIndex]);
+				if (!threshold) throw new Error('IdentityStore: entry without threshold in transaction');
+				if (!ownershipStorage.getOwnedRootAddress(pubKeysHex)) throw new Error('Identity declaration: missing');
+
 				const isMultiSig = pubKeysHex.length > 1;
-				if (!isMultiSig) this.#unregister('C');
-				else if (!threshold) throw new Error(`IdentityStore: multi-sig entry without threshold in transaction at ${block.index}:${txIndex} - unable to extract discovery information for revert`);
-				else this.#unregister(ADDRESS.getPrefixForMultisig(threshold));
+				const prefix = isMultiSig ? ADDRESS.getPrefixForMultisig(threshold) : 'C';
+				this.#unregister(prefix);
+				ownershipStorage.deleteOwnership(pubKeysHex);
 			}
 		}
 	}
@@ -174,13 +168,13 @@ export class IdentityStore {
 	/** Write the pointer, return the address @param {string} prefix @param {number} blockIndex @param {number} txIndex @param {number} identityIndex */
 	#register(prefix, blockIndex, txIndex, identityIndex) { // WRITE ENTRY
 		const handler = this.#getHandler(prefix);
-		const rootAddress = this.nextRootAddressToCreate(prefix, 1)[0];
+		const walletId = this.nextRootAddressToCreate(prefix, 1)[0];
 		const entryBytes = serializer.serialize.stamp(blockIndex, txIndex, identityIndex); // throws if non conform
 		handler.cursor = handler.size; // APPEND TO THE END OF THE FILE
 		handler.write(entryBytes);
 
 		// RETURN THE NEW ADDRESS
-		return rootAddress;
+		return walletId;
 	}
 	/** Truncate the end of file for one entry @param {string} prefix */
 	#unregister(prefix) {

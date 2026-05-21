@@ -94,7 +94,7 @@ export class BoardInternalWallet {
 		buttonRefresh.classList.add('active');
 
 		const start = Date.now();
-		for (const account of this.wallet.accounts) {
+		/*for (const account of this.wallet.accounts) {
 			if (!this.accountThatNeedsRefresh.has(account.address)) continue;
 			if (!account.address) throw new Error('Account address not set');
 
@@ -105,7 +105,18 @@ export class BoardInternalWallet {
 			//if (ledger.history) console.log(`Account ${account.address} history ids:`, ledger.history);
 			if (ledger.history) account.setHistoryIds(ledger.history);
 			this.accountThatNeedsRefresh.delete(account.address);
-        }
+        }*/
+		const walletId = this.wallet.walletId;
+		if (!walletId) throw new Error('walletId is missing!');
+
+		const ledgers = await this.connectorP2P.getWalletLedgers(walletId);
+		if (!ledgers) throw new Error('Unable to fetch wallet ledgers!');
+
+		for (let i = 0; i < ledgers.length; i++) {
+			const ledger = ledgers[i];
+			this.wallet.accounts[0].setBalanceAndUTXOs(ledger.getBalance, ledger.getUtxos);
+			this.wallet.accounts[0].setHistoryIds(ledger.getHistory);
+		}
 
 		if ((this.activeAccount?.historyIds || []).length > 0) eHTML.get('buttonBarHistory')?.classList.remove('disabled');
 		else eHTML.get('buttonBarHistory')?.classList.add('disabled');
@@ -234,8 +245,7 @@ export class BoardInternalWallet {
 		const privateKey = await frontCrypto.decipher(blob, password);
 		const privateKeyHex = serializer.converter.bytesToHex(privateKey);
 
-        this.wallet = new Wallet(privateKeyHex, undefined, this.boardStorage);
-        await this.wallet.init();
+		this.wallet = await Wallet.initializedWallet(undefined, this.boardStorage, privateKeyHex);
 		this.components.accounts.updateLabels();
 		await this.refreshAccounts();
 		

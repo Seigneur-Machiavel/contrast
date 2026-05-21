@@ -7,7 +7,7 @@
  * @property {number} [withdrawLockBlocks] - Number of blocks to lock for 'sigOrSlash' rule
  * @property {number} [lockUntilBlock] - Block height until which the UTXO is locked for 'lockUntilBlock' rule
  * 
- * @typedef {string[]} Witness 	- A string array in the format [address, hint, signature]
+ * @typedef {string[]} Witness 	- A string array in the format [address, signature]
  * @typedef {Uint8Array} IdentityEntry - binary entry, e.g: [vout: 2b][threshold: 1b][pointers & pubkeys]
  *
  * @typedef {string} TxAnchor 	- The path to the UTXO, ex: blockHeight:txIndex:vout
