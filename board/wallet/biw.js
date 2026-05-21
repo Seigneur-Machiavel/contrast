@@ -33,8 +33,7 @@ export class BoardInternalWallet {
 	boardStorage;
 	connectorP2P;
 	historyItemsPerPage = 5;
-	accountThatNeedsRefresh = new Set();
-	accountThatNeedsIdentityRecord = new Set();
+	#needsLedgersRefresh = false;
 	// User preferences
 	balanceDecimals = 2;
 	autoRefresh = true;
@@ -80,13 +79,16 @@ export class BoardInternalWallet {
         this.textInfoTimeout2 = setTimeout(() => infoElmnt.innerText = "", timeout + 200);
     }
 	async refreshAccounts(force = false) {
-		if (!this.wallet || !this.wallet.accounts.length) return;
+		if (!this.wallet) return;
+
+		const { walletId, accounts } = this.wallet;
+		if (!walletId || !accounts?.length) return;
+
 		eHTML.get('buttonBarTransfer')?.classList.remove('disabled');
 
-		if (force) for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
-		if (this.accountThatNeedsRefresh.size === 0) return;
+		if (!force && !this.#needsLedgersRefresh) return;
+		this.#needsLedgersRefresh = false;
 
-		console.log(`Refreshing ${this.accountThatNeedsRefresh.size} accounts...`);
 		const buttonRefresh = eHTML.get('buttonRefresh');
 		const balanceElement = eHTML.get('balanceStr');
 		const stakedBalanceElement = eHTML.get('stakedStr');
@@ -94,28 +96,13 @@ export class BoardInternalWallet {
 		buttonRefresh.classList.add('active');
 
 		const start = Date.now();
-		/*for (const account of this.wallet.accounts) {
-			if (!this.accountThatNeedsRefresh.has(account.address)) continue;
-			if (!account.address) throw new Error('Account address not set');
-
-			const ledger = await this.connectorP2P.getAddressLedger(account.address);
-			if (!ledger || !ledger.ledgerUtxos) continue;
-
-			account.setBalanceAndUTXOs(ledger.balance, ledger.ledgerUtxos);
-			//if (ledger.history) console.log(`Account ${account.address} history ids:`, ledger.history);
-			if (ledger.history) account.setHistoryIds(ledger.history);
-			this.accountThatNeedsRefresh.delete(account.address);
-        }*/
-		const walletId = this.wallet.walletId;
-		if (!walletId) throw new Error('walletId is missing!');
-
 		const ledgers = await this.connectorP2P.getWalletLedgers(walletId);
 		if (!ledgers) throw new Error('Unable to fetch wallet ledgers!');
 
 		for (let i = 0; i < ledgers.length; i++) {
 			const ledger = ledgers[i];
-			this.wallet.accounts[0].setBalanceAndUTXOs(ledger.getBalance, ledger.getUtxos);
-			this.wallet.accounts[0].setHistoryIds(ledger.getHistory);
+			accounts[i].setBalanceAndUTXOs(ledger.getBalance, ledger.getUtxos);
+			accounts[i].setHistoryIds(ledger.getHistory);
 		}
 
 		if ((this.activeAccount?.historyIds || []).length > 0) eHTML.get('buttonBarHistory')?.classList.remove('disabled');
@@ -124,7 +111,7 @@ export class BoardInternalWallet {
 		this.components.accounts.updateLabels();
 		balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance, this.balanceDecimals);
 		stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.stakedBalance, this.balanceDecimals);
-		
+
 		// wait at least 500ms to remove the active state, to avoid too quick flashes if the refresh is very fast
 		if (Date.now() - start < 1000) await new Promise(r => setTimeout(r, 1000 - (Date.now() - start)));
         buttonRefresh.classList.remove('active');
@@ -246,22 +233,11 @@ export class BoardInternalWallet {
 		const privateKeyHex = serializer.converter.bytesToHex(privateKey);
 
 		this.wallet = await Wallet.initializedWallet(undefined, this.boardStorage, privateKeyHex);
-		this.components.accounts.updateLabels();
+		await this.#getWalletOwnership();
 		await this.refreshAccounts();
 		
 		if (this.wallet.accounts.length > 0 && this.wallet.accounts[0].address)
 			this.selectAccountLabel(this.wallet.accounts[0].address);
-		
-		for (const account of this.wallet.accounts) this.accountThatNeedsRefresh.add(account.address);
-	}
-	/** Derive accounts from master seed.
-	 * @param {number} [nbOfAccounts] - default: 1 @param {'mayo1' | 'mayo2'} [mayoVariant] default: 'mayo1' @param {string} [qsafeSigVersion] default: '1' */
-	async deriveAccounts(nbOfAccounts = 1, mayoVariant = 'mayo1', qsafeSigVersion = '1') {
-		if (!this.wallet) throw new Error('Wallet not initialized');
-		if (!this.boardStorage) throw new Error('Storage not available');
-		
-		await this.wallet.deriveAccounts(nbOfAccounts, mayoVariant, qsafeSigVersion);
-		this.components.accounts.updateLabels();
 	}
 	async disconnectedWallet(eraseWallet = false) {
 		if (eraseWallet) {
@@ -298,22 +274,37 @@ export class BoardInternalWallet {
 
 		this.connectorP2P.on('consensus_height_change', this.#onConsensusHeightChange);
     }
+	async #getWalletOwnership() {
+		if (!this.wallet) return;
+
+		const walletId = await this.connectorP2P.getOwnership([this.wallet.hybridKeyHex]);
+		if (!walletId || walletId === 'UNKNOWN') return; // Not identified yet.
+
+		this.wallet.assignRootAddress(walletId, false); // assign but don't save.
+		if (!this.wallet.accounts) throw new Error("accounts aren't initialized!");
+	}
 	#onConsensusHeightChange = async (newHeight = 0) => {
-		if (!this.autoRefresh || !this.wallet?.accounts?.length) return;
+		if (!this.wallet || !this.autoRefresh) return;
+
+		await this.#getWalletOwnership();
+		if (!this.wallet.accounts) throw new Error("accounts aren't initialized!");
+		
+		const { walletId, accounts } = this.wallet;
+		if (!walletId || !accounts?.length) return;
 
 		// CHECK WHICH ACCOUNTS NEED REFRESH (because they are involved in the new finalized block)
 		const block = this.connectorP2P.blocks.finalized[this.connectorP2P.hash];
 		for (const tx of block?.Txs || []) {
 			for (const output of tx.outputs)
-				for (const account of this.wallet.accounts)
-					if (output.address === account.address && !this.accountThatNeedsRefresh.has(account.address))
-						this.accountThatNeedsRefresh.add(account.address);
+				for (const account of accounts)
+					if (output.address !== account.address) continue;
+					else this.#needsLedgersRefresh = true;
 
 			for (const input of tx.inputs)
-				for (const account of this.wallet.accounts)
+				for (const account of accounts)
 					for (const utxo of account.ledgerUtxos)
-						if (input === utxo.anchor && !this.accountThatNeedsRefresh.has(account.address))
-							this.accountThatNeedsRefresh.add(account.address);
+						if (input !== utxo.anchor) continue;
+						else this.#needsLedgersRefresh = true;
 		}
 
 		await this.refreshAccounts();
@@ -324,8 +315,8 @@ export class BoardInternalWallet {
 			if (this.wallet.accounts[j].address === address) return j;
         return -1;
     }
-	async #generateNewAddress() {
-		if (!this.wallet) return this.textInfo('Wallet not initialized');
+	async #generateNewMultiSigAddress() { // DEPRECATED -> UPDATE TO MULTISIG GENERATION
+		if (!this.wallet?.walletId) return this.textInfo('Wallet not initialized');
 		// TODO: MAYBE CALL ASSIISTANT
 
 		const btn = eHTML.get('newAddressBtn');
@@ -345,7 +336,6 @@ export class BoardInternalWallet {
 			easing: 'easeInOutQuad'
 		});
 
-		await this.wallet.deriveAccount();
 		await new Promise(r => setTimeout(r, 800)); // wait a bit to show the animation
 		eHTML.get('buttonBarTransfer')?.classList.remove('disabled'); // ensure transfer button is enabled
 		this.components.accounts.updateLabels();
@@ -456,7 +446,7 @@ export class BoardInternalWallet {
 				this.#saveUserPreferences();
 				break;
 			case 'biw-new-address':
-				this.#generateNewAddress();
+				this.#generateNewMultiSigAddress();
 				break;
 			case 'biw-select-account':
 				this.selectAccountLabel(e.target.dataset.value);

@@ -35,8 +35,8 @@ export class Ledger {
 	get getNbHistory() { return converter.bytes4ToNumber(this.#readBytes(22, 4)); }
 	get getUtxosBuffer() {
 		const nbUtxos = this.getNbUtxos;
-		if (!nbUtxos) return Buffer.from([]);
-		return Buffer.from(this.#readBytes(26, nbUtxos * SIZES.ledgerUtxo.bytes));
+		if (!nbUtxos) return new Uint8Array();
+		return this.#readBytes(26, nbUtxos * SIZES.ledgerUtxo.bytes);
 	}
 	get getHistoryBytes() {
 		const nbHistory = this.getNbHistory;
@@ -134,10 +134,11 @@ export class Ledger {
 	}
 
 	// INTERNALS
-	/** @param {Buffer} buffer @param {Uint8Array[]} entriesToSkip */
-	#extractIndexesOfMatches(buffer, entriesToSkip) {
+	/** @param {Uint8Array} bytes @param {Uint8Array[]} entriesToSkip */
+	#extractIndexesOfMatches(bytes, entriesToSkip) {
 		/** @type {Set<number>} */
 		const indexes = new Set();
+		const buffer = Buffer.from(bytes);
 		for (const entryBytes of entriesToSkip) {
 			const idx = buffer.indexOf(entryBytes);
 			if (idx === -1) throw new Error(`UTXO entry not found: ${Buffer.from(entryBytes).toString('hex')}`);

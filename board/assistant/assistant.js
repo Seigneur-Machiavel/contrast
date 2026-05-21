@@ -214,14 +214,17 @@ export class Assistant {
 		await this.biw.loadWalletFromStoredPrivateKey();
 		if (!this.biw.wallet) throw new Error('Failed to load wallet after generating private key');
 		
-		await this.biw.deriveAccounts(2); // throw on error if failed to derive accounts
+		console.log('--- DEBUG ---');
 		this.interactor.requestNewPassword();
 		if (!this.connectorNode.isConnected) return;
 
 		// SETUP ADDRESSES IN CONTROLLER -> Rewards of local node will go to the generated wallet.
-		const [ vAccount, sAccount ] = this.biw.wallet.accounts;
-		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'validator', address: vAccount.address, pubKeysHex: vAccount.pubKeysHex });
-		this.connectorNode.sendEncryptedMessage('setAddress', { type: 'solver', address: sAccount.address, pubKeysHex: sAccount.pubKeysHex });
+		//const [ vAccount, sAccount ] = this.biw.wallet.accounts;
+		//this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'validator', address: vAccount.address, pubKeysHex: vAccount.pubKeysHex });
+		//this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'solver', address: sAccount.address, pubKeysHex: sAccount.pubKeysHex });
+		// FOR NOW WE JUST SEND PUBKEYS -> MULTISIG SHOULD NEEDS ADDRESSES & PUBKEY USED TO SIGN
+		this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'validator', pubKeysHex: [this.biw.wallet.hybridKeyHex] });
+		this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'solver', pubKeysHex: [this.biw.wallet.hybridKeyHex] });
 	}
 
 	/** Based on authInfo => RequestPrivateKey or RequestPasswordToUnlock or load wallet. */

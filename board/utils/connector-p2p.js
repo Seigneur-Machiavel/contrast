@@ -1,6 +1,6 @@
 // @ts-check
 import { Sync } from '../../node/src/sync.mjs';
-import { serializer, BinaryReader } from '../../utils/serializer.mjs';
+import { serializer, BinaryReader, BinaryWriter } from '../../utils/serializer.mjs';
 import { PendingRequest } from '../../utils/networking.mjs';
 import { Ledger } from '../../types/ledger.mjs';
 import { BlockFinalized, BlockFinalizedHeader } from '../../types/block.mjs';
@@ -15,6 +15,7 @@ import { ADDRESS } from '../../types/address.mjs';
 
 export class ConnectorP2P {
 	/** @type {PendingRequest | null} */		pendingLedgerRequest = null;
+	/** @type {PendingRequest | null} */		pendingOwnershipRequest = null;
 	/** @type {PendingRequest | null} */		pendingWalletRequest = null;
 	/** @type {PendingRequest | null} */		pendingBlocksHeadersRequest = null;
 	/** @type {PendingRequest | null} */		pendingTransactionsRequest = null;
@@ -53,6 +54,7 @@ export class ConnectorP2P {
 		p2pNode.messager.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
 		p2pNode.messager.on('wallet_ledgers', this.#onWalletLedgers);
+		p2pNode.messager.on('ownership', this.#onOwnership);
 		p2pNode.messager.on('blocks_headers', this.#onBlocksHeaders);
 		p2pNode.messager.on('rounds_legitimacies', this.#onRoundsLegitimacies);
 		this.#consensusChangeDetectionLoop();
@@ -115,12 +117,12 @@ export class ConnectorP2P {
 			} catch (error) {}
 		}
 	}
-	/** @param {string} address */
-	async getWalletLedgers(address, timeout = 3000) {
+	/** @param {string} walletId */
+	async getWalletLedgers(walletId, timeout = 3000) {
 		const peersToAsk = this.sync.getUpdatedPeersToAskList();
 		for (const peerId of peersToAsk) {
 			this.pendingWalletRequest = new PendingRequest(peerId, 'wallet_ledgers', timeout);
-			this.p2pNode.messager.sendUnicast(peerId, address, 'wallet_ledgers_request');
+			this.p2pNode.messager.sendUnicast(peerId, walletId, 'wallet_ledgers_request');
 			try {
 				/** @type {Ledger[]} */
 				const response = await this.pendingWalletRequest.promise;
@@ -128,18 +130,19 @@ export class ConnectorP2P {
 			} catch (error) {}
 		}
 	}
-	/** Verify if an address is known in the network and optionally check if the provided pubkeys and threshold match those of the identity entry stored in the ledger for that address.
-	 * @param {string} address @param {string[]} [pubKeysHex] - Optional, if provided will check that the pubkeys match those of the identity entry in the ledger. If not provided, it will just return 'KNOWN' if an entry exists for the address, or 'UNKNOWN' if it doesn't.
-	 * @param {number} [threshold] Optional, if provided will check that the threshold matches that of the identity entry in the ledger. If not provided, it will not check the threshold and consider it a match regardless of its value. */
-	async verifyIdentity(address, pubKeysHex = [], threshold, timeout = 3000) {
+	/** Verify if the provided pubkeys has a walletId record. @param {string[]} pubKeysHex */
+	async getOwnership(pubKeysHex = [], timeout = 3000) {
 		const peersToAsk = this.sync.getUpdatedPeersToAskList();
+		const pubkeys = [];
+		for (const pkh of pubKeysHex) pubkeys.push(serializer.converter.hexToBytes(pkh));
+		const s = BinaryWriter.serializedBytesArray(pubkeys);
+
 		for (const peerId of peersToAsk) {
-			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
-			const s = serializer.serialize.identityEntry(threshold, pubKeysHex);
-			this.p2pNode.messager.sendUnicast(peerId, s, 'verify_identity_request');
+			this.pendingOwnershipRequest = new PendingRequest(peerId, 'ownership', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, s, 'ownership_resquest');
 			try {
-				/** @type {'UNKNOWN' | 'KNOWN' | 'MISMATCH' | 'MATCH'} */
-				const response = await this.pendingLedgerRequest.promise;
+				/** - WalletId or 'UNKNOWN' @type {string} */
+				const response = await this.pendingOwnershipRequest.promise;
 				return response;
 			} catch (error) {}
 		}
@@ -275,12 +278,20 @@ export class ConnectorP2P {
 		const { senderId, data } = msg;
 		if (this.pendingWalletRequest?.peerId !== senderId) return; // not the expected sender
 		const ledgers = [];
-		if (data instanceof Uint8Array) {
-			const serializedLedgers = new BinaryReader(data).readPointersAndExtractDataChunks();
-			for (const sl of serializedLedgers) ledgers.push(new Ledger(sl));
-		}
+		if (data instanceof Uint8Array)
+			for (const sl of new BinaryReader(data).readPointersAndExtractDataChunks('pointer32'))
+				ledgers.push(new Ledger(sl));
+
 		this.pendingWalletRequest.complete(ledgers);
 		this.pendingWalletRequest = null;
+	}
+	/** @param {DirectMessage} msg */
+	#onOwnership = (msg) => {
+		const { senderId, data } = msg; // data = 'UNKNOWN' or WALLET_ID
+		if (this.pendingOwnershipRequest?.peerId !== senderId) return; // not the expected sender
+		if (typeof data === 'string') this.pendingOwnershipRequest.complete(data);
+		else console.error("data isn't string");
+		this.pendingOwnershipRequest = null;
 	}
 	/** @param {DirectMessage} msg */
 	#onTransactions = (msg) => {

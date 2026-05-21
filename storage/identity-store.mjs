@@ -51,7 +51,8 @@ export class IdentityStore {
 	hasIdentity(address) {
 		const { prefix, rootUint32 } = ADDRESS.getAddressRoot(address);
 		const handler = this.#getHandler(prefix);
-		const offset = rootUint32 * ENTRY_BYTES;
+		const rootIndex = rootUint32 / ADDRESS.CRITERIA.ADDRESSES_PER_ROOT;
+		const offset = rootIndex * ENTRY_BYTES;
 		return offset < handler.size; // if offset is out of range, it means no identity entry has been registered for this address
 	}
 	/** Return the pubkeys associated with an address @param {string} address */
@@ -156,7 +157,8 @@ export class IdentityStore {
 	#getPointer(address) { // READ ENTRY
 		const { prefix, rootUint32 } = ADDRESS.getAddressRoot(address);
 		const handler = this.#getHandler(prefix);
-		const offset = rootUint32 * ENTRY_BYTES;
+		const rootIndex = rootUint32 / ADDRESS.CRITERIA.ADDRESSES_PER_ROOT;
+		const offset = rootIndex * ENTRY_BYTES;
 		if (offset >= handler.size) return null; // NO ENTRY FOR THIS ADDRESS
 
 		const entryBytes = handler.read(offset, ENTRY_BYTES);

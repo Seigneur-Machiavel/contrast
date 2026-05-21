@@ -5,7 +5,7 @@ import { solving } from '../../utils/conditionals.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { TxValidation } from './tx-validation.mjs';
 import { Transaction_Builder } from './transaction.mjs';
-import { serializer, SIZES } from '../../utils/serializer.mjs';
+import { serializer, SIZES, BinaryReader } from '../../utils/serializer.mjs';
 import { Transaction, UTXO, UtxoState } from '../../types/transaction.mjs';
 
 /**
@@ -80,14 +80,16 @@ export class BlockUtils {
 		const identityEntries = [];
 		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 2);
 		const useExistingRootAccount = !!wallet.accounts[0]?.address;
-		const validatorAddress = wallet.accounts[0]?.address ? wallet.accounts[0].address : nextRootAddresses[0]; // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
+		const validatorAddress = wallet.accounts[0]?.address ? wallet.accounts[0].address : nextRootAddresses.shift(); // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
+		if (!validatorAddress) throw new Error('Fatal error, validatorAddress missing!');
+
 		const status1 = identityStore.verify(validatorAddress, [wallet.hybridKeyHex]);
 		if (status1 === 'MISMATCH') throw new Error('Validator address known but pubkey(s) mismatch in identity store');
 		if (status1 === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([wallet.hybridKeyHex]));
 
 		const pubKeyMatch = vPubkeys?.length === 1 && vPubkeys[0] === wallet.hybridKeyHex;
-		const rewardAddress = vAddress || (pubKeyMatch ? validatorAddress : nextRootAddresses[1]);
-		if (rewardAddress === nextRootAddresses[1]) { // CREATE REWARD IDENTITY IF NEEDED
+		const rewardAddress = walletIds.reward || vAddress || (pubKeyMatch ? validatorAddress : nextRootAddresses[0]);
+		if (rewardAddress === nextRootAddresses[0]) { // CREATE REWARD IDENTITY IF NEEDED
 			const rewardPubkeys = (vPubkeys?.length || 0) > 0 ? vPubkeys : undefined;
 			const status2 = identityStore.verify(rewardAddress, rewardPubkeys);
 			if (status2 === 'MISMATCH') throw new Error('Reward address known but pubkey(s) mismatch in identity store');

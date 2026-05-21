@@ -58,7 +58,7 @@ export class ContrastNode {
 	logger = new MiniLogger('node');
 	info = { lastLegitimacy: 0, state: 'idle' };
 	/** When address is assigned, the associated pubkey shouldn't been set as tx identity.
-	 * @type {{ vAddress: string | null | undefined, vPubkeys: string[] | undefined, sAddress: string | null | undefined, sPubkeys: string[] | undefined }} */
+	 * @type {{ vAddress: string | undefined, vPubkeys: string[] | undefined, sAddress: string | undefined, sPubkeys: string[] | undefined }} */
 	rewardsInfo = { vAddress: undefined, vPubkeys: undefined, sAddress: undefined, sPubkeys: undefined };
 	/** @type {Wallet | null} */
 	wallet = null;
@@ -98,7 +98,7 @@ export class ContrastNode {
 		p2pNode.gossip.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
 		p2pNode.messager.on('wallet_ledgers_request', this.#onWalletLedgersRequest);
-		//p2pNode.messager.on('verify_identity_request', this.#onVerifyIdentityRequest);
+		p2pNode.messager.on('ownership_resquest', this.#onOwnershipRequest);
 		p2pNode.messager.on('transactions_request', this.#onTransactionsRequest);
 		p2pNode.messager.on('blocks_headers_request', this.#onBlocksHeadersRequest);
 		p2pNode.messager.on('rounds_legitimacies_request', this.#onRoundsLegitimaciesRequest);
@@ -126,16 +126,16 @@ export class ContrastNode {
 		
 		if (wallet) {
 			this.wallet = wallet;
-			this.#setRewardInfo('validator', null, [wallet.hybridKeyHex], false);
-			this.#setRewardInfo('solver', null, [wallet.hybridKeyHex], false);
+			this.setRewardInfo('validator', undefined, [wallet.hybridKeyHex], false);
+			this.setRewardInfo('solver', undefined, [wallet.hybridKeyHex], false);
 		}
 
 		// ASSOCIATE WALLET IF PROVIDED, AND SET SAVED REWARD ADDRESSES IF ANY
 		const rewardAddresses = this.mainStorage.loadJSON('rewardAddresses');
-		if (rewardAddresses && rewardAddresses.vAddress && rewardAddresses.vPubkeys)
-			this.#setRewardInfo('validator', rewardAddresses.vAddress, rewardAddresses.vPubkeys, false);
-		if (rewardAddresses && rewardAddresses.sAddress && rewardAddresses.sPubkeys)
-			this.#setRewardInfo('solver', rewardAddresses.sAddress, rewardAddresses.sPubkeys, false);
+		if (rewardAddresses && !(rewardAddresses.vAddress && rewardAddresses.vPubkeys))
+			this.setRewardInfo('validator', rewardAddresses.vAddress, rewardAddresses.vPubkeys, false);
+		if (rewardAddresses && !(rewardAddresses.sAddress && rewardAddresses.sPubkeys))
+			this.setRewardInfo('solver', rewardAddresses.sAddress, rewardAddresses.sPubkeys, false);
 
 		if (!this.p2p.started) { 		// START P2P NODE IF NOT
 			this.updateState("Starting HiveP2P node");
@@ -162,20 +162,16 @@ export class ContrastNode {
 		await this.start();
 	}
 
-	/** @param {'solver' | 'validator'} type @param {string} address @param {string[]} [pubKeysHex] */
-	handleAddressUpdate(type, address, pubKeysHex) {
-		//const pks = pubKeysHex || this.blockchain.identityStore.getIdentity(address)?.pubKeysHex;
-		//if (!pks) return this.logger.log(`Failed to update ${type} address to ${address}: no pubkeys found for this address`, (m, c) => console.warn(m, c));
-		this.#setRewardInfo(type, address, pubKeysHex);
-	}
-	/** @param {'solver' | 'validator'} type @param {string | null} address @param {string[]} [pubKeysHex] */
-	#setRewardInfo(type, address, pubKeysHex, save = true) {
+	/** @param {'solver' | 'validator'} type @param {string} [address] @param {string[]} [pubKeysHex] */
+	setRewardInfo(type, address, pubKeysHex, save = true) {
 		if (address && pubKeysHex) throw new Error(`Cannot set both address and pubkeys for ${type}`);
 		
 		this.rewardsInfo[type === 'solver' ? 'sAddress' : 'vAddress'] = address;
 		this.rewardsInfo[type === 'solver' ? 'sPubkeys' : 'vPubkeys'] = pubKeysHex;
 
-		if (save) this.mainStorage.saveJSON('rewardAddresses', { vAddress: this.rewardsInfo.vAddress, vPubkeys: this.rewardsInfo.vPubkeys, sAddress: this.rewardsInfo.sAddress, sPubkeys: this.rewardsInfo.sPubkeys });
+		if (!save) return;
+		this.mainStorage.saveJSON('rewardAddresses', { vAddress: this.rewardsInfo.vAddress, vPubkeys: this.rewardsInfo.vPubkeys, sAddress: this.rewardsInfo.sAddress, sPubkeys: this.rewardsInfo.sPubkeys });
+		this.logger.log(`${type} reward ${address ? 'address' : 'pubkey'} saved!`, (m, c) => console.log(m, c));
 	}
 	async createAndShareMyBlockCandidate() {
 		try {
@@ -291,17 +287,23 @@ export class ContrastNode {
 			
 			const ledgers = this.blockchain.ledgersStorage.getSerializedBatch(walletId);
 			if (!ledgers) throw new Error('Ledgers not found for wallet: ' + walletId);
-			this.p2p.messager.sendUnicast(senderId, ledgers, 'address_ledger');
+			this.p2p.messager.sendUnicast(senderId, ledgers, 'wallet_ledgers');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onWalletLedgersRequest- Error processing address ledger request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */
-	/*#onVerifyIdentityRequest = async (msg) => {
+	#onOwnershipRequest = async (msg) => {
 		const { senderId, data } = msg;
 		try {
-			if (!(data instanceof Uint8Array)) throw new Error('Invalid verify identity request data type');
-			const request = serializer.deserialize.identityEntry(data);
-			if (!request.address || !request.pubKeysHex) throw new Error('Invalid verify identity request format');
-			if (!ADDRESS.checkConformity(request.address)) throw new Error('Invalid address format in verify identity request');*/
+			if (!(data instanceof Uint8Array)) throw new Error('Invalid ownership request data type, should be array of pubkeys as Uint8Array');
+
+			const hybridKeysHex = [];
+			const hybridKeys = new BinaryReader(data).readPointersAndExtractDataChunks();
+			for (const hybridKey of hybridKeys) hybridKeysHex.push(serializer.converter.bytesToHex(hybridKey));
+			
+			const walletId = this.blockchain.ownershipStorage.getOwnedRootAddress(hybridKeysHex) || 'UNKNOWN';
+			this.p2p.messager.sendUnicast(senderId, walletId, 'ownership');
+		} catch (/** @type {any} */ error) { this.logger.log(`-onOwnershipRequest- Error processing ownership request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
+	}
 	/** @param {DirectMessage} msg */
 	#onTransactionsRequest = async (msg) => {
 		const { senderId, data } = msg;
@@ -335,10 +337,7 @@ export class ContrastNode {
 			const headers = this.blockchain.blockStorage.getSerializedBlocksHeaders(request.fromHeight, request.toHeight);
 			if (!headers) throw new Error(`No block headers found between heights ${request.fromHeight} and ${request.toHeight}`);
 			
-			const pointersSize = BinaryWriter.calculatePointersSize(headers.length);
-			const w = new BinaryWriter(pointersSize + headers.reduce((sum, h) => sum + h.length, 0));
-			w.writePointersAndDataChunks(headers);
-			const s = w.getBytesOrThrow();
+			const s = BinaryWriter.serializedBytesArray(headers);
 			this.p2p.messager.sendUnicast(senderId, s, 'blocks_headers');
 		} catch (/** @type {any} */ error) { this.logger.log(`-onBlocksHeadersRequest- Error processing blocks headers request from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}

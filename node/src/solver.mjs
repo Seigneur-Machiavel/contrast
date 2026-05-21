@@ -168,11 +168,11 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 		const validatorAddress = validatorTx.inputs[0].split(':')[0];
 		const validatorRewardAddress = validatorTx.outputs[0].address;
 		const validatorAddressesEqual = validatorAddress === validatorRewardAddress;
-		const lastValidatorIdentityEntry = validatorTx.identities[1] || validatorTx.identities[0];
+		//const lastValidatorIdentityEntry = validatorTx.identities[1] || validatorTx.identities[0];
 		if (!validatorAddress || !validatorRewardAddress) throw new Error('Invalid block candidate: missing validator address or reward address');
 
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
-		const { sAddress, sPubkeys } = this.node.rewardsInfo;
+		const { vAddress, vPubkeys, sAddress, sPubkeys } = this.node.rewardsInfo;
 		const { identityStore } = this.node.blockchain;
 		if (!sAddress && !sPubkeys) throw new Error('Both solver reward address and pubkeys are missing, unable to proceed');
 		
@@ -181,17 +181,16 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 3);
 		const addressesToCheck = validatorAddressesEqual ? [validatorAddress] : [validatorAddress, validatorRewardAddress];
 
-		// SELF ADDRESS CREATION BY VALIDATOR => CHECK IF PUBKEY MATCH => 
-		if (sPubkeys && validatorAddressesEqual) {
-			const { pubKeysHex } = lastValidatorIdentityEntry
+		// SELF ADDRESS CREATION BY VALIDATOR => CHECK IF PUBKEY MATCH
+		//if (sPubkeys && validatorAddressesEqual) {
+		if (sPubkeys?.[0] === vPubkeys?.[0]) { // TRUST SELF
+			/*const { pubKeysHex } = lastValidatorIdentityEntry
 				? serializer.deserialize.identityEntry(lastValidatorIdentityEntry)
-				: identityStore.getIdentity(validatorAddress) || {};
+				: identityStore.getIdentity(validatorRewardAddress) || {};*/
 
 			// VALIDATOR PK === SOLVER PK => PICKUP NEXT RELATED ADDRESS
-			if (pubKeysHex?.[0] === sPubkeys[0]) {
-				const addresses = ADDRESS.getAddressesFromWalletId(validatorAddress);
-				return { sAddress: addresses[1], identityEntries: undefined };
-			}
+			const addresses = ADDRESS.getAddressesFromWalletId(validatorRewardAddress);
+			return { sAddress: addresses[1], identityEntries: undefined };
 		}
 		
 		for (const a of addressesToCheck) {

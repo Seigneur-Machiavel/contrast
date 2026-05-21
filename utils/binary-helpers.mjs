@@ -47,6 +47,15 @@ export class BinaryWriter {
 	static calculatePointersSize(nbOfElements, pointerType = 'pointer16') {
 		return 2 + (nbOfElements * SIZES[pointerType].bytes) + SIZES[pointerType].bytes;
 	}
+	/** Fast method to serialize an array of Uint8Array using pointers
+	 * @param {Uint8Array[]} data @param {'pointer16' | 'pointer32'} [pointerType] default: 'pointer16' */
+	static serializedBytesArray(data, pointerType) {
+		const pointersSize = this.calculatePointersSize(data.length, pointerType);
+		const dataSize = data.reduce((sum, h) => sum + h.length, 0);
+		const writer = new BinaryWriter(pointersSize + dataSize);
+		writer.writePointersAndDataChunks(data, pointerType);
+		return writer.getBytesOrThrow();
+	}
 	/** Write a pointer, which is a list of offsets pointing to the start of each data chunk in the final serialized buffer.
 	 * @param {Uint8Array[]} listOfData @param {'pointer16' | 'pointer32'} [pointerType] default: 'pointer16' */
 	writePointers(listOfData, pointerType = 'pointer16') {

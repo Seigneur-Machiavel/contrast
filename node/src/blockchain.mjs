@@ -19,8 +19,7 @@ import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
 * @typedef {import("../../types/transaction.mjs").TxAnchor} TxAnchor
 * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
 * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
-* @typedef {import("../../types/block.mjs").BlockSolvingData} BlockSolvingData
-* @typedef {import("../../storage/ledgers-store.mjs").AddressLedger} AddressLedger */
+* @typedef {import("../../types/block.mjs").BlockSolvingData} BlockSolvingData */
 
 export class Blockchain {
 	/** @type {BlockFinalized | null} */	lastBlock = null;

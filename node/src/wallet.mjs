@@ -93,6 +93,7 @@ export class Wallet {
 	assignRootAddress(walletId, saveToStorage = true) {
 		if (walletId === this.walletId) return;
 		if (this.accounts.length > 0) throw new Error('Root address already assigned');
+		
 		const addresses = ADDRESS.getAddressesFromWalletId(walletId);
 		for (const address of addresses) this.accounts.push(new Account(this, address));
 		if (saveToStorage) this.#saveRootAddressToStorage();

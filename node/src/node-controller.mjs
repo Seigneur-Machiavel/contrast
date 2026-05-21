@@ -109,7 +109,7 @@ export class NodeController {
 		switch (type) {
 			case 'decreaseThreads': return this.node.solver.decreaseThreads();
 			case 'increaseThreads': return this.node.solver.increaseThreads();
-			case 'setAddress': return this.node.handleAddressUpdate(data.type, data.address, data.pubKeysHex);
+			case 'setRewardInfo': return this.node.setRewardInfo(data.type, data.address, data.pubKeysHex);
 
 			default: console.log(`[NodeController] Received unknown message of type "${type}":`, data);
 		}

@@ -188,12 +188,12 @@ export class LedgersStorage {
 	}
 	/** @param {string} walletId @param {Uint8Array[]} serializedLedgers */
 	#serializeAndSaveLedgersAsBatch(walletId, serializedLedgers, isNewLedger = true) {
-		const pointersSize = BinaryWriter.calculatePointersSize(serializedLedgers.length, 'pointer32');
+		/*const pointersSize = BinaryWriter.calculatePointersSize(serializedLedgers.length, 'pointer32');
 		const totalSize = serializedLedgers.reduce((sum, b) => sum + b.length, 0);
 		const w = new BinaryWriter(pointersSize + totalSize);
-		w.writePointersAndDataChunks(serializedLedgers, 'pointer32');
-
+		w.writePointersAndDataChunks(serializedLedgers, 'pointer32');*/
+		const s = BinaryWriter.serializedBytesArray(serializedLedgers, 'pointer32');
 		const dirPath = this.#pathOfAddressLedgerDir(walletId);
-		this.storage.saveBinary(walletId, w.getBytesOrThrow(), dirPath, !isNewLedger);
+		this.storage.saveBinary(walletId, s, dirPath, !isNewLedger);
 	}
 }

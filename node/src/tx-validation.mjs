@@ -161,7 +161,8 @@ export class TxValidation {
 				if (!id) throw new Error(`Identity ${walletId} does not exist in the store`);
 				return identitiesCache.set(walletId, id.pubKeysHex, id.threshold); // set in cache and return
 			}
-			if (!nextRootAddresses.includes(walletId)) throw new Error(`Transaction address ${walletId} is not the expected next root address for identity reservation`);
+			if (!nextRootAddresses.includes(walletId))
+				throw new Error(`Transaction address ${walletId} is not the expected next root address for identity reservation`);
 			
 			const entry = nextIdentityEntry();
 			if (!entry)
