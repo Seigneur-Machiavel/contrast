@@ -39,6 +39,7 @@ export class BoardInternalWallet {
 	autoRefresh = true;
 	/** @type {{ hasWallet: boolean, hasPassword: boolean } | null} */
 	authInfo = null;
+	firstAccountLabelSelected = false; // flag to initialize first account selection
 
 	/** @type {Record<string, anime.AnimeInstance | null>} */
 	animations = {};
@@ -112,6 +113,9 @@ export class BoardInternalWallet {
 		balanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.balance, this.balanceDecimals);
 		stakedBalanceElement.innerText = CURRENCY.formatNumberAsCurrency(this.wallet.stakedBalance, this.balanceDecimals);
 
+		if (!this.firstAccountLabelSelected && this.wallet.accounts[0]?.address)
+			this.selectAccountLabel(this.wallet.accounts[0].address);
+
 		// wait at least 500ms to remove the active state, to avoid too quick flashes if the refresh is very fast
 		if (Date.now() - start < 1000) await new Promise(r => setTimeout(r, 1000 - (Date.now() - start)));
         buttonRefresh.classList.remove('active');
@@ -162,7 +166,8 @@ export class BoardInternalWallet {
 	}
 	/** @param {string} address */
     selectAccountLabel(address) {
-		if (!this.wallet || !this.activeAccount) throw new Error('Wallet not initialized');
+		if (!this.wallet) throw new Error('Wallet not initialized');
+		this.firstAccountLabelSelected = true; // ensure flag is set
 
 		const accountIndex = this.#getWalletAccountIndexByAddress(address);
 		this.components.accounts.setActiveAccountIndex(accountIndex);
@@ -170,6 +175,7 @@ export class BoardInternalWallet {
 		this.components.miniform.setSenderAddress(address);
 		this.components.miniform.resetHistoryList();
 
+		if (!this.activeAccount) throw new Error('Wallet not initialized');
 		if (this.activeAccount.historyIds.length > 0) eHTML.get('buttonBarHistory')?.classList.remove('disabled');
 		else eHTML.get('buttonBarHistory')?.classList.add('disabled');
 
@@ -232,12 +238,10 @@ export class BoardInternalWallet {
 		const privateKey = await frontCrypto.decipher(blob, password);
 		const privateKeyHex = serializer.converter.bytesToHex(privateKey);
 
+		console.log('--- INITIALIZING WALLET ---');
 		this.wallet = await Wallet.initializedWallet(undefined, this.boardStorage, privateKeyHex);
 		await this.#getWalletOwnership();
-		await this.refreshAccounts();
-		
-		if (this.wallet.accounts.length > 0 && this.wallet.accounts[0].address)
-			this.selectAccountLabel(this.wallet.accounts[0].address);
+		await this.refreshAccounts(true);
 	}
 	async disconnectedWallet(eraseWallet = false) {
 		if (eraseWallet) {

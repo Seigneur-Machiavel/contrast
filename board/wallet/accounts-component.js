@@ -25,6 +25,8 @@ export class AccountsComponent {
 	}
 
 	updateLabels() {
+		if (!this.biw.wallet || !this.biw.wallet.accounts[0]) return;
+
 		const accounts = this.biw.wallet.accounts;
 		const newAddressBtn = this.biw.eHTML.get('newAddressBtn');
 		if (!newAddressBtn) throw new Error('AccountsComponent.updateLabels: newAddressBtn not found');
