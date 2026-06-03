@@ -4,8 +4,9 @@ import path from 'path';
 import { ADDRESS } from '../types/address.mjs';
 import { buildEntry } from '../types/identity.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
-import { serializer, SIZES } from '../utils/serializer.mjs';
 import { OwnershipStorage } from './ownership-store.mjs';
+import { serializer, SIZES } from '../utils/serializer.mjs';
+import { TransactionReader } from '../types/transaction.mjs';
 
 /** 
  * @typedef {import("../types/transaction.mjs").TxId} TxId
@@ -65,13 +66,12 @@ export class IdentityStore {
 
 		// RETRIEVE TX AND PARSE IDENTITY ENTRY ASSOCIATED WITH THE ADDRESS
 		const { blockIndex, txIndex, identityIndex } = pointer;
-		const readableTx = this.bcStorage.getTransactionReaderWithCursors(blockIndex, txIndex);
-		if (!readableTx) throw new Error(`IdentityStore.get: no data found for transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
+		const serializedTx = this.bcStorage.getSerializedTransactions(blockIndex, [txIndex])?.txsBytes[txIndex];
+		if (!serializedTx) throw new Error(`IdentityStore.get: no data found for transaction at ${blockIndex}:${txIndex} for address ${address} - unable to resolve identity`);
 
-		const { reader, cursors, sizes } = readableTx;
-		reader.cursor = cursors.identities;
-		
-		const identities = reader.readPointersAndExtractDataChunks();
+		const mode = txIndex === 0 ? 'solver' : txIndex === 1 ? 'validator' : 'tx';
+		const txReader = new TransactionReader(serializedTx, mode);
+		const identities = txReader.getIdentities();
 		if (!identities[identityIndex]) throw new Error(`IdentityStore.get: no identity entry found at index ${identityIndex} for transaction at ${blockIndex}:${txIndex} - unable to resolve identity`);
 		
 		const { pubKeysHex, threshold } = serializer.deserialize.identityEntry(identities[identityIndex]);

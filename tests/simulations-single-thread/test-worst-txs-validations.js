@@ -6,11 +6,13 @@
 // 1) LOT OF SINGLE OUTPUT TRANSACTIONS (HIGH VALIDATION COST FOR THE NUMBER OF TXS IN BLOCK)
 // 2) ONE MULTI OUTPUT TRANSACTION WITH LOT OF OUTPUTS (HIGH VALIDATION COST FOR ONE SINGLE TX IN BLOCK)
 
+import { ADDRESS } from '../../types/address.mjs';
 import { Wallet } from '../../node/src/wallet.mjs';
-import { createContrastNode } from '../../node/src/node.mjs';
+import { Account } from '../../node/src/account.mjs';
 import { Transfer } from "../../types/transaction.mjs";
 import { serializer } from '../../utils/serializer.mjs';
 import { ContrastStorage } from '../../storage/storage.mjs';
+import { createContrastNode } from '../../node/src/node.mjs';
 import { Transaction_Builder } from '../../node/src/transaction.mjs';
 
 // IMPORT HIVE_P2P & PATCH CONFIG
@@ -28,7 +30,8 @@ const mayoVariant = args.includes('--mayo2') ? 'mayo2' : 'mayo1'; // MAYO VARIAN
 const nor = args.includes('-nor') ? parseInt(nextArg('-nor')) : null;
 const nos = args.includes('-nos') ? parseInt(nextArg('-nos')) : null;
 const nbReceipients = nor || 2000;	// Number of recipient addresses in multi output transaction (The max tested is 7140 outputs)
-const nbOfSenders = nos || 660; 	// Number of single output transactions to send (should be higher than nbReceipients)
+const nbOfSenders = nos || 660; 	// Number of single output transactions to send (should be lower than nbReceipients)
+if (nbOfSenders > nbReceipients) throw new Error('nbOfSenders should be lower than nbReceipients!!');
 // NOTE:
 // NEEDS NEW MEASURE! - 2500 outputs Tx: ~30KB => max around ~4800 outputs in one tx: 57726 bytes (64KB limit)
 
@@ -37,88 +40,146 @@ const seed = '0000000000000000000000000000000000000000000000000000000000000011';
 const storage = new ContrastStorage(seed);
 if (clearOnStart) storage.clear(); // start fresh
 
-const wallet = await Wallet.initializedWallet(storage, undefined, seed);
+const nodeWallet = await Wallet.initializedWallet(storage, undefined, seed, mayoVariant);
 const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect to
 const cryptoCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed);
-// @ts-ignore
 const node = await createContrastNode({ cryptoCodex, bootstraps, storage, domain, port: nodePort });
 if (node.controller) node.controller.enableUnsafeServePubKey(); // ENABLE UNSAFE MODE FOR TESTING
-await node.start(wallet);
+await node.start(nodeWallet);
 
 // -------------------------------------------------------------------------------------
 // TESTS
 // -------------------------------------------------------------------------------------
+
+/** @type {Wallet[]} */
+const wallets = [];
+const nbWalletToGenerate = Math.ceil(nbReceipients / ADDRESS.CRITERIA.ADDRESSES_PER_ROOT);
+for (let i = 0; i < nbWalletToGenerate; i++)
+	wallets.push(await Wallet.initializedWallet(storage, undefined, undefined, mayoVariant));
+
+console.log(`${nbWalletToGenerate} wallets generated! (${nbWalletToGenerate * ADDRESS.CRITERIA.ADDRESSES_PER_ROOT} accounts)`);
+
+/** create TX to check size, if too big it will throw, then we stop adding identityEntries
+ * @param {Account} senderAccount @param {Uint8Array[]} identityEntries */
+const createTransactionOrPopIdentityIfNotPossible = (senderAccount, identityEntries, removeSelectedUtxos = false) => {
+	try { 
+		const { tx, selectedUtxos } = Transaction_Builder.createTransaction(senderAccount, [], undefined, 1, identityEntries);
+		if (removeSelectedUtxos) for (const utxo of selectedUtxos) senderAccount.markUTXOAsSpent(utxo.anchor);
+		return tx;
+	} catch (/** @type {any} */ error) { identityEntries.pop(); } // we need to remove identity entry as well
+}
+
+/** create TX to check size, if too big it will throw, then we stop adding outputs
+ * @param {Account} senderAccount @param {Transfer[]} transfers */
+const createTransactionOrPopTransferIfNotPossible = (senderAccount, transfers, removeSelectedUtxos = false) => {
+	try {
+		const { tx, selectedUtxos } = Transaction_Builder.createTransaction(senderAccount, transfers, undefined, 1);
+		if (removeSelectedUtxos) for (const utxo of selectedUtxos) senderAccount.markUTXOAsSpent(utxo.anchor);
+		return tx;
+	} catch (/** @type {any} */ error) { transfers.pop(); } // remove last transfer that caused failure
+}
+
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
 const onBlockConfirmed = async (block) => {
-	const { identityStore } = node.blockchain;
+	const [validatorAccount, solverAccount] = [nodeWallet.accounts[0], nodeWallet.accounts[1]];
+	if (!validatorAccount || !solverAccount) return; // nodeWallet not ready yet!
 	
-	// TEST: SEND TRANSACTION WITH MULTI OUTPUTS
-	if (block.index % 2 === 1) { // ONLY ON ODD BLOCKS
-		const account = wallet.accounts[1]; // Solver account as sender
-		if (!account.address) return; // account not ready
+	const txs = [];
+	const { identityStore, ledgersStorage, ownershipStorage } = node.blockchain;
+	const solverLedger = ledgersStorage.getAddressLedger(solverAccount.address);
+	solverAccount.setBalanceAndUTXOs(solverLedger.getBalance, solverLedger.getUtxos);
 
-		const ledger = node.blockchain.ledgersStorage.getAddressLedger(account.address);
-		if (!ledger || !ledger.ledgerUtxos) throw new Error('Ledger or ledgerUtxos not found for the account');
-		if (ledger.totalReceived - ledger.totalSent !== ledger.balance) throw new Error('Inconsistent balance calculation!');
+	// TEST: CREATE MISSING IDENTITIES
+	/** @type {Uint8Array[]} */
+	let identityEntries = [];
+	for (const wallet of wallets) {
+		if (wallet.nbAccounts) continue; // ready
 
-		account.setBalanceAndUTXOs(ledger.balance, ledger.ledgerUtxos);
+		const rootAddress = ownershipStorage.getOwnedRootAddress([wallet.hybridKeyHex]);
+		if (rootAddress) wallet.assignRootAddress(rootAddress); // newly attributed
+		else { // or declare the wallet identity
+			identityEntries.push(identityStore.buildEntry([wallet.hybridKeyHex]));
 
-		const identityEntries = [];
-		const transfers = [];
-		for (let i = 2; i < 2 + nbReceipients; i++) {
-			const recipient = wallet.accounts[i].address;
-			const pk = wallet.accounts[i].pubKey;
-			if (!recipient || !pk) continue; // account not ready
+			// IF ABLE TO ADD ENTRY => DO NOTHTING
+			if (createTransactionOrPopIdentityIfNotPossible(solverAccount, identityEntries)) continue;
 			
-			// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
-			const identityCountBefore = identityEntries.length;
-			const identityStatus = identityStore.verify(recipient, [pk]);
-			if (identityStatus === 'MISMATCH') throw new Error('Validator reward address known but pubkey(s) mismatch in identity store');
-			if (identityStatus === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([pk])); // if identity is unknown, we need to create it and attach it to the coinbase transaction for it to be valid (if not, the block will be rejected because of unknown identity)
+			// IF FULLY FILLED => SIGN & PUSH TX
+			const tx = createTransactionOrPopIdentityIfNotPossible(solverAccount, identityEntries, true);
+			if (!tx) continue;
 
-			try { // create TX to check size, if too big it will throw, then we stop adding outputs
-				transfers.push(new Transfer(recipient, 1_000));
-				//Transaction_Builder.
-				Transaction_Builder.createTransaction(account, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
-			} catch (/** @type {any} */ error) {
-				transfers.pop(); // remove last transfer that caused failure
-				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this recipient, we need to remove it as well
-				break; // stop adding outputs if failed (most likely because of size limit)
+			txs.push(await nodeWallet.signTransaction(tx, 1));
+			console.log(`Prepared 1 tx with ${identityEntries.length} identities reservation.`);
+			identityEntries = []; // CLEAR IDENTITIES ARRAY
+		}
+	}
+	if (identityEntries.length) { // REMAINING JOB
+		const tx = createTransactionOrPopIdentityIfNotPossible(solverAccount, identityEntries, true);
+		if (!tx) throw new Error('UNABLE TO CREATE TX!!!');
+
+		txs.push(await nodeWallet.signTransaction(tx, 1));
+		console.log(`Prepared 1 tx with ${identityEntries.length} identities reservation.`);
+	}
+	
+	// TEST: CREATE TRANSACTIONS WITH MULTI OUTPUTS (ONLY ON ODD BLOCKS)
+	if (txs.length === 0 && block.index % 2 === 1) {
+		const totalTransfers = () => nbTransfersWrapInTx + transfers.length;
+		let nbTransfersWrapInTx = 0;
+		let transfers = [];
+		for (const wallet of wallets) {
+			if (totalTransfers() >= nbReceipients) break; // enough transfers
+			
+			for (const account of wallet.accounts) {
+				if (totalTransfers() >= nbReceipients) break; // enough transfers
+				transfers.push(new Transfer(account.address, 1_000));
+
+				// IF ABLE TO ADD transfer => DO NOTHTING
+				if (createTransactionOrPopTransferIfNotPossible(solverAccount, transfers)) continue;
+
+				// IF FULLY FILLED => SIGN & PUSH TX
+				const tx = createTransactionOrPopTransferIfNotPossible(solverAccount, transfers, true);
+				if (!tx) continue;
+
+				txs.push(await nodeWallet.signTransaction(tx, 1));
+				console.log(`Prepared 1 tx with ${tx.outputs.length} outputs.`);
+				nbTransfersWrapInTx += transfers.length;
+				transfers = [];
 			}
 		}
 
-		const { tx } = Transaction_Builder.createTransaction(account, transfers, 1, identityEntries);
-		const signedTx = await account.signTransaction(tx);
-		if (!signedTx) return; // failed to create tx
-	
-		try {
-			const s = serializer.serialize.transaction(signedTx);
-			node.p2p.broadcast(s, { topic: 'transaction' });
-			await node.memPool.pushTransaction(node, s);
-			console.log(`Sent 1 multi output transaction with ${tx.outputs.length} outputs. (${identityEntries.length} identity entries)`);
-		} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.stack); }
-		
-		return; // only one multi output tx every 2 blocks
+		if (transfers.length) { // REMAINING JOB
+			const tx = createTransactionOrPopTransferIfNotPossible(solverAccount, transfers, true);
+			if (!tx) throw new Error('UNABLE TO CREATE TX!!!');
+			txs.push(await nodeWallet.signTransaction(tx, 1));
+			console.log(`Prepared 1 tx with ${tx.outputs.length} outputs.`);
+		}
 	}
 
-	// TEST: SEND LOT OF SINGLE OUTPUT TRANSACTIONS (ONLY ON EVEN BLOCKS)
-	let txs = [];
-	for (let i = 2; i < nbOfSenders + 2; i++) {
-		const sender = wallet.accounts[i];
-		const recipient = wallet.accounts[1].address; // send back to main account
-		if (!sender.address || !recipient) continue; // account not ready
+	// TEST: CREATE SINGLE OUTPUT TRANSACTIONS (ONLY ON EVEN BLOCKS)
+	if (txs.length === 0 && block.index % 2 === 0) {
+		for (const wallet of wallets) {
+			if (txs.length >= nbOfSenders) break; // enough txs
+			
+			for (const account of wallet.accounts) {
+				if (txs.length >= nbOfSenders) break; // enough txs
 
-		const ledger = await node.blockchain.ledgersStorage.getAddressLedger(sender.address);
-		if (ledger && ledger.ledgerUtxos) sender.ledgerUtxos = ledger.ledgerUtxos;
-		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', recipient, 1))?.signedTx;
-		if (signedTx2) txs.push(signedTx2);
+				const ledger = ledgersStorage.getAddressLedger(account.address);
+				account.setBalanceAndUTXOs(ledger.getBalance, ledger.getUtxos);
+				const { signedTx, selectedUtxos } = await Transaction_Builder.createAndSignTransaction(account, 'max', solverAccount.address, 1);
+				if (!signedTx || !selectedUtxos) continue;
+
+				txs.push(signedTx);
+				for (const utxo of selectedUtxos) account.markUTXOAsSpent(utxo.anchor);
+			}
+		}
 	}
 
 	if (txs.length === 0) return; // no tx to send
-	else console.log(`Prepared ${txs.length} single output transactions to send.`);
+	else console.log(`${txs.length} transactions to be sent...`);
 
-	// SPEND EVERYTHING AT ONCE
-	node.p2p.broadcast(serializer.serialize.transactions(txs), { topic: 'transactions' });
+	// SPEND EVERYTHING
+	if (txs.length === 1) node.p2p.broadcast(serializer.serialize.transaction(txs[0]), { topic: 'transaction' });
+	else node.p2p.broadcast(serializer.serialize.transactions(txs), { topic: 'transactions' });
+
 	for (const tx of txs) // if no peer to broadcast to, push them one by one to mempool
 		await node.memPool.pushTransaction(node, serializer.serialize.transaction(tx));
 }

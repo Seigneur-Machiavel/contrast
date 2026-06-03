@@ -3,6 +3,27 @@
 import { SIZES } from "./serializer-schema.mjs";
 const isNode = typeof self === 'undefined';
 
+/** Two bytes (Uint16) encoder/decoder (values 0 and 1 are reserved)
+ * - Shift the value by 2 to fit in the range 2-255 for each byte
+ * - Use this method to optimize UTXO state search with indexOf() => No fake positive are allowed
+ * - Also used by identity store to write the pointer of an address (blockIndex + txIndex) where txIndex is Uint16.
+ * - Max value: 64516 */
+export class NonZeroUint16 {
+    #buffer = new ArrayBuffer(2);
+    #bytes = new Uint8Array(this.#buffer);
+    
+	/** 0 - 64516 @param {number} value */
+    encode(value) {
+        this.#bytes[0] = Math.floor(value / 254) + 2;  	// MSB: 2-255
+        this.#bytes[1] = (value % 254) + 2;             // LSB: 2-255
+        return this.#bytes;
+    }
+    /** @param {Uint8Array} bytes */
+    decode(bytes) {
+        return (bytes[0] - 2) * 254 + (bytes[1] - 2);
+    }
+}
+
 /** BinaryWriter is used to write data to a Uint8Array buffer. It has a cursor that moves forward as data is written.
  * - Made to improve clarity and performance of serialization functions in serializer.js by minimizing garbage and avoiding array concatenations.
  * - Caution 1: writing functions must ensure that the buffer is large enough for the data to write, otherwise it will throw an error or write incomplete data without warning.
@@ -111,9 +132,9 @@ export class BinaryReader {
 	#readU32BE = (offset = this.cursor) => {
 		return (this.view[offset] << 24) | (this.view[offset + 1] << 16) | (this.view[offset + 2] << 8) | this.view[offset + 3];
 	}
-	/** @param {number} length */
-	read(length) {
-		const [start, end] = [this.cursor, this.cursor + length];
+	/** @param {number} length @param {number} start Optional: start of the reading operation, default: this.cursor */
+	read(length, start = this.cursor) {
+		const end = start + length;
 		this.cursor = end;
 		return this.view.slice(start, end);
 	}

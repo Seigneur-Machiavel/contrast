@@ -1,7 +1,7 @@
 import { newWorker } from './unified-worker-initializer.mjs';
 
 /** 
- * @typedef {import('../src/tx-validation.mjs').QsafeVerifyTask} QsafeVerifyTask
+ * @typedef {import('../../types/identity.mjs').QsafeVerifyTask} QsafeVerifyTask
  * @typedef {import('../../types/transaction.mjs').Transaction} Transaction */
 
 // CLASSES SIMPLIFYING USAGE OF THE WORKERS

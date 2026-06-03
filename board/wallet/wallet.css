@@ -228,6 +228,9 @@
 	margin: 0 5%;
 	width: 90%;
 }
+.biw-inputs-wrap input:disabled {
+	color: var(--color3);
+}
 
 /* TRANSFER FORM */
 #biw-interpreterWrap {

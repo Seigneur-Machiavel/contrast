@@ -3,6 +3,8 @@ import { parentPort } from 'worker_threads';
 import { BlockUtils } from '../src/block.mjs';
 import { HashFunctions } from '../src/conCrypto.mjs';
 import { solving } from '../../utils/conditionals.mjs';
+//import { serializer } from '../../utils/serializer.mjs'; // DEBUG
+//import { Transaction } from '../../types/transaction.mjs';
 import { Transaction_Builder } from '../src/transaction.mjs';
 if (parentPort === null) throw new Error('No parent port in solver worker');
 
@@ -111,10 +113,11 @@ async function mineBlockUntilValid() {
             if (!conform) continue;
 			
             if (block.timestamp - now() <= 0) return block;
+			
             //solverVars.readyBlock = { ...block }; // clone to freeze state
-			//solverVars.readyBlock = { ...block, Txs: block.Txs.map(tx => ({ ...tx })) };
-			solverVars.readyBlock = { ...block, Txs: [...block.Txs] };
-			solverVars.readyBlock = JSON.parse(JSON.stringify(block)); // deep clone to freeze state
+			//solverVars.readyBlock = JSON.parse(JSON.stringify(block)); // deep clone to freeze state
+			//solverVars.readyBlock = { ...block, Txs: [...block.Txs] };
+			solverVars.readyBlock = { ...block, Txs: block.Txs.map(tx => ({ ...tx })) };
             solverVars.readyBlockTimestamp = block.timestamp;
         } catch (/** @type {any} */ err) {
             await new Promise(r => setTimeout(r, 10));
@@ -138,6 +141,7 @@ parentPort.on('message', async (task) => {
 			if (solverVars.readyBlock?.index !== task.blockCandidate.index
 				|| solverVars.readyBlock?.prevHash !== task.blockCandidate.prevHash)
 				solverVars.readyBlock = null;
+
 			solverVars.blockCandidate = task.blockCandidate;
 			solverVars.pausedAtTime = null;
 			return;

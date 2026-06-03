@@ -37,6 +37,9 @@ export class OwnershipStorage {
 		const hash = HashFunctions.SHA256(str, 32).hashHex; // 16 bytes
 		const { fileName, dirPath } = this.#pathOfOwnership(hash);
 		const serializedAddress = ADDRESS.addressToBytes(walletId);
+		const b58 = ADDRESS.bytesToAddress(serializedAddress);
+		if (this.cache.get(hash) !== null) throw new Error(`address should not been cached before saving ownership ! ${this.cache.get(hash)} - ${b58}`);
+		this.cache.set(hash, b58);
 		this.storage.saveBinary(fileName, serializedAddress, dirPath);
 	}
 	/** @param {string[]} pubKeysHex */

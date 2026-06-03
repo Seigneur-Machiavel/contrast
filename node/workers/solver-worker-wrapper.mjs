@@ -16,6 +16,7 @@ export class SolverWorker {
 	difficulty = 1;        // base difficulty of current candidate (for effective rate weighting)
 	sAddress;
 	identityEntries;
+	serializedCandidate;
 
 	/** @param {string} sAddress @param {number} bet @param {number} timeOffset @param {Uint8Array[]} [identityEntries] */
 	constructor(sAddress, bet, timeOffset, identityEntries) {
@@ -92,7 +93,7 @@ export class SolverWorker {
 		this.difficulty = blockCandidate.difficulty; // track base difficulty for weighting
 		this.worker.postMessage({ type: 'newCandidate', blockCandidate });
 
-		await new Promise(resolve => setTimeout(resolve, 200));
+		//await new Promise(resolve => setTimeout(resolve, 200));
 	}
 	mineUntilValid() {
 		if (this.terminate) return;

@@ -1,7 +1,7 @@
 import { parentPort } from 'worker_threads';
 import { TxValidation } from '../src/tx-validation.mjs';
 
-/** @typedef {import('../src/tx-validation.mjs').QsafeVerifyTask} QsafeVerifyTask */
+/** @typedef {import('../../types/identity.mjs').QsafeVerifyTask} QsafeVerifyTask */
 
 // WORKER SIDE
 let workerId = undefined;

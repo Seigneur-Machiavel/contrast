@@ -155,10 +155,11 @@ export class MemPool {
 				try {
 					TxValidation.isConformTransaction(involvedUTXOs, oTx.tx);
 					TxValidation.controlIdentitiesReservation(node, oTx.tx, entriesCache);
-					TxValidation.extractRegularTxIdentities(node, involvedUTXOs, oTx.tx, identitiesCache);
+					const requiredWitnesses = TxValidation.extractRegularTxIdentities(node, involvedUTXOs, oTx.tx, identitiesCache);
+					TxValidation.controlAddressesHasAssociatedWitnesses(oTx.tx, identitiesCache, requiredWitnesses);
 				} catch (error) { invalidTransactions.push(oTx); continue; }
 
-				// No needs for "controlAddressesHasAssociatedWitnesses()" -> 	already done while tx enter in memPool.
+				// THIS IS WRONG !!!! =>  No needs for "controlAddressesHasAssociatedWitnesses()" -> 	already done while tx enter in memPool.
 				
 				// ADD THE TRANSACTION TO RESULT
 				for (const input of oTx.tx.inputs) spentAnchors.add(input);

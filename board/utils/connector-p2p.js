@@ -1,11 +1,10 @@
 // @ts-check
 import { Sync } from '../../node/src/sync.mjs';
-import { serializer, BinaryReader, BinaryWriter } from '../../utils/serializer.mjs';
-import { PendingRequest } from '../../utils/networking.mjs';
 import { Ledger } from '../../types/ledger.mjs';
-import { BlockFinalized, BlockFinalizedHeader } from '../../types/block.mjs';
+import { PendingRequest } from '../../utils/networking.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
-import { ADDRESS } from '../../types/address.mjs';
+import { BlockFinalized, BlockFinalizedHeader } from '../../types/block.mjs';
+import { serializer, BinaryReader, BinaryWriter } from '../../utils/serializer.mjs';
 
 /**
  * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
@@ -51,12 +50,12 @@ export class ConnectorP2P {
 		p2pNode.onPeerConnect(this.#onPeerConnect);
 		p2pNode.onPeerDisconnect(this.#onPeerDisconnect);
 		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
+		p2pNode.messager.on('blocks_headers', this.#onBlocksHeaders);
+		p2pNode.messager.on('rounds_legitimacies', this.#onRoundsLegitimacies);
 		p2pNode.messager.on('transactions', this.#onTransactions);
 		p2pNode.messager.on('address_ledger', this.#onAddressLedger);
 		p2pNode.messager.on('wallet_ledgers', this.#onWalletLedgers);
 		p2pNode.messager.on('ownership', this.#onOwnership);
-		p2pNode.messager.on('blocks_headers', this.#onBlocksHeaders);
-		p2pNode.messager.on('rounds_legitimacies', this.#onRoundsLegitimacies);
 		this.#consensusChangeDetectionLoop();
 	}
 	getBlockConfirmationTimestampApproximation(blockHeight = 0) {
@@ -72,6 +71,8 @@ export class ConnectorP2P {
 		if (!this.listeners[type]) this.listeners[type] = [];
 		this.listeners[type].push(callback);
 	}
+
+	// BLOCKCHAIN/TRANSACTIONS
 	/** @param {number} [height] */
 	async getMissingBlock(height = this.height) {
 		const peersToAsk = this.sync.getUpdatedPeersToAskList();
@@ -103,76 +104,6 @@ export class ConnectorP2P {
 
 		// NOT FOUND, FETCH FROM PEERS
 		return this.getMissingBlock(height);
-	}
-	/** @param {string} address */
-	async getAddressLedger(address, timeout = 3000) {
-		const peersToAsk = this.sync.getUpdatedPeersToAskList();
-		for (const peerId of peersToAsk) {
-			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
-			this.p2pNode.messager.sendUnicast(peerId, address, 'address_ledger_request');
-			try {
-				/** @type {Ledger} */
-				const response = await this.pendingLedgerRequest.promise;
-				return response;
-			} catch (error) {}
-		}
-	}
-	/** @param {string} walletId */
-	async getWalletLedgers(walletId, timeout = 3000) {
-		const peersToAsk = this.sync.getUpdatedPeersToAskList();
-		for (const peerId of peersToAsk) {
-			this.pendingWalletRequest = new PendingRequest(peerId, 'wallet_ledgers', timeout);
-			this.p2pNode.messager.sendUnicast(peerId, walletId, 'wallet_ledgers_request');
-			try {
-				/** @type {Ledger[]} */
-				const response = await this.pendingWalletRequest.promise;
-				return response;
-			} catch (error) {}
-		}
-	}
-	/** Verify if the provided pubkeys has a walletId record. @param {string[]} pubKeysHex */
-	async getOwnership(pubKeysHex = [], timeout = 3000) {
-		const peersToAsk = this.sync.getUpdatedPeersToAskList();
-		const pubkeys = [];
-		for (const pkh of pubKeysHex) pubkeys.push(serializer.converter.hexToBytes(pkh));
-		const s = BinaryWriter.serializedBytesArray(pubkeys);
-
-		for (const peerId of peersToAsk) {
-			this.pendingOwnershipRequest = new PendingRequest(peerId, 'ownership', timeout);
-			this.p2pNode.messager.sendUnicast(peerId, s, 'ownership_resquest');
-			try {
-				/** - WalletId or 'UNKNOWN' @type {string} */
-				const response = await this.pendingOwnershipRequest.promise;
-				return response;
-			} catch (error) {}
-		}
-	}
-	/** @param {TxId[]} txIds */
-	async getTransactions(txIds, timeout = 5000, force = false) {
-		// only fetch transactions for which we don't have the implied UTXOs (which means we don't have the transaction details)
-		const txIdsToFetch = force ? txIds : txIds.filter(txId => !this.utxosByAnchors.has(txId));
-		const peersToAsk = this.sync.getUpdatedPeersToAskList();
-		for (const peerId of peersToAsk) {
-			console.log(`Requesting transactions ${txIdsToFetch} from peer ${peerId}`);
-			const serializedTxIds = serializer.serialize.txsIdsArray(txIdsToFetch);
-			this.pendingTransactionsRequest = new PendingRequest(peerId, 'transactions', timeout);
-			this.p2pNode.messager.sendUnicast(peerId, serializedTxIds, 'transactions_request');
-			try {
-				const serialized = await this.pendingTransactionsRequest.promise;
-				const r = serializer.deserialize.transactionsResponse(serialized);
-				for (const anchor in r.impliedUtxos) this.utxosByAnchors.set(anchor, r.impliedUtxos[anchor]);
-				for (const txId in r.txs) this.txsById.set(txId, r.txs[txId]);
-				break; // stop after the first successful response
-			} catch (/** @type {any} */ error) { console.log(`Unable to fetch transactions from peer ${peerId}:`, error.stack || error.message || error); }
-		}
-
-		/** @type {Transaction[]} */
-		const txs = [];
-		for (const txId of txIds) // @ts-ignore
-			if (this.txsById.has(txId)) txs.push(this.txsById.get(txId));
-			else throw new Error(`Transaction with id ${txId} not found after fetching from peers`);
-
-		return txs;
 	}
 	/** Max number of blocks: 60 @param {number} [fromHeight] default: 0 @param {number} [toHeight] default: this.height */
 	async getBlocksHeaders(fromHeight = 0, toHeight = this.height, timeout = 3000) {
@@ -213,6 +144,80 @@ export class ConnectorP2P {
 			try {
 				const response = await this.pendingRoundsLegitimaciesRequest.promise;
 				if (response) return serializer.deserialize.roundsLegitimaciesResponse(response);
+			} catch (error) {}
+		}
+	}
+
+	// TRANSACTIONS
+	/** @param {TxId[]} txIds */
+	async getTransactions(txIds, timeout = 5000, force = false) {
+		// only fetch transactions for which we don't have the implied UTXOs (which means we don't have the transaction details)
+		const txIdsToFetch = force ? txIds : txIds.filter(txId => !this.utxosByAnchors.has(txId));
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
+		for (const peerId of peersToAsk) {
+			console.log(`Requesting transactions ${txIdsToFetch} from peer ${peerId}`);
+			const serializedTxIds = serializer.serialize.txsIdsArray(txIdsToFetch);
+			this.pendingTransactionsRequest = new PendingRequest(peerId, 'transactions', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, serializedTxIds, 'transactions_request');
+			try {
+				const serialized = await this.pendingTransactionsRequest.promise;
+				const r = serializer.deserialize.transactionsResponse(serialized);
+				for (const anchor in r.impliedUtxos) this.utxosByAnchors.set(anchor, r.impliedUtxos[anchor]);
+				for (const txId in r.txs) this.txsById.set(txId, r.txs[txId]);
+				break; // stop after the first successful response
+			} catch (/** @type {any} */ error) { console.log(`Unable to fetch transactions from peer ${peerId}:`, error.stack || error.message || error); }
+		}
+
+		/** @type {Transaction[]} */
+		const txs = [];
+		for (const txId of txIds) // @ts-ignore
+			if (this.txsById.has(txId)) txs.push(this.txsById.get(txId));
+			else throw new Error(`Transaction with id ${txId} not found after fetching from peers`);
+
+		return txs;
+	}
+
+	// LEDGERS/OWNERSHIP
+	/** @param {string} address */
+	async getAddressLedger(address, timeout = 3000) {
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
+		for (const peerId of peersToAsk) {
+			this.pendingLedgerRequest = new PendingRequest(peerId, 'address_ledger', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, address, 'address_ledger_request');
+			try {
+				/** @type {Ledger} */
+				const response = await this.pendingLedgerRequest.promise;
+				return response;
+			} catch (error) {}
+		}
+	}
+	/** @param {string} walletId */
+	async getWalletLedgers(walletId, timeout = 3000) {
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
+		for (const peerId of peersToAsk) {
+			this.pendingWalletRequest = new PendingRequest(peerId, 'wallet_ledgers', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, walletId, 'wallet_ledgers_request');
+			try {
+				/** @type {Ledger[]} */
+				const response = await this.pendingWalletRequest.promise;
+				return response;
+			} catch (error) {}
+		}
+	}
+	/** Verify if the provided pubkeys has a walletId record. @param {string[]} pubKeysHex */
+	async getOwnership(pubKeysHex = [], timeout = 3000) {
+		const peersToAsk = this.sync.getUpdatedPeersToAskList();
+		const pubkeys = [];
+		for (const pkh of pubKeysHex) pubkeys.push(serializer.converter.hexToBytes(pkh));
+		const s = BinaryWriter.serializedBytesArray(pubkeys);
+
+		for (const peerId of peersToAsk) {
+			this.pendingOwnershipRequest = new PendingRequest(peerId, 'ownership', timeout);
+			this.p2pNode.messager.sendUnicast(peerId, s, 'ownership_resquest');
+			try {
+				/** - WalletId or 'UNKNOWN' @type {string} */
+				const response = await this.pendingOwnershipRequest.promise;
+				return response;
 			} catch (error) {}
 		}
 	}
@@ -259,12 +264,39 @@ export class ConnectorP2P {
 		console.log('Connector received message:', msg);
 		for (const handler of this.listeners[msg.type] || []) handler(msg.data);
 	}
+
+	// BLOCKCHAIN/TRANSACTIONS
 	/** @param {GossipMessage} msg */
 	#onBlockFinalized = (msg) => {
 		if (!(msg.data instanceof Uint8Array)) return; // not the expected data type
 		if (!this.#storeBlock(msg.data)) return;
 		for (const handler of this.listeners['block_finalized'] || []) handler(msg.data);
 	};
+	/** @param {DirectMessage} msg */
+	#onBlocksHeaders = (msg) => {
+		const { senderId, data } = msg;
+		if (this.pendingBlocksHeadersRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingBlocksHeadersRequest.complete(data);
+		this.pendingBlocksHeadersRequest = null;
+	}
+	/** @param {DirectMessage} msg */
+	#onRoundsLegitimacies = (msg) => {
+		const { senderId, data } = msg;
+		if (this.pendingRoundsLegitimaciesRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingRoundsLegitimaciesRequest.complete(data);
+		this.pendingRoundsLegitimaciesRequest = null;
+	}
+
+	// TRANSACTIONS
+	/** @param {DirectMessage} msg */
+	#onTransactions = (msg) => {
+		const { senderId, data } = msg;
+		if (this.pendingTransactionsRequest?.peerId !== senderId) return; // not the expected sender
+		this.pendingTransactionsRequest.complete(data);
+		this.pendingTransactionsRequest = null;
+	}
+
+	// LEDGERS/OWNERSHIP
 	/** @param {DirectMessage} msg */
 	#onAddressLedger = (msg) => {
 		const { senderId, data } = msg;
@@ -292,26 +324,5 @@ export class ConnectorP2P {
 		if (typeof data === 'string') this.pendingOwnershipRequest.complete(data);
 		else console.error("data isn't string");
 		this.pendingOwnershipRequest = null;
-	}
-	/** @param {DirectMessage} msg */
-	#onTransactions = (msg) => {
-		const { senderId, data } = msg;
-		if (this.pendingTransactionsRequest?.peerId !== senderId) return; // not the expected sender
-		this.pendingTransactionsRequest.complete(data);
-		this.pendingTransactionsRequest = null;
-	}
-	/** @param {DirectMessage} msg */
-	#onBlocksHeaders = (msg) => {
-		const { senderId, data } = msg;
-		if (this.pendingBlocksHeadersRequest?.peerId !== senderId) return; // not the expected sender
-		this.pendingBlocksHeadersRequest.complete(data);
-		this.pendingBlocksHeadersRequest = null;
-	}
-	/** @param {DirectMessage} msg */
-	#onRoundsLegitimacies = (msg) => {
-		const { senderId, data } = msg;
-		if (this.pendingRoundsLegitimaciesRequest?.peerId !== senderId) return; // not the expected sender
-		this.pendingRoundsLegitimaciesRequest.complete(data);
-		this.pendingRoundsLegitimaciesRequest = null;
 	}
 }

@@ -43,7 +43,7 @@ export class BoardInternalWallet {
 
 	/** @type {Record<string, anime.AnimeInstance | null>} */
 	animations = {};
-    standardFeePerByte = { "fast": 12, "average": 5, "slow": 2, "min": BLOCKCHAIN_SETTINGS.minTransactionFeePerByte };
+	standardFeePerByte = { "fast": 12, "average": 5, "slow": 2, "min": BLOCKCHAIN_SETTINGS.minTransactionFeePerByte };
 	/** @type {string | null} */			currentTextInfo = null;
 	/** @type {NodeJS.Timeout | null} */	textInfoTimeout1 = null;
     /** @type {NodeJS.Timeout | null} */	textInfoTimeout2 = null;
@@ -62,23 +62,23 @@ export class BoardInternalWallet {
 	 * @param {string} text @param {HTMLElement | null} [infoElmnt] @param {number} [timeout] @param {boolean} [eraseAnyCurrentTextInfo] @param {boolean} [important] */
 	textInfo(text, infoElmnt = eHTML.get('globalTextInfo'), timeout = 3000, eraseAnyCurrentTextInfo = false, important = false) {
 		if (!infoElmnt) return;
-        if (!eraseAnyCurrentTextInfo && this.currentTextInfo) return;
+		if (!eraseAnyCurrentTextInfo && this.currentTextInfo) return;
 
-        this.currentTextInfo = text;
-        infoElmnt.innerText = text;
-        infoElmnt.style.opacity = '1';
-        if (important) infoElmnt.classList.add('important');
+		this.currentTextInfo = text;
+		infoElmnt.innerText = text;
+		infoElmnt.style.opacity = '1';
+		if (important) infoElmnt.classList.add('important');
 
-        if (this.textInfoTimeout1) clearTimeout(this.textInfoTimeout1);
-        if (this.textInfoTimeout2) clearTimeout(this.textInfoTimeout2);
+		if (this.textInfoTimeout1) clearTimeout(this.textInfoTimeout1);
+		if (this.textInfoTimeout2) clearTimeout(this.textInfoTimeout2);
 
-        this.textInfoTimeout1 = setTimeout(() => {
-            this.currentTextInfo = null;
-            infoElmnt.style.opacity = '0';
-            infoElmnt.classList.remove('important');
-        }, timeout);
-        this.textInfoTimeout2 = setTimeout(() => infoElmnt.innerText = "", timeout + 200);
-    }
+		this.textInfoTimeout1 = setTimeout(() => {
+			this.currentTextInfo = null;
+			infoElmnt.style.opacity = '0';
+			infoElmnt.classList.remove('important');
+		}, timeout);
+		this.textInfoTimeout2 = setTimeout(() => infoElmnt.innerText = "", timeout + 200);
+	}
 	async refreshAccounts(force = false) {
 		if (!this.wallet) return;
 
@@ -118,8 +118,8 @@ export class BoardInternalWallet {
 
 		// wait at least 500ms to remove the active state, to avoid too quick flashes if the refresh is very fast
 		if (Date.now() - start < 1000) await new Promise(r => setTimeout(r, 1000 - (Date.now() - start)));
-        buttonRefresh.classList.remove('active');
-    }
+		buttonRefresh.classList.remove('active');
+	}
 	async getAndDisplayTransactionsDetails(page = this.components.accounts.activeAccountHistoryPage) {
 		const activeAccount = this.activeAccount;
 		if (!activeAccount) throw new Error('No active account selected');
@@ -127,7 +127,7 @@ export class BoardInternalWallet {
 		this.components.miniform.resetHistoryList();
 		this.components.miniform.startHistoryLoading();
 		this.components.miniform.updatePaginationButtonsState(true); // lock buttons while loading
-	
+
 		const txIds = this.components.accounts.getHistoryTxIdsOfPage(page);
 		if (txIds.length === 0 || txIds.length > this.historyItemsPerPage) {
 			this.components.miniform.setHistoryMessage('No transactions found');
@@ -144,7 +144,7 @@ export class BoardInternalWallet {
 
 		let index = 0;
 		for (let i = 0; i < txIds.length; i++) {
-			const [ txId, tx ] = [txIds[i], txs[i]];
+			const [txId, tx] = [txIds[i], txs[i]];
 			const specialTxType = Transaction_Builder.isSolverOrValidatorTx(tx);
 			const inAmount = specialTxType ? 0
 				: tx.inputs.reduce((sum, input) => {
@@ -165,7 +165,7 @@ export class BoardInternalWallet {
 		setTimeout(() => this.components.miniform.updatePaginationButtonsState(), index * 100);
 	}
 	/** @param {string} address */
-    selectAccountLabel(address) {
+	selectAccountLabel(address) {
 		if (!this.wallet) throw new Error('Wallet not initialized');
 		this.firstAccountLabelSelected = true; // ensure flag is set
 
@@ -182,7 +182,7 @@ export class BoardInternalWallet {
 		if (this.components.miniform.isHistoryOpen) this.getAndDisplayTransactionsDetails();
 
 		console.log(`Selected account: ${address}`);
-    }
+	}
 	/** @param {string | null} action */
 	setActiveTogglerButton(action = 'biw-toggle-transfer-form') {
 		const buttonBar = eHTML.get('buttonBar');
@@ -196,7 +196,7 @@ export class BoardInternalWallet {
 	}
 	async getAuthInfo() {
 		if (this.authInfo !== null) return this.authInfo; // return cached info if available
-		
+
 		/** @ts-ignore @type {string | null} */
 		const blobHex = await this.boardStorage.load('wallet_blob_hex');
 		this.authInfo = { hasWallet: false, hasPassword: false }; // init values
@@ -219,7 +219,7 @@ export class BoardInternalWallet {
 			/** @ts-ignore @type {string | null} */
 			const blobHex = await this.boardStorage.load('wallet_blob_hex');
 			if (!blobHex) throw new Error('No private key found in storage');
-	
+
 			const blob = serializer.converter.hexToBytes(blobHex);
 			const pk = await frontCrypto.decipher(blob, oldPassword);
 			const newBlob = await frontCrypto.cipher(pk, newPassword);
@@ -277,7 +277,7 @@ export class BoardInternalWallet {
 		await this.#loadUserPreferences();
 
 		this.connectorP2P.on('consensus_height_change', this.#onConsensusHeightChange);
-    }
+	}
 	async #getWalletOwnership() {
 		if (!this.wallet) return;
 
@@ -292,7 +292,7 @@ export class BoardInternalWallet {
 
 		await this.#getWalletOwnership();
 		if (!this.wallet.accounts) throw new Error("accounts aren't initialized!");
-		
+
 		const { walletId, accounts } = this.wallet;
 		if (!walletId || !accounts?.length) return;
 
@@ -315,10 +315,10 @@ export class BoardInternalWallet {
 	}
 	#getWalletAccountIndexByAddress(address = '') {
 		if (!this.wallet) throw new Error('Wallet not initialized');
-        for (let j = 0; j < this.wallet.accounts.length; j++)
+		for (let j = 0; j < this.wallet.accounts.length; j++)
 			if (this.wallet.accounts[j].address === address) return j;
-        return -1;
-    }
+		return -1;
+	}
 	async #generateNewMultiSigAddress() { // DEPRECATED -> UPDATE TO MULTISIG GENERATION
 		if (!this.wallet?.walletId) return this.textInfo('Wallet not initialized');
 		// TODO: MAYBE CALL ASSIISTANT
@@ -355,26 +355,26 @@ export class BoardInternalWallet {
 			complete: () => { btn.innerHTML = '+'; }
 		});
 	}
-    #followInstructionsFromInput() {
+	#followInstructionsFromInput() {
 		const instructionsInput = /** @type {HTMLInputElement} */ (eHTML.get('interpreterInput'));
 		const sender = this.activeAccount?.address;
 		if (!sender) throw new Error('No active account selected to send from');
 
 		const instructions = this.components.interpreter.read(instructionsInput.value);
-        instructionsInput.value = ''; // reset field after reading instructions
-        if (typeof instructions === 'string') { this.textInfo(instructions); return; }
+		instructionsInput.value = ''; // reset field after reading instructions
+		if (typeof instructions === 'string') { this.textInfo(instructions); return; }
 
 		const { action, amount, address, dataStr } = instructions;
 		this.components.miniform.open(action);
 		this.components.miniform.setTransferValues(
 			amount,
 			address || sender,
-			dataStr	? dataStr : undefined
+			dataStr ? dataStr : undefined
 		)
 
 		// eHTML.get('buttonBarInterpreter')?.classList.remove('open');
 		// eHTML.get('interpreter')?.classList.remove('open');
-    }
+	}
 	#saveUserPreferences() {
 		const autoRefreshCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('autoRefreshCheckbox'));
 		const enableCommandsCheckbox = /** @type {HTMLInputElement} */ (eHTML.get('enableCommandsCheckbox'));
@@ -415,9 +415,9 @@ export class BoardInternalWallet {
 	// @ts-ignore
 	clickHandler(e) {
 		if (!e.target.dataset.action) return;
-		
+
 		const parent = e.target.parentElement;
-		switch(e.target.dataset.action) {
+		switch (e.target.dataset.action) {
 			case 'biw-refresh':
 				this.refreshAccounts(true);
 				break;
@@ -507,7 +507,7 @@ export class BoardInternalWallet {
 		}
 	} // @ts-ignore
 	inputHandler(e) {
-		const amountInput = /** @type {HTMLInputElement} */ (eHTML.get('amountInput')); 
+		const amountInput = /** @type {HTMLInputElement} */ (eHTML.get('amountInput'));
 		if (e.target === amountInput) {
 			// Allow only numbers and one dot, and max 6 decimals
 			const parts = amountInput.value.replace(/[^\d.]/g, '').split('.');
@@ -515,8 +515,7 @@ export class BoardInternalWallet {
 			if (parts.length === 2) parts[1] = parts[1].slice(0, 6); // limit to 6 decimals
 
 			amountInput.value = parts.length > 1 ? `${parts[0]}.${parts[1]}` : parts[0];
-			this.components.miniform.prepareTxAccordingToInputsAndUpdateFees();
-			return;
+			return this.components.miniform.prepareTxAccordingToInputsAndUpdateFees();
 		}
 
 		const recipientAddress = /** @type {HTMLInputElement} */ (eHTML.get('recipientAddress'));
@@ -544,37 +543,39 @@ export class BoardInternalWallet {
 	focusInHandler(e) {
 		//if (e.target.id === 'biw-amountInput') e.target.value = '';
 	} // @ts-ignore
-	focusOutHandler(e) {
+	async focusOutHandler(e) {
 		if (e.target.id === 'biw-amountInput') this.components.miniform.prepareTxAccordingToInputsAndUpdateFees();
 	} // @ts-ignore
-	mouseDownHandler(e) { // CONFIRM TX SENDING
+	async mouseDownHandler(e) { // CONFIRM TX SENDING
 		if (e.target.dataset.action !== 'biw-confirm') return;
-
+		
 		const r = this.components.miniform.prepareTxAccordingToInputsAndUpdateFees();
 		if (typeof r === 'string') { console.error(r); this.textInfo(r); return; }
-
+		
 		// EVERYTHING IS OK, PROCEED WITH TRANSACTION CREATION AND BROADCAST
 		if (this.animations.sendBtn) this.animations.sendBtn.pause();
 		
 		const cb = async () => { // AWAIT HOLD TIME TO SIGN AND BROADCAST
+			if (!this.wallet) return;
 			try {
-				const activeAccount = this.activeAccount;
-				if (!activeAccount) throw new Error('No active account selected');
+				if (!this.activeAccount) throw new Error('No active account selected');
 
-				this.connectorP2P.p2pNode.broadcast(r.serialized, { topic: 'transaction' });
+				const signedTx = await this.wallet.signTransaction(r);
+				const serialized = serializer.serialize.transaction(signedTx);
+				this.connectorP2P.p2pNode.broadcast(serialized, { topic: 'transaction' });
 				this.textInfo('Transaction broadcasted');
 
-				for (const anchor of r.signedTx.inputs) this.activeAccount.markUTXOAsSpent(anchor);
+				for (const anchor of signedTx.inputs) this.activeAccount.markUTXOAsSpent(anchor);
 				this.components.accounts.updateLabels();
 				this.components.miniform.resetTransferForm();
 				this.animations.sendBtn = null;
-				console.log(`Broadcasted tx (${r.serialized.length} bytes):`, r.signedTx);
+				console.log(`Broadcasted tx (${serialized.length} bytes):`, signedTx);
 			} catch (/** @type {any} */ error) {
 				console.error('Error broadcasting transaction:', error);
 				this.textInfo(error.message);
 			}
 		};
-		
+
 		const sendBtn = /** @type {HTMLButtonElement} */ (eHTML.get('sendBtn'));
 		this.animations.sendBtn = ButtonHoldAnimation.holdMouseDown(sendBtn, cb);
 	} // @ts-ignore

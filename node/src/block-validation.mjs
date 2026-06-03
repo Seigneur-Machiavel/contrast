@@ -192,17 +192,17 @@ export class BlockValidation {
 			const specialTx = index < 2 ? Transaction_Builder.isSolverOrValidatorTx(tx) : undefined; // coinbase Tx / validator Tx
         	const fee = TxValidation.isConformTransaction(involvedUTXOs, tx, specialTx); // also check spendable UTXOs
 			TxValidation.controlTransactionOutputsRulesConditions(tx);
+			let requiredWitnesses;
 			if (!specialTx) {
 				TxValidation.controlOutputsHasIdentities(node, tx);
 				TxValidation.controlIdentitiesReservation(node, tx, entriesCache);
-				TxValidation.extractRegularTxIdentities(node, involvedUTXOs, tx, identitiesCache);
-			} else TxValidation.extractSpecialTxIdentities(node, tx, identitiesCache, entriesCache);
+				requiredWitnesses = TxValidation.extractRegularTxIdentities(node, involvedUTXOs, tx, identitiesCache);
+			} else requiredWitnesses = TxValidation.extractSpecialTxIdentities(node, tx, identitiesCache, entriesCache);
 
 			if (specialTx === 'solver') continue; // solver Tx doesn't have to verify signatures (can be signed by anyone)
 
-			const qsafeVerifyTask = TxValidation.controlAddressesHasAssociatedWitnesses(tx, identitiesCache);
-			for (const address in qsafeVerifyTask)
-				signatureVerificationTasks.push(qsafeVerifyTask[address]);
+			const qsafeVerifyTask = TxValidation.controlAddressesHasAssociatedWitnesses(tx, identitiesCache, requiredWitnesses);
+			for (const address in qsafeVerifyTask) signatureVerificationTasks.push(qsafeVerifyTask[address]);
 		}
 
 		// SIGNATURE VERIFICATION (MULTI-THREADING)

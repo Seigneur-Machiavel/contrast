@@ -5,6 +5,7 @@ import { CURRENCY } from "../../utils/currency.mjs";
 import { serializer } from "../../utils/serializer.mjs";
 import { createSpacedTextElement } from "../utils/board-helpers.js";
 import { Transaction_Builder } from "../../node/src/transaction.mjs";
+import { BLOCKCHAIN_SETTINGS } from "../../config/blockchain-settings.mjs";
 
 /**
  * @typedef {import('../../types/transaction.mjs').Transaction} Transaction
@@ -65,27 +66,37 @@ export class MiniformComponent {
 	// PUBLIC METHODS
 	/** @param {'SEND' | 'STAKE' | 'UNSTAKE' | 'INSCRIBE' | 'HISTORY' | string} action */
 	open(action = 'SEND') {
-		this.eHTML.history.historyForm.classList.remove('active');
-		this.eHTML.transfer.miniForm.classList.remove('active');
 		this.eHTML.container.classList.add('expand');
 
-		if (action === 'HISTORY') this.eHTML.history.historyForm.classList.add('active');
-		else {
-			this.eHTML.transfer.miniForm.classList.add('active');
-			this.eHTML.transfer.actionSelector.value = action[0] + action.toLowerCase().slice(1);
+		if (action === 'HISTORY') {
+			this.eHTML.history.historyForm.classList.add('active');
+			this.eHTML.transfer.miniForm.classList.remove('active');
+			return;
 		}
 		
+		this.eHTML.history.historyForm.classList.remove('active');
+		this.eHTML.transfer.miniForm.classList.add('active');
+		this.eHTML.transfer.actionSelector.value = action[0] + action.toLowerCase().slice(1);
+
+		if (action === 'STAKE' || action === 'UNSTAKE') this.eHTML.transfer.dataInput.placeholder = 'Authorized addresses (C123456, ...)';
+		else this.eHTML.transfer.dataInput.placeholder = 'Data (optional)';
+
 		// SHOW OR HIDE DATA FIELD ACCORDING TO ACTION (Stake | Inscribe => always show)
-		this.toggleDataField();
+		this.#toggleDataField();
+		// UPDATE AMOUT & RECEPIENT INPUTS ACCORDING TO ACTION
+		const isLockedAction = action === 'STAKE' || action === 'UNSTAKE' || action === 'INSCRIBE';
+		this.eHTML.transfer.recipientAddress.disabled = isLockedAction ? true : false;
+		this.eHTML.transfer.amountInput.disabled = isLockedAction ? true : false;
+		if (this.biw.activeAccount?.address) this.setSenderAddress(this.biw.activeAccount.address);
 	}
 	close() {
 		this.eHTML.transfer.miniForm.classList.remove('active');
 		this.eHTML.history.historyForm.classList.remove('active');
 		this.eHTML.container.classList.remove('expand');
 	}
-	
+
 	// TRANSFER FORM METHODS
-	toggleDataField(forceVisible = this.action === 'Inscribe' || this.action === 'Stake') {
+	#toggleDataField(forceVisible = this.action === 'Inscribe' || this.action === 'Stake') {
 		this.eHTML.transfer.dataInput.value = '';
 		if (!forceVisible && !this.isDataFieldEnabled) this.eHTML.transfer.dataInput.classList.add('hidden');
 		else this.eHTML.transfer.dataInput.classList.remove('hidden');
@@ -102,11 +113,23 @@ export class MiniformComponent {
 		this.eHTML.transfer.senderAddress.innerText = address;
 		this.eHTML.history.senderAddress.innerText = address;
 
-		if (this.action === 'Stake' || this.action === 'Unstake' || this.action === 'Inscribe')
+		// Auto fill or reset address input value.
+		const action = this.action;
+		if (action === 'Stake' || action === 'Unstake' || action === 'Inscribe')
 			this.eHTML.transfer.recipientAddress.value = address;
+		else if (this.eHTML.transfer.recipientAddress.value = address)
+			this.eHTML.transfer.recipientAddress.value = '';
+
+		// Auto fill or reset input value.
+		const lastAmountValue = this.eHTML.transfer.amountInput.value;
+		if (action === 'Inscribe') this.eHTML.transfer.amountInput.value = '0';
+		else if (action === 'Stake' || action === 'Unstake') this.eHTML.transfer.amountInput.value = CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.stakeAmount);
+		else if (lastAmountValue === '0' || lastAmountValue === CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.stakeAmount)) this.eHTML.transfer.amountInput.value = '';
+	
+		this.prepareTxAccordingToInputsAndUpdateFees();
 	}
 	/** @param {number} [amount] @param {string} [recipient] @param {string} [dataStr] */
-	setTransferValues(amount, recipient, dataStr) {
+	async setTransferValues(amount, recipient, dataStr) {
 		// AMOUNT
 		if (typeof amount === 'number') this.eHTML.transfer.amountInput.value = CURRENCY.formatNumberAsCurrency(amount);
 
@@ -116,58 +139,70 @@ export class MiniformComponent {
 			this.eHTML.transfer.recipientAddress.value = this.eHTML.transfer.senderAddress?.innerText; // FORCE SENDER AS RECIPIENT
 
 		// SHOW DATA FIELD IF dataStr IS PROVIDED, HIDE IT OTHERWISE
-		this.toggleDataField(dataStr !== undefined);
 		this.eHTML.transfer.dataInput.value = dataStr || '';
+		this.#toggleDataField(dataStr !== undefined);
 		this.prepareTxAccordingToInputsAndUpdateFees();
 	}
-	/** @returns {{ action: 'Send' | 'Stake' | 'Unstake' | 'Inscribe', amount: number, recipient: string | undefined, dataStr: string | undefined }} */
+	/** @returns {{ action: 'Send' | 'Stake' | 'Unstake' | 'Inscribe', amount: number, recipient: string | undefined, dataStr: string | undefined, authorizedAddresses: string[] }} */
 	getTransferValues() {
 		const amountStr = this.eHTML.transfer.amountInput.value;
 		const recipient = this.eHTML.transfer.recipientAddress.value;
 		const dataStr = this.isDataFieldEnabled ? this.eHTML.transfer.dataInput.value : undefined;
+		const authorizedAddresses = []; // @ts-ignore
+		if (window.nodeWalletId) authorizedAddresses.push(window.nodeWalletId);
+		for (const address of (dataStr || '').trim().replaceAll(' ', '').split(','))
+			if (ADDRESS.checkConformity(address)) authorizedAddresses.push(address);
+
 		return {
 			action: this.action,
 			amount: amountStr !== '' ? CURRENCY.formatCurrencyAsMicroAmount(amountStr) : 0,
 			recipient: recipient !== '' ? recipient : undefined,
-			dataStr: dataStr !== '' ? dataStr : undefined
+			dataStr: dataStr !== '' ? dataStr : undefined,
+			authorizedAddresses
 		}
 	}
-	/** @returns {{ serialized: Uint8Array, signedTx: Transaction } | string }} */
+	/** @returns {Transaction | string} */
 	prepareTxAccordingToInputsAndUpdateFees() {
+		console.log('PREPARING TX')
+		if (!this.biw.wallet) return 'No wallet';
 		if (!this.biw.activeAccount) return 'No active account';
 		this.eHTML.transfer.txFee.innerText = CURRENCY.formatNumberAsCurrency(0);
 		this.eHTML.transfer.totalSpent.innerText = CURRENCY.formatNumberAsCurrency(0);
 
+		let nbOfStakes = 0;
 		const senderAccount = this.biw.activeAccount;
 		const feePerByte = this.biw.standardFeePerByte.min;
-		const { action, amount, recipient, dataStr } = this.getTransferValues();
+		const { action, amount, recipient, dataStr, authorizedAddresses } = this.getTransferValues();
 		if (!amount && !dataStr) return 'Amount or data field must be filled';
+		if (action === 'Stake') {
+			if (!authorizedAddresses) return 'authorizedAddresses must be field';
+			else if (authorizedAddresses.length === 0) return 'authorizedAddresses.length === 0';
+			if (amount % BLOCKCHAIN_SETTINGS.stakeAmount !== 0) return `Amount should be multiple of ${CURRENCY.formatNumberAsCurrency(BLOCKCHAIN_SETTINGS.stakeAmount)}`;
+			nbOfStakes = amount / BLOCKCHAIN_SETTINGS.stakeAmount;
+		}
 
 		const recipientAddress = recipient || senderAccount.address;
+		if (!recipientAddress) return 'No recipient address';
 		if (!ADDRESS.checkConformity(recipientAddress)) return 'Invalid address';
-		
+
 		const accountLinkedToRecipient = this.biw.wallet?.accounts.find(a => a.address === recipientAddress);
 		console.log('Account linked to recipient:', accountLinkedToRecipient);
 		try {
-			//const dataEncoded = action === 'Stake'
-			//	? 
-			//	: typeof dataStr === 'string' ? serializer.converter.textEncoder.encode(dataStr) : undefined
-
 			const { tx, finalFee, totalConsumed } = action === 'Stake' // PREPARE TX ON CLICK
-				? Transaction_Builder.createStakingVss(senderAccount, amount, dataStr)
-				: Transaction_Builder.createTransaction(senderAccount,
+				? Transaction_Builder.createStakingVss(senderAccount, nbOfStakes, authorizedAddresses)
+				: Transaction_Builder.createTransaction(
+					senderAccount,
 					amount ? [{ recipientAddress, amount }] : [], // don't add an empty output if amount is 0, to allow sending only data
+					undefined, // no lastValidHeight
 					feePerByte,
+					undefined, // no identity record
 					dataStr ? serializer.converter.textEncoder.encode(dataStr) : undefined
 				);
-			
-			const signedTx = senderAccount.signTransaction(tx);
-			const serialized = serializer.serialize.transaction(signedTx);
-
+				
 			// UPDATE FEES AND TOTAL IN THE UI
 			this.eHTML.transfer.txFee.innerText = CURRENCY.formatNumberAsCurrency(finalFee);
 			this.eHTML.transfer.totalSpent.innerText = CURRENCY.formatNumberAsCurrency(totalConsumed);
-			return { serialized, signedTx };
+			return tx;
 		} catch (/** @type {any} */ error) { return error.message; }
 	}
 
@@ -221,11 +256,11 @@ export class MiniformComponent {
 		const changeText = `${isPositive ? '+' : ''}${CURRENCY.formatNumberAsCurrency(balanceChange, this.biw.balanceDecimals)}c`;
 		const specialTxText = specialTxType ? ` (${specialTxType.toUpperCase()})` : '';
 		createSpacedTextElement(changeText + specialTxText, ['biw-historyChange'], state, ['biw-historyState'], listItem);
-		
+
 		const dateText = !approxTimestamp ? 'Pending'
 			: new Date(approxTimestamp).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
 		createSpacedTextElement(txId, ['biw-historyTxId'], dateText, ['biw-historyDate'], listItem);
-		
+
 		this.eHTML.history.list.appendChild(listItem);
 	}
 	/** @param {'SENT' | 'RECEIVED' | 'ALL'} filter */

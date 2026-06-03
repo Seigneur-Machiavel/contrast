@@ -66,7 +66,7 @@ export class ADDRESS {
 		/** @type {number | undefined} */
 		const cached = ADDRESS.#suffixToUint32Cache.get(str);
 		if (cached !== undefined) return cached;
-		
+
 		const result = Converter.b58ToUint32(str);
 		ADDRESS.#suffixToUint32Cache.set(str, result);
 		return result;
@@ -74,7 +74,7 @@ export class ADDRESS {
 	static #uint32ToSuffixCaches = { p1: new ConverterCache(), p2: new ConverterCache() };
 	static uint32ToSuffix(num = 0, prefixLength = 1) {
 		/** @type {string | undefined} */
-		const cached =  prefixLength === 1
+		const cached = prefixLength === 1
 			? ADDRESS.#uint32ToSuffixCaches.p1.get(num)
 			: ADDRESS.#uint32ToSuffixCaches.p2.get(num);
 		if (cached !== undefined) return cached;
@@ -82,7 +82,7 @@ export class ADDRESS {
 		const b58Length = prefixLength === 1 ? CRITERIA.SUFFIX_LENGTH.p1 : CRITERIA.SUFFIX_LENGTH.p2;
 		const result = Converter.uint32ToB58(num, b58Length);
 		if (prefixLength === 1) ADDRESS.#uint32ToSuffixCaches.p1.set(num, result);
-						   else ADDRESS.#uint32ToSuffixCaches.p2.set(num, result);
+		else ADDRESS.#uint32ToSuffixCaches.p2.set(num, result);
 		return result;
 	}
 
@@ -99,6 +99,10 @@ export class ADDRESS {
 		const uint32 = ADDRESS.suffixToUint32(suffix);
 		bytes.set([PREFIX_CODES[prefix]], 0);
 		bytes.set(converter.numberTo4Bytes(uint32), 1);
+		
+		const roundTrip = ADDRESS.bytesToAddress(bytes);
+    	if (roundTrip !== addressBase58)
+			console.error(`ROUND TRIP FAIL: ${addressBase58} => ${roundTrip}`);
 		ADDRESS.#addressToBytesCache.set(addressBase58, bytes);
 		return bytes;
 	}
@@ -107,17 +111,14 @@ export class ADDRESS {
 	/** @param {Uint8Array} bytes length: 5, first byte is prefix */
 	static bytesToAddress(bytes) {
 		if (bytes.length !== CRITERIA.BYTES_LENGTH) throw new Error('Invalid bytes length!');
-
-		const uint32 = (bytes[4] << 24 | bytes[3] << 16 | bytes[2] << 8 | bytes[1]) >>> 0; // LE
-		const key = bytes[0] * 0x100000000 + uint32; // unique per prefix+uint32
-
-		/** @type {string | undefined} */
+		
+		const key = bytes[0] * 0x100000000 + converter.bytes4ToNumber(bytes.subarray(1));
 		const cached = ADDRESS.#bytesToAddressCache.get(key);
 		if (cached !== undefined) return cached;
 
 		const prefix = PREFIXES_LIST[bytes[0]];
-		const suffix = ADDRESS.uint32ToSuffix(uint32, prefix.length);
-		const result = prefix + suffix;
+		const uint32 = converter.bytes4ToNumber(bytes.subarray(1));
+		const result = prefix + ADDRESS.uint32ToSuffix(uint32, prefix.length);
 		ADDRESS.#bytesToAddressCache.set(key, result);
 		return result;
 	}
@@ -139,15 +140,23 @@ export class ADDRESS {
 		const suffix = addressBase58.slice(prefix.length);
 		return { prefix, suffix };
 	}
-	
-	/** - rootUint32 is a memory pointer @param {string} addressBase58 */
+
+	/** @param {string} addressBase58 */
 	static getAddressRoot(addressBase58) {
 		const { prefix, suffix } = ADDRESS.splitAddress(addressBase58);
 		const uint32 = ADDRESS.suffixToUint32(suffix);
 		const remainder = uint32 % CRITERIA.ADDRESSES_PER_ROOT;
+		if (remainder === 0) return { prefix, rootSuffix: suffix, rootUint32: uint32, walletId: addressBase58 };
+
 		const rootUint32 = uint32 - remainder;
 		const rootSuffix = ADDRESS.uint32ToSuffix(rootUint32, prefix.length);
 		return { prefix, rootSuffix, rootUint32, walletId: `${prefix}${rootSuffix}` };
+	}
+	/** @param {string} addressBase58 */
+	static isRootAddress(addressBase58) {
+		const { prefix, suffix } = ADDRESS.splitAddress(addressBase58);
+		const uint32 = ADDRESS.suffixToUint32(suffix);
+		return uint32 % CRITERIA.ADDRESSES_PER_ROOT === 0;
 	}
 
 	/** Returns all addresses associated with walletId (e.g. C111111 => C111111, C111112, ..., C111119) @param {string} walletId */
@@ -171,7 +180,7 @@ export class ADDRESS {
 		// CONTROL FIRST CHAR EXISTS IN LEXICON
 		const { prefix, suffix } = ADDRESS.splitAddress(addressBase58);
 		if (!ADDRESS.#AUTHORIZED_PREFIXES.has(prefix)) return false;
-		
+
 		/// CONTROL NUMERICAL VALUE OF THE ADDRESS IS UNDER MAX VALUE
 		const val = ADDRESS.suffixToUint32(suffix);
 		const maxVal = prefix.length === 1 ? CRITERIA.MAX_NUM_VALUE.p1 : CRITERIA.MAX_NUM_VALUE.p2;

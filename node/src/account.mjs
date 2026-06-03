@@ -8,8 +8,6 @@ import { UTXO_RULES_GLOSSARY, UTXO } from '../../types/transaction.mjs';
 
 export class Account {
 	parentWallet;
-	pubKeysHex;
-	pubKeys;
 	address;
 
 	/** @type {TxId[]} */					historyIds = [];
@@ -20,13 +18,10 @@ export class Account {
 	/** @type {number} */					spendableBalance = 0;
 	get nbHistory() { return this.historyIds.length; }
 
-	/** @param {Wallet} parentWallet @param {string | null} [address] */
-	constructor(parentWallet, address = null) {
+	/** @param {Wallet} parentWallet @param {string} address */
+	constructor(parentWallet, address) {
 		this.parentWallet = parentWallet;
 		this.address = address;
-		// Assign parent wallet pubKey -> singleSig account by default
-		this.pubKeysHex = [this.parentWallet.hybridKeyHex];
-		this.pubKeys = [this.parentWallet.hybridKey];
 	}
 
 	/** @param {number} balance @param {LedgerUtxo[]} ledgerUtxos */

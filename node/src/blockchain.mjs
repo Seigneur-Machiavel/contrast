@@ -101,7 +101,7 @@ export class Blockchain {
 
 		// EXEC CALLBACK
 		try { await node.callbacks.onBlockConfirmed?.(block);
-		} catch (/** @type {any} */ error) { this.logger.log(`onBlockConfirmed callback error: ${error.message}`, (m, c) => console.error(m, c)); }
+		} catch (/** @type {any} */ error) { this.logger.log(`onBlockConfirmed callback error: ${error.stack}`, (m, c) => console.error(m, c)); }
 
 		// UPDATE NODE INFO
 		if (node.controller?.sharedSecret && block.index >= 12) {

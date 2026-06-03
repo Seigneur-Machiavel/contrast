@@ -217,11 +217,7 @@ export class Assistant {
 		console.log('--- DEBUG ---');
 		this.interactor.requestNewPassword();
 		if (!this.connectorNode.isConnected) return;
-
-		// SETUP ADDRESSES IN CONTROLLER -> Rewards of local node will go to the generated wallet.
-		//const [ vAccount, sAccount ] = this.biw.wallet.accounts;
-		//this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'validator', address: vAccount.address, pubKeysHex: vAccount.pubKeysHex });
-		//this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'solver', address: sAccount.address, pubKeysHex: sAccount.pubKeysHex });
+		
 		// FOR NOW WE JUST SEND PUBKEYS -> MULTISIG SHOULD NEEDS ADDRESSES & PUBKEY USED TO SIGN
 		this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'validator', pubKeysHex: [this.biw.wallet.hybridKeyHex] });
 		this.connectorNode.sendEncryptedMessage('setRewardInfo', { type: 'solver', pubKeysHex: [this.biw.wallet.hybridKeyHex] });

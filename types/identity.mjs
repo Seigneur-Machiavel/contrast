@@ -35,9 +35,6 @@ export class Identity {
 }
 
 export class IdentitiesCache {
-	/** Set of walletId who needs to be in tx witnesses @type {Set<string>} */
-	requiredWitnesses = new Set();
-
 	/** key: walletId, value: Identity @type {Map<string, Identity>} */
 	identities = new Map();
 	

@@ -17,6 +17,8 @@ import { SIZES, serializer, BinaryReader, BinaryWriter } from '../utils/serializ
 
 const converter = serializer.converter;
 export class Ledger {
+	/** balance(6b) + totalSent(6b) + totalReceived(6b) + nbUtxos(4b) + nbHistory(4b) */
+	static EMPTY_LEDGER_SIZE = 26; // 6 + 6 + 6 + 4 + 4;
 	writer;
 
 	/** @param {Uint8Array} serializedLedger */
@@ -57,15 +59,17 @@ export class Ledger {
 		const newHistoryBytes = serializer.serialize.txsIdsArray(changes.historyTxIds);
 		const historyBytes = this.getHistoryBytes;
 		if (safeMode) { // CHECK IF ALREADY UPDATED => NO WRITE
-			if (historyBytes.length >= newHistoryBytes.length) return null;
+			if (historyBytes.length < newHistoryBytes.length) return null; // can't already be applied
 			const existingHistoryEnd = historyBytes.subarray(historyBytes.length - newHistoryBytes.length);
 			if (Buffer.from(existingHistoryEnd).compare(Buffer.from(newHistoryBytes)) === 0) return null;
 		}
 
 		// PREPARE NEW LEDGER VALUES
+		const utxosBuffer = this.getUtxosBuffer;
+		const indexesToSkip = this.#extractIndexesOfMatches(utxosBuffer, changes.out);
 		const newNbUtxos = this.getNbUtxos + changes.in.length - changes.out.length;
 		const newNbHistory = this.getNbHistory + changes.historyTxIds.size;
-		const newBalance = this.getBalance + (changes.totalInAmount - changes.totalOutAmount);
+		const newBalance = this.getBalance + changes.totalInAmount - changes.totalOutAmount;
 		const newTotalSent = this.getTotalSent + changes.totalOutAmount;
 		const newTotalReceived = this.getTotalReceived + changes.totalInAmount;
 
@@ -75,11 +79,9 @@ export class Ledger {
 		w.writeBytes(serializer.converter.numberTo6Bytes(newTotalReceived));
 		w.writeBytes(serializer.converter.numberTo4Bytes(newNbUtxos));
 		w.writeBytes(serializer.converter.numberTo4Bytes(newNbHistory));
-		
+
 		// WRITE KEPT UTXOS
-		const utxosBuffer = this.getUtxosBuffer;
-		const indexesToSkip = this.#extractIndexesOfMatches(utxosBuffer, changes.out);
-		for (let i = 0; i < newNbUtxos * 15; i += 15)
+		for (let i = 0; i < utxosBuffer.length; i += 15)
 			if (!indexesToSkip.has(i)) w.writeBytes(utxosBuffer.subarray(i, i + 15));
 
 		// WRITE NEW UTXOS
@@ -109,18 +111,18 @@ export class Ledger {
 		const newBalance = this.getBalance - (changes.totalInAmount - changes.totalOutAmount);
 		const newTotalSent = this.getTotalSent - changes.totalOutAmount;
 		const newTotalReceived = this.getTotalReceived - changes.totalInAmount;
-		
+
 		const w = new BinaryWriter(6 + 6 + 6 + 4 + 4 + (newNbUtxos * 15) + (newNbHistory * 6));
 		w.writeBytes(serializer.converter.numberTo6Bytes(newBalance));
 		w.writeBytes(serializer.converter.numberTo6Bytes(newTotalSent));
 		w.writeBytes(serializer.converter.numberTo6Bytes(newTotalReceived));
 		w.writeBytes(serializer.converter.numberTo4Bytes(newNbUtxos));
 		w.writeBytes(serializer.converter.numberTo4Bytes(newNbHistory));
-		
+
 		// WRITE KEPT UTXOS
 		const utxosBuffer = this.getUtxosBuffer;
 		const indexesToSkip = this.#extractIndexesOfMatches(utxosBuffer, changes.in);
-		for (let i = 0; i < newNbUtxos * 15; i += 15)
+		for (let i = 0; i < utxosBuffer.length; i += 15)
 			if (!indexesToSkip.has(i)) w.writeBytes(utxosBuffer.subarray(i, i + 15));
 
 		// WRITE NEW UTXOS

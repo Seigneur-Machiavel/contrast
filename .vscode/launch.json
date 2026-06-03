@@ -65,7 +65,7 @@
 			"name": "Test: Worst TXs Validations",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/tests/simulations-single-thread/test-worst-txs-validations.js",
-			"args": ["--mayo2"],
+			"args": ["--mayo1"],
 			"runtimeArgs": ["--inspect"]
 		},
 		{

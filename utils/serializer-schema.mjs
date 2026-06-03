@@ -22,8 +22,9 @@ export const SIZES = {
 	stamp: { bytes: 7, str: null },
 
 	// TRANSACTION
-	/** Transaction header, represented as 12 bytes, containing: version(2) + witnessesCount(2) + identitiesCount(2) + inputsCount(2) + outputsCount(2) + dataLength(2) */
-	txHeader: { bytes: 2 + 2 + 2 + 2 + 2 + 2, str: null },
+	/** Transaction header, represented as 18 bytes, containing: version(2) + lastValidHeight(4)
+	 * witnessesSize(2) + identitiesSize(2) + utxoParamsSize(2) + inputsCount(2) + outputsCount(2) + dataSize(2) */
+	txHeader: { bytes: 2 + 4 + 2 + 2 + 2 + 2 + 2 + 2, str: null },
 	/** Anchor, represented as 8 bytes, containing: height(4) + txIndex(2) + vout(2) */
 	anchor: { bytes: 8, str: null },
 	/** Transaction ID, represented as 6 bytes, containing: height(4) + txIndex(2) */

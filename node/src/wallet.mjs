@@ -103,16 +103,17 @@ export class Wallet {
 		const address = typeof accountIndexOrtempAddress === 'number'
 			? this.accounts[accountIndexOrtempAddress]?.address
 			: accountIndexOrtempAddress;
-
-		if (typeof address !== 'string') throw new Error('Invalid address provided for signing');
-		if (!this.#signer) throw new Error('Account not initialized with signer');
+			
+		if (!ADDRESS.checkConformity(address)) throw new Error('Providing invalid address for signing');
 		if (!this.hybridKeyHex) throw new Error('Account not initialized with hybridKeyHex');
 		if (!Array.isArray(transaction.witnesses)) throw new Error('Invalid witnesses');
-
+		if (!this.#signer) throw new Error('Account not initialized with signer');
+		
+		const walletId = ADDRESS.getAddressRoot(address).walletId;
 		const hashBytes = Transaction_Builder.getTransactionSignable(transaction).hashBytes;
 		const hybridSig = this.#signer.sign(hashBytes);
 		const hybridSigHex = serializer.converter.bytesToHex(hybridSig);
-		transaction.witnesses.push([address, hybridSigHex]);
+		transaction.witnesses.push([walletId, hybridSigHex]);
 		return transaction;
 	}
 	async #saveRootAddressToStorage() {

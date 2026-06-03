@@ -27,8 +27,7 @@ export class BlockUtils {
 			if (secondTxIsValidator) txsSignables.shift();
 		}
 
-        const txsIDStr = txsSignables.join('');
-        return HashFunctions.SHA512(txsIDStr);
+        return HashFunctions.SHA512(txsSignables.join('-'));
     };
 	/** @param {Object<string, UTXO>} involvedUTXOs @param {Transaction[]} Txs */
     static #calculateTxsTotalFees(involvedUTXOs, Txs) {
@@ -108,11 +107,12 @@ export class BlockUtils {
      * @param {BlockCandidate | BlockFinalized} block
      * @param {boolean} isPosHash - if true, exclude coinbase/pos Txs and blockTimestamp */
     static getBlockSignature(block, isPosHash = false) {
+		// const startTime = performance.now();
         const txsHash = this.#getBlockTxsHash(block, isPosHash).hashHex;
         const { index, supply, coinBase, difficulty, legitimacy, prevHash, posTimestamp } = block;
-        let signatureStr = `${index}${supply}${coinBase}${difficulty}${legitimacy}${prevHash}${posTimestamp}${txsHash}`;
+		let signatureStr = `${index}-${supply}-${coinBase}-${difficulty}-${legitimacy}-${prevHash}-${posTimestamp}-${txsHash}`;
         if (!isPosHash && 'timestamp' in block) signatureStr += block.timestamp;
-
+		// console.log(performance.now() - startTime);
         return HashFunctions.SHA512(signatureStr).hashHex;
     }
     /** @param {BlockFinalized} block */

@@ -20,6 +20,7 @@ export class Dashboard {
 	constructor(connectorP2P, connectorNode) {
 		this.connectorP2P = connectorP2P;
 		this.connectorNode = connectorNode;
+		this.connectorNode.onMessageCallbacks['dashboard'] = this.#handleDecryptedMessage;
 		this.#initWhileDomReady();
 	}
 
@@ -61,7 +62,6 @@ export class Dashboard {
 		sAddressSpan.addEventListener('focusout', (e) => this.focusOutHandler(e));
 
 		setInterval(() => this.#connectionStateCheckLoop(), 1000);
-		this.connectorNode.onMessageCallbacks['dashboard'] = this.#handleDecryptedMessage;
 	}
 	#connectionStateCheckLoop() {
 		if (this.connectorNode.isConnected) return eHTML.get('dashboard-wrapper').classList.remove('connecting');
@@ -96,14 +96,19 @@ export class Dashboard {
 		if (type === 'nodeInfo') return this.#handleNodeInfoUpdate(data);
 	}
 	#handleStateUpdate(d) {
+		if (!eHTML.isReady) return;
 		if (this.lastValues.nodeState !== d) eHTML.get('nodeState').textContent = d;
 		this.lastValues.nodeState = d;
 	}
 	#handleMyLastLegitimacyUpdate(d) {
+		if (!eHTML.isReady) return;
 		if (this.lastValues.myLastLegitimacy !== d) eHTML.get('lastLegitimacy').textContent = d;
 		this.lastValues.myLastLegitimacy = d;
 	}
 	#handleNodeInfoUpdate(d) {
+		window.nodeWalletId = d.publicAddress;
+		if (!eHTML.isReady) return;
+		
 		const lv = this.lastValues;
 		if (lv.currentHeight !== d.currentHeight) eHTML.get('nodeHeight').textContent = d.currentHeight;
 	

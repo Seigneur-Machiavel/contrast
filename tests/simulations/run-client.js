@@ -47,9 +47,7 @@ const tryStaking = async (block) => {
 	// UPDATE ACCOUNT BALANCE & UTXOS
 	const recipient = senderAccount.address;
 	const ledger = clientNode.blockchain.ledgersStorage.getAddressLedger(recipient);
-	if (!ledger.ledgerUtxos) return; // no UTXO
-	
-	senderAccount.setBalanceAndUTXOs(senderAccount.balance, ledger.ledgerUtxos);
+	senderAccount.setBalanceAndUTXOs(senderAccount.balance, ledger.getUtxos);
 	const sigUtxos = senderAccount.filteredUtxos(undefined, undefined, ['sig']);
 	const availableAmount = sigUtxos.reduce((a, b) => a + b.amount, 0);
 	if (availableAmount < 10_000_000 * 2) return; // not enough to stake
@@ -78,15 +76,14 @@ const trySpamming = async (block) => {
 	
     if (block.index % 2 === 0) { // EVEN BLOCKS: one multi-output tx
         const ledger = clientNode.blockchain.ledgersStorage.getAddressLedger(senderAccount.address);
-        if (!ledger?.ledgerUtxos) return;
-        senderAccount.setBalanceAndUTXOs(senderAccount.balance, ledger.ledgerUtxos);
+        senderAccount.setBalanceAndUTXOs(senderAccount.balance, ledger.getUtxos);
 
 		const identityStore = clientNode.blockchain.identityStore;
 		const identityEntries = []; 
 		const transfers = [];
 		for (let i = 2; i < 2 + nbReceipients; i++) {
 			const a = clientWallet.accounts[i].address;
-			const pks = clientWallet.accounts[i].pubKeysHex;
+			const pks = [clientWallet.hybridKeyHex];
 			if (!a) throw new Error('Address not found for recipient account');
 			if (pks.length === 0) throw new Error('Pubkey not found for recipient account');
 			
@@ -98,7 +95,7 @@ const trySpamming = async (block) => {
 
 			try { // create TX to check size, if too big it will throw, then we stop adding outputs
 				transfers.push(new Transfer(a, 1_000));
-				Transaction_Builder.createTransaction(senderAccount, transfers, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
+				Transaction_Builder.createTransaction(senderAccount, transfers, undefined, 1, identityEntries); // test if transaction can be created with current data size, if not stop adding outputs
 			} catch (/** @type {any} */ error) {
 				transfers.pop(); // remove last transfer that caused failure
 				if (identityCountBefore < identityEntries.length) identityEntries.pop(); // if we added an identity entry for this recipient, we need to remove it as well
@@ -106,7 +103,7 @@ const trySpamming = async (block) => {
 			}
 		}
 
-        const { tx } = Transaction_Builder.createTransaction(senderAccount, transfers, 1, identityEntries);
+        const { tx } = Transaction_Builder.createTransaction(senderAccount, transfers, undefined, 1, identityEntries);
         const signedTx = await senderAccount.parentWallet.signTransaction(tx);
         if (!signedTx) return;
 
@@ -128,8 +125,7 @@ const trySpamming = async (block) => {
 
 		const ledger = 
 		clientNode.blockchain.ledgersStorage.getAddressLedger(sender.address);
-		if (!ledger?.ledgerUtxos) continue;
-		sender.setBalanceAndUTXOs(sender.balance, ledger.ledgerUtxos);
+		sender.setBalanceAndUTXOs(sender.balance, ledger.getUtxos);
 
 		const signedTx2 = (await Transaction_Builder.createAndSignTransaction(sender, 'max', recipient, 1))?.signedTx;
 		if (signedTx2) txs.push(signedTx2);

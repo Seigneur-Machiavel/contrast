@@ -119,8 +119,8 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 		await this.#terminateUnusedWorkers();
 		const readyWorkers = await this.#createMissingWorkers(sAddress, identityEntries);
 
-		this.hashrate = 0;
-		for (const worker of this.workers) this.hashrate += worker.hashRate;
+		this.hashRate = 0;
+		for (const worker of this.workers) this.hashRate += worker.hashRate;
 		
 		const timings = { start: Date.now(), workersUpdate: 0, updateInfo: 0 }
 		for (let i = 0; i < readyWorkers; i++) await this.workers[i].updateCandidate(blockCandidate);
@@ -182,12 +182,7 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 		const addressesToCheck = validatorAddressesEqual ? [validatorAddress] : [validatorAddress, validatorRewardAddress];
 
 		// SELF ADDRESS CREATION BY VALIDATOR => CHECK IF PUBKEY MATCH
-		//if (sPubkeys && validatorAddressesEqual) {
 		if (sPubkeys?.[0] === vPubkeys?.[0]) { // TRUST SELF
-			/*const { pubKeysHex } = lastValidatorIdentityEntry
-				? serializer.deserialize.identityEntry(lastValidatorIdentityEntry)
-				: identityStore.getIdentity(validatorRewardAddress) || {};*/
-
 			// VALIDATOR PK === SOLVER PK => PICKUP NEXT RELATED ADDRESS
 			const addresses = ADDRESS.getAddressesFromWalletId(validatorRewardAddress);
 			return { sAddress: addresses[1], identityEntries: undefined };

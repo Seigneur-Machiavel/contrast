@@ -10,6 +10,7 @@ import { serializer, BinaryWriter, SIZES } from '../../utils/serializer.mjs';
 import { Transaction, TxOutput, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 
 /**
+ * @typedef {import('./wallet.mjs').Wallet} Wallet
  * @typedef {import('./account.mjs').Account} Account
  * @typedef {import('../../types/block.mjs').BlockCandidate} BlockCandidate */
 
@@ -35,7 +36,7 @@ export class Transaction_Builder {
 		if (data && !(data instanceof Uint8Array)) throw new Error('Invalid data');
 
         const coinbaseOutput = new TxOutput(amount, 'sig', address);
-		return new Transaction([nonceHex], [coinbaseOutput], undefined, identities, data);
+		return new Transaction([nonceHex], [coinbaseOutput], undefined, undefined, identities, undefined, data);
     }
     /** @param {number} posReward @param {BlockCandidate} blockCandidate @param {string} validatorAddress @param {string} rewardAddress - who will receive the reward @param {Uint8Array[] | undefined} [identities] @param {Uint8Array | undefined} [data] */
     static createValidatorReward(posReward, blockCandidate, validatorAddress, rewardAddress, identities, data) {
@@ -45,26 +46,27 @@ export class Transaction_Builder {
         const posHashHex = BlockUtils.getBlockSignature(blockCandidate, true);
         const posInput = `${validatorAddress}:${posHashHex}`;
         const posOutput = new TxOutput(posReward, 'sig', rewardAddress);
-		return new Transaction([posInput], [posOutput], undefined, identities, data);
+		return new Transaction([posInput], [posOutput], undefined, undefined, identities, undefined, data);
     }
-    /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} feePerByte @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
-    static createTransaction(senderAccount, transfers, feePerByte = 1, identities = [], data, inMaxAmount = false) {
-        const { address, pubKeys } = senderAccount;
+    /** @param {Account} senderAccount @param {{recipientAddress: string, amount: number}[]} transfers @param {number} [lastValidHeight] default: max uint32 value @param {number} [feePerByte] @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
+    static createTransaction(senderAccount, transfers, lastValidHeight = 0xffffffff, feePerByte = 1, identities = [], data, isMaxAmount = false) {
+		const { address, parentWallet } = senderAccount;
+		const pubKeys = [parentWallet.hybridKey];
 		if (!address || pubKeys.length === 0) throw new Error('Sender account is not properly initialized');
 
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
         const UTXOs = UTXO.fromLedgerUtxos(address, senderAccount.ledgerUtxos, ruleCodesToExclude);
 		if (UTXOs.length === 0) throw new Error('No UTXO to spend');
 
-        this.checkMalformedAnchorsInUtxosArray(UTXOs);
-        this.checkDuplicateAnchorsInUtxosArray(UTXOs);
+        Transaction_Builder.checkMalformedAnchorsInUtxosArray(UTXOs);
+        Transaction_Builder.checkDuplicateAnchorsInUtxosArray(UTXOs);
 
-		const dataLength = data ? data.length : 0;
         const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
 		
-		// SIMPLIFIED FEE ESTIMATION WITHOUT OPTIMIZATION (USE ALL UTXOs, IF EXCEEDS MAX SIZE THEN THROW)
-		const result = inMaxAmount ? Transaction_Builder.#countAllSpent(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataLength)
-			: Transaction_Builder.#addUtxoUntilAmount(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataLength);
+		// SIMPLIFIED FEE ESTIMATION WITHOUT OPTIMIZATION (USE ALL UTXOs, IF EXCEEDS MAX SIZE => THROW)
+		const dataSize = data ? data.length : 0;
+		const result = isMaxAmount ? Transaction_Builder.#countAllSpent(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataSize)
+			: Transaction_Builder.#addUtxoUntilAmount(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataSize);
 		
 		const { selectedUtxos, changeOutput, finalFee, weight } = result;
 		if (weight > BLOCKCHAIN_SETTINGS.maxTransactionSize) throw new Error(`Estimated transaction weight (${weight} bytes) exceeds maximum allowed (${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes)`);
@@ -72,27 +74,36 @@ export class Transaction_Builder {
 		if (changeOutput) outputs.push(changeOutput);
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
-		const tx = Transaction.fromUTXOs(selectedUtxos, outputs, identities, data);
-		return { tx, finalFee, totalConsumed: totalSpent + finalFee, weight };
+		const tx = Transaction.fromUTXOs(selectedUtxos, outputs, lastValidHeight, identities, data);
+		return { tx, finalFee, totalConsumed: totalSpent + finalFee, weight, selectedUtxos };
     }
 	/** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount - the account who is staking the VSS
 	 * @param {number} qty The quanity of stakes to create
 	 * @param {string[]} [authorizedAddresses] - the addresses of the validators authorized to sign for this stake (default: the senderAccount address) 
+	 * @param {number} [lastValidHeight] default: max uint32 value
 	 * @param {Uint8Array[] | undefined} [identities] - optional identities associated with the stake */
-    static createStakingVss(senderAccount, qty, authorizedAddresses, identities = []) {
+    static createStakingVss(senderAccount, qty, authorizedAddresses, lastValidHeight = 0xffffffff, identities = []) {
 		if (!senderAccount.address) throw new Error('Address missing in senderAccount!');
-
+		if (typeof qty !== 'number' || qty <= 0) throw new Error('Invalid quantity to stake');
+		
 		const senderAddress = senderAccount.address;
+		if (!authorizedAddresses && senderAccount.address) authorizedAddresses = [senderAddress];
+
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
 		const availableUTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
         if (availableUTXOs.length === 0) throw new Error('No UTXO to spend');
-		if (typeof qty !== 'number' || qty <= 0) throw new Error('Invalid quantity to stake');
-		if (!authorizedAddresses && senderAccount.address) authorizedAddresses = [senderAddress];
-		if (!Array.isArray(authorizedAddresses) || authorizedAddresses.some(address => ADDRESS.checkConformity(address) === false)) throw new Error('Invalid authorized validator addresses');
+		if (!Array.isArray(authorizedAddresses)) throw new Error('Invalid authorizedAddresses type!');
+		
+		/** @type {string[]} */
+		const authorizedWalletIds = [];
+		for (const address of authorizedAddresses) {
+			const walletId = ADDRESS.getAddressRoot(address).walletId;
+			if (!authorizedWalletIds.includes(walletId)) authorizedWalletIds.push(walletId);
+		}
 
-        this.checkMalformedAnchorsInUtxosArray(availableUTXOs);
-        this.checkDuplicateAnchorsInUtxosArray(availableUTXOs);
+        Transaction_Builder.checkMalformedAnchorsInUtxosArray(availableUTXOs);
+        Transaction_Builder.checkDuplicateAnchorsInUtxosArray(availableUTXOs);
 
 		const transfers = [];
 		for (let i = 0; i < qty; i++) transfers.push({ recipientAddress: senderAddress, amount: BLOCKCHAIN_SETTINGS.stakeAmount });
@@ -108,9 +119,9 @@ export class Transaction_Builder {
 		if (change) outputs.push(new TxOutput(change, 'sig', senderAddress));
 
 		// SET THE AUTHORIZED VALIDATOR PUBKEY IN TX DATA
-        const tx = Transaction.fromUTXOs(utxos, outputs, identities);
-		const w = new BinaryWriter(authorizedAddresses.length * SIZES.address.bytes);
-		for (const address of authorizedAddresses) w.writeBytes(ADDRESS.addressToBytes(address));
+        const tx = Transaction.fromUTXOs(utxos, outputs, lastValidHeight, identities);
+		const w = new BinaryWriter(authorizedWalletIds.length * SIZES.address.bytes);
+		for (const walletId of authorizedWalletIds) w.writeBytes(ADDRESS.addressToBytes(walletId));
 		tx.data = w.getBytesOrThrow();
 		return { tx, finalFee: fee, totalConsumed: totalStake + fee };
     }
@@ -142,7 +153,7 @@ export class Transaction_Builder {
 			
 			const needsChangeOutput = totalIn > amount + finalFee;
 			const nbOutputs = outputCount + (needsChangeOutput ? 1 : 0);
-			weight = this.#calculateTransactionSize(selectedUtxos.length, nbOutputs, hybridKeys, identities, dataSize);
+			weight = Transaction_Builder.#calculateTransactionSize(selectedUtxos.length, nbOutputs, hybridKeys, identities, dataSize);
 			finalFee = Math.ceil(weight * feePerByte);
 			if (totalIn < amount + finalFee) continue; // keep adding UTXOs until we reach the amount needed
 		}
@@ -178,7 +189,8 @@ export class Transaction_Builder {
 	}
 	/** @param {Account} account @param {number} feePerByte @param {Uint8Array[]} identities @param {Uint8Array} [data] */
 	static calculateMaxSendableAmount(account, feePerByte = 1, identities, data) {
-		const { address, pubKeys, ledgerUtxos } = account;
+		const { address, parentWallet, ledgerUtxos } = account;
+		const pubKeys = [parentWallet.hybridKey];
 		if (!address || pubKeys.length === 0 || ledgerUtxos.length === 0) throw new Error('No UTXO to spend');
 
 		const nbIn = ledgerUtxos.length;
@@ -234,28 +246,83 @@ export class Transaction_Builder {
 	}
 
     // Multi-functions methods
-    /** Fast method to create & sign a transaction in on call. (Only works with 1 signature, for more complex transactions use createTransaction + account.signTransaction separately)
-	 * @param {Account} senderAccount @param {number | 'max'} amount @param {string} recipientAddress @param {number} [feePerByte]  @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
-    static async createAndSignTransaction(senderAccount, amount, recipientAddress, feePerByte = 1, identities = [], data) {
+    /** Fast method to create & sign a transaction. (Only works with 1 signature, for more complex transactions use createTransaction + account.signTransaction separately)
+	 * @param {Account} senderAccount @param {number | 'max'} amount @param {string} recipientAddress @param {number} [lastValidHeight] default: max uint32 value @param {number} [feePerByte]  @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
+    static async createAndSignTransaction(senderAccount, amount, recipientAddress, lastValidHeight = 0xffffffff, feePerByte = 1, identities = [], data) {
 		if (amount !== 'max' && (typeof amount !== 'number' || amount <= 0)) throw new Error('Invalid amount');
 
 		try {
-			const inMaxAmount = amount === 'max';
-			const amountToSend = !inMaxAmount ? amount : Transaction_Builder.calculateMaxSendableAmount(senderAccount, feePerByte, identities, data);
+			const isMaxAmount = amount === 'max';
+			const amountToSend = !isMaxAmount ? amount : Transaction_Builder.calculateMaxSendableAmount(senderAccount, feePerByte, identities, data);
+			if (!amountToSend) throw new Error('Nothing to send!');
+			
 			const transfer = { recipientAddress, amount: amountToSend };
-			const { tx, finalFee } = Transaction_Builder.createTransaction(senderAccount, [transfer], feePerByte, identities, data, inMaxAmount);
+			const { tx, finalFee, selectedUtxos } = Transaction_Builder.createTransaction(senderAccount, [transfer], lastValidHeight, feePerByte, identities, data, isMaxAmount);
 			await senderAccount.parentWallet.signTransaction(tx);
-			return { signedTx: tx, finalFee, error: false };
+			return { signedTx: tx, selectedUtxos, finalFee, error: false };
         } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }
     }
+	/** Fast method to create & sign a transaction using any necessary wallet's accounts
+	 * @param {Wallet} senderWallet @param {number | 'max'} amount @param {string} recipientAddress @param {number} [lastValidHeight] default: max uint32 value @param {number} [feePerByte]  @param {Uint8Array[]} [identities] @param {Uint8Array} [data] */
+	static async createAndSignTransactionUsingWallet(senderWallet, amount, recipientAddress, lastValidHeight = 0xffffffff, feePerByte = 1, identities = [], data) {
+		if (amount !== 'max' && (typeof amount !== 'number' || amount <= 0)) throw new Error('Invalid amount');
+
+		const isMaxAmount = amount === 'max';
+		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
+		try {
+			const UTXOs = [];
+			for (const account of senderWallet.accounts) {
+				const { address, ledgerUtxos} = account;
+				if (!address || !ledgerUtxos.length) continue;
+				UTXOs.push(...UTXO.fromLedgerUtxos(address, ledgerUtxos, ruleCodesToExclude));
+			}
+			if (UTXOs.length === 0) throw new Error('No UTXO to spend');
+			Transaction_Builder.checkMalformedAnchorsInUtxosArray(UTXOs);
+			Transaction_Builder.checkDuplicateAnchorsInUtxosArray(UTXOs);
+
+			const amountToSend = !isMaxAmount ? amount : UTXOs.reduce((a, b) => a + b.amount, 0);
+			const transfers = [{ recipientAddress, amount: amountToSend }];
+			const { outputs, totalSpent } = Transaction_Builder.buildOutputsFrom(transfers, 'sig');
+			
+			// SIMPLIFIED FEE ESTIMATION WITHOUT OPTIMIZATION (USE ALL UTXOs, IF EXCEEDS MAX SIZE => THROW)
+			const dataSize = data ? data.length : 0;
+			const pubKeys = [senderWallet.hybridKey];
+			const result = isMaxAmount ? Transaction_Builder.#countAllSpent(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataSize)
+				: Transaction_Builder.#addUtxoUntilAmount(UTXOs, totalSpent, outputs.length, feePerByte, pubKeys, identities, dataSize);
+			
+			const { selectedUtxos, changeOutput, finalFee, weight } = result;
+			if (weight > BLOCKCHAIN_SETTINGS.maxTransactionSize) throw new Error(`Estimated transaction weight (${weight} bytes) exceeds maximum allowed (${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes)`);
+
+			if (changeOutput) outputs.push(changeOutput);
+			if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
+
+			const tx = Transaction.fromUTXOs(selectedUtxos, outputs, lastValidHeight , identities, data);
+			await senderWallet.signTransaction(tx);
+			return { signedTx: tx, finalFee, error: false };
+        } catch (/**@type {any}*/ error) { return { signedTx: null, error }; }
+	}
 	/** @param {Transaction} transaction */
 	static getTransactionSignable(transaction) {
-		const inStr = JSON.stringify(transaction.inputs);
-		const outStr = JSON.stringify(transaction.outputs);
-		const idStr = JSON.stringify(transaction.identities || []);
-		const dataStr = JSON.stringify(transaction.data || []);
-		const verStr = transaction.version.toString();
-		const raw = inStr + outStr + idStr + dataStr + verStr;
+		const raw = '-start-'
+				  + `-${JSON.stringify(transaction.inputs)}-`
+				  + `-${JSON.stringify(transaction.outputs)}-`
+				  + `-${Transaction_Builder.serializeByteMatrix(transaction.identities)}-`
+				  + `-${Transaction_Builder.serializeByteMatrix(transaction.utxoParams)}-`
+				  + `-${Transaction_Builder.serializeByteArray(transaction.data || [])}-`
+				  + `-${transaction.version.toString()}-`
+				  + `-${transaction.lastValidHeight.toString()}-`
+				  + '-end-';
 		return HashFunctions.SHA512(raw);
+	}
+	/** Serialize a byte array or Uint8Array to a deterministic JSON-like string @param {[] | Uint8Array} val */
+	static serializeByteArray(val) {
+		if (val instanceof Uint8Array) return '[' + val.join(',') + ']';
+		return JSON.stringify(val);
+	}
+	/** Serialize an array of byte arrays or Uint8Arrays @param {[][] | Uint8Array[]} val */
+	static serializeByteMatrix(val) {
+		let str = '[';
+		for (const bytes of val) str += Transaction_Builder.serializeByteArray(bytes) + ',';
+		return str.length > 1 ? str.slice(0, -1) + ']' : '[]';
 	}
 }
