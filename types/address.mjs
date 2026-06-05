@@ -100,9 +100,6 @@ export class ADDRESS {
 		bytes.set([PREFIX_CODES[prefix]], 0);
 		bytes.set(converter.numberTo4Bytes(uint32), 1);
 		
-		const roundTrip = ADDRESS.bytesToAddress(bytes);
-    	if (roundTrip !== addressBase58)
-			console.error(`ROUND TRIP FAIL: ${addressBase58} => ${roundTrip}`);
 		ADDRESS.#addressToBytesCache.set(addressBase58, bytes);
 		return bytes;
 	}
@@ -113,6 +110,7 @@ export class ADDRESS {
 		if (bytes.length !== CRITERIA.BYTES_LENGTH) throw new Error('Invalid bytes length!');
 		
 		const key = bytes[0] * 0x100000000 + converter.bytes4ToNumber(bytes.subarray(1));
+		/** @type {string | undefined} */
 		const cached = ADDRESS.#bytesToAddressCache.get(key);
 		if (cached !== undefined) return cached;
 

@@ -44,15 +44,6 @@ export const UTXO_RULESNAME_FROM_CODE = {
     4: 'p2pExchange'
 };
 
-export class UtxoState {
-	/** @param {number} txIndex @param {number} vout @param {boolean} [spent] default: false */
-	constructor(txIndex, vout, spent = false) {
-		this.txIndex = txIndex;
-		this.vout = vout;
-		this.spent = spent;
-	}
-}
-
 export class TxOutput {
 	/** @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - output only */
 	constructor(amount, rule, address) {

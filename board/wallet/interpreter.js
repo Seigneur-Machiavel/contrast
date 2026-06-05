@@ -9,50 +9,6 @@ export class Interpreter {
 	validChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .';
 	get isOpen() { return this.interpreter?.classList.contains('open'); }
 
-	/* OLD VERSION WITH "biw-buttonBarInterpreter" TO BE REMOVED LATER
-	toggle() {
-		if (!this.interpreter || !this.buttonBarInterpreter) throw new Error('Interpreter.toggle: interpreter or buttonBarInterpreter element not found');
-		if (this.isOpen) this.close();
-		else this.open();
-	}
-	open() {
-		if (!this.interpreter || !this.buttonBarInterpreter || !this.interpreterInput) throw new Error('Interpreter.open: interpreter or buttonBarInterpreter or interpreterInput element not found');
-		this.interpreter.classList.add('open');
-		this.buttonBarInterpreter.classList.add('open');
-		this.interpreterInput.focus();
-	}
-	close() {
-		if (!this.interpreter || !this.buttonBarInterpreter) throw new Error('Interpreter.close: interpreter or buttonBarInterpreter element not found');
-		this.interpreter.classList.remove('open');
-		this.buttonBarInterpreter.classList.remove('open');
-	}*/
-	/** @param {string} str */
-	read_OLD(str) { // DEPRECATED, TO BE REMOVED LATER, USE read() INSTEAD
-		if (!this.#isSafelyReadable(str)) return 'Instructions is not safely readable';
-
-		try {
-			const t = str.split(' ');
-			if (!['SEND', 'STAKE', 'UNSTAKE', 'INSCRIBE'].includes(t[0].toUpperCase()))
-				return `Invalid action: ${t[0]}`;
-			
-			/** @ts-ignore @type {'SEND' | 'STAKE' | 'UNSTAKE' | 'INSCRIBE'} */
-			const action = t[0].toUpperCase();
-			const amount = this.#parseFloatIfSafeAndValidContrastAmount(t[1]) || 0;
-
-			const address = t[2].toUpperCase() === 'TO' ? t[3] : null;
-			if (address && !ADDRESS.checkConformity(address)) return `Invalid address: ${address}`;
-
-			const dataKeywordIndex = t.findIndex(word => word.toUpperCase() === 'DATA');
-			const dataStr = action === 'INSCRIBE' ? t[1]
-				: dataKeywordIndex > -1 ? t[dataKeywordIndex + 1]
-				: null;
-			if (typeof dataStr !== 'string' && dataStr !== null) return 'Invalid data field';
-	
-			return { action, amount, address, dataStr };
-		} catch (/** @type {any} */ error) { console.warn('Error reading t:', error.stack || error); }
-
-		return 'Invalid instructions';
-	}
 	/** @param {string} str */
 	read(str) {
 		if (!this.#isSafelyReadable(str)) return 'Unsafe input';

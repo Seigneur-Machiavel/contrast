@@ -22,7 +22,7 @@ export class Wallet {
 	#mayoVariant;		// The Mayo variant to use for signature generation.
 	#qsafeSigVersion;	// qsafe-sig version as string, e.g., '1'
 																// @ts-ignore: assigned in init()
-	/** @type {QsafeSigner} qsafe-sig instance */  #signer;		// @ts-ignore: assigned in init()
+	/** @type {QsafeSigner} qsafe-sig instance */  	#signer;		// @ts-ignore: assigned in init()
 	/** @type {Uint8Array} qsafe-sig */ 			hybridKey;	// @ts-ignore: assigned in init()
 	/** @type {string} qsafe-sig pubKey. */			hybridKeyHex;
 

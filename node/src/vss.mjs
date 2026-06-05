@@ -1,6 +1,6 @@
 // @ts-check
-import { ADDRESS } from '../../types/address.mjs';
 import { HashFunctions } from "./conCrypto.mjs";
+import { ADDRESS } from '../../types/address.mjs';
 import { VssStorage } from "../../storage/vss-store.mjs";
 import { TransactionReader } from '../../types/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from "../../config/blockchain-settings.mjs";

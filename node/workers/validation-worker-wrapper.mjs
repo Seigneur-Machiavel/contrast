@@ -1,8 +1,8 @@
 import { newWorker } from './unified-worker-initializer.mjs';
 
 /** 
- * @typedef {import('../../types/identity.mjs').QsafeVerifyTask} QsafeVerifyTask
- * @typedef {import('../../types/transaction.mjs').Transaction} Transaction */
+ * @typedef {import('../../types/transaction.mjs').Transaction} Transaction
+ * @typedef {import('../../types/identity.mjs').QsafeVerifyTask} QsafeVerifyTask */
 
 // CLASSES SIMPLIFYING USAGE OF THE WORKERS
 export class ValidationWorker {

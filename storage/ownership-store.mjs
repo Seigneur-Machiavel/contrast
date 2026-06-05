@@ -27,7 +27,7 @@ export class OwnershipStorage {
 
 		const { fileName, dirPath } = this.#pathOfOwnership(hash);
 		const serializedAddress = this.storage.loadBinary(fileName, dirPath, false);
-		const b58 = serializedAddress ? ADDRESS.bytesToAddress(serializedAddress) : null
+		const b58 = serializedAddress ? ADDRESS.bytesToAddress(serializedAddress) : null;
 		this.cache.set(hash, b58);
 		return b58;
 	}

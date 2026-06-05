@@ -79,22 +79,6 @@ export class IdentityStore {
 		if (ADDRESS.LEXICON[prefix]?.threshold !== threshold) throw new Error(`IdentityStore.get: threshold mismatch for address ${address} in transaction at ${blockIndex}:${txIndex} - expected ${ADDRESS.LEXICON[prefix]?.threshold} but got ${threshold}`);
 		return { address, pubKeysHex, threshold, serializedEntry: identities[identityIndex] };
 	}
-	/** Lookup at the store to verify identity.
-	 * - 'UNKNOWN' if the address is not known in the store (no pointer, no entry)
-	 * - 'KNOWN' if the address is known but no pubkeys provided to verify
-	 * - 'MISMATCH' if the address is known but the pubkey(s) do not match the entry
-	 * - 'MATCH' if the address is known and the pubkey(s) match the entry
-	 * @param {string} address @param {string[]} [pubKeysHex] - optional array of pubkeys to verify against the stored identity @param {number} [threshold] - optional threshold to verify against the stored identity (only relevant for multi-sig addresses) */
-	verify(address, pubKeysHex, threshold) {
-		const parsedEntry = this.getIdentity(address);
-		if (!parsedEntry) return 'UNKNOWN';
-		if (!pubKeysHex?.length) return 'KNOWN'; // early return if no pubkeys provided
-
-		if (parsedEntry.pubKeysHex.length !== pubKeysHex.length) return 'MISMATCH';
-		for (const pk of parsedEntry.pubKeysHex) if (!pubKeysHex.includes(pk)) return 'MISMATCH';
-		if (threshold !== undefined && parsedEntry.threshold !== threshold) return 'MISMATCH';
-		return 'MATCH';
-	}
 	/** Create the new identities entries for the addresses involved in the block (pointers)
 	 * @param {BlockFinalized} block @param {OwnershipStorage} ownershipStorage */
 	digestBlock(block, ownershipStorage, throwOnConflict = true) {

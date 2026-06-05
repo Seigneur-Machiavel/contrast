@@ -1,16 +1,15 @@
 // @ts-check
-import { BLOCKCHAIN_SETTINGS, SOLVING } from '../../config/blockchain-settings.mjs';
-import { BlockFinalizedHeader, BlockFinalized, BlockCandidate } from '../../types/block.mjs';
-import { solving } from '../../utils/conditionals.mjs';
 import { HashFunctions } from './conCrypto.mjs';
 import { TxValidation } from './tx-validation.mjs';
+import { solving } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from './transaction.mjs';
+import { Transaction, UTXO } from '../../types/transaction.mjs';
 import { serializer, SIZES, BinaryReader } from '../../utils/serializer.mjs';
-import { Transaction, UTXO, UtxoState } from '../../types/transaction.mjs';
+import { BLOCKCHAIN_SETTINGS, SOLVING } from '../../config/blockchain-settings.mjs';
+import { BlockFinalizedHeader, BlockFinalized, BlockCandidate } from '../../types/block.mjs';
 
 /**
-* @typedef {import("./node.mjs").ContrastNode} ContrastNode
-*/
+* @typedef {import("./node.mjs").ContrastNode} ContrastNode */
 
 export class BlockUtils {
 	// PRIVATE STATIC METHODS
@@ -79,24 +78,23 @@ export class BlockUtils {
 		const identityEntries = [];
 		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 2);
 		const useExistingRootAccount = !!wallet.accounts[0]?.address;
-		const validatorAddress = wallet.accounts[0]?.address ? wallet.accounts[0].address : nextRootAddresses.shift(); // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
+		const validatorAddress = wallet.walletId ? wallet.walletId : nextRootAddresses.shift(); // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
 		if (!validatorAddress) throw new Error('Fatal error, validatorAddress missing!');
 
-		const status1 = identityStore.verify(validatorAddress, [wallet.hybridKeyHex]);
-		if (status1 === 'MISMATCH') throw new Error('Validator address known but pubkey(s) mismatch in identity store');
-		if (status1 === 'UNKNOWN') identityEntries.push(identityStore.buildEntry([wallet.hybridKeyHex]));
+		const validatorWalletId = ownershipStorage.getOwnedRootAddress([wallet.hybridKeyHex]);
+		if (!validatorWalletId) identityEntries.push(identityStore.buildEntry([wallet.hybridKeyHex]));
+		else if (validatorWalletId !== validatorAddress) throw new Error('Validator walletId mismatch in identity store');
 
 		const pubKeyMatch = vPubkeys?.length === 1 && vPubkeys[0] === wallet.hybridKeyHex;
 		const rewardAddress = walletIds.reward || vAddress || (pubKeyMatch ? validatorAddress : nextRootAddresses[0]);
 		if (rewardAddress === nextRootAddresses[0]) { // CREATE REWARD IDENTITY IF NEEDED
 			const rewardPubkeys = (vPubkeys?.length || 0) > 0 ? vPubkeys : undefined;
-			const status2 = identityStore.verify(rewardAddress, rewardPubkeys);
-			if (status2 === 'MISMATCH') throw new Error('Reward address known but pubkey(s) mismatch in identity store');
-			if (status2 === 'UNKNOWN') {
-				if (!rewardPubkeys) throw new Error('Reward address unknown but no pubkey provided, cannot create identity for block signing');
-				if (rewardPubkeys.length !== 1) throw new Error('Reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
-				identityEntries.push(identityStore.buildEntry(rewardPubkeys));
-			}
+			if (rewardPubkeys) {
+				const rewardWalletId = ownershipStorage.getOwnedRootAddress(rewardPubkeys);
+				if (!rewardWalletId) identityEntries.push(identityStore.buildEntry(rewardPubkeys));
+				else if (rewardWalletId !== rewardAddress) throw new Error('Reward walletId mismatch in identity store');
+			} else if (!identityStore.getIdentity(rewardAddress))
+				throw new Error('Reward address unknown but no pubkey provided, cannot create identity for block signing');
 		}
 
 		return { validatorAddress, rewardAddress, identityEntries, useExistingRootAccount };
@@ -206,13 +204,5 @@ export class BlockUtils {
 				else { control[input] = true; involvedAnchors.push(input); }
 
 		return { involvedAnchors, repeatedAnchorsCount };
-	}
-	/** @param {BlockFinalized} block @returns {UtxoState[]} */
-	static buildUtxosStatesOfFinalizedBlock(block) {
-		const utxosStates = [];
-		for (let i = 0; i < block.Txs.length; i++)
-			for (let j = 0; j < block.Txs[i].outputs.length; j++)
-				utxosStates.push(new UtxoState(i, j, false));
-		return utxosStates;
 	}
 }

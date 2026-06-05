@@ -165,15 +165,19 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 	// INTERNAL METHODS
 	/** @param {Transaction} validatorTx*/
 	#resolveIdentityOfRewardTx(validatorTx) {
+		const result = {
+			/** @type {undefined | Uint8Array[]} */
+			identityEntries: undefined,
+			sAddress: 'toto'
+		};
 		const validatorAddress = validatorTx.inputs[0].split(':')[0];
 		const validatorRewardAddress = validatorTx.outputs[0].address;
 		const validatorAddressesEqual = validatorAddress === validatorRewardAddress;
-		//const lastValidatorIdentityEntry = validatorTx.identities[1] || validatorTx.identities[0];
 		if (!validatorAddress || !validatorRewardAddress) throw new Error('Invalid block candidate: missing validator address or reward address');
 
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
 		const { vAddress, vPubkeys, sAddress, sPubkeys } = this.node.rewardsInfo;
-		const { identityStore } = this.node.blockchain;
+		const { identityStore, ownershipStorage } = this.node.blockchain;
 		if (!sAddress && !sPubkeys) throw new Error('Both solver reward address and pubkeys are missing, unable to proceed');
 		
 		// IF NO SOLVER REWARD ADDRESS, CREATE ONE FOR THE SOLVER REWARD IDENTITY (vout:0)
@@ -184,8 +188,8 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 		// SELF ADDRESS CREATION BY VALIDATOR => CHECK IF PUBKEY MATCH
 		if (sPubkeys?.[0] === vPubkeys?.[0]) { // TRUST SELF
 			// VALIDATOR PK === SOLVER PK => PICKUP NEXT RELATED ADDRESS
-			const addresses = ADDRESS.getAddressesFromWalletId(validatorRewardAddress);
-			return { sAddress: addresses[1], identityEntries: undefined };
+			result.sAddress = ADDRESS.getAddressesFromWalletId(validatorRewardAddress)[1];
+			return result;
 		}
 		
 		for (const a of addressesToCheck) {
@@ -199,18 +203,18 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 			}
 		}
 
-		const solverAddress = sAddress ? sAddress : nextRootAddresses[nextAddressIndex];
-		if (!solverAddress) throw new Error('Unable to determine solver reward address for mining');
+		result.sAddress = sAddress ? sAddress : nextRootAddresses[nextAddressIndex];
+		if (!result.sAddress) throw new Error('Unable to determine solver reward address for mining');
 
-		const identityStatus = identityStore.verify(solverAddress, sPubkeys);
-		if (identityStatus === 'MISMATCH') throw new Error('Solver reward address known but pubkey(s) mismatch in identity store');
-		if (identityStatus === 'MATCH') return { sAddress: solverAddress, identityEntries: undefined };
+		const rewardPubkeys = (sPubkeys?.length || 0) > 0 ? sPubkeys : undefined;
+		if (rewardPubkeys) {
+			const rewardWalletId = ownershipStorage.getOwnedRootAddress(rewardPubkeys);
+			if (!rewardWalletId) result.identityEntries = [identityStore.buildEntry(rewardPubkeys)];
+			else if (rewardWalletId !== result.sAddress) throw new Error('Reward walletId mismatch in identity store');
+		} else if (!identityStore.getIdentity(result.sAddress))
+			throw new Error('Reward address unknown but no pubkey provided, unable to create identity for mining reward');
 		
-		// 'UNKNOWN' => create the identity entries for the solver reward address.
-		if (!sPubkeys) throw new Error('Solver reward address unknown but no pubkey provided, unable to create identity for mining reward');
-		if (sPubkeys.length !== 1) throw new Error('Solver reward address unknown but multiple pubkeys provided, cannot determine threshold for identity creation');
-		
-		return { sAddress: solverAddress, identityEntries: [identityStore.buildEntry(sPubkeys)] };
+		return result;
 	}
     /** @param {BlockFinalized} block */
     async #broadcastFinalizedBlock(block) {

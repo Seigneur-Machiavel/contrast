@@ -75,7 +75,8 @@ export class Transaction_Builder {
         if (conditionnals.arrayIncludeDuplicates(outputs)) throw new Error('Duplicate outputs');
 
 		const tx = Transaction.fromUTXOs(selectedUtxos, outputs, lastValidHeight, identities, data);
-		return { tx, finalFee, totalConsumed: totalSpent + finalFee, weight, selectedUtxos };
+		const totalConsumed = totalSpent + finalFee;
+		return { tx, finalFee, totalConsumed, weight, selectedUtxos };
     }
 	/** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount - the account who is staking the VSS

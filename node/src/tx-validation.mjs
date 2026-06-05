@@ -10,13 +10,14 @@ import { serializer, SIZES, BinaryReader } from '../../utils/serializer.mjs';
 import { OutputCreationValidator } from './tx-rule-checkers.mjs';
 import { UTXO_RULES_GLOSSARY } from '../../types/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../../config/blockchain-settings.mjs';
-import { Identity, EntriesCache, IdentitiesCache, QsafeVerifyTask } from '../../types/identity.mjs';
+import { EntriesCache, IdentitiesCache } from '../../types/identity.mjs';
 
 /**
  * @typedef {import("./node.mjs").ContrastNode} ContrastNode
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").TxOutput} TxOutput
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
+ * @typedef {import("../../types/identity.mjs").QsafeVerifyTask} QsafeVerifyTask
  * @typedef {import("../../storage/identity-store.mjs").IdentityStore} IdentityStore
  * @typedef {import("../workers/validation-worker-wrapper.mjs").ValidationWorker} ValidationWorker */
 
@@ -276,7 +277,7 @@ export class TxValidation {
 			if (!id) throw new Error(`${walletId} not found in identities to confirm, this should not happen as we fetched all identities for involved addresses in the previous step`);
 			if (signatures[walletId].size < id.threshold) throw new Error(`Not enough witnesses for walletId: ${walletId}`);
 
-			qsafeVerifyTasks[walletId] = new QsafeVerifyTask(signable, id.pubKeysHex, signatures[walletId]);
+			qsafeVerifyTasks[walletId] = { signable, pubKeysHex: id.pubKeysHex, signatures: signatures[walletId] };
 			requiredWitnesses.delete(walletId);
 		}
 

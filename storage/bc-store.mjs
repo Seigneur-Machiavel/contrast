@@ -1,12 +1,10 @@
 // @ts-check
 import fs from 'fs';
 import path from 'path';
-//import AdmZip from 'adm-zip';
 import HiveP2P from "hive-p2p";
-import { TransactionReader, UTXO } from '../types/transaction.mjs';
-import { BlockUtils } from '../node/src/block.mjs';
 import { BinaryHandler } from './binary-handler.mjs';
 import { BLOCK, BlockFinalizedHeader } from '../types/block.mjs';
+import { TransactionReader, UTXO } from '../types/transaction.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
 
@@ -18,8 +16,6 @@ import { BinaryReader, serializer, SIZES } from '../utils/serializer.mjs';
  * @typedef {import("../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../types/block.mjs").BlockFinalized} BlockFinalized */
 
-/** @type {Object<number, 'solver' | 'validator'>} */
-const specialMode = { 0: 'solver', 1: 'validator' }; // Finalized block only: correspond to index of tx in the block.
 const ENTRY_BYTES = SIZES.indexEntry.bytes;
 
 /** New version of BlockchainStorage.
@@ -52,12 +48,11 @@ export class BlockchainStorage {
 		if (block.index !== this.lastBlockIndex + 1) throw new Error(`Block index mismatch: expected ${this.lastBlockIndex + 1}, got ${block.index}`);
 
 		// PREPARE DATA TO WRITE
-		const utxosStates = BlockUtils.buildUtxosStatesOfFinalizedBlock(block);
-		const blockBytes = serializer.serialize.block(block);
-		const utxosStatesBytes = serializer.serialize.utxosStatesArray(utxosStates);
 		const previousOffset = block.index % this.batchSize === 0 ? null
-			: this.#getOffsetOfBlockData(this.lastBlockIndex);
+		: this.#getOffsetOfBlockData(this.lastBlockIndex);
 		const start = previousOffset ? previousOffset.start + previousOffset.blockBytes + previousOffset.utxosStatesBytes : 0;
+		const blockBytes = serializer.serialize.block(block, 'finalized');
+		const utxosStatesBytes = serializer.serialize.utxosStatesOfBlock(block);
 		const indexesBytes = serializer.serialize.blockIndexEntry(start, blockBytes.length, utxosStatesBytes.length);
 		
 		// UPDATE INDEXES and BLOCKCHAIN FILE, do not use "appendFileSync" => cursor position issues

@@ -3,6 +3,18 @@ import { QsafeHelper } from '../node/src/conCrypto.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 import { serializer } from '../utils/serializer.mjs';
 
+/** 
+ * @typedef {Object} 		QsafeVerifyTask
+ * @property {Uint8Array} 	signable
+ * @property {string[]} 	pubKeysHex
+ * @property {Set<string>} 	signatures
+ * 
+ * @typedef {Object} 		Identity
+ * @property {string} 		walletId The root wallet address (addressses[0])
+ * @property {string[]} 	pubKeysHex The list of pubkeys able to sign
+ * @property {number} 		threshold The required number of signature
+ * @property {boolean}		selfDeclared Only true for specialTx, blocks cross-tx usage */
+
 /** Build identity entry, used to declare/record the pubkey(s) associated with an address in the identities filed of a transaction, to be retrieved later for identity resolution.
  * @param {string[]} pubKeysHex @param {number} [threshold] (1b) number of required signatures for multi-sig */
 export function buildEntry(pubKeysHex, threshold = 1) {
@@ -13,25 +25,9 @@ export function buildEntry(pubKeysHex, threshold = 1) {
 	
 	for (const pk of pubKeysHex)
 		if (!QsafeHelper.checkFormat(serializer.converter.hexToBytes(pk)))
-			throw new Error(`buildEntry(): invalid pubkey ${serializer.converter.hexToBytes(pk)}`);
+			throw new Error(`buildEntry(): invalid pubKeyHex ${serializer.converter.hexToBytes(pk)}`);
 
 	return serializer.serialize.identityEntry(threshold, pubKeysHex); // throws if non conform
-}
-
-export class Identity {
-	/** only true for specialTx, blocks cross-tx usage */
-	selfDeclared;
-	address;
-	pubKeysHex;
-	threshold;
-
-	/** @param {string} address @param {string[]} pubKeysHex @param {number} threshold */
-	constructor(address, pubKeysHex, threshold, selfDeclared = false) {
-		this.address = address;
-		this.pubKeysHex = pubKeysHex;
-		this.threshold = threshold;
-		this.selfDeclared = selfDeclared;
-	}
 }
 
 export class IdentitiesCache {
@@ -41,7 +37,7 @@ export class IdentitiesCache {
 	/** @param {string} walletId @param {string[]} pubKeysHex @param {number} threshold */
 	set(walletId, pubKeysHex, threshold, selfDeclared = false) {
 		if (this.identities.has(walletId)) throw new Error(`Identity for walletId ${walletId} already exists in cache`);
-		this.identities.set(walletId, new Identity(walletId, pubKeysHex, threshold, selfDeclared));
+		this.identities.set(walletId, { walletId, pubKeysHex, threshold, selfDeclared });
 	}
 	
 	/** @param {string} walletId */
@@ -64,18 +60,5 @@ export class EntriesCache {
 			if (s.every((byte, index) => byte === serializedEntry[index])) return true;
 		}
 		return false;
-	}
-}
-
-export class QsafeVerifyTask {
-	signable;
-	pubKeysHex;
-	signatures;
-
-	/** @param {Uint8Array} signable @param {string[]} pubKeysHex @param {Set<string>} signatures */
-	constructor(signable, pubKeysHex, signatures) {
-		this.signable = signable;
-		this.pubKeysHex = pubKeysHex;
-		this.signatures = signatures;
 	}
 }

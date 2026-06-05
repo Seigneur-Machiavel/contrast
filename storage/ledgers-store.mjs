@@ -117,13 +117,12 @@ export class LedgersStorage {
 	}
 	/** Try cache first -> then storage @param {string} walletId */
 	getSerializedBatch(walletId) {
-		if (!this.cache.serializedBatches.has(walletId)) {
-			const { dirPath, fileName } = this.#pathOfAddressLedger(walletId);
-			const serializedBatch = this.storage.loadBinary(fileName, dirPath, false);
-			this.cache.serializedBatches.set(walletId, serializedBatch);
-		}
-			
-		return this.cache.serializedBatches.get(walletId);
+		if (this.cache.serializedBatches.has(walletId))
+			return this.cache.serializedBatches.get(walletId); 
+
+		const { dirPath, fileName } = this.#pathOfAddressLedger(walletId);
+		const serializedBatch = this.storage.loadBinary(fileName, dirPath, false);
+		this.cache.serializedBatches.set(walletId, serializedBatch);
 	}
 	/** @param {string} address @param {string[]} [walletAddresses] addresses linked to walletId if known */
 	getAddressLedger(address, walletAddresses) {

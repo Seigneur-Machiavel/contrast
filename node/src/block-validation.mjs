@@ -5,7 +5,7 @@ import { solving } from '../../utils/conditionals.mjs';
 import { Transaction_Builder } from './transaction.mjs';
 import { SIZES } from '../../utils/serializer-schema.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-import { EntriesCache, IdentitiesCache, QsafeVerifyTask } from '../../types/identity.mjs';
+import { EntriesCache, IdentitiesCache } from '../../types/identity.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 
 /**
@@ -13,7 +13,8 @@ import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
  * @typedef {import("../../types/transaction.mjs").UTXO} UTXO
  * @typedef {import("../../types/transaction.mjs").Transaction} Transaction
  * @typedef {import("../../types/block.mjs").BlockCandidate} BlockCandidate
- * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized */
+ * @typedef {import("../../types/block.mjs").BlockFinalized} BlockFinalized
+ * @typedef {import("../../types/identity.mjs").QsafeVerifyTask} QsafeVerifyTask */
 
 const validationMiniLogger = new MiniLogger('validation');
 const failureErrorMessages = {

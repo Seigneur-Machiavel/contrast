@@ -62,7 +62,7 @@ console.log(`${nbWalletToGenerate} wallets generated! (${nbWalletToGenerate * AD
 /** create TX to check size, if too big it will throw, then we stop adding identityEntries
  * @param {Account} senderAccount @param {Uint8Array[]} identityEntries */
 const createTransactionOrPopIdentityIfNotPossible = (senderAccount, identityEntries, removeSelectedUtxos = false) => {
-	try { 
+	try {
 		const { tx, selectedUtxos } = Transaction_Builder.createTransaction(senderAccount, [], undefined, 1, identityEntries);
 		if (removeSelectedUtxos) for (const utxo of selectedUtxos) senderAccount.markUTXOAsSpent(utxo.anchor);
 		return tx;
@@ -86,14 +86,16 @@ const onBlockConfirmed = async (block) => {
 	
 	const txs = [];
 	const { identityStore, ledgersStorage, ownershipStorage } = node.blockchain;
+	const loadLedgerStart = performance.now();
 	const solverLedger = ledgersStorage.getAddressLedger(solverAccount.address);
+	console.log(`Load solver ledger: ${(performance.now() - loadLedgerStart).toFixed(2)}ms | ${solverLedger.getNbUtxos} utxos | ${solverLedger.getNbHistory} history entries.`);
 	solverAccount.setBalanceAndUTXOs(solverLedger.getBalance, solverLedger.getUtxos);
 
 	// TEST: CREATE MISSING IDENTITIES
 	/** @type {Uint8Array[]} */
 	let identityEntries = [];
 	for (const wallet of wallets) {
-		if (wallet.nbAccounts) continue; // ready
+		if (wallet.walletId) continue; // ready
 
 		const rootAddress = ownershipStorage.getOwnedRootAddress([wallet.hybridKeyHex]);
 		if (rootAddress) wallet.assignRootAddress(rootAddress); // newly attributed
@@ -136,9 +138,11 @@ const onBlockConfirmed = async (block) => {
 				if (createTransactionOrPopTransferIfNotPossible(solverAccount, transfers)) continue;
 
 				// IF FULLY FILLED => SIGN & PUSH TX
+				const createTxStart = performance.now();
 				const tx = createTransactionOrPopTransferIfNotPossible(solverAccount, transfers, true);
 				if (!tx) continue;
-
+				
+				console.log(`multi outputs tx: ${(performance.now() - createTxStart).toFixed(2)}ms`);
 				txs.push(await nodeWallet.signTransaction(tx, 1));
 				console.log(`Prepared 1 tx with ${tx.outputs.length} outputs.`);
 				nbTransfersWrapInTx += transfers.length;

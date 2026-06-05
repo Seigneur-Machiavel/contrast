@@ -14,7 +14,6 @@ export { SIZES, BinaryReader, BinaryWriter, NonZeroUint16 };
 * @typedef {import("../types/transaction.mjs").TxId} TxId
 * @typedef {import("../types/transaction.mjs").Witness} Witness
 * @typedef {import("../types/transaction.mjs").TxAnchor} TxAnchor
-* @typedef {import("../types/transaction.mjs").UtxoState} UtxoState
 * @typedef {import("../types/sync.mjs").BlockHeightHash} BlockHeightHash
 *
 * @typedef {Object} NodeSetting
@@ -121,14 +120,19 @@ export const serializer = {
             };
             return w.getBytesOrThrow(`Txs references array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-		/** @param {UtxoState[]} utxoStates */
-		utxosStatesArray(utxoStates) {
-			const w = new BinaryWriter(utxoStates.length * SIZES.utxoState.bytes);
-			for (const utxoState of utxoStates) {
-				w.writeBytes(serializer.nonZeroUint16.encode(utxoState.txIndex));
-				w.writeBytes(serializer.nonZeroUint16.encode(utxoState.vout));
-				w.writeByte(utxoState.spent ? 1 : 0);
-			}
+		/** @param {BlockFinalized} block */
+		utxosStatesOfBlock(block) {
+			let utxoCount = 0;
+			for (let i = 0; i < block.Txs.length; i++) utxoCount += block.Txs[i].outputs.length;
+
+			const w = new BinaryWriter(utxoCount * SIZES.utxoState.bytes);
+			for (let i = 0; i < block.Txs.length; i++)
+				for (let j = 0; j < block.Txs[i].outputs.length; j++) {
+					w.writeBytes(serializer.nonZeroUint16.encode(i));
+					w.writeBytes(serializer.nonZeroUint16.encode(j));
+					w.writeByte(0);
+				}
+			
 			return w.getBytesOrThrow(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
 		/** @param {number | undefined} threshold 'undefined' will set '0' and return 'undefined' on deserialization @param {string[]} pubKeysHex */
