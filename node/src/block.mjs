@@ -76,9 +76,9 @@ export class BlockUtils {
 		// PRE-GENERATE 2 ADDRESSES IN CASE BOTH VALIDATOR AND REWARD ADDRESS NEED TO BE CREATED
 		/** @type {Uint8Array[]} */
 		const identityEntries = [];
-		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 2);
+		const batchOfNextAddresses = identityStore.batchOfNextAddresses('C', 2);
 		const useExistingRootAccount = !!wallet.accounts[0]?.address;
-		const validatorAddress = wallet.walletId ? wallet.walletId : nextRootAddresses.shift(); // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
+		const validatorAddress = wallet.walletId ? wallet.walletId : batchOfNextAddresses.getAndConsumeNextWalletId(); // IF NO ACCOUNT ADDRESS, CREATE ONE FOR THE VALIDATOR IDENTITY (vout:65535)
 		if (!validatorAddress) throw new Error('Fatal error, validatorAddress missing!');
 
 		const validatorWalletId = ownershipStorage.getOwnedRootAddress([wallet.hybridKeyHex]);
@@ -86,8 +86,9 @@ export class BlockUtils {
 		else if (validatorWalletId !== validatorAddress) throw new Error('Validator walletId mismatch in identity store');
 
 		const pubKeyMatch = vPubkeys?.length === 1 && vPubkeys[0] === wallet.hybridKeyHex;
-		const rewardAddress = walletIds.reward || vAddress || (pubKeyMatch ? validatorAddress : nextRootAddresses[0]);
-		if (rewardAddress === nextRootAddresses[0]) { // CREATE REWARD IDENTITY IF NEEDED
+		const nextWalletId = batchOfNextAddresses.getAndConsumeNextWalletId();
+		const rewardAddress = walletIds.reward || vAddress || (pubKeyMatch ? validatorAddress : nextWalletId);
+		if (rewardAddress === nextWalletId) { // CREATE REWARD IDENTITY IF NEEDED
 			const rewardPubkeys = (vPubkeys?.length || 0) > 0 ? vPubkeys : undefined;
 			if (rewardPubkeys) {
 				const rewardWalletId = ownershipStorage.getOwnedRootAddress(rewardPubkeys);

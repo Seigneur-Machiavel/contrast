@@ -117,7 +117,8 @@ async function mineBlockUntilValid() {
             //solverVars.readyBlock = { ...block }; // clone to freeze state
 			//solverVars.readyBlock = JSON.parse(JSON.stringify(block)); // deep clone to freeze state
 			//solverVars.readyBlock = { ...block, Txs: [...block.Txs] };
-			solverVars.readyBlock = { ...block, Txs: block.Txs.map(tx => ({ ...tx })) };
+			//solverVars.readyBlock = { ...block, Txs: block.Txs.map(tx => ({ ...tx })) };
+			solverVars.readyBlock = structuredClone(block); // this one looks clean
             solverVars.readyBlockTimestamp = block.timestamp;
         } catch (/** @type {any} */ err) {
             await new Promise(r => setTimeout(r, 10));

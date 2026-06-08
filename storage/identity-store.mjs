@@ -21,6 +21,25 @@ import { TransactionReader } from '../types/transaction.mjs';
 
 const ENTRY_BYTES = SIZES.stamp.bytes; // blockIndex(4b):txIndex(2b):identityIndex(1b)> (total: 7b)
 
+class BatchOfNextAddresses {
+	/** @type {string[]} */
+	walletIds = [];
+
+	getAndConsumeNextWalletId() {
+		const walletId = this.walletIds.shift();
+		if (!walletId) throw new Error('No remaining walletId in the list!');
+		return walletId;
+	}
+	/** @param {string[]} addresses */
+	consumeWalletIdsOfAddresses(addresses) {
+		for (const a of addresses) {
+			const walletId = ADDRESS.getAddressRoot(a).walletId;
+			const index = this.walletIds.indexOf(walletId);
+			if (index !== -1) this.walletIds.splice(index, 1);
+		}
+	}
+}
+
 export class IdentityStore {
 	buildEntry = buildEntry;
 
@@ -36,17 +55,16 @@ export class IdentityStore {
 	}
 
 	/** Generate the next 9 addresseses to create based on the number of entries already in the file for the given prefix. */
-	nextRootAddressToCreate(prefix = 'C', count = 1) {
-		/** @type {string[]} */
-		const walletIds = [];
+	batchOfNextAddresses(prefix = 'C', count = 1) {
+		const batch = new BatchOfNextAddresses();
 		const handler = this.#getHandler(prefix);
 		const ADDRESSES_PER_ROOT = ADDRESS.CRITERIA.ADDRESSES_PER_ROOT;
 		const start = handler.size / ENTRY_BYTES * ADDRESSES_PER_ROOT; // Number of entries already in the file for this prefix
 		const end = start + (count * ADDRESSES_PER_ROOT);
 		for (let i = start; i < end; i += ADDRESSES_PER_ROOT)
-			walletIds.push(`${prefix}${ADDRESS.uint32ToSuffix(i, prefix.length)}`);
+			batch.walletIds.push(`${prefix}${ADDRESS.uint32ToSuffix(i, prefix.length)}`);
 
-		return walletIds;
+		return batch;
 	}
 	/** Check if the address has an associated identity @param {string} address */
 	hasIdentity(address) {
@@ -154,7 +172,7 @@ export class IdentityStore {
 	/** Write the pointer, return the address @param {string} prefix @param {number} blockIndex @param {number} txIndex @param {number} identityIndex */
 	#register(prefix, blockIndex, txIndex, identityIndex) { // WRITE ENTRY
 		const handler = this.#getHandler(prefix);
-		const walletId = this.nextRootAddressToCreate(prefix, 1)[0];
+		const walletId = this.batchOfNextAddresses(prefix, 1).walletIds[0];
 		const entryBytes = serializer.serialize.stamp(blockIndex, txIndex, identityIndex); // throws if non conform
 		handler.cursor = handler.size; // APPEND TO THE END OF THE FILE
 		handler.write(entryBytes);

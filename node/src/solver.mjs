@@ -165,24 +165,19 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 	// INTERNAL METHODS
 	/** @param {Transaction} validatorTx*/
 	#resolveIdentityOfRewardTx(validatorTx) {
-		const result = {
-			/** @type {undefined | Uint8Array[]} */
-			identityEntries: undefined,
-			sAddress: 'toto'
-		};
+		const { vAddress, vPubkeys, sAddress, sPubkeys } = this.node.rewardsInfo;
+		const { identityStore, ownershipStorage } = this.node.blockchain;
+		if (!sAddress && !sPubkeys) throw new Error('Both solver reward address and pubkeys are missing, unable to proceed');
+		
 		const validatorAddress = validatorTx.inputs[0].split(':')[0];
 		const validatorRewardAddress = validatorTx.outputs[0].address;
 		const validatorAddressesEqual = validatorAddress === validatorRewardAddress;
 		if (!validatorAddress || !validatorRewardAddress) throw new Error('Invalid block candidate: missing validator address or reward address');
 
 		// VERIFY IDENTITY CORRESPONDANCE => IF NOT IDENTIFY => CREATE IDENTITY
-		const { vAddress, vPubkeys, sAddress, sPubkeys } = this.node.rewardsInfo;
-		const { identityStore, ownershipStorage } = this.node.blockchain;
-		if (!sAddress && !sPubkeys) throw new Error('Both solver reward address and pubkeys are missing, unable to proceed');
-		
 		// IF NO SOLVER REWARD ADDRESS, CREATE ONE FOR THE SOLVER REWARD IDENTITY (vout:0)
-		let nextAddressIndex = 0; // Index of address to use for the solver reward identity (vout:0)
-		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 3);
+		/** @type {{identityEntries: undefined | Uint8Array[], sAddress: undefined | string}} */
+		const result = { identityEntries: undefined, sAddress: undefined };
 		const addressesToCheck = validatorAddressesEqual ? [validatorAddress] : [validatorAddress, validatorRewardAddress];
 
 		// SELF ADDRESS CREATION BY VALIDATOR => CHECK IF PUBKEY MATCH
@@ -192,18 +187,9 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 			return result;
 		}
 		
-		for (const a of addressesToCheck) {
-			const { prefix: p1, rootSuffix: str1 } = ADDRESS.getAddressRoot(a);
-			for (const walletId of nextRootAddresses) {
-				const { prefix: p2, suffix: str2 } = ADDRESS.splitAddress(walletId);
-				if (p1 !== p2) continue; // different prefix, cannot be the same root address
-				if (str2 !== str1) continue; // different root address, skip
-				
-				nextAddressIndex++; // this root address is already used by the validator identities, so we need to use the next one for the solver reward identity
-			}
-		}
-
-		result.sAddress = sAddress ? sAddress : nextRootAddresses[nextAddressIndex];
+		const batchOfNextAddresses = identityStore.batchOfNextAddresses('C', 3);
+		batchOfNextAddresses.consumeWalletIdsOfAddresses(addressesToCheck); // remove addresses declared in the block candidate
+		result.sAddress = sAddress ? sAddress : batchOfNextAddresses.getAndConsumeNextWalletId();
 		if (!result.sAddress) throw new Error('Unable to determine solver reward address for mining');
 
 		const rewardPubkeys = (sPubkeys?.length || 0) > 0 ? sPubkeys : undefined;

@@ -304,7 +304,7 @@ export class Transaction_Builder {
 	}
 	/** @param {Transaction} transaction */
 	static getTransactionSignable(transaction) {
-		const raw = '-start-'
+		/*const raw = '-start-'
 				  + `-${JSON.stringify(transaction.inputs)}-`
 				  + `-${JSON.stringify(transaction.outputs)}-`
 				  + `-${Transaction_Builder.serializeByteMatrix(transaction.identities)}-`
@@ -313,7 +313,19 @@ export class Transaction_Builder {
 				  + `-${transaction.version.toString()}-`
 				  + `-${transaction.lastValidHeight.toString()}-`
 				  + '-end-';
-		return HashFunctions.SHA512(raw);
+		return HashFunctions.SHA512(raw);*/
+		const parts = [
+			'-start-',
+			JSON.stringify(transaction.inputs),
+			JSON.stringify(transaction.outputs),
+			Transaction_Builder.serializeByteMatrix(transaction.identities),
+			Transaction_Builder.serializeByteMatrix(transaction.utxoParams),
+			Transaction_Builder.serializeByteArray(transaction.data || []),
+			transaction.version.toString(),
+			transaction.lastValidHeight.toString(),
+			'-end-',
+		];
+		return HashFunctions.SHA512(parts.join('-'));
 	}
 	/** Serialize a byte array or Uint8Array to a deterministic JSON-like string @param {[] | Uint8Array} val */
 	static serializeByteArray(val) {

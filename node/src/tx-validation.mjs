@@ -160,7 +160,7 @@ export class TxValidation {
 		let identityEntryIndex = 0;
 		const { identityStore } = node.blockchain;
 		const nextIdentityEntry = () => tx.identities[identityEntryIndex++];
-		const nextRootAddresses = identityStore.nextRootAddressToCreate('C', 3);
+		const batchOfNextAddresses = identityStore.batchOfNextAddresses('C', 3);
 
 		/** @param {string} walletId */
 		const handleAddressEntry = (walletId) => {
@@ -170,7 +170,7 @@ export class TxValidation {
 				if (!id) throw new Error(`Identity ${walletId} does not exist in the store`);
 				return identitiesCache.set(walletId, id.pubKeysHex, id.threshold); // set in cache and return
 			}
-			if (!nextRootAddresses.includes(walletId))
+			if (!batchOfNextAddresses.walletIds.includes(walletId))
 				throw new Error(`Transaction address ${walletId} is not the expected next root address for identity reservation`);
 
 			const entry = nextIdentityEntry();
