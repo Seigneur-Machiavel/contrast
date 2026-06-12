@@ -192,8 +192,15 @@ export class TestTransactionCreator {
 		else if (logs) console.log(`${this.txs.length} transactions to be sent...`);
 	
 		// SPEND EVERYTHING OVER NETWORK
+		const batchSize = BLOCKCHAIN_SETTINGS.maxTransactionsBatchSize;
+		const batchesCount = Math.ceil(this.txs.length / batchSize);
 		if (this.txs.length === 1) this.node.p2p.broadcast(serializer.serialize.transaction(this.txs[0]), { topic: 'transaction' });
-		else this.node.p2p.broadcast(serializer.serialize.transactions(this.txs), { topic: 'transactions' });
+		else
+			for (let i = 0; i < batchesCount; i++) {
+				const end = (i + 1) * batchSize > this.txs.length ? this.txs.length : (i + 1) * batchSize;
+				const batch = this.txs.slice(i * batchSize, end)
+				this.node.p2p.broadcast(serializer.serialize.transactions(batch), { topic: 'transactions' });
+			}
 	
 		for (const tx of this.txs) // then push them one by one to self mempool
 			await this.node.memPool.pushTransaction(this.node, serializer.serialize.transaction(tx));

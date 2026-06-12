@@ -8,13 +8,10 @@ const args = process.argv.slice(2); // digest the start args
 const domain = args.includes('--local') ? 'localhost' : '0.0.0.0';
 const nodePort = args.includes('-np') ? parseInt(nextArg('-np')) : 27260;
 const clearOnStart = true;		// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
-const transactionTest = false; 	// ENABLE TRANSACTION TESTING MODE - FOR TEST PURPOSES ONLY!
 
 import { Wallet } from '../../node/src/wallet.mjs';
-import { serializer } from '../../utils/serializer.mjs';
 import { ContrastStorage } from '../../storage/storage.mjs';
 import { createContrastNode } from '../../node/src/node.mjs';
-import { Transaction_Builder } from '../../node/src/transaction.mjs';
 
 // IMPORT HIVE_P2P & PATCH CONFIG
 import HiveP2P from "hive-p2p";
@@ -28,8 +25,13 @@ if (clearOnStart) bootstrapStorage.clear(); // start fresh
 
 const bootstrapWallet = await Wallet.initializedWallet(bootstrapStorage, undefined, bootstrapSeed);
 const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, bootstrapSeed);
-// @ts-ignore
-const bootstrapNode = await createContrastNode({ cryptoCodex: bootstrapCodex, storage: bootstrapStorage, domain, port: nodePort });
+const bootstrapNode = await createContrastNode({
+	cryptoCodex: bootstrapCodex,
+	storage: bootstrapStorage,
+	bootstraps: [],
+	port: nodePort,
+	domain,
+});
 await bootstrapNode.start(bootstrapWallet);
 bootstrapNode.blockchain.simulateFailureRate = 0.1; // for testing purposes
 
@@ -47,7 +49,12 @@ async function createClientNode(seed = 'toto') {
 
 	const clientWallet = await Wallet.initializedWallet(clientStorage, undefined, seed);
 	const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
-	const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps });
+	const clientNode = await createContrastNode({
+		cryptoCodex: clientCodex,
+		storage: clientStorage,
+		controllerPort: false,
+		bootstraps
+	});
 	await clientNode.start(clientWallet);
 	clientNode.blockchain.simulateFailureRate = 0.1; // for testing purposes
 	return clientNode;
@@ -55,31 +62,3 @@ async function createClientNode(seed = 'toto') {
 
 const clientNodes = [];
 for (const seed of clientSeeds) clientNodes.push(await createClientNode(seed));
-
-// -------------------------------------------------------------------------------------
-// TESTS
-// -------------------------------------------------------------------------------------
-/** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
-const onBlockConfirmed = async (block) => {
-	if (!transactionTest) return;
-
-	// TEST: create transaction
-	const a = bootstrapWallet.accounts[0];
-	const recipient = bootstrapWallet.accounts[1].address;
-	if (!a.address || !recipient) return; // account not ready
-
-	const ledger = bootstrapNode.blockchain.ledgersStorage.getAddressLedger(a.address);
-	if (!ledger.ledgerUtxos) return;
-
-	a.setBalanceAndUTXOs(a.balance, ledger.ledgerUtxos);
-	const tx = (await Transaction_Builder.createAndSignTransaction(a, 10, recipient))?.signedTx;
-	if (!tx) return; // failed to create tx
-
-	// TEST: push transaction
-	console.log(`Pushing transaction spending: ${tx.inputs.join(', ')}`);
-	try { 
-		const s = serializer.serialize.transaction(tx);
-		await bootstrapNode.memPool.pushTransaction(bootstrapNode, s);
-	} catch (/** @type {any} */ error) { console.error('Failed to push transaction to mempool:', error.message); }
-}
-bootstrapNode.on('onBlockConfirmed', onBlockConfirmed);

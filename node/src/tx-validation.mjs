@@ -200,7 +200,7 @@ export class TxValidation {
 
 		// VALIDATOR CHECK
 		if (tx.inputs[0].length === SIZES.validatorInput.str) {
-			const validatorWalletId = ADDRESS.getAddressRoot(tx.inputs[0].split(":")[0]).walletId;
+			const validatorWalletId = ADDRESS.getAddressRoot(tx.inputs[0].split(':')[0]).walletId;
 			const rewardWalletId = ADDRESS.getAddressRoot(tx.outputs[0].address).walletId;
 			handleAddressEntry(validatorWalletId);
 			handleAddressEntry(rewardWalletId);

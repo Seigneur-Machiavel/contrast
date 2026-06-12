@@ -71,14 +71,6 @@
 		{
 			"type": "node",
 			"request": "launch",
-			"name": "Test: Staking",
-			"skipFiles": ["<node_internals>/**"],
-			"program": "${workspaceFolder}/tests/simulations-single-thread/test-staking.js",
-			"args": ["--max-old-space-size=16384"]
-		},
-		{
-			"type": "node",
-			"request": "launch",
 			"name": "Test: Sync",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/tests/simulations-single-thread/test_sync.js"

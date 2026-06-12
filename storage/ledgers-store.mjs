@@ -75,33 +75,37 @@ export class LedgersStorage {
 	/** @param {BlockFinalized} block @param {Object<string, UTXO>} involvedUTXOs @param {'APPLY' | 'REVERT'} mode @param {boolean} [safeMode] If enabled: check the history before writing, default: false */
 	digestBlock(block, involvedUTXOs, mode, safeMode = false) {
 		const changesByWallet = this.#extractChangesByWallet(block, involvedUTXOs);
-		let count = 0;
+		let count = 0; // BUILD UPDATED LEDGERS
 		for (const walletId in changesByWallet) {
-
-			// BUILD UPDATED LEDGERS
-			/** @type {Record<string, Uint8Array>} */
-			const serializedUpdatedLedgersByAddress = {};
-			const { isNewLedger, serializedLedgers } = this.#getSerializedLedgers(walletId);
+			/** @type {Map<string, Uint8Array>} */
+			const serializedUpdatedLedgersByAddress = new Map();
 			const changes = changesByWallet[walletId];
 			for (const address in changes.slotChanges) {
 				const slotChanges = changes.slotChanges[address];
+				if (slotChanges.historyTxIds.size === 0) continue; // Nothing new
+
 				const ledger = this.getAddressLedger(address, changes.addresses);
 				const result = mode === 'APPLY'
 					? ledger.applySlotChanges(slotChanges, safeMode)
 					: ledger.reverseSlotChanges(slotChanges, safeMode);
 
 				if (!result) continue;
-				serializedUpdatedLedgersByAddress[address] = result;
+				serializedUpdatedLedgersByAddress.set(address, result);
 			}
+
+			if (serializedUpdatedLedgersByAddress.size === 0) continue; // No modification.
 
 			// MERGE UPDATED LEDGERS
 			let isEmpty = true;
 			const serializedUpdatedLedgers = [];
 			const addresses = ADDRESS.getAddressesFromWalletId(walletId);
+			const { isNewLedger, serializedLedgers } = this.#getSerializedLedgers(walletId); // ensure all non-updated ledgers presence.
 			for (let i = 0; i < addresses.length; i++) {
-				const sl = serializedUpdatedLedgersByAddress[addresses[i]] || serializedLedgers[i];
-				serializedUpdatedLedgers.push(sl);
-				if (sl.length > Ledger.EMPTY_LEDGER_SIZE) isEmpty = false;
+				const updated = serializedUpdatedLedgersByAddress.get(addresses[i]);
+				const loaded = serializedLedgers[i]; // fallback (original)
+				const serialized = updated || loaded; // Choose the right ledger
+				serializedUpdatedLedgers.push(serialized);
+				if (serialized.length > Ledger.EMPTY_LEDGER_SIZE) isEmpty = false;
 			}
 
 			// SAVE FILE OR DELETE IF EMPTY

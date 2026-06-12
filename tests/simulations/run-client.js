@@ -6,9 +6,9 @@ const workerData 	= JSON.parse(process.env.NODE_WORKER_DATA || '{}');
 const seed      	= workerData.seed;
 const isStaker  	= workerData.isStaker || false;
 const isSpammer 	= workerData.isSpammer || false;
-const nbReceipients = workerData.nbReceipients || 0;	// Number of recipient addresses in multi output transaction
-const nbOfSenders 	= workerData.nbOfSenders || 0; 	// Number of single output transactions to send (should be higher than nbReceipients)
-const clearOnStart 	= workerData.clearOnStart;	// RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
+const nbReceipients = workerData.nbReceipients || 0; // Number of recipient addresses in multi output transaction
+const nbOfSenders 	= workerData.nbOfSenders || 0; // Number of single output transactions to send (should be higher than nbReceipients)
+const clearOnStart 	= workerData.clearOnStart; // RESET STORAGE ON STARTUP - FOR TEST PURPOSES ONLY!
 const bootstraps = ['ws://localhost:27260']; // bootstrap node URL(s) to connect to
 
 if (isStaker && isSpammer) throw new Error('A client cannot be both a staker and a spammer');
@@ -28,7 +28,12 @@ if (clearOnStart) clientStorage.clear(); // start fresh
 
 const clientWallet = await Wallet.initializedWallet(clientStorage, undefined, seed);
 const clientCodex = await HiveP2P.CryptoCodex.createCryptoCodex(false, seed);
-const clientNode = await createContrastNode({ cryptoCodex: clientCodex, storage: clientStorage, bootstraps, controllerPort: false });
+const clientNode = await createContrastNode({
+	cryptoCodex: clientCodex,
+	storage: clientStorage,
+	controllerPort: false,
+	bootstraps
+});
 await clientNode.start(clientWallet);
 
 // STAKER / SPAMMER BEHAVIOR

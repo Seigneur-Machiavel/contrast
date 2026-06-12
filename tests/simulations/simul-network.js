@@ -1,5 +1,4 @@
 // @ts-check
-//import { newWorker } from '../../node/workers/unified-worker-initializer.mjs';
 import { newProcess } from "./process-spawner.js";
 process.on('uncaughtException', err => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', err => console.error('[unhandledRejection]', err));
@@ -8,8 +7,8 @@ function nextArg(arg = '') { return args[args.indexOf(arg) + 1]; }
 const args = process.argv.slice(2); // digest the start args
 const domain 			= args.includes('--local') ? 'localhost' : '0.0.0.0';
 const bootstrapCount 	= parseInt(nextArg('-bootstraps')) || 0;
-const clientCount 		= parseInt(nextArg('-clients'))  || 0;
-const stakerCount  		= parseInt(nextArg('-stakers'))  || 0;
+const clientCount 		= parseInt(nextArg('-clients')) || 0;
+const stakerCount  		= parseInt(nextArg('-stakers')) || 0;
 const spammerCount 		= parseInt(nextArg('-spammers')) || 0;
 const nbReceipients 	= parseInt(nextArg('-nor')) || 2500;	// Number of recipient addresses in multi output transaction
 const nbOfSenders 		= parseInt(nextArg('-nos')) || 200; 	// Number of single output transactions to send (should be higher than nbReceipients)

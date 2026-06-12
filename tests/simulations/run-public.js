@@ -22,12 +22,14 @@ const bootstrapStorage = new ContrastStorage(seed);
 if (clearOnStart) bootstrapStorage.clear(); // start fresh
 
 const bootstrapWallet = await Wallet.initializedWallet(bootstrapStorage, undefined, seed);
-const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed); // @ts-ignore
+const bootstrapCodex = await HiveP2P.CryptoCodex.createCryptoCodex(true, seed);
 const bootstrapNode = await createContrastNode({
-	controllerPort: false,
 	cryptoCodex: bootstrapCodex,
 	storage: bootstrapStorage,
-	domain, port: nodePort
+	controllerPort: false,
+	bootstraps: [],
+	port: nodePort,
+	domain,
 });
 await bootstrapNode.start(bootstrapWallet);
 

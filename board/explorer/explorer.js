@@ -199,8 +199,9 @@ export class Explorer {
 		const inputText = e.target.value.replace(/\s/g, '');
 		const isNumber = !isNaN(inputText);
 		const isAddress = ADDRESS.checkConformity(inputText);
-		const isTxId = inputText.split(':').length === 2;
-		const isAnchor = inputText.split(':').length === 3;
+		const splitInput = inputText.split(':');
+		const isTxId = splitInput.length === 2;
+		const isAnchor = splitInput.length === 3;
 
 		if (isNumber) this.navigator.blockIndex = parseInt(inputText);
 		if (isAddress) this.navigator.address = inputText;

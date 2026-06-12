@@ -22,20 +22,18 @@ export const SIZES = {
 	stamp: { bytes: 7, str: null },
 
 	// TRANSACTION
+	/** Transaction ID, represented as 6 bytes, containing: height(4) + txIndex(2) */
+	txId: { bytes: 6, str: null },
 	/** Transaction header, represented as 18 bytes, containing: version(2) + lastValidHeight(4)
 	 * witnessesSize(2) + identitiesSize(2) + utxoParamsSize(2) + inputsCount(2) + outputsCount(2) + dataSize(2) */
 	txHeader: { bytes: 2 + 4 + 2 + 2 + 2 + 2 + 2 + 2, str: null },
-	/** Anchor, represented as 8 bytes, containing: height(4) + txIndex(2) + vout(2) */
+	/** Anchor (TxInput), represented as 8 bytes, containing: height(4) + txIndex(2) + vout(2) */
 	anchor: { bytes: 8, str: null },
-	/** Transaction ID, represented as 6 bytes, containing: height(4) + txIndex(2) */
-	txId: { bytes: 6, str: null },
-	/** UTXO state, represented as 5 bytes, containing: txIndex(2) + vout(2) + state(1) */
-	utxoState: { bytes: 5, str: null },
-	/** Mini UTXO, represented as 12 bytes, containing: address(5) + amount(6) + rule(1) */
-	miniUTXO: { bytes: ADDRESS.CRITERIA.BYTES_LENGTH + 6 + 1, str: null },
 	/** Validator input, represented as 69 bytes, containing: validatorAddress(5) + hash(64)
 	 * - As string: <5 chars for address + : + 128 chars for hash in hex> */
 	validatorInput: { bytes: ADDRESS.CRITERIA.BYTES_LENGTH + 64, str: ADDRESS.CRITERIA.STRING_LENGTH + 1 + 128 },
+	/** Mini UTXO, represented as 12 bytes, containing: address(5) + amount(6) + rule(1) */
+	miniUTXO: { bytes: ADDRESS.CRITERIA.BYTES_LENGTH + 6 + 1, str: null },
 
 	// LEDGERS
 	/** Ledger UTXO, represented as 15 bytes, containing: height(4) + txIndex(2) + vout(2) + amount(6) + rule(1) */
@@ -51,7 +49,7 @@ export const SIZES = {
 	/** Nonce, represented as 4 bytes or 8 hex characters */
 	nonce: { bytes: 4, str: 8 },
 
-	// BLOCK INDEX ENTRY
+	// BLOCK STORAGE
 	/** Start entry, represented as 6 bytes, containing: height(4) + txIndex(2) */
 	startEntry: { bytes: 6, str: null },
 	/** Block bytes entry, represented as 4 bytes, containing: blockBytesLen(4) */
@@ -60,4 +58,6 @@ export const SIZES = {
 	utxosStatesBytesEntry: { bytes: 2, str: null },
 	/** Index entry, represented as 12 bytes, containing: start(6) + blockBytesLen(4) + utxosStatesBytesLen(2) */
 	indexEntry: { bytes: 12, str: null },
+	/** UTXO "spent" state (boolean), represented as 5 bytes, containing: txIndex(2) + vout(2) + state(1) */
+	utxoState: { bytes: 5, str: null },
 };

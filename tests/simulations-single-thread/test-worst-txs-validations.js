@@ -48,6 +48,7 @@ await node.start(nodeWallet);
 // ------------------------------------------------------------------------------------
 
 const testTxsCreator = await TestTransactionCreator.newInstance(node, mayoVariant, nbOfSenders, nbReceipients);
+testTxsCreator.updateAccountBalanceAndLedger(undefined, true); // update solver account
 
 /** @param {import("../../node/src/blockchain.mjs").BlockFinalized} block */
 const onBlockConfirmed = async (block) => {

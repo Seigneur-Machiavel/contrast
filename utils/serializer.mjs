@@ -1,4 +1,17 @@
 // @ts-check
+/**
+ * @fileoverview Central serialization hub — currently undergoing progressive migration.
+ *
+ * Type-specific serialization logic is being moved to their respective type files:
+ * - Transaction read/write → `types/transaction.mjs` (TransactionWriter / TransactionReader)
+ * - Block read/write → `types/block.mjs` (planned)
+ *
+ * Network/protocol messages (blocksRangeRequest, transactionsResponse, etc.) will eventually
+ * land in a dedicated `sync-messages.mjs`.
+ *
+ * Until then, this file remains the single entry point for all serialization needs.
+ * Do not add new logic here — prefer the appropriate type file or create a new one. */
+
 import { ADDRESS } from '../types/address.mjs';
 import { SIZES } from './serializer-schema.mjs';
 import { BinaryReader, BinaryWriter, NonZeroUint16 } from './binary-helpers.mjs';
@@ -30,9 +43,9 @@ const dataPositions = { // specific helpers for partial block reading
 	timestampInFinalizedBlock: SIZES.blockFinalizedHeader.bytes - SIZES.timestamp.bytes - SIZES.hash.bytes - SIZES.nonce.bytes,
 }
 
-/** Theses functions are used to serialize and deserialize the data of the blockchain.
+/** Theses methods are used to serialize and deserialize the data of the blockchain.
  * 
- * - functions do not check the input data.
+ * - Method do not check the input data.
  * - Make sure to validate the data before using these functions. */
 export const serializer = {
 	/** Routing of mode for transaction serialization
@@ -120,21 +133,6 @@ export const serializer = {
             };
             return w.getBytesOrThrow(`Txs references array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
         },
-		/** @param {BlockFinalized} block */
-		utxosStatesOfBlock(block) {
-			let utxoCount = 0;
-			for (let i = 0; i < block.Txs.length; i++) utxoCount += block.Txs[i].outputs.length;
-
-			const w = new BinaryWriter(utxoCount * SIZES.utxoState.bytes);
-			for (let i = 0; i < block.Txs.length; i++)
-				for (let j = 0; j < block.Txs[i].outputs.length; j++) {
-					w.writeBytes(serializer.nonZeroUint16.encode(i));
-					w.writeBytes(serializer.nonZeroUint16.encode(j));
-					w.writeByte(0);
-				}
-			
-			return w.getBytesOrThrow(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
-		},
 		/** @param {number | undefined} threshold 'undefined' will set '0' and return 'undefined' on deserialization @param {string[]} pubKeysHex */
 		identityEntry(threshold, pubKeysHex) {
 			const pks = pubKeysHex.map(hybridKeyHex => converter.hexToBytes(hybridKeyHex));
@@ -218,6 +216,21 @@ export const serializer = {
 			w.writeBytes(converter.numberTo4Bytes(blockBytes));
 			w.writeBytes(converter.numberTo2Bytes(utxosStatesBytes));
 			return w.getBytes();
+		},
+		/** @param {BlockFinalized} block */
+		utxosStatesOfBlock(block) {
+			let utxoCount = 0;
+			for (let i = 0; i < block.Txs.length; i++) utxoCount += block.Txs[i].outputs.length;
+
+			const w = new BinaryWriter(utxoCount * SIZES.utxoState.bytes);
+			for (let i = 0; i < block.Txs.length; i++)
+				for (let j = 0; j < block.Txs[i].outputs.length; j++) {
+					w.writeBytes(serializer.nonZeroUint16.encode(i));
+					w.writeBytes(serializer.nonZeroUint16.encode(j));
+					w.writeByte(0);
+				}
+			
+			return w.getBytesOrThrow(`UTXO states array serialization incomplete: wrote ${w.cursor} of ${w.view.length} bytes`);
 		},
 		/** @param {NodeSetting} nodeSetting */
         nodeSetting(nodeSetting) {
