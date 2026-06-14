@@ -24,7 +24,7 @@
 			"name": "Run-client-with-board-service",
 			"skipFiles": ["<node_internals>/**"],
 			"program": "${workspaceFolder}/node/run-client.mjs",
-			"args": ["-cp", "27259", "--board-service"],
+			"args": ["-cp", "27259", "--board-service", "--unsafe-serve-pubkey"],
 			"runtimeArgs": ["--inspect"]
 		},
 		{

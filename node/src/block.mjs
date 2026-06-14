@@ -175,13 +175,13 @@ export class BlockUtils {
 		const posTimestamp = blockchain.lastBlock?.timestamp ? blockchain.lastBlock.timestamp + 1 : time;
 		if (!blockchain.lastBlock) return new BlockCandidate(0, 0, blockReward, initDiff, 0, '00'.repeat(SIZES.hash.bytes), [], posTimestamp);
 		
-		// CHOOSE TO RETURN NULL IF NOT ELIGIBLE TO MINE
 		const prevHash = blockchain.lastBlock.hash;
 		const solverBestIndex = solver.bestCandidateIndex !== -1 ? solver.bestCandidateIndex : null;
 		const validatorAddress = wallet.accounts[0]?.address || 'CZZZZZZ'; // IF NO ACCOUNT ADDRESS, USE A PLACEHOLDER THAT WILL NOT BE FOUND IN THE IDENTITY STORE
 		const myLegitimacy = await blockchain.vss.getAddressLegitimacy(validatorAddress, prevHash);
 		node.info.lastLegitimacy = myLegitimacy;
-
+		
+		// CHOOSE TO RETURN FALSE IF NOT ELIGIBLE TO MINE
 		if (solverBestIndex !== null)
 			if (solverBestIndex > blockchain.lastBlock.index + 1) return false; // TOO FAR AHEAD, WAIT FOR OTHER BLOCKS TO CATCH UP
 			else if (solverBestIndex < blockchain.lastBlock.index) return false;// ALREADY BEHIND, WAIT FOR OTHER BLOCKS TO CATCH UP

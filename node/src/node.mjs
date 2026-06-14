@@ -179,7 +179,6 @@ export class ContrastNode {
 			const { blockReward } = BLOCKCHAIN_SETTINGS;
 			const { initialDifficulty } = SOLVING;
 			const myCandidate = await BlockUtils.createBlockCandidate(this, blockReward, initialDifficulty);
-			if (myCandidate === null) throw new Error('Failed to create block candidate');
 			if (myCandidate === false) throw new Error('Not eligible to create a block candidate at this time (low legitimacy or already ahead, or too far behind)');
 
 			this.controller?.sendEncryptedMessage('myLastLegitimacy', myCandidate.legitimacy);
