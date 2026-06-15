@@ -9,11 +9,11 @@ import { Blockchain } from './blockchain.mjs';
 import { ADDRESS } from "../../types/address.mjs";
 import { NodeController } from "./node-controller.mjs";
 import { Transaction_Builder } from "./transaction.mjs";
-import { BinaryReader, BinaryWriter, serializer } from "../../utils/serializer.mjs";
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
 import { ValidationWorker } from '../workers/validation-worker-wrapper.mjs';
 import { BLOCKCHAIN_SETTINGS, SOLVING } from "../../config/blockchain-settings.mjs";
+import { BinaryReader, BinaryWriter, serializer } from "../../utils/serializer.mjs";
 
 /**
 * @typedef {import("../../node_modules/hive-p2p/core/unicast.mjs").DirectMessage} DirectMessage
@@ -91,17 +91,7 @@ export class ContrastNode {
 		this.solver = new Solver(this);
 		this.sync = new Sync(this);
 		if (controllerPort !== false) this.controller = new NodeController(this, controllerPort, serverChachaSeedHex, unsafeServePubKey);
-
-		p2pNode.gossip.on('block_candidate', this.#onBlockCandidate);
-		p2pNode.gossip.on('block_finalized', this.#onBlockFinalized);
-		p2pNode.gossip.on('transaction', this.#onTransaction);
-		p2pNode.gossip.on('transactions', this.#onTransactions);
-		p2pNode.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
-		p2pNode.messager.on('wallet_ledgers_request', this.#onWalletLedgersRequest);
-		p2pNode.messager.on('ownership_resquest', this.#onOwnershipRequest);
-		p2pNode.messager.on('transactions_request', this.#onTransactionsRequest);
-		p2pNode.messager.on('blocks_headers_request', this.#onBlocksHeadersRequest);
-		p2pNode.messager.on('rounds_legitimacies_request', this.#onRoundsLegitimaciesRequest);
+		this.#setupMessageHandlers();
 	}
 
 	// GETTERS --------------------------------------------------------------------------
@@ -226,6 +216,18 @@ export class ContrastNode {
 		else if (task.type === 'DigestBlock') 	// @ts-ignore: task.data = BlockFinalizedSerialized
 			await this.blockchain.digestFinalizedBlock(this, task.data);
 	}
+	#setupMessageHandlers() {
+		this.p2p.gossip.on('block_candidate', this.#onBlockCandidate);
+		this.p2p.gossip.on('block_finalized', this.#onBlockFinalized);
+		this.p2p.gossip.on('transaction', this.#onTransaction);
+		this.p2p.gossip.on('transactions', this.#onTransactions);
+		this.p2p.messager.on('address_ledger_request', this.#onAddressLedgerRequest);
+		this.p2p.messager.on('wallet_ledgers_request', this.#onWalletLedgersRequest);
+		this.p2p.messager.on('ownership_resquest', this.#onOwnershipRequest);
+		this.p2p.messager.on('transactions_request', this.#onTransactionsRequest);
+		this.p2p.messager.on('blocks_headers_request', this.#onBlocksHeadersRequest);
+		this.p2p.messager.on('rounds_legitimacies_request', this.#onRoundsLegitimaciesRequest);
+	}
 	/** @param {GossipMessage} msg */
 	#onBlockCandidate = async (msg) => {
 		const { senderId, data, HOPS } = msg;
@@ -314,10 +316,12 @@ export class ContrastNode {
 			if (request.length > 10) throw new Error('Too many transactions requested at once (max 10)');
 
 			const txs = this.blockchain.blockStorage.getTransactionsByIds(request);
+			if (!txs) throw new Error('Unable to get transactions');
+
 			const impliedAnchors = [];
-			for (const tx in txs)
-				if (Transaction_Builder.isSolverOrValidatorTx(txs[tx])) continue;
-				else impliedAnchors.push(...txs[tx].inputs);
+			for (const txId in txs)
+				if (Transaction_Builder.isSolverOrValidatorTx(txs[txId])) continue;
+				else impliedAnchors.push(...txs[txId].inputs);
 				
 			const impliedUtxos = this.blockchain.blockStorage.getUtxos(impliedAnchors);
 			if (!impliedUtxos) throw new Error('Failed to retrieve implied UTXOs for the requested transactions');

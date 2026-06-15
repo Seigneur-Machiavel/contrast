@@ -114,8 +114,7 @@ export class Transaction {
 	 * @param {IdentityEntry[]} [identities] The newly delaclared identities.
 	 * @param {Uint8Array[]} [utxoParams]
 	 * @param {Uint8Array | undefined} [data] Arbitrary data attached to the transaction
-	 * @param {number} [version] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight]
-	 * @param {Record<string, number>} [inAmountByAddress] */
+	 * @param {number} [version] @param {number | undefined} [feePerByte] @param {number | undefined} [byteWeight] @param {Record<string, number>} [inAmountByAddress] */
 	constructor(inputs, outputs, lastValidHeight = 0xffffffff, witnesses = [], identities = [], utxoParams = [], data, version = VERSION, feePerByte, byteWeight, inAmountByAddress) {
 		this.inputs = inputs;
 		this.outputs = outputs;

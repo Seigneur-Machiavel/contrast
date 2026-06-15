@@ -21,6 +21,7 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
     maxTransactionDataSize: 65_535, // =64KB (impossible to reach this limit since maxTransactionSize is equal)
 	maxPubkeysPerMultiSig: 15,		// maximum number of pubkeys allowed in a multi-sig address ( also affects the maximum size of the witness for multi-sig transactions )
 	maxTransactionsBatchSize: 250, 	// maximum number of transactions that can be included 'push transactions' message.
+	minLockTime,					// minimum (and default) utxo number of block to consider UTXO spendable.
 
     // VSS (STAKING)
 	validatorsPerRound: 10, 	// maximum number of validators per round

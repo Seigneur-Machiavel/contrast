@@ -111,9 +111,11 @@ export class BlockchainStorage {
 		/** key: txId, value: transaction @type {Record<TxId, Transaction>} */
 		const transactions = {};
 		for (const [height, txIndexes] of txIdByHeight.entries()) {
-			const txs = this.getTransactions(height, txIndexes)?.txs;
-			if (!txs) continue;
-			for (const txIndex of txIndexes) transactions[`${height}:${txIndex}`] = txs[txIndex];
+			const { txs, timestamp } = this.getTransactions(height, txIndexes) || {};
+			if (!txs || txs.length !== txIndexes.length) return null;
+
+			for (let i = 0; i < txIndexes.length; i++)
+				transactions[`${height}:${txIndexes[i]}`] = txs[i];
 		}
 
 		return transactions;
