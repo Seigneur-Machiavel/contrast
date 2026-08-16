@@ -201,11 +201,12 @@ export class ContrastNode {
 		const task = this.taskQueue.nextTask;
 		if (!task) { this.solver.canProceedSolving = true; return; } // no task to process
 
-		if (task.type === 'PushTxs') 			// as batch of transactions
+		if (task.type === 'DigestBlock') await this.blockchain.digestFinalizedBlock(this, task.data);
+		else if (task.type === 'PushTxs') // as batch of transactions (queue will never give us single tx as array of tx.s)
 			for (const tx of task.data)
 				try { await this.memPool.pushTransaction(this, tx); }
 				catch (/** @type {any} */ error) { this.logger.log(`[P2P->MEMPOOL] -PushTxs- Error pushing transaction to mempool: ${error.message}`, (m, c) => console.error(m, c)); }
-		else if (task.type === 'NewCandidate') 	// @ts-ignore: task.data = BlockCandidate
+		else if (task.type === 'NewCandidate')
 			try {
 				const candidate = serializer.deserialize.blockCandidate(task.data);
 				const isLegitimate = await BlockValidation.validateLegitimacy(this, candidate, 'candidate');
@@ -213,8 +214,6 @@ export class ContrastNode {
 				if (this.blockchain.currentHeight + 1 !== candidate.index) return; // check again.
 				this.solver.updateBestCandidate(candidate);
 			} catch (/** @type {any} */ error) { if (this.verb >= 2) this.logger.log(`[P2P->SOLVER] -NewCandidate- ${error.message}`, (m, c) => console.error(m, c)); }
-		else if (task.type === 'DigestBlock') 	// @ts-ignore: task.data = BlockFinalizedSerialized
-			await this.blockchain.digestFinalizedBlock(this, task.data);
 	}
 	#setupMessageHandlers() {
 		this.p2p.gossip.on('block_candidate', this.#onBlockCandidate);
@@ -237,13 +236,13 @@ export class ContrastNode {
 		}
 
 		const index = serializer.converter.bytes4ToNumber(new Uint8Array(data.slice(2, 6)));
-		if (index === this.blockchain.currentHeight + 1) this.taskQueue.push('NewCandidate', data);
+		if (index === this.blockchain.currentHeight + 1) this.taskQueue.pushTask({ type: 'NewCandidate', data });
 		else this.logger.log(`[SYNC] -onBlockCandidate- Received block candidate with invalid index ${index} from ${senderId} (current height: ${this.blockchain.currentHeight})`, (m, c) => console.warn(m, c));
 	}
 	/** @param {GossipMessage} msg */
 	#onBlockFinalized = (msg) => {
 		const { senderId, data, HOPS } = msg;
-		if (data instanceof Uint8Array) this.taskQueue.push('DigestBlock', data);
+		if (data instanceof Uint8Array) this.taskQueue.pushTask({ type: 'DigestBlock', data });
 		else this.logger.log(`[SYNC] -onBlockFinalized- Invalid block finalized data type from ${senderId}`, (m, c) => console.error(m, c));
 	}
 	/** @param {GossipMessage} msg */
@@ -251,7 +250,7 @@ export class ContrastNode {
 		const { senderId, data, HOPS } = msg;
 		try {
 			if (!(data instanceof Uint8Array)) throw new Error('Invalid transaction data type from ' + senderId);
-			this.taskQueue.push('PushTxs', [data]);
+			this.taskQueue.pushTask({ type: 'PushTx', data });
 		} catch (/** @type {any} */ error) { this.logger.log(`[P2P] -onTransaction- Error deserializing transaction from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {GossipMessage} msg */
@@ -264,7 +263,7 @@ export class ContrastNode {
 			if (pointers.length > BLOCKCHAIN_SETTINGS.maxTransactionsBatchSize) throw new Error(`Too many transactions in batch from ${senderId} (count: ${pointers.length}, max: ${BLOCKCHAIN_SETTINGS.maxTransactionsBatchSize})`);
 			const txs = r.readFollowingThePointers(pointers, endOfLastDataChunk	);
 			if (!r.isReadingComplete) throw new Error('Invalid chunks in transactions');
-			this.taskQueue.push('PushTxs', txs);
+			for (const tx of txs) this.taskQueue.pushTask({ type: 'PushTx', data: tx });
 		} catch (/** @type {any} */ error) { this.logger.log(`[P2P] -onTransactions- Error deserializing transactions from ${senderId}: ${error.message}`, (m, c) => console.error(m, c)); }
 	}
 	/** @param {DirectMessage} msg */

@@ -5,14 +5,10 @@ import { Converter } from '../node/src/conCrypto.mjs';
 import { SIZES } from '../utils/serializer-schema.mjs';
 import { BLOCKCHAIN_SETTINGS } from '../config/blockchain-settings.mjs';
 import { BinaryReader, BinaryWriter, NonZeroUint16 } from '../utils/binary-helpers.mjs';
+import { UTXO, LedgerUtxo, UTXO_RULESNAME_FROM_CODE, UTXO_RULES_GLOSSARY } from './utxo.mjs';
+export { UTXO, LedgerUtxo, UTXO_RULESNAME_FROM_CODE, UTXO_RULES_GLOSSARY }; // export utxo's related classes and constants
 
 /**
- * @typedef {Object} UTXORule
- * @property {number} code 			- The code of the rule
- * @property {string} description 	- The description of the rule
- * @property {number} [withdrawLockBlocks] - Number of blocks to lock for 'sigOrSlash' rule
- * @property {number} [lockUntilBlock] - Block height until which the UTXO is locked for 'lockUntilBlock' rule
- * 
  * @typedef {string[]} Witness 	- A string array in the format [address, signature]
  * @typedef {Uint8Array} IdentityEntry - binary entry, e.g: [vout: 2b][threshold: 1b][pointers & pubkeys]
  *
@@ -24,78 +20,12 @@ const VERSION = 1;
 const converter = new Converter();
 const nonZeroUint16 = new NonZeroUint16();
 
-/** @type {Record<string, UTXORule>} */
-export const UTXO_RULES_GLOSSARY = {
-    sig: { code: 0, description: 'Simple signature verification' },
-    sigOrSlash: { code: 1, description: "Open right to slash the UTXO if validator's fraud proof is provided", withdrawLockBlocks: 144 },
-    lockUntilBlock: { code: 2, description: 'UTXO locked until block height', lockUntilBlock: 0 },
-    multiSigCreate: { code: 3, description: 'Multi-signature creation' },
-    p2pExchange: { code: 4, description: 'Peer-to-peer exchange' },
-    lightHousePause: { code: 6, description: 'LightHouse pause' },
-    lightHouseResume: { code: 7, description: 'LightHouse resume' },
-};
-
-/** @type {Record<number, string>} */
-export const UTXO_RULESNAME_FROM_CODE = {
-    0: 'sig',
-    1: 'sigOrSlash',
-    2: 'lockUntilBlock',
-    3: 'multiSigCreate',
-    4: 'p2pExchange'
-};
-
 export class TxOutput {
 	/** @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - output only */
 	constructor(amount, rule, address) {
 		this.address = address;
 		this.amount = amount;
 		this.rule = rule;
-	}
-}
-
-export class UTXO {
-	/** @param {TxAnchor} anchor - the path to the UTXO blockHeight:txIndex:vout @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - the address of the recipient @param {boolean} [spent] - if the UTXO has been spent, default: false */
-	constructor(anchor, amount, rule, address, spent = false) {
-		this.address = address;
-		this.amount = amount;
-		this.anchor = anchor;
-		this.rule =  rule;
-		this.spent = spent;
-	}
-
-	/** @param {string} address @param {LedgerUtxo} ledgerUtxo */
-	static fromLedgerUtxo(address, ledgerUtxo) {
-		const ruleName = UTXO_RULESNAME_FROM_CODE[ledgerUtxo.ruleCode];
-		return new UTXO(ledgerUtxo.anchor, ledgerUtxo.amount, ruleName, address, false);
-	}
-	/** @param {string} address @param {LedgerUtxo[]} ledgerUtxos @param {Set<number>} [ruleCodesToExclude] */
-	static fromLedgerUtxos(address, ledgerUtxos, ruleCodesToExclude) {
-		const UTXOs = [];
-		for (const l of ledgerUtxos)
-			if (ruleCodesToExclude?.has(l.ruleCode)) continue;
-			else UTXOs.push(UTXO.fromLedgerUtxo(address, l));
-
-		return UTXOs;
-	}
-}
-
-/** Lightweight UTXO representation without address, unspent only */
-export class LedgerUtxo {
-	/** @param {TxAnchor} anchor @param {number} amount @param {number} ruleCode */
-	constructor(anchor, amount, ruleCode) {
-		this.anchor = anchor;
-		this.amount = amount;
-		this.ruleCode = ruleCode;
-	}
-
-	/** @param {UTXO} utxo */
-	static fromUTXO(utxo) {
-		const ruleCode = UTXO_RULES_GLOSSARY[utxo.rule].code;
-		return new LedgerUtxo(utxo.anchor, utxo.amount, ruleCode);
-	}
-	/** @param {UTXO[]} utxos */
-	static fromUTXOs(utxos) {
-		return utxos.map(utxo => LedgerUtxo.fromUTXO(utxo));
 	}
 }
 
@@ -107,6 +37,7 @@ export class Transfer {
 	}
 }
 
+/** This class is used to build transaction before serialization, easy to read using debugger, mostly like a template */
 export class Transaction {
 	/**
 	 * @param {TxAnchor[]} inputs @param {TxOutput[]} outputs @param {number} [lastValidHeight] default: max uint32 value
@@ -142,6 +73,7 @@ export class Transaction {
 	}
 }
 
+/** This class is made to serialize transaction's data properly by using seperated methods that are more reliable */
 export class TransactionWriter {
 	/** The BinaryWriter initialized. Set cursor before external use */
 	w; tx;
@@ -283,7 +215,10 @@ export class TransactionWriter {
 	}
 }
 
-/** The position of each pointers/cursor in the #cursors array. Sorry for the complexity, needs for good performance in here */
+/** The position of each pointers/cursor in the #cursors array.
+ * - .start => reading start position
+ * - .size => length to read (can be 0)
+ * - Sorry for complexity, a need for good performance in here */
 const CUR = {
 	witnesses: 			{ start: 0, size: 1},
 	identities:			{ start: 2, size: 3},
@@ -292,6 +227,7 @@ const CUR = {
 	utxoParams:			{ start: 8, size: 9},
 	data: 				{ start: 10, size: 11}
 };
+/** This class optimize de serialized transaction's data reading by accessing them using partial deserialization */
 export class TransactionReader {
 	/** The BinaryReader initialized with serializedTx. Set cursor before external use */
 	r; #cursors = new Uint16Array(12);

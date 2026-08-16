@@ -242,7 +242,7 @@ to #${block.index} (leg: ${block.legitimacy})`, (m, c) => console.info(m, c));
 		//console.log(`[SOLVER:${solverAddress}] Broadcasted #${block.index}`); // DEBUG
         this.addressOfCandidatesBroadcasted.push(validatorAddress);
 		//const deserializedBlock = serializer.deserialize.blockFinalized(serialized); // DEBUG
-		this.node.taskQueue.pushFirst('DigestBlock', serialized);
+		this.node.taskQueue.pushTaskFirst({ type: 'DigestBlock', data: serialized });
     }
 	/** @param {string} sAddress @param {Uint8Array[]} [identityEntries] */
     async #createMissingWorkers(sAddress, identityEntries) {

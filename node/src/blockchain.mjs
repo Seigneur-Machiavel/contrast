@@ -80,7 +80,7 @@ export class Blockchain {
 			this.#addBlock(block, involvedAnchors, involvedUTXOs);
 			
 			// APPLY LEDGERS CHANGES
-			node.memPool.removeFinalizedBlocksTransactions(block);
+			node.memPool.removeFinalizedBlocksTransactions(block, involvedUTXOs);
 			
 			const timeBetweenPosPow = ((block.timestamp - block.posTimestamp) / 1000).toFixed(2);
 			const [solverAddress, validatorAddress] = [block.Txs[0].outputs[0].address, block.Txs[1].outputs[0].address];
@@ -144,9 +144,9 @@ export class Blockchain {
 	getUtxo(anchor) {
 		return this.getUtxos([anchor], true)?.[anchor] || null;
 	}
-	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify to return null when a spent UTXO is found (early abort), default: false */
-	getUtxos(anchors, breakOnSpent = false) {
-		return this.blockStorage.getUtxos(anchors, breakOnSpent);
+	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify to return null when a spent UTXO is found (early abort), default: false @param {Object<string, UTXO>} [involvedUTXOs] optional accumulator */
+	getUtxos(anchors, breakOnSpent = false, involvedUTXOs = {}) {
+		return this.blockStorage.getUtxos(anchors, breakOnSpent, involvedUTXOs);
 	}
 	async undoBlock(resetOnFailure = false) {
 		const block = this.lastBlock;

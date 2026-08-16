@@ -28,7 +28,8 @@ class OrganizedTx {
 }
 
 class Organizer {
-	/** @type {Map<string, OrganizedTx>} */	byAnchor = new Map();
+	/** @type {Map<string, Set<OrganizedTx>>} */ byAddress = new Map();
+	/** @type {Map<string, OrganizedTx>} */ byAnchor = new Map();
 	/** @type {Object<string, Map<TxUniqueId, OrganizedTx>>} */
 	txsByRanges = {
 		'1000+': new Map(),
@@ -50,24 +51,48 @@ class Organizer {
 		if (val < 1000) return '100-1000';
 		return '1000+';
 	}
-	/** @param {OrganizedTx} oTx */
-	add(oTx) { // ADD BOTH MAPPINGS
-		if (oTx.feePerByte <= 0) throw new Error('Invalid feePerByte value');
+	/** @param {Transaction} tx @param {Record<string, UTXO>} involvedUTXOs */
+	#extractInvolvedAddresses(tx, involvedUTXOs) {
+		/** @type {Set<string>} */
+		const involedAddresses = new Set();
+		for (const input of tx.inputs)
+			if (!involvedUTXOs[input]) throw new Error(`UTXO with anchor ${input} not found in involvedUTXOs`);
+			else if (involedAddresses.has(involvedUTXOs[input].address)) continue;
+			else involedAddresses.add(involvedUTXOs[input].address);
 
+		for (const output of tx.outputs)
+			if (involedAddresses.has(output.address)) continue;
+			else involedAddresses.add(output.address);
+
+		return involedAddresses;
+	}
+	/** @param {OrganizedTx} oTx @param {Record<string, UTXO>} involvedUTXOs */
+	#getTxSortingInfo(oTx, involvedUTXOs) {
+		const involedAddresses = this.#extractInvolvedAddresses(oTx.tx, involvedUTXOs);
 		const txUniqueId = HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs)).hashHex;
 		const rangeKey = this.#getRangeKey(oTx.feePerByte);
+		return { involedAddresses, txUniqueId, rangeKey };
+	}
+	/** Add mappings @param {OrganizedTx} oTx @param {Record<string, UTXO>} involvedUTXOs */
+	add(oTx, involvedUTXOs) {
+		if (oTx.feePerByte <= 0) throw new Error('Invalid feePerByte value');
+
+		const { involedAddresses, txUniqueId, rangeKey } = this.#getTxSortingInfo(oTx, involvedUTXOs);
 		this.txsByRanges[rangeKey].set(txUniqueId, oTx);
 		for (const input of oTx.tx.inputs) this.byAnchor.set(input, oTx);
-		return true;
+		for (const address of involedAddresses) {
+			if (!this.byAddress.has(address)) this.byAddress.set(address, new Set());
+			this.byAddress.get(address)?.add(oTx);
+		}
 	}
-	/** @param {OrganizedTx} oTx */
-	remove(oTx) { // REMOVE BOTH MAPPINGS
+	/** Remove mappings @param {OrganizedTx} oTx @param {Record<string, UTXO>} involvedUTXOs */
+	remove(oTx, involvedUTXOs) {
 		if (oTx.feePerByte <= 0) throw new Error('Invalid feePerByte value');
 
-		const rangeKey = this.#getRangeKey(oTx.feePerByte);
-		const txUniqueId = HashFunctions.SHA256(JSON.stringify(oTx.tx.inputs)).hashHex;
+		const { involedAddresses, txUniqueId, rangeKey } = this.#getTxSortingInfo(oTx, involvedUTXOs);
+		for (const address of involedAddresses) this.byAddress.get(address)?.delete(oTx);
 		for (const input of oTx.tx.inputs) this.byAnchor.delete(input);
-		return this.txsByRanges[rangeKey].delete(txUniqueId);
+		this.txsByRanges[rangeKey].delete(txUniqueId);
 	}
 	/** @param {Transaction} tx */
     caughtAnchorsCollision(tx) {
@@ -85,9 +110,11 @@ export class MemPool {
 	/** @param {import("./blockchain.mjs").Blockchain} blockchain */
 	constructor(blockchain) { this.blockchain = blockchain; }
 
-    /** DON'T PARALLELIZE THIS FUNCTION!!!
-	 * @param {ContrastNode} node @param {Uint8Array} serializedTx */
+    /** DON'T PARALLELIZE THIS FUNCTION!!! - throw on error @param {ContrastNode} node @param {Uint8Array} serializedTx */
     async pushTransaction(node, serializedTx) {
+		// CHECK SIZE LIMIT
+		if (serializedTx.byteLength >= BLOCKCHAIN_SETTINGS.maxTransactionSize) throw new Error(`Transaction size too big: ${serializedTx.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
+		
 		// CHECK CONFORMITY & SPENDABILITY
 		const tx = serializer.deserialize.transaction(serializedTx);
 		TxValidation.controlTransactionOutputsRulesConditions(tx); // throw if not conform
@@ -99,10 +126,6 @@ export class MemPool {
 		if (!involvedUTXOs) throw new Error('Unable to extract involved UTXOs for transaction, spent or missing UTXO detected');
 		TxValidation.isConformTransaction(involvedUTXOs, tx); // throw if not conform/spendable
 		
-		// CHECK SIZE LIMIT
-		if (serializedTx.byteLength >= BLOCKCHAIN_SETTINGS.maxTransactionSize)
-			throw new Error(`Transaction size too big: ${serializedTx.byteLength} bytes >= ${BLOCKCHAIN_SETTINGS.maxTransactionSize} bytes`);
-		
 		// CONFIRM ADDRESS OWNERSHIP & FEE PER BYTE
 		const result = await TxValidation.transactionValidation(node, involvedUTXOs, tx);
 		if (!result.success) throw new Error('Transaction validation failed: succes === false');
@@ -113,18 +136,20 @@ export class MemPool {
 		if (colliding && oTx.feePerByte <= colliding.oTx.feePerByte) throw new Error(`Conflicting transaction in mempool higher or equal feePerByte: ${colliding.oTx.feePerByte} >= ${oTx.feePerByte}`);
 		
 		// ADD TRANSACTION TO MEMPOOL
-		if (colliding?.oTx) this.organizer.remove(colliding.oTx);
-		this.organizer.add(oTx);
+		if (colliding?.oTx) this.organizer.remove(colliding.oTx, involvedUTXOs);
+		this.organizer.add(oTx, involvedUTXOs);
     }
-	/** @param {BlockFinalized} block */
-    removeFinalizedBlocksTransactions(block) {
+	/** @param {BlockFinalized} block @param {Record<string, UTXO>} involvedUTXOs */
+    removeFinalizedBlocksTransactions(block, involvedUTXOs) {
         for (let i = 2; i < block.Txs.length; i++) {
             const colliding = this.organizer.caughtAnchorsCollision(block.Txs[i]);
-            if (colliding) this.organizer.remove(colliding.oTx);
+            if (colliding) this.organizer.remove(colliding.oTx, involvedUTXOs);
         }
     }
 	/** @param {ContrastNode} node */
     getMostLucrativeTransactionsBatch(node) {
+		/** @type {Record<string, UTXO>} involvedUTXOs */
+		const involvedUTXOs = {};
 		/** @type {OrganizedTx[]} */
 		const invalidTransactions = [];
 		const batchSize = 1000; // Number of anchors to process in one go
@@ -143,23 +168,20 @@ export class MemPool {
 
 		/** @type {Set<string>} */
 		const spentAnchors = new Set();
-		const identitiesCache = new IdentitiesCache();
 		const entriesCache = new EntriesCache();
+		const identitiesCache = new IdentitiesCache();
 		
 		const includeCurrentBatchIfValid = () => {
-			const involvedUTXOs = this.blockchain.getUtxos(batch.anchors, false) || {};
+			if (!batch.oTxs.length) return; // nothing to flush, skip the round-trip entirely
+			this.blockchain.getUtxos(batch.anchors, false, involvedUTXOs); // accumulate across batches
+
 			for (const oTx of batch.oTxs) {
 				// skip transaction if one of its inputs is already spent by another tx in the batch
 				if (oTx.tx.inputs.some(input => spentAnchors.has(input))) continue;
-			
-				try {
-					TxValidation.isConformTransaction(involvedUTXOs, oTx.tx);
-					TxValidation.controlIdentitiesReservation(node, oTx.tx, entriesCache);
-					const requiredWitnesses = TxValidation.extractRegularTxIdentities(node, involvedUTXOs, oTx.tx, identitiesCache);
-					TxValidation.controlAddressesHasAssociatedWitnesses(oTx.tx, identitiesCache, requiredWitnesses);
-				} catch (error) { invalidTransactions.push(oTx); continue; }
-
-				// THIS IS WRONG !!!! =>  No needs for "controlAddressesHasAssociatedWitnesses()" -> 	already done while tx enter in memPool.
+				
+				// CONTROL THAT THE IDENTITIES RESERVATIONS REMAINS VALID
+				try { TxValidation.controlIdentitiesReservation(node, oTx.tx, entriesCache); }
+				catch (error) { invalidTransactions.push(oTx); continue; }
 				
 				// ADD THE TRANSACTION TO RESULT
 				for (const input of oTx.tx.inputs) spentAnchors.add(input);
@@ -195,7 +217,7 @@ export class MemPool {
 
 		// REMOVE INVALID TRANSACTIONS FROM MEMPOOL & RETURN RESULT
 		console.log(`[MEMPOOL] Selected ${result.txs.length} txs, fee: ${result.totalFee} mC, size: ${result.bytes}b. Invalid txs removed: ${invalidTransactions.length}`);
-		for (const oTx of invalidTransactions) this.organizer.remove(oTx);
+		for (const oTx of invalidTransactions) this.organizer.remove(oTx, involvedUTXOs);
         return result;
     }
 }

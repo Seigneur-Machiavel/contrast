@@ -127,10 +127,8 @@ export class BlockchainStorage {
 
 		return this.#extractTransactionsBytesFromBlockBytes(blockBytes, txIndexes);
 	}
-	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) */
-	getUtxos(anchors, breakOnSpent = false) {
-		/** Key: Anchor, value: UTXO @type {Object<string, UTXO>} */
-		const utxos = {};
+	/** @param {TxAnchor[]} anchors @param {boolean} breakOnSpent Specify if the function should return null when a spent UTXO is found (early abort) @param {Object<string, UTXO>} [involvedUTXOs] optional accumulator */
+	getUtxos(anchors, breakOnSpent = false, involvedUTXOs = {}) {
 		const search = this.#getUtxosSearchPattern(anchors);
 		for (const height of search.keys()) {
 			if (height > this.lastBlockIndex) return null;
@@ -163,12 +161,12 @@ export class BlockchainStorage {
 					const amount = outputs[voutIndex].amount;
 					const rule = outputs[voutIndex].rule;
 					const address = outputs[voutIndex].address;
-					utxos[anchor] = new UTXO(anchor, amount, rule, address, utxoSpent);
+					involvedUTXOs[anchor] = new UTXO(anchor, amount, rule, address, utxoSpent);
 				}
 			}
 		}
 
-		return utxos;
+		return involvedUTXOs;
 	}
 	getSerializedBlocksHeaders(fromHeight = this.lastBlockIndex - 1, toHeight = this.lastBlockIndex) {
 		if (fromHeight < 0 || toHeight > this.lastBlockIndex || fromHeight > toHeight) return null;

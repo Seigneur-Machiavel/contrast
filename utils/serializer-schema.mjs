@@ -1,7 +1,7 @@
 // @ts-check
 import { ADDRESS } from '../types/address.mjs';
 
-/** List of lengths for the different values, Each entry has the following format:
+/** List of lengths for the different serialized values, Each entry has the following format:
  * 
  * - bytes: The lengths in bytes of the value when serialized
  * - str: The lengths in characters of the value (if applicable, otherwise null) */

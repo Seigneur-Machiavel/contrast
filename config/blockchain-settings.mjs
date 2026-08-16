@@ -15,17 +15,16 @@ export const BLOCKCHAIN_SETTINGS = { // UPDATE TO 60 SEC BLOCK TIME
 
     // TRANSACTION
     minTransactionFeePerByte: 0.1, 	// 0.1 mC per byte = 100 mC per KB
-    unspendableUtxoAmount: 120,		// min utxo amount to be considered as dust ( used for spam protection, and to avoid dust accumulation in the blockchain )
-	finalizationDelay: 12, 			// number of blocks before a transaction is considered final ( used for double spending protection )
 	maxTransactionSize: 65_535, 	// =64KB
     maxTransactionDataSize: 65_535, // =64KB (impossible to reach this limit since maxTransactionSize is equal)
 	maxPubkeysPerMultiSig: 15,		// maximum number of pubkeys allowed in a multi-sig address ( also affects the maximum size of the witness for multi-sig transactions )
 	maxTransactionsBatchSize: 250, 	// maximum number of transactions that can be included 'push transactions' message.
-	minLockTime,					// minimum (and default) utxo number of block to consider UTXO spendable.
+    unspendableUtxoAmount: 8,		// min amount to be considered as dust ( used for spam protection, and to avoid dust accumulation in the blockchain )
+	minLockTime: 10,				// minimum (and default) number of block to consider UTXO spendable.
 
     // VSS (STAKING)
-	validatorsPerRound: 10, 	// maximum number of validators per round
-    stakeAmount: 10_000_000, 	// 10_000_000 mC = 10 C
+	validatorsPerRound: 10, 		// maximum number of validators per round
+    stakeAmount: 10_000_000, 		// 10_000_000 mC = 10 C
 };
 
 // a minConsensusRatio of 1 means that the best consensus must have at least the same number of peers as the second best consensus to be considered valid, otherwise we consider that there is no consensus

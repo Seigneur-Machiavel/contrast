@@ -81,33 +81,22 @@ export class Transaction_Builder {
 	/** Create a transaction to stake new VSS - fee should be => amount to be staked
      * @param {Account} senderAccount - the account who is staking the VSS
 	 * @param {number} qty The quanity of stakes to create
-	 * @param {string[]} [authorizedAddresses] - the addresses of the validators authorized to sign for this stake (default: the senderAccount address) 
+	 * @param {string[]} [authorizedWalletIds] - the walletIds of the validators authorized to sign for this stake (utxo's owner always considered as authorized)
 	 * @param {number} [lastValidHeight] default: max uint32 value
-	 * @param {Uint8Array[] | undefined} [identities] - optional identities associated with the stake */
-    static createStakingVss(senderAccount, qty, authorizedAddresses, lastValidHeight = 0xffffffff, identities = []) {
+	 * @param {Uint8Array[] | undefined} [identities] - optional identities declarations */
+    static createStakingVss(senderAccount, qty, authorizedWalletIds, lastValidHeight = 0xffffffff, identities = []) {
 		if (!senderAccount.address) throw new Error('Address missing in senderAccount!');
 		if (typeof qty !== 'number' || qty <= 0) throw new Error('Invalid quantity to stake');
+		if (authorizedWalletIds && !Array.isArray(authorizedWalletIds)) throw new Error('Invalid authorizedWalletIds type!');
+		if (authorizedWalletIds?.includes(senderAccount.parentWallet.walletId)) throw new Error('authorizedWalletIds should not include self!');
 		
-		const senderAddress = senderAccount.address;
-		if (!authorizedAddresses && senderAccount.address) authorizedAddresses = [senderAddress];
-
 		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
-		const availableUTXOs = UTXO.fromLedgerUtxos(senderAddress, senderAccount.ledgerUtxos, ruleCodesToExclude);
+		const availableUTXOs = UTXO.fromLedgerUtxos(senderAccount.address, senderAccount.ledgerUtxos, ruleCodesToExclude);
         if (availableUTXOs.length === 0) throw new Error('No UTXO to spend');
-		if (!Array.isArray(authorizedAddresses)) throw new Error('Invalid authorizedAddresses type!');
-		
-		/** @type {string[]} */
-		const authorizedWalletIds = [];
-		for (const address of authorizedAddresses) {
-			const walletId = ADDRESS.getAddressRoot(address).walletId;
-			if (!authorizedWalletIds.includes(walletId)) authorizedWalletIds.push(walletId);
-		}
-
-        Transaction_Builder.checkMalformedAnchorsInUtxosArray(availableUTXOs);
-        Transaction_Builder.checkDuplicateAnchorsInUtxosArray(availableUTXOs);
+		Transaction_Builder.checkMalformedAnchorsInUtxosArray(availableUTXOs);
 
 		const transfers = [];
-		for (let i = 0; i < qty; i++) transfers.push({ recipientAddress: senderAddress, amount: BLOCKCHAIN_SETTINGS.stakeAmount });
+		for (let i = 0; i < qty; i++) transfers.push({ recipientAddress: senderAccount.address, amount: BLOCKCHAIN_SETTINGS.stakeAmount });
         const { outputs, totalSpent: totalStake } = Transaction_Builder.buildOutputsFrom(transfers, 'sigOrSlash');
         const availableAmount = availableUTXOs.reduce((a, b) => a + b.amount, 0);
         if (availableAmount < totalStake) throw new Error(`Not enough funds: ${availableAmount} < ${totalStake}`);
@@ -117,13 +106,16 @@ export class Transaction_Builder {
 		const utxos = Transaction_Builder.#extractNecessaryUtxosForAmount(availableUTXOs, totalStake + fee);
 		const inAmount = utxos.reduce((a, b) => a + b.amount, 0);
 		const change = inAmount - totalStake - fee;
-		if (change) outputs.push(new TxOutput(change, 'sig', senderAddress));
+		if (change) outputs.push(new TxOutput(change, 'sig', senderAccount.address));
 
 		// SET THE AUTHORIZED VALIDATOR PUBKEY IN TX DATA
         const tx = Transaction.fromUTXOs(utxos, outputs, lastValidHeight, identities);
-		const w = new BinaryWriter(authorizedWalletIds.length * SIZES.address.bytes);
-		for (const walletId of authorizedWalletIds) w.writeBytes(ADDRESS.addressToBytes(walletId));
-		tx.data = w.getBytesOrThrow();
+		if (authorizedWalletIds) {
+			const w = new BinaryWriter(authorizedWalletIds.length * SIZES.address.bytes);
+			for (const walletId of authorizedWalletIds) w.writeBytes(ADDRESS.addressToBytes(walletId));
+			tx.data = w.getBytesOrThrow();
+		}
+
 		return { tx, finalFee: fee, totalConsumed: totalStake + fee };
     }
 	/** @param {UTXO[]} utxos @param {number} amount */
