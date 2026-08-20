@@ -66,7 +66,7 @@ export class TxValidation {
 			const utxo = involvedUTXOs[input];
 			if (!utxo) throw new Error(`Invalid transaction: UTXO not found in involvedUTXOs: ${input}`);
 			if (utxo.spent) throw new Error(`Invalid transaction: UTXO already spent: ${input}`);
-			if (utxo.rule === 'sigOrSlash') throw new Error(`Invalid transaction: sigOrSlash UTXO cannot be spend: ${input}`);
+			if (utxo.rule === 'sLock') throw new Error(`Invalid transaction: sLock UTXO cannot be spend: ${input}`);
 		}
 
 		return remainingAmount;
@@ -113,9 +113,9 @@ export class TxValidation {
 		for (const output of tx.outputs)
 			if (!outRules.has(output.rule)) outRules.add(output.rule);
 
-		if (outRules.has('sigOrSlash'))
-			if (!tx.data) throw new Error('Transactions creating sigOrSlash outputs must have data field with the authorized validators addresses');
-			else if (tx.data.length % SIZES.address.bytes !== 0) throw new Error('Invalid data field for sigOrSlash output, must be a multiple of address size');
+		if (outRules.has('sLock'))
+			if (!tx.data) throw new Error('Transactions creating sLock outputs must have data field with the authorized validators addresses');
+			else if (tx.data.length % SIZES.address.bytes !== 0) throw new Error('Invalid data field for sLock output, must be a multiple of address size');
 			else {
 				const r = new BinaryReader(tx.data);
 				for (let i = 0; i < tx.data.length; i += SIZES.address.bytes) 

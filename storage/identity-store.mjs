@@ -169,7 +169,7 @@ export class IdentityStore {
 		const identityIndex = entryBytes[6];
 		return { blockIndex, txIndex, identityIndex };
 	}
-	/** Write the pointer, return the address @param {string} prefix @param {number} blockIndex @param {number} txIndex @param {number} identityIndex */
+	/** Write the pointer, return the walletId @param {string} prefix @param {number} blockIndex @param {number} txIndex @param {number} identityIndex */
 	#register(prefix, blockIndex, txIndex, identityIndex) { // WRITE ENTRY
 		const handler = this.#getHandler(prefix);
 		const walletId = this.batchOfNextAddresses(prefix, 1).walletIds[0];
@@ -177,8 +177,7 @@ export class IdentityStore {
 		handler.cursor = handler.size; // APPEND TO THE END OF THE FILE
 		handler.write(entryBytes);
 
-		// RETURN THE NEW ADDRESS
-		return walletId;
+		return walletId; // RETURN THE NEW ADDRESS
 	}
 	/** Truncate the end of file for one entry @param {string} prefix */
 	#unregister(prefix) {

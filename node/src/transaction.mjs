@@ -54,7 +54,7 @@ export class Transaction_Builder {
 		const pubKeys = [parentWallet.hybridKey];
 		if (!address || pubKeys.length === 0) throw new Error('Sender account is not properly initialized');
 
-		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
+		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sLock'].code]);
         const UTXOs = UTXO.fromLedgerUtxos(address, senderAccount.ledgerUtxos, ruleCodesToExclude);
 		if (UTXOs.length === 0) throw new Error('No UTXO to spend');
 
@@ -90,14 +90,14 @@ export class Transaction_Builder {
 		if (authorizedWalletIds && !Array.isArray(authorizedWalletIds)) throw new Error('Invalid authorizedWalletIds type!');
 		if (authorizedWalletIds?.includes(senderAccount.parentWallet.walletId)) throw new Error('authorizedWalletIds should not include self!');
 		
-		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
+		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sLock'].code]);
 		const availableUTXOs = UTXO.fromLedgerUtxos(senderAccount.address, senderAccount.ledgerUtxos, ruleCodesToExclude);
         if (availableUTXOs.length === 0) throw new Error('No UTXO to spend');
 		Transaction_Builder.checkMalformedAnchorsInUtxosArray(availableUTXOs);
 
 		const transfers = [];
 		for (let i = 0; i < qty; i++) transfers.push({ recipientAddress: senderAccount.address, amount: BLOCKCHAIN_SETTINGS.stakeAmount });
-        const { outputs, totalSpent: totalStake } = Transaction_Builder.buildOutputsFrom(transfers, 'sigOrSlash');
+        const { outputs, totalSpent: totalStake } = Transaction_Builder.buildOutputsFrom(transfers, 'sLock');
         const availableAmount = availableUTXOs.reduce((a, b) => a + b.amount, 0);
         if (availableAmount < totalStake) throw new Error(`Not enough funds: ${availableAmount} < ${totalStake}`);
 		
@@ -261,7 +261,7 @@ export class Transaction_Builder {
 		if (amount !== 'max' && (typeof amount !== 'number' || amount <= 0)) throw new Error('Invalid amount');
 
 		const isMaxAmount = amount === 'max';
-		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sigOrSlash'].code]);
+		const ruleCodesToExclude = new Set([UTXO_RULES_GLOSSARY['sLock'].code]);
 		try {
 			const UTXOs = [];
 			for (const account of senderWallet.accounts) {

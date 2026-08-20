@@ -4,29 +4,23 @@
 /**
  * @typedef {Object} UTXORule
  * @property {number} code 			- The code of the rule
- * @property {string} description 	- The description of the rule 
+ * @property {string} description 	- The description of the rule
+ * @property {string} [paramsDesc] 	- The description of associated utxoParams section
+ * @property {number} [activationHeight] - The block height where the rule is activated
  * 
  * @typedef {string} TxAnchor 		- The path to the UTXO, ex: blockHeight:txIndex:vout */
 
 
 /** @type {Record<string, UTXORule>} */
 export const UTXO_RULES_GLOSSARY = {
-    sig: { code: 0, description: 'Simple signature verification' },
-    sigOrSlash: { code: 1, description: "Open right to slash the UTXO if validator's fraud proof is provided" },
-    lockUntilBlock: { code: 2, description: 'UTXO locked until block height' },
-    p2pExchange: { code: 3, description: 'Peer-to-peer exchange' },
-    lightHousePause: { code: 4, description: 'LightHouse pause' },
-    lightHouseResume: { code: 5, description: 'LightHouse resume' },
-	// deadManSwitch?
+    sig: { code: 0, description: 'Simple signature verification', activationHeight: 0 },
+    sLock: { code: 1, description: "Staking -> Lock for a delay specified in blockchain-settings.mjs. Open right to slash the UTXO if validator's fraud proof is provided", activationHeight: 0 },
+    nLock: { code: 2, description: 'UTXO locked until block height or UNIX timestamp if value > 1_000_000_000', paramsDesc: 'blockIndex or UNIX timestamp (4b)', activationHeight: 0 },
+    hLock: { code: 3, description: 'Hash lock, useful for HTLC protocol', paramsDesc: 'algoCode(2b) + hash(Xb)', activationHeight: 0 },
+	deadManSwitch: { code: 4, description: '<Send to self only> Window (nBlock) without tx sig who open access to a successor. accessType: 0 = this Wallet | 1 = this address | 2 = this UTXO.', paramsDesc: 'numberOfBlock(4b) + accessType(1b) + successorWalletId(5b)', activationHeight: 0 }
 };
 
-/** @type {Record<number, string>} */
-export const UTXO_RULESNAME_FROM_CODE = {
-    0: 'sig',
-    1: 'sigOrSlash',
-    2: 'lockUntilBlock',
-    3: 'p2pExchange'
-};
+export const UTXO_RULESNAME_FROM_CODE = Object.keys(UTXO_RULES_GLOSSARY);
 
 export class UTXO {
 	/** @param {TxAnchor} anchor - the path to the UTXO blockHeight:txIndex:vout @param {number} amount - the amount of microConts @param {string} rule - the unlocking rule @param {string} address - the address of the recipient @param {boolean} [spent] - if the UTXO has been spent, default: false */

@@ -5,7 +5,6 @@ import { solving } from '../../utils/conditionals.mjs';
 import { serializer } from '../../utils/serializer.mjs';
 import { BlockValidation } from './block-validation.mjs';
 import { MiniLogger } from '../../miniLogger/mini-logger.mjs';
-//import { BlockchainStorage, AddressesTxsRefsStorage } from '../../storage/storage.mjs';
 import { BlockchainStorage } from '../../storage/bc-store.mjs';
 import { IdentityStore } from "../../storage/identity-store.mjs";
 import { LedgersStorage } from '../../storage/ledgers-store.mjs';
@@ -49,8 +48,6 @@ export class Blockchain {
 		await this.#ensureConsistency();
 		this.lastBlock = this.getBlock() || null;
 	}
-
-	// API METHODS
 	/** Digest and apply a finalized block to the blockchain.
 	 * @param {ContrastNode} node @param {Uint8Array} serializedBlock - The serialized finalized block.
      * @param {Object} [options] - Configuration options for the blockchain.
@@ -185,7 +182,6 @@ export class Blockchain {
         this.logger.log('BLOCKCHAIN RESET COMPLETE.', (m, c) => console.warn(m, c));
     }
 
-	// INTERNAL METHODS
 	/** Ensure the blockchain storage consistency by checking the last block */
 	async #ensureConsistency() {
 		// ZERO: if no blocks, just reset everything to be sure

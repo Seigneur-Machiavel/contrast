@@ -36,7 +36,7 @@ export class Wallet {
 	get walletId() { return this.accounts[0]?.address }
 	get walletIdentifier() { return HashFunctions.SHA512(this.#masterHex).hashHex.substring(0, 8); }
 	get balance() { return this.accounts.reduce((sum, account) => sum + account.balance, 0); }
-	get stakedBalance() { return this.accounts.reduce((sum, account) => sum + account.filteredBalance(Infinity, [], ['sigOrSlash']), 0); }
+	get stakedBalance() { return this.accounts.reduce((sum, account) => sum + account.filteredBalance(Infinity, [], ['sLock']), 0); }
 	get nbAccounts() { return this.accounts.length; }
 
 	/** One storage option must be provided, either contrastStorage or frontStorage (not both)

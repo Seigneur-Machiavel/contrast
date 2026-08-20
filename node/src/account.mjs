@@ -47,7 +47,7 @@ export class Account {
 		this.ledgerUtxos = this.ledgerUtxos.filter(utxo => utxo.anchor !== anchor);
 	}
 	/** Return a list of UTXOs that are filtered based on the provided criteria. (excludeRules or includesRules, not both)
-	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sigOrSlash'] @param {string[]} [includesRules] ex: ['sigOrSlash'] */
+	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sLock'] @param {string[]} [includesRules] ex: ['sLock'] */
 	filteredUtxos(maxHeight = Infinity, excludeRules = [], includesRules = []) {
 		if (!this.address) return [];
 		if (excludeRules.length > 0 && includesRules.length > 0) throw new Error('Cannot use both excludeRules and includesRules at the same time');
@@ -59,7 +59,7 @@ export class Account {
 		return utxo.filter(u => parseInt(u.anchor.split(':')[0], 10) <= maxHeight);
 	}
 	/** Calculate the balance based on the filtered UTXOs. (excludeRules or includesRules, not both)
-	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sigOrSlash'] @param {string[]} [includesRules] ex: ['sigOrSlash'] */
+	 * @param {number} maxHeight default: Infinity @param {string[]} [excludeRules] ex: ['sLock'] @param {string[]} [includesRules] ex: ['sLock'] */
 	filteredBalance(maxHeight = Infinity, excludeRules = [], includesRules = []) {
 		const filteredUtxos = this.filteredUtxos(maxHeight, excludeRules, includesRules);
 		return filteredUtxos.reduce((sum, utxo) => sum + utxo.amount, 0);

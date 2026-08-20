@@ -8,7 +8,7 @@ import { Transaction, UTXO, UTXO_RULES_GLOSSARY } from '../../types/transaction.
 // DON'T KNOW IF THE STRUCTURE IS GOOD
 export class OutputCreationValidator {
 	/**
-	 * @param {'sigOrSlash' | string} rule
+	 * @param {'sLock' | string} rule
 	 * @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {number} remainingAmount */
 	static validate(rule, involvedUTXOs, transaction, remainingAmount) {
 		if (UTXO_RULES_GLOSSARY[rule] === undefined) throw new Error(`Unknown output creation rule: ${rule}`);
@@ -19,21 +19,21 @@ export class OutputCreationValidator {
 	static sig(involvedUTXOs, transaction, remainingAmount) {} // nothing to validate for simple sig
 	
 	/** @param {Object<string, UTXO>} involvedUTXOs @param {Transaction} transaction @param {number} remainingAmount */
-	static sigOrSlash(involvedUTXOs, transaction, remainingAmount) {
-		// 1. SHOULD CONTAIN OUTPUT(S) WITH RULE "sigOrSlash"
+	static sLock(involvedUTXOs, transaction, remainingAmount) {
+		// 1. SHOULD CONTAIN OUTPUT(S) WITH RULE "sLock"
 		// 2. AMOUT SHOULD BE EQUAL TO
 		for (let i = 0; i < transaction.outputs.length; i++) {
 			const output = transaction.outputs[i];
-			if (i === 0 && output.rule !== "sigOrSlash") throw new Error('First output must be sigOrSlash');
-			if (output.rule !== "sigOrSlash") continue; // skip other outputs
-			if (output.amount !== BLOCKCHAIN_SETTINGS.stakeAmount) throw new Error('Invalid sigOrSlash output amount');
+			if (i === 0 && output.rule !== "sLock") throw new Error('First output must be sLock');
+			if (output.rule !== "sLock") continue; // skip other outputs
+			if (output.amount !== BLOCKCHAIN_SETTINGS.stakeAmount) throw new Error('Invalid sLock output amount');
 		}
 	
 		// 3. DATA SECTION SHOULD CONTAIN PUBKEY.S
 		const r = new BinaryReader(transaction.data);
 		const pubKeys = r.readPointersAndExtractDataChunks();
 		for (const pkBytes of pubKeys)
-			if (!QsafeHelper.checkFormat(pkBytes)) throw new Error('Invalid pubkey format in sigOrSlash transaction data');
+			if (!QsafeHelper.checkFormat(pkBytes)) throw new Error('Invalid pubkey format in sLock transaction data');
 
 		// 4. REMAINING AMOUNT (FEE) SHOULD BE GREATER THAN STAKE AMOUNT
 		if (remainingAmount < BLOCKCHAIN_SETTINGS.stakeAmount) throw new Error('Sig_Or_Slash requires fee > stake amount');

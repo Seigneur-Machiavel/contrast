@@ -5,7 +5,7 @@ import { PatternGenerator } from './pattern-generator.js';
 import { eHTML_STORE, createElement, createSpacedTextElement } from '../utils/board-helpers.js';
 
 /**
- * @typedef {import('../../node/src/wallet.mjs').Account} Account
+ * @typedef {import('../../node/src/account.mjs').Account} Account
  */
 
 const UX_SETTINGS = { shapes: 4 };
@@ -14,7 +14,7 @@ export class AccountsComponent {
 	/** @type {HTMLElement} */ wrap;
 	activeAccountIndex = 0;
 	activeAccountHistoryPage = 0;
-	get totalAccountHistoryPages() { return Math.ceil(this.biw.activeAccount.historyIds.length / this.biw.historyItemsPerPage); }
+	get totalAccountHistoryPages() { return this.biw.activeAccount ? Math.ceil(this.biw.activeAccount.historyIds.length / this.biw.historyItemsPerPage) : 0; }
 	biw;
 
 	/** @param {HTMLElement | null} wrap @param {import('./biw.js').BoardInternalWallet} biw */
@@ -55,7 +55,7 @@ export class AccountsComponent {
 					else accountImgWrap.appendChild(img);
                 }
 
-                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sigOrSlash']), this.biw.balanceDecimals)}`;
+                const readableAmount = `${CURRENCY.formatNumberAsCurrency(account.filteredBalance(undefined, ['sLock']), this.biw.balanceDecimals)}`;
                 if (name.innerText !== accountName) name.innerText = accountName;
                 if (address.innerText !== account.address) address.innerText = account.address;
                 if (amount.innerText !== readableAmount) amount.innerText = readableAmount;
@@ -72,6 +72,7 @@ export class AccountsComponent {
 	}
 	getHistoryTxIdsOfPage(page = this.activeAccountHistoryPage) {
 		this.activeAccountHistoryPage = page;
+		if (!this.biw.activeAccount) return [];
 
 		const total = this.biw.activeAccount.historyIds.length;
 		const end = total - (page * this.biw.historyItemsPerPage);

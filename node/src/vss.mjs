@@ -92,7 +92,7 @@ export class Vss {
 		for (let txId = 2; txId < block.Txs.length; txId++) // skip coinbase and pos fee Txs
 			for (let voudId = 0; voudId < block.Txs[txId].outputs.length; voudId++) {
 				const { address, amount, rule } = block.Txs[txId].outputs[voudId];
-				if (rule !== "sigOrSlash") continue;
+				if (rule !== "sLock") continue;
 				if (amount !== BLOCKCHAIN_SETTINGS.stakeAmount) throw new Error(`Invalid stake amount in block #${block.index}, Tx #${txId}, Vout #${voudId}`);
 				newStakeAnchors.push(`${block.index}:${txId}:${voudId}`);
 			}
